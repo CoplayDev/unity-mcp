@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1020"/>
+      <stop offset="0.55" stop-color="#070a14"/>
+      <stop offset="1" stop-color="#0c0710"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.7" cy="0.28" r="0.7">
+      <stop offset="0" stop-color="#3fe0ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#3fe0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#243150"/>
+      <stop offset="1" stop-color="#0e1424"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4d8d"/>
+      <stop offset="1" stop-color="#ffcc55"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="600" height="600" fill="url(#bg)"/>
+  <rect width="600" height="600" fill="url(#halo)"/>
+
+  <!-- HUD grid -->
+  <g stroke="#3fe0ff" stroke-opacity="0.10" stroke-width="1">
+    <path d="M0 150 H600 M0 300 H600 M0 450 H600 M150 0 V600 M300 0 V600 M450 0 V600"/>
+  </g>
+  <g stroke="#3fe0ff" stroke-opacity="0.5" stroke-width="2" fill="none" filter="url(#glow)">
+    <circle cx="300" cy="270" r="190" stroke-opacity="0.18"/>
+    <path d="M300 60 v22 M300 480 v-22 M90 270 h22 M510 270 h-22"/>
+  </g>
+
+  <!-- mecha head silhouette -->
+  <g filter="url(#glow)">
+    <path d="M300 110
+             L386 150 L398 250 L372 320
+             L388 360 L360 470 L300 500
+             L240 470 L212 360 L228 320
+             L202 250 L214 150 Z"
+          fill="url(#steel)" stroke="#3fe0ff" stroke-opacity="0.55" stroke-width="2"/>
+    <!-- crest -->
+    <path d="M268 120 L300 86 L332 120 L320 150 L280 150 Z"
+          fill="#0e1424" stroke="#ffcc55" stroke-opacity="0.8" stroke-width="2"/>
+    <!-- visor -->
+    <path d="M236 232 L364 232 L352 282 L248 282 Z" fill="url(#visor)" opacity="0.92"/>
+    <path d="M236 232 L364 232 L352 282 L248 282 Z" fill="none" stroke="#fff" stroke-opacity="0.5"/>
+    <!-- vents -->
+    <g stroke="#3fe0ff" stroke-opacity="0.45" stroke-width="3">
+      <path d="M256 330 h88 M262 348 h76 M270 366 h60"/>
+    </g>
+  </g>
+
+  <!-- corner ticks -->
+  <g stroke="#ff4d8d" stroke-width="3" fill="none" stroke-opacity="0.8">
+    <path d="M40 40 h34 M40 40 v34 M560 40 h-34 M560 40 v34
+             M40 560 h34 M40 560 v-34 M560 560 h-34 M560 560 v-34"/>
+  </g>
+
+  <!-- text -->
+  <text x="50" y="530" font-family="Menlo,Consolas,monospace" font-size="17"
+        fill="#3fe0ff" letter-spacing="6">MOBILE FRAME</text>
+  <text x="50" y="566" font-family="Helvetica,Arial,sans-serif" font-weight="800"
+        font-size="44" fill="#e8eefc" letter-spacing="2">EXILE</text>
+  <text x="552" y="566" text-anchor="end" font-family="Menlo,Consolas,monospace"
+        font-size="15" fill="#ffcc55" letter-spacing="3">EP.01 ASHFALL</text>
+</svg>

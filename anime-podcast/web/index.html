@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SPOKE — anime for your ears</title>
+<meta name="description" content="Anime you listen to. Original mecha episodes, rendered three ways, built for the road." />
+<meta name="theme-color" content="#05070d" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="assets/icon-192.png" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">◣</span>
+    <span class="word">SPOKE</span>
+    <span class="sub">anime for your ears</span>
+  </div>
+  <button id="offlineBtn" class="ghost" title="Save this episode for offline / no-signal rides">
+    <span class="dot"></span><span id="offlineLabel">Save offline</span>
+  </button>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="cover">
+      <img id="coverImg" src="assets/cover.svg" alt="Mobile Frame: EXILE cover art" />
+      <div class="cover-glow" aria-hidden="true"></div>
+    </div>
+    <div class="hero-meta">
+      <div class="kicker">EPISODE <span id="epNum">01</span> · NOW PLAYING</div>
+      <h1 id="epSeries">Mobile Frame: EXILE</h1>
+      <div class="eptitle">“<span id="epTitle">Ashfall</span>”</div>
+      <p id="epLogline" class="logline"></p>
+      <div class="ride-hint">
+        <span>🚲</span> Plays with your screen locked — lockscreen controls, no glancing down.
+      </div>
+    </div>
+  </section>
+
+  <section class="styles">
+    <div class="styles-head">
+      <h2>Three ways to listen</h2>
+      <p>Same scene, three completely different rides. Switch any time — feel the difference.</p>
+    </div>
+    <div id="styleTabs" class="tabs" role="tablist"></div>
+    <p id="styleBlurb" class="blurb"></p>
+  </section>
+
+  <section class="player" id="player">
+    <div class="np">
+      <div class="np-art"><img id="npArt" src="assets/cover.svg" alt="" /></div>
+      <div class="np-text">
+        <div class="np-style" id="npStyle">Pure Cut</div>
+        <div class="np-line" id="npLine">Press play</div>
+        <div class="np-who" id="npWho"></div>
+      </div>
+    </div>
+
+    <div class="scrub">
+      <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+      <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+    </div>
+
+    <div class="controls">
+      <button id="prevStyle" class="ctl" title="Previous style">⟦</button>
+      <button id="back15" class="ctl" title="Back 15s">«15</button>
+      <button id="playBtn" class="ctl play" title="Play / pause">▶</button>
+      <button id="fwd15" class="ctl" title="Forward 15s">15»</button>
+      <button id="nextStyle" class="ctl" title="Next style">⟧</button>
+    </div>
+    <div class="speedrow">
+      <span>Speed</span>
+      <div id="speeds" class="speeds"></div>
+    </div>
+  </section>
+
+  <section class="transcript">
+    <div class="tr-head">
+      <h2>Transcript</h2>
+      <span class="tr-hint">tap a line to jump</span>
+    </div>
+    <ol id="cues" class="cues"></ol>
+  </section>
+
+  <section class="about">
+    <h2>What is this?</h2>
+    <p>
+      <strong>SPOKE</strong> turns anime into something you can <em>listen</em> to — on a bike,
+      a run, a commute. This demo is an original mecha episode,
+      <strong>Mobile Frame: EXILE</strong>, written for this project so it’s free to share.
+      Every voice is neural text-to-speech; every explosion, thruster, comms crackle and the
+      theme music is synthesized from scratch in code. No copyrighted audio is used.
+    </p>
+    <div class="cards">
+      <div class="card"><h3>Pure Cut</h3><p>Dialogue + sound design, no narrator. Closest to watching with your eyes shut. Most immersive.</p></div>
+      <div class="card"><h3>Audio-Described</h3><p>A narrator paints the visuals between lines, like audio description for film. You’ll never lose the plot — best for a long ride.</p></div>
+      <div class="card"><h3>Recap Hosts</h3><p>Two hosts react and joke, with clips dropped in. Lightest, most fun, least faithful.</p></div>
+    </div>
+    <p class="fine">
+      Want your <em>own</em> anime as a podcast? The pipeline that built this (script → cast of
+      voices → sound design → three mixes) is in the repo. Point it at content you have the
+      rights to and it renders the same three styles.
+    </p>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>SPOKE · a listen-while-you-ride prototype</span>
+  <span id="netState" class="net">online</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

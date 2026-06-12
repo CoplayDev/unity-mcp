@@ -1,0 +1,12 @@
+# neural voice models (~500MB) — fetch with pipeline/fetch_voices.py
+voices/
+
+# build scratch (intermediate wavs, screenshots, smoke tests)
+build/
+*.wav
+
+# python / node noise
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
