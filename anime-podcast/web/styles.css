@@ -65,6 +65,25 @@ section{margin-top:34px}
 .ride-hint{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);
   background:rgba(255,255,255,.04);border:1px solid var(--line2);padding:7px 12px;border-radius:999px}
 
+/* ---------- episode switcher ---------- */
+.ep-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.ep-head h2{font-size:22px}
+.ep-hint{font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.epchips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.epchip{text-align:left;padding:12px 14px;border-radius:14px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line2);color:var(--ink);transition:.18s;
+  display:flex;flex-direction:column;gap:3px}
+.epchip:hover{border-color:var(--line)}
+.ec-kind{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber)}
+.ec-title{font-weight:700;font-size:14px;line-height:1.3}
+.ec-meta{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.epchip.active{border-color:transparent;background:
+  linear-gradient(var(--panel2),var(--panel2)) padding-box,
+  linear-gradient(120deg,var(--cyan),var(--magenta)) border-box;border:1px solid transparent}
+.epchip.active .ec-kind{color:var(--cyan)}
+@media(max-width:560px){.epchips{grid-template-columns:1fr}}
+.episodes{margin-bottom:6px}
+
 /* ---------- styles switcher ---------- */
 .styles-head h2{font-size:22px}
 .styles-head p{color:var(--dim);margin:0 0 14px;max-width:54ch}

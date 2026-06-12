@@ -296,6 +296,36 @@ def build_scene(style):
     return tl
 
 
+def build_track(events):
+    """Generic studio track (commentary / primer): a flat event list, no
+    ambient bed. Theme/sting fx pace themselves like the recap builder."""
+    tl = Timeline("recap")  # recap style => BED_GAIN 0, dry studio sound
+    for ev in events:
+        t = ev["t"]
+        if t == "fx":
+            name = ev["name"]
+            tl.add_fx(name, ev.get("gain", 0.7), at=tl.cursor + ev.get("pre", 0.0))
+            fxlen = get_fx(name).shape[0] / SR
+            factor = 0.8 if name == "theme" else (0.5 if name in ("sting", "comm_open") else 0.35)
+            tl.pause(fxlen * factor)
+        elif t == "pause":
+            tl.pause(ev["dur"])
+        elif t == "say":
+            sig = render_say(ev)
+            anchor = tl.cursor
+            tl.add_fx_list(ev["fx"], anchor)
+            tl.add_voice(sig, ev["who"], ev["text"])
+        elif t == "act":  # stage direction that slipped in -> narrate it
+            sig = render_voice(S.ROLES["NARRATOR"]["voice"], ev["text"],
+                               S.ROLES["NARRATOR"]["ls"])
+            anchor = tl.cursor
+            tl.add_fx_list(ev.get("fx", []), anchor)
+            tl.add_voice(sig, "NARRATOR", ev["text"], gap=ACT_GAP)
+        elif t == "loc":
+            tl.open_bed(ev["bed"])
+    return tl
+
+
 def build_recap():
     tl = Timeline("recap")
     # render scene first so clip refs are available
@@ -322,59 +352,44 @@ def build_recap():
 
 # ---------------- main ----------------
 
-STYLES = {
-    "pure": {
-        "id": "pure",
-        "label": "Pure Cut",
-        "tag": "Dialogue + sound design, zero narration.",
-        "blurb": "The scene, raw. Voices, comms, mecha, and ambient sound only — "
-                 "like watching with your eyes closed. Most immersive, asks the "
-                 "most of your imagination.",
-        "build": lambda: build_scene("pure"),
-    },
-    "described": {
-        "id": "described",
-        "label": "Audio-Described",
-        "tag": "A narrator paints the action between the lines.",
-        "blurb": "Every visual beat is described by a narrator, the way audio "
-                 "description works for film. You will never lose the plot — "
-                 "ideal for a long ride where you can't glance at a screen.",
-        "build": lambda: build_scene("described"),
-    },
-    "recap": {
-        "id": "recap",
-        "label": "Recap Hosts",
-        "tag": "Two hosts react and riff, with clips dropped in.",
-        "blurb": "A podcast ABOUT the episode — two hosts recap, joke, and pull "
-                 "in real clips. Lightest and most fun, least faithful. Great "
-                 "for catching up without committing.",
-        "build": build_recap,
-    },
-}
+def build_for(directive):
+    """Resolve a style 'build' directive into a rendered Timeline."""
+    if directive.startswith("scene:"):
+        return build_scene(directive.split(":", 1)[1])
+    if directive == "recap":
+        return build_recap()
+    if directive.startswith("track:"):
+        return build_track(S.TRACKS[directive.split(":", 1)[1]])
+    raise ValueError(f"unknown build directive: {directive}")
 
 
 def main():
-    manifest = {"episode": S.EPISODE, "roles": S.NAMES, "styles": []}
-    for sid in ("pure", "described", "recap"):
-        spec = STYLES[sid]
-        print(f"[build] {spec['label']} ...", flush=True)
-        tl = spec["build"]()
-        master = tl.render()
-        wav = BUILD / f"exile-ep1-{sid}.wav"
-        mp3 = AUDIO_OUT / f"exile-ep1-{sid}.mp3"
-        write_wav_f32(wav, master)
-        encode_mp3(wav, mp3)
-        dur = len(master) / SR
-        size_kb = mp3.stat().st_size // 1024
-        print(f"        {dur:5.1f}s  {size_kb}KB  -> {mp3.name}", flush=True)
-        manifest["styles"].append({
-            "id": spec["id"], "label": spec["label"], "tag": spec["tag"],
-            "blurb": spec["blurb"], "audio": f"audio/{mp3.name}",
-            "duration": round(dur, 2), "cues": tl.cues,
-        })
+    catalog = {"roles": S.NAMES, "episodes": []}
+    for ep in S.EPISODES:
+        ep_out = {k: ep[k] for k in
+                  ("id", "series", "number", "title", "logline", "kind")}
+        ep_out["styles"] = []
+        for st in ep["styles"]:
+            print(f"[build] {ep['id']} · {st['label']} ...", flush=True)
+            tl = build_for(st["build"])
+            master = tl.render()
+            base = f"{ep['id']}-{st['id']}"
+            wav = BUILD / f"{base}.wav"
+            mp3 = AUDIO_OUT / f"{base}.mp3"
+            write_wav_f32(wav, master)
+            encode_mp3(wav, mp3)
+            dur = len(master) / SR
+            size_kb = mp3.stat().st_size // 1024
+            print(f"        {dur:5.1f}s  {size_kb}KB  -> {mp3.name}", flush=True)
+            ep_out["styles"].append({
+                "id": st["id"], "label": st["label"], "tag": st["tag"],
+                "blurb": st["blurb"], "audio": f"audio/{mp3.name}",
+                "duration": round(dur, 2), "cues": tl.cues,
+            })
+        catalog["episodes"].append(ep_out)
     out = DATA_OUT / "episodes.json"
-    out.write_text(json.dumps(manifest, indent=2))
-    print(f"[build] wrote {out}")
+    out.write_text(json.dumps(catalog, indent=2))
+    print(f"[build] wrote {out} ({len(catalog['episodes'])} episodes)")
 
 
 if __name__ == "__main__":

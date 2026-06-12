@@ -1,5 +1,5 @@
 /* SPOKE service worker — offline-first for no-signal rides. */
-const SHELL = "spoke-shell-v1";
+const SHELL = "spoke-shell-v2";
 const MEDIA = "spoke-media-v1";
 const SHELL_URLS = [
   "./", "index.html", "styles.css", "app.js", "manifest.webmanifest",

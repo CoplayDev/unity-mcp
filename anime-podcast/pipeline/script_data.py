@@ -206,3 +206,248 @@ RECAP = [
                   "will see you then."),
     {"t": "fx", "name": "sting", "gain": 0.7, "pre": 0.2},
 ]
+
+
+# =====================================================================
+#  FRAME THEORY — commentary episodes about real anime.
+#
+#  These are transformative commentary / criticism: two original hosts
+#  give their own analysis and opinions about famous franchises. No
+#  copyrighted dialogue, script, or audio is reproduced — the shows are
+#  named and discussed the way any review podcast names and discusses
+#  them. Nothing here is a transcript of, or substitute for, the source
+#  works.
+# =====================================================================
+
+GUNDAM_RECAP = [
+    {"t": "fx", "name": "theme", "gain": 0.7},
+    say("HOST_A", "Welcome back to Frame Theory. I am Delray, and today we are "
+                  "not cracking open a new show — we are going back to the one "
+                  "that started literally all of this. Nineteen seventy-nine. "
+                  "Mobile Suit Gundam."),
+    say("HOST_B", "I am Pip, and here is the thesis, right up front: this is the "
+                  "show that split the entire giant-robot world in half. Before "
+                  "it, robots were superheroes. After it, robots were equipment."),
+    say("HOST_A", "That is the whole revolution in one word. Equipment. The "
+                  "mobile suits are mass-produced military hardware. They run out "
+                  "of ammo. They need maintenance. They get assigned to scared "
+                  "teenagers who were drafted into a war they did not start."),
+    say("HOST_B", "Amuro is not a chosen one. He is a civilian kid who climbs "
+                  "into the prototype because the trained adults around him are "
+                  "already dead and somebody has to pull the lever."),
+    say("HOST_A", "And then there is the rival. The masked antagonist basically "
+                  "invented an archetype that the next forty-five years of anime "
+                  "are still paying rent on. The tragic grudge, the custom "
+                  "color-coded unit, the soldier who is too charismatic to be a "
+                  "villain and too bitter to be a hero."),
+    say("HOST_B", "They built a calendar, Delray. A whole fake history — the "
+                  "Universal Century — so internally consistent that grown adults "
+                  "now write essays about the economics of space colonies."),
+    say("HOST_A", "And underneath the war story there is this quiet, almost "
+                  "spiritual idea — that living out in space might be slowly "
+                  "evolving human empathy into something close to psychic. The "
+                  "show is really asking whether war is just a failure of people "
+                  "to understand each other."),
+    say("HOST_B", "Does it all hold up? Honestly, no. The pacing is nineteen "
+                  "seventy-nine television pacing. There is a monster-of-the-week "
+                  "skeleton bolted onto an anti-war epic, and you can feel the "
+                  "bolts."),
+    say("HOST_A", "But when it lands — the moment a child soldier realizes the "
+                  "pilot he just shot down was a person with a name and a family "
+                  "— that single beat is the genetic code of every serious mecha "
+                  "show since. Macross. Evangelion. The original drama we run on "
+                  "this very feed."),
+    say("HOST_B", "Ride recommendation: do not binge it like a modern series. "
+                  "Let it breathe. One or two a day, like reading a war diary."),
+    say("HOST_A", "That is the real robot revolution. Robots stopped being gods "
+                  "and started being machines that people have to live and die "
+                  "inside. Next time, we go loud. Very loud."),
+    {"t": "fx", "name": "sting", "gain": 0.7, "pre": 0.2},
+]
+
+GUNDAM_PRIMER = [
+    {"t": "fx", "name": "theme", "gain": 0.6},
+    {"t": "fx", "name": "comm_open", "gain": 0.3},
+    say("NARRATOR", "A Frame Theory primer, for the road. No spoilers that "
+                    "matter — just enough to ride in knowing why this one is a "
+                    "pillar."),
+    say("NARRATOR", "The original Mobile Suit Gundam is the founding text of "
+                    "what fans call the real robot genre. The giant machines are "
+                    "not magic. They are tanks with arms — mass-produced, "
+                    "fuel-hungry, and only as good as the frightened young pilots "
+                    "strapped inside them."),
+    say("NARRATOR", "The story follows a teenage civilian thrown behind the "
+                    "controls of an experimental unit when his colony is caught "
+                    "in a war between Earth and its breakaway space settlements."),
+    say("NARRATOR", "Its lasting ideas are simple and heavy. War is logistics "
+                    "and grief, not glory. The enemy is a person. And a new kind "
+                    "of human, sharpened by life in space, might just be able to "
+                    "feel that across a battlefield."),
+    say("NARRATOR", "If you only know the genre through its descendants, this is "
+                    "the source of the river. Watch for the masked rival; he is "
+                    "the blueprint for nearly every anime antagonist you already "
+                    "love."),
+    say("NARRATOR", "That is your primer. Now go ride in knowing where the road "
+                    "began."),
+    {"t": "fx", "name": "sting", "gain": 0.6, "pre": 0.2},
+]
+
+DBZ_RECAP = [
+    {"t": "fx", "name": "theme", "gain": 0.7},
+    say("HOST_A", "Frame Theory is back. I am Delray, and after a week in the "
+                  "quiet grief of classic Gundam, we are doing the loudest show "
+                  "in the entire genre. Dragon Ball Z."),
+    say("HOST_B", "Pip here, and let me give you the elevator pitch the way an "
+                  "honest person would: this is the show that taught a whole "
+                  "generation that any problem can be solved by screaming until "
+                  "your hair changes color."),
+    say("HOST_A", "And structurally it is brilliant and infuriating at the exact "
+                  "same time. It is a treadmill of escalation. Every arc runs the "
+                  "same loop: a new threat stronger than the last one, the heroes "
+                  "train, they surpass it, repeat forever."),
+    say("HOST_B", "But here is the part people get wrong. The engine of this "
+                  "show is not the fighting. It is the waiting. The charge-up. "
+                  "They monetized anticipation. A single punch can take three "
+                  "episodes to actually land."),
+    say("HOST_A", "And somehow it works, because the real stakes are emotional, "
+                  "not tactical. The lead is not fighting to save the universe. "
+                  "He is fighting because he wants a stronger opponent. He is a "
+                  "cheerful zen monk with the temperament of a golden retriever."),
+    say("HOST_B", "Meanwhile the prince — the proud rival — is the best-written "
+                  "character in the whole thing and everyone quietly knows it. "
+                  "Pride as a tragic flaw. A redemption arc you can measure in "
+                  "how many years it takes him to admit that he cares about "
+                  "anyone."),
+    say("HOST_A", "We have to mention the power-level discourse. The show "
+                  "introduces these precise numeric strength readings, and then "
+                  "abandons them almost immediately, because numbers physically "
+                  "cannot keep up with that much escalation. After a point it is "
+                  "running on pure vibes."),
+    say("HOST_B", "Fair criticisms: the filler, the recaps, and the way the "
+                  "deep, capable female cast gets benched the second the real "
+                  "punching starts."),
+    say("HOST_A", "But the craft of a climax? Dragon Ball Z might be the best in "
+                  "all of anime at the long, earned, hair-raising peak. The build "
+                  "is endless, but the payoff genuinely lifts you out of your "
+                  "seat."),
+    say("HOST_B", "Which makes it the perfect audio commute show, weirdly. You "
+                  "do not need a screen to know the hero is powering up. You can "
+                  "hear it. The whole soundtrack is anticipation."),
+    say("HOST_A", "Power levels and patience. That is the entire machine. Ride "
+                  "safe, and we will see you next time on Frame Theory."),
+    {"t": "fx", "name": "sting", "gain": 0.7, "pre": 0.2},
+]
+
+DBZ_PRIMER = [
+    {"t": "fx", "name": "theme", "gain": 0.6},
+    {"t": "fx", "name": "comm_open", "gain": 0.3},
+    say("NARRATOR", "A Frame Theory primer, for the road. Spoiler-light — just "
+                    "the shape of the thing, so you can ride in knowing what you "
+                    "are hearing."),
+    say("NARRATOR", "Dragon Ball Z is the loudest, most influential action "
+                    "anime ever made. It follows a circle of martial artists who "
+                    "defend their world from a rising ladder of ever-stronger "
+                    "threats — aliens, androids, and worse."),
+    say("NARRATOR", "Its rhythm is unique. Battles are enormous, drawn-out "
+                    "events built around the charge — the slow, deliberate "
+                    "gathering of power before release. The anticipation is the "
+                    "point, and the sound design carries it."),
+    say("NARRATOR", "Underneath the spectacle is a simple emotional core: a hero "
+                    "who fights not for glory but for the joy of a worthy "
+                    "opponent, and a rival whose entire arc is learning, very "
+                    "slowly, how to care."),
+    say("NARRATOR", "Because so much of its drama lives in voice, music, and the "
+                    "rising hum before a clash, it travels beautifully without a "
+                    "screen. You will always know when the moment is coming."),
+    say("NARRATOR", "That is your primer. Eyes on the road, ears on the charge."),
+    {"t": "fx", "name": "sting", "gain": 0.6, "pre": 0.2},
+]
+
+
+# =====================================================================
+#  EPISODE CATALOG  (drives build + the site's episode switcher)
+#
+#  Each style's "build" is a directive the builder resolves:
+#    "scene:pure" / "scene:described"  -> render SCENE in that style
+#    "recap"                           -> render RECAP (with SCENE clips)
+#    "track:NAME"                      -> render the named event list above
+# =====================================================================
+
+_PURE = ("Pure Cut", "Dialogue + sound design, zero narration.",
+         "The scene, raw. Voices, comms, mecha, and ambient sound only — like "
+         "watching with your eyes closed. Most immersive, asks the most of your "
+         "imagination.")
+_DESC = ("Audio-Described", "A narrator paints the action between the lines.",
+         "Every visual beat is described by a narrator, the way audio "
+         "description works for film. You will never lose the plot — ideal for a "
+         "long ride where you can't glance at a screen.")
+_RECAP = ("Recap Hosts", "Two hosts react and riff, with clips dropped in.",
+          "A podcast ABOUT the episode — two hosts recap, joke, and pull in real "
+          "clips. Lightest and most fun, least faithful. Great for catching up "
+          "without committing.")
+_COMMENT = ("Recap Hosts", "Two hosts dig into a classic — pure commentary.",
+            "Delray and Pip break down a landmark series in their own words: "
+            "history, craft, hot takes, and why it still matters. Transformative "
+            "commentary — no clips, just analysis.")
+_PRIMER = ("Audio Primer", "A narrator's spoiler-light field guide.",
+           "A short, calm primer that sets up the series before you dive in — "
+           "what it is, why it matters, what to listen for. Perfect for the "
+           "first few minutes of a ride.")
+
+
+def _style(sid, meta, build):
+    label, tag, blurb = meta
+    return {"id": sid, "label": label, "tag": tag, "blurb": blurb, "build": build}
+
+
+EPISODES = [
+    {
+        "id": "exile-ep1",
+        "series": "Mobile Frame: EXILE",
+        "number": 1,
+        "title": "Ashfall",
+        "logline": EPISODE["logline"],
+        "kind": "Original drama",
+        "styles": [
+            _style("pure", _PURE, "scene:pure"),
+            _style("described", _DESC, "scene:described"),
+            _style("recap", _RECAP, "recap"),
+        ],
+    },
+    {
+        "id": "frame-theory-gundam",
+        "series": "Frame Theory",
+        "number": 2,
+        "title": "The Real Robot Revolution",
+        "logline": "The hosts go back to 1979's Mobile Suit Gundam — the show "
+                   "that turned giant robots from superheroes into equipment, and "
+                   "rewrote the genre forever.",
+        "kind": "Commentary",
+        "styles": [
+            _style("recap", _COMMENT, "track:GUNDAM_RECAP"),
+            _style("primer", _PRIMER, "track:GUNDAM_PRIMER"),
+        ],
+    },
+    {
+        "id": "frame-theory-dbz",
+        "series": "Frame Theory",
+        "number": 3,
+        "title": "Power Levels & Patience",
+        "logline": "The loudest show in the genre, taken apart with love: why "
+                   "Dragon Ball Z's treadmill of escalation works, and why it's "
+                   "secretly the perfect thing to listen to.",
+        "kind": "Commentary",
+        "styles": [
+            _style("recap", _COMMENT, "track:DBZ_RECAP"),
+            _style("primer", _PRIMER, "track:DBZ_PRIMER"),
+        ],
+    },
+]
+
+# named event lists the builder can resolve from "track:NAME"
+TRACKS = {
+    "GUNDAM_RECAP": GUNDAM_RECAP,
+    "GUNDAM_PRIMER": GUNDAM_PRIMER,
+    "DBZ_RECAP": DBZ_RECAP,
+    "DBZ_PRIMER": DBZ_PRIMER,
+}

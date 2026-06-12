@@ -1,10 +1,4 @@
 {
-  "episode": {
-    "series": "Mobile Frame: EXILE",
-    "number": 1,
-    "title": "Ashfall",
-    "logline": "A teenage scavenger looking for a spare power cell in a dead colony instead wakes the most wanted war machine in the Tiers."
-  },
   "roles": {
     "KESTREL": "Kestrel",
     "ECHO": "Echo",
@@ -15,664 +9,972 @@
     "HOST_A": "Delray",
     "HOST_B": "Pip"
   },
-  "styles": [
+  "episodes": [
     {
-      "id": "pure",
-      "label": "Pure Cut",
-      "tag": "Dialogue + sound design, zero narration.",
-      "blurb": "The scene, raw. Voices, comms, mecha, and ambient sound only \u2014 like watching with your eyes closed. Most immersive, asks the most of your imagination.",
-      "audio": "audio/exile-ep1-pure.mp3",
-      "duration": 179.58,
-      "cues": [
+      "id": "exile-ep1",
+      "series": "Mobile Frame: EXILE",
+      "number": 1,
+      "title": "Ashfall",
+      "logline": "A teenage scavenger looking for a spare power cell in a dead colony instead wakes the most wanted war machine in the Tiers.",
+      "kind": "Original drama",
+      "styles": [
         {
-          "t": 10.66,
-          "end": 15.1,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Come on. Come on. There has to be one clean power cell in this whole graveyard."
+          "id": "pure",
+          "label": "Pure Cut",
+          "tag": "Dialogue + sound design, zero narration.",
+          "blurb": "The scene, raw. Voices, comms, mecha, and ambient sound only \u2014 like watching with your eyes closed. Most immersive, asks the most of your imagination.",
+          "audio": "audio/exile-ep1-pure.mp3",
+          "duration": 179.09,
+          "cues": [
+            {
+              "t": 10.66,
+              "end": 15.23,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Come on. Come on. There has to be one clean power cell in this whole graveyard."
+            },
+            {
+              "t": 17.6,
+              "end": 19.14,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "That is not the structure settling."
+            },
+            {
+              "t": 19.81,
+              "end": 30.53,
+              "who": "SABINE",
+              "name": "Compact PA",
+              "text": "Attention. This sector is under Meridian Compact jurisdiction. Unauthorized salvage will be met with lethal force. You have thirty seconds to comply."
+            },
+            {
+              "t": 30.85,
+              "end": 33.17,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Thirty seconds. Great. Generous."
+            },
+            {
+              "t": 34.58,
+              "end": 38.08,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "The old fabrication bay. They never stripped the fabrication bay."
+            },
+            {
+              "t": 39.77,
+              "end": 41.95,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Okay. That is definitely not a power cell."
+            },
+            {
+              "t": 43.36,
+              "end": 49.47,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Cradle integrity nominal. Reactor at four percent, and climbing. ... Pilot detected."
+            },
+            {
+              "t": 49.79,
+              "end": 56.03,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Nope. Nope, nope, nope. I am a scavenger. I scavenge. I do not pilot the giant murder machine."
+            },
+            {
+              "t": 56.35,
+              "end": 64.77,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "You are the only living operator in range. Designation of this unit: Exile. I am its intelligence. You may call me Echo."
+            },
+            {
+              "t": 65.09,
+              "end": 66.84,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "I may call you a really bad idea."
+            },
+            {
+              "t": 67.16,
+              "end": 74.74,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
+            },
+            {
+              "t": 75.41,
+              "end": 82.56,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "Compact lance, this is Rask. Heat signature in the fab bay just spiked. Something down there woke up. ... Burn it."
+            },
+            {
+              "t": 82.88,
+              "end": 83.81,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Who is Rask?"
+            },
+            {
+              "t": 84.13,
+              "end": 87.14,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "The man who is about to kill you. Cradle release?"
+            },
+            {
+              "t": 87.46,
+              "end": 89.69,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Do it. Do it, do it, do it."
+            },
+            {
+              "t": 91.66,
+              "end": 96.95,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Neural sync at sixty percent. Try not to think too hard. It listens."
+            },
+            {
+              "t": 97.27,
+              "end": 100.85,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "It listens to \u2014 whoa. Whoa, I felt that. I felt the arm."
+            },
+            {
+              "t": 101.52,
+              "end": 108.87,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Incoming. Rask's frame. The Harrow. He is the Compact's best. Please understand what that means."
+            },
+            {
+              "t": 109.19,
+              "end": 113.74,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "A child. They woke the Exile for a child. ... This is almost an insult."
+            },
+            {
+              "t": 115.57,
+              "end": 117.65,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "He is fast \u2014 Echo, he is too fast\u2014"
+            },
+            {
+              "t": 117.97,
+              "end": 124.17,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Then stop aiming. Stop thinking like a gun. Move like you are running. You are good at running."
+            },
+            {
+              "t": 124.49,
+              "end": 126.87,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Yeah. Yeah, okay. Running I can do."
+            },
+            {
+              "t": 129.39,
+              "end": 130.11,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "...Interesting."
+            },
+            {
+              "t": 130.78,
+              "end": 135.94,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "All units, pull back. Mark the frame. We do not lose the Exile twice."
+            },
+            {
+              "t": 138.54,
+              "end": 139.42,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Did we just\u2014"
+            },
+            {
+              "t": 139.74,
+              "end": 144.01,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Survive? Barely. You are bleeding from a console you headbutted."
+            },
+            {
+              "t": 144.33,
+              "end": 144.88,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Worth it."
+            },
+            {
+              "t": 145.55,
+              "end": 154.67,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "Unregistered Exile-class frame. I have waited twelve years to hear that reactor sing again. ... I did not expect a kid at the helm."
+            },
+            {
+              "t": 154.99,
+              "end": 155.69,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Who is this?"
+            },
+            {
+              "t": 156.01,
+              "end": 166.63,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "My name is Vale. I lead what is left of the people the Compact tried to erase. And you, son, have just stolen the single most wanted machine in the Tiers."
+            },
+            {
+              "t": 166.95,
+              "end": 168.61,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...I really just wanted a power cell."
+            },
+            {
+              "t": 168.93,
+              "end": 174.72,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "They always do. Bring it home, Kestrel. We have a great deal to talk about."
+            }
+          ]
         },
         {
-          "t": 17.47,
-          "end": 18.96,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "That is not the structure settling."
+          "id": "described",
+          "label": "Audio-Described",
+          "tag": "A narrator paints the action between the lines.",
+          "blurb": "Every visual beat is described by a narrator, the way audio description works for film. You will never lose the plot \u2014 ideal for a long ride where you can't glance at a screen.",
+          "audio": "audio/exile-ep1-described.mp3",
+          "duration": 254.29,
+          "cues": [
+            {
+              "t": 10.66,
+              "end": 24.75,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "A dead place. Wind moves through the gutted ribs of Colony Ring Nine, abandoned twelve years. In the dark, a boy with a wrist lamp picks through a drift of scrap. His name is Kestrel. He is seventeen, and he is not supposed to be here."
+            },
+            {
+              "t": 25.03,
+              "end": 29.6,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Come on. Come on. There has to be one clean power cell in this whole graveyard."
+            },
+            {
+              "t": 30.32,
+              "end": 36.3,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Far off, a sound that does not belong to a dead colony. A low thud. Then another, closer."
+            },
+            {
+              "t": 36.58,
+              "end": 38.11,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "That is not the structure settling."
+            },
+            {
+              "t": 38.78,
+              "end": 49.51,
+              "who": "SABINE",
+              "name": "Compact PA",
+              "text": "Attention. This sector is under Meridian Compact jurisdiction. Unauthorized salvage will be met with lethal force. You have thirty seconds to comply."
+            },
+            {
+              "t": 49.83,
+              "end": 52.15,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Thirty seconds. Great. Generous."
+            },
+            {
+              "t": 52.47,
+              "end": 59.51,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Kestrel runs. Behind him the corridor lights stutter awake, red, one by one, as Compact drones flood the ring."
+            },
+            {
+              "t": 59.79,
+              "end": 63.29,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "The old fabrication bay. They never stripped the fabrication bay."
+            },
+            {
+              "t": 63.61,
+              "end": 78.34,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "He shoulders through a half-sealed blast door into a cavern of black air. His lamp barely reaches the far wall. And then it catches something. A shape. Forty meters of dormant steel hung in a cradle of dead gantries. Humanoid. Sleeping. Waiting."
+            },
+            {
+              "t": 78.62,
+              "end": 80.8,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Okay. That is definitely not a power cell."
+            },
+            {
+              "t": 81.12,
+              "end": 84.34,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "As he steps closer, something deep in the machine answers."
+            },
+            {
+              "t": 84.62,
+              "end": 90.73,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Cradle integrity nominal. Reactor at four percent, and climbing. ... Pilot detected."
+            },
+            {
+              "t": 91.05,
+              "end": 97.29,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Nope. Nope, nope, nope. I am a scavenger. I scavenge. I do not pilot the giant murder machine."
+            },
+            {
+              "t": 97.61,
+              "end": 106.02,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "You are the only living operator in range. Designation of this unit: Exile. I am its intelligence. You may call me Echo."
+            },
+            {
+              "t": 106.34,
+              "end": 108.1,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "I may call you a really bad idea."
+            },
+            {
+              "t": 108.42,
+              "end": 116.0,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
+            },
+            {
+              "t": 116.67,
+              "end": 123.82,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "Compact lance, this is Rask. Heat signature in the fab bay just spiked. Something down there woke up. ... Burn it."
+            },
+            {
+              "t": 124.14,
+              "end": 125.07,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Who is Rask?"
+            },
+            {
+              "t": 125.39,
+              "end": 128.4,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "The man who is about to kill you. Cradle release?"
+            },
+            {
+              "t": 128.72,
+              "end": 130.95,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Do it. Do it, do it, do it."
+            },
+            {
+              "t": 131.27,
+              "end": 142.52,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "The cradle clamps blow. Forty meters of forgotten war drops, catches itself on screaming thrusters, and stands \u2014 for the first time in twelve years \u2014 with a terrified teenager wired into its spine."
+            },
+            {
+              "t": 142.8,
+              "end": 148.09,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Neural sync at sixty percent. Try not to think too hard. It listens."
+            },
+            {
+              "t": 148.41,
+              "end": 151.99,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "It listens to \u2014 whoa. Whoa, I felt that. I felt the arm."
+            },
+            {
+              "t": 152.66,
+              "end": 160.01,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Incoming. Rask's frame. The Harrow. He is the Compact's best. Please understand what that means."
+            },
+            {
+              "t": 160.33,
+              "end": 164.88,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "A child. They woke the Exile for a child. ... This is almost an insult."
+            },
+            {
+              "t": 165.2,
+              "end": 167.71,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "The Harrow comes out of the dark like a thrown knife."
+            },
+            {
+              "t": 167.99,
+              "end": 170.07,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "He is fast \u2014 Echo, he is too fast\u2014"
+            },
+            {
+              "t": 170.39,
+              "end": 176.6,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Then stop aiming. Stop thinking like a gun. Move like you are running. You are good at running."
+            },
+            {
+              "t": 176.92,
+              "end": 179.3,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Yeah. Yeah, okay. Running I can do."
+            },
+            {
+              "t": 179.62,
+              "end": 191.07,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "And the Exile moves \u2014 not like a soldier, but like a kid who has spent his whole life slipping through gaps that were never meant for him. It ducks under the Harrow's blade and lets the colony's broken bones do the rest."
+            },
+            {
+              "t": 191.35,
+              "end": 192.07,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "...Interesting."
+            },
+            {
+              "t": 192.74,
+              "end": 197.9,
+              "who": "RASK",
+              "name": "Rask",
+              "text": "All units, pull back. Mark the frame. We do not lose the Exile twice."
+            },
+            {
+              "t": 198.57,
+              "end": 207.81,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "They break through the colony's shattered outer ring into open dark. Earth hangs below, a bruised blue marble. And for one second there is only the sound of Kestrel breathing."
+            },
+            {
+              "t": 208.09,
+              "end": 208.97,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Did we just\u2014"
+            },
+            {
+              "t": 209.29,
+              "end": 213.55,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Survive? Barely. You are bleeding from a console you headbutted."
+            },
+            {
+              "t": 213.87,
+              "end": 214.43,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Worth it."
+            },
+            {
+              "t": 215.1,
+              "end": 224.22,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "Unregistered Exile-class frame. I have waited twelve years to hear that reactor sing again. ... I did not expect a kid at the helm."
+            },
+            {
+              "t": 224.54,
+              "end": 225.24,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "Who is this?"
+            },
+            {
+              "t": 225.56,
+              "end": 236.18,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "My name is Vale. I lead what is left of the people the Compact tried to erase. And you, son, have just stolen the single most wanted machine in the Tiers."
+            },
+            {
+              "t": 236.5,
+              "end": 238.16,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...I really just wanted a power cell."
+            },
+            {
+              "t": 238.48,
+              "end": 244.27,
+              "who": "VALE",
+              "name": "Vale",
+              "text": "They always do. Bring it home, Kestrel. We have a great deal to talk about."
+            },
+            {
+              "t": 244.94,
+              "end": 253.01,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Above a dying world, a stolen legend turns toward the dark \u2014 and the boy inside it has no idea he has just become the most hunted person alive."
+            }
+          ]
         },
         {
-          "t": 19.63,
-          "end": 30.65,
-          "who": "SABINE",
-          "name": "Compact PA",
-          "text": "Attention. This sector is under Meridian Compact jurisdiction. Unauthorized salvage will be met with lethal force. You have thirty seconds to comply."
-        },
-        {
-          "t": 30.97,
-          "end": 33.29,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Thirty seconds. Great. Generous."
-        },
-        {
-          "t": 34.7,
-          "end": 38.2,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "The old fabrication bay. They never stripped the fabrication bay."
-        },
-        {
-          "t": 39.89,
-          "end": 42.22,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Okay. That is definitely not a power cell."
-        },
-        {
-          "t": 43.63,
-          "end": 49.42,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Cradle integrity nominal. Reactor at four percent, and climbing. ... Pilot detected."
-        },
-        {
-          "t": 49.74,
-          "end": 56.07,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Nope. Nope, nope, nope. I am a scavenger. I scavenge. I do not pilot the giant murder machine."
-        },
-        {
-          "t": 56.39,
-          "end": 64.66,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "You are the only living operator in range. Designation of this unit: Exile. I am its intelligence. You may call me Echo."
-        },
-        {
-          "t": 64.98,
-          "end": 66.7,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "I may call you a really bad idea."
-        },
-        {
-          "t": 67.02,
-          "end": 74.69,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
-        },
-        {
-          "t": 75.36,
-          "end": 82.37,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "Compact lance, this is Rask. Heat signature in the fab bay just spiked. Something down there woke up. ... Burn it."
-        },
-        {
-          "t": 82.69,
-          "end": 83.44,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Who is Rask?"
-        },
-        {
-          "t": 83.76,
-          "end": 86.84,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "The man who is about to kill you. Cradle release?"
-        },
-        {
-          "t": 87.16,
-          "end": 89.35,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Do it. Do it, do it, do it."
-        },
-        {
-          "t": 91.32,
-          "end": 96.6,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Neural sync at sixty percent. Try not to think too hard. It listens."
-        },
-        {
-          "t": 96.92,
-          "end": 100.7,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "It listens to \u2014 whoa. Whoa, I felt that. I felt the arm."
-        },
-        {
-          "t": 101.37,
-          "end": 108.74,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Incoming. Rask's frame. The Harrow. He is the Compact's best. Please understand what that means."
-        },
-        {
-          "t": 109.06,
-          "end": 113.59,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "A child. They woke the Exile for a child. ... This is almost an insult."
-        },
-        {
-          "t": 115.42,
-          "end": 117.72,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "He is fast \u2014 Echo, he is too fast\u2014"
-        },
-        {
-          "t": 118.04,
-          "end": 124.37,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Then stop aiming. Stop thinking like a gun. Move like you are running. You are good at running."
-        },
-        {
-          "t": 124.69,
-          "end": 126.99,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Yeah. Yeah, okay. Running I can do."
-        },
-        {
-          "t": 129.51,
-          "end": 130.24,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "...Interesting."
-        },
-        {
-          "t": 130.91,
-          "end": 136.09,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "All units, pull back. Mark the frame. We do not lose the Exile twice."
-        },
-        {
-          "t": 138.69,
-          "end": 139.5,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Did we just\u2014"
-        },
-        {
-          "t": 139.82,
-          "end": 144.08,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Survive? Barely. You are bleeding from a console you headbutted."
-        },
-        {
-          "t": 144.4,
-          "end": 145.01,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Worth it."
-        },
-        {
-          "t": 145.68,
-          "end": 154.86,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "Unregistered Exile-class frame. I have waited twelve years to hear that reactor sing again. ... I did not expect a kid at the helm."
-        },
-        {
-          "t": 155.18,
-          "end": 155.87,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Who is this?"
-        },
-        {
-          "t": 156.19,
-          "end": 167.33,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "My name is Vale. I lead what is left of the people the Compact tried to erase. And you, son, have just stolen the single most wanted machine in the Tiers."
-        },
-        {
-          "t": 167.65,
-          "end": 169.31,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...I really just wanted a power cell."
-        },
-        {
-          "t": 169.63,
-          "end": 175.21,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "They always do. Bring it home, Kestrel. We have a great deal to talk about."
+          "id": "recap",
+          "label": "Recap Hosts",
+          "tag": "Two hosts react and riff, with clips dropped in.",
+          "blurb": "A podcast ABOUT the episode \u2014 two hosts recap, joke, and pull in real clips. Lightest and most fun, least faithful. Great for catching up without committing.",
+          "audio": "audio/exile-ep1-recap.mp3",
+          "duration": 120.13,
+          "cues": [
+            {
+              "t": 10.4,
+              "end": 17.46,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Welcome back to Frame Theory, the show where we watch giant robots make terrible decisions so you do not have to. I am Delray."
+            },
+            {
+              "t": 17.78,
+              "end": 30.28,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "And I am Pip, and this week \u2014 oh, this week. We are cracking open Mobile Frame: Exile, episode one, Ashfall. Delray. They gave the forty-meter doomsday weapon to a teenager."
+            },
+            {
+              "t": 30.6,
+              "end": 34.4,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "They gave it to a scavenger, Pip. A kid who is, and I quote\u2014"
+            },
+            {
+              "t": 34.84,
+              "end": 37.02,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Okay. That is definitely not a power cell."
+            },
+            {
+              "t": 37.47,
+              "end": 45.03,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "That is not a power cell! He is just trying to find a battery in a dead colony, and he trips over a war crime in a closet."
+            },
+            {
+              "t": 45.35,
+              "end": 55.28,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "And can we talk about Echo? Because the ship A.I. has the driest delivery I have heard in years. The colony is about to be breached, the kid is panicking, and Echo just goes\u2014"
+            },
+            {
+              "t": 55.72,
+              "end": 63.3,
+              "who": "ECHO",
+              "name": "Echo",
+              "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
+            },
+            {
+              "t": 63.75,
+              "end": 67.56,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Statistically. I am obsessed. That is my new coworker."
+            },
+            {
+              "t": 67.88,
+              "end": 80.76,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Now here is what actually got me. The fight. Rask \u2014 the Compact's best pilot \u2014 he expects a soldier. And instead the show does this really smart thing where the kid's only real skill is running away."
+            },
+            {
+              "t": 81.08,
+              "end": 86.49,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Right, and the A.I. leans into it. It is not become a warrior, it is\u2014"
+            },
+            {
+              "t": 86.93,
+              "end": 89.31,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...Yeah. Yeah, okay. Running I can do."
+            },
+            {
+              "t": 89.76,
+              "end": 95.51,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "It is a fight scene built entirely around the protagonist's one talent, which is cowardice with excellent cardio."
+            },
+            {
+              "t": 95.83,
+              "end": 103.46,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "And then the gut punch. Vale shows up, tells him he just stole the most wanted machine in the Tiers, and the kid just\u2014"
+            },
+            {
+              "t": 103.9,
+              "end": 105.56,
+              "who": "KESTREL",
+              "name": "Kestrel",
+              "text": "...I really just wanted a power cell."
+            },
+            {
+              "t": 106.01,
+              "end": 111.44,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Best last line of any premiere this season. Episode one, Ashfall. We are so in."
+            },
+            {
+              "t": 111.76,
+              "end": 116.21,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Next week: apparently the murder machine has opinions. We will see you then."
+            }
+          ]
         }
       ]
     },
     {
-      "id": "described",
-      "label": "Audio-Described",
-      "tag": "A narrator paints the action between the lines.",
-      "blurb": "Every visual beat is described by a narrator, the way audio description works for film. You will never lose the plot \u2014 ideal for a long ride where you can't glance at a screen.",
-      "audio": "audio/exile-ep1-described.mp3",
-      "duration": 254.48,
-      "cues": [
+      "id": "frame-theory-gundam",
+      "series": "Frame Theory",
+      "number": 2,
+      "title": "The Real Robot Revolution",
+      "logline": "The hosts go back to 1979's Mobile Suit Gundam \u2014 the show that turned giant robots from superheroes into equipment, and rewrote the genre forever.",
+      "kind": "Commentary",
+      "styles": [
         {
-          "t": 10.66,
-          "end": 24.9,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "A dead place. Wind moves through the gutted ribs of Colony Ring Nine, abandoned twelve years. In the dark, a boy with a wrist lamp picks through a drift of scrap. His name is Kestrel. He is seventeen, and he is not supposed to be here."
+          "id": "recap",
+          "label": "Recap Hosts",
+          "tag": "Two hosts dig into a classic \u2014 pure commentary.",
+          "blurb": "Delray and Pip break down a landmark series in their own words: history, craft, hot takes, and why it still matters. Transformative commentary \u2014 no clips, just analysis.",
+          "audio": "audio/frame-theory-gundam-recap.mp3",
+          "duration": 148.29,
+          "cues": [
+            {
+              "t": 10.4,
+              "end": 22.67,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Welcome back to Frame Theory. I am Delray, and today we are not cracking open a new show \u2014 we are going back to the one that started literally all of this. Nineteen seventy-nine. Mobile Suit Gundam."
+            },
+            {
+              "t": 22.99,
+              "end": 34.89,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "I am Pip, and here is the thesis, right up front: this is the show that split the entire giant-robot world in half. Before it, robots were superheroes. After it, robots were equipment."
+            },
+            {
+              "t": 35.21,
+              "end": 48.18,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "That is the whole revolution in one word. Equipment. The mobile suits are mass-produced military hardware. They run out of ammo. They need maintenance. They get assigned to scared teenagers who were drafted into a war they did not start."
+            },
+            {
+              "t": 48.5,
+              "end": 57.13,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Amuro is not a chosen one. He is a civilian kid who climbs into the prototype because the trained adults around him are already dead and somebody has to pull the lever."
+            },
+            {
+              "t": 57.45,
+              "end": 72.47,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "And then there is the rival. The masked antagonist basically invented an archetype that the next forty-five years of anime are still paying rent on. The tragic grudge, the custom color-coded unit, the soldier who is too charismatic to be a villain and too bitter to be a hero."
+            },
+            {
+              "t": 72.79,
+              "end": 84.12,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "They built a calendar, Delray. A whole fake history \u2014 the Universal Century \u2014 so internally consistent that grown adults now write essays about the economics of space colonies."
+            },
+            {
+              "t": 84.44,
+              "end": 98.92,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "And underneath the war story there is this quiet, almost spiritual idea \u2014 that living out in space might be slowly evolving human empathy into something close to psychic. The show is really asking whether war is just a failure of people to understand each other."
+            },
+            {
+              "t": 99.24,
+              "end": 110.95,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Does it all hold up? Honestly, no. The pacing is nineteen seventy-nine television pacing. There is a monster-of-the-week skeleton bolted onto an anti-war epic, and you can feel the bolts."
+            },
+            {
+              "t": 111.27,
+              "end": 126.4,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "But when it lands \u2014 the moment a child soldier realizes the pilot he just shot down was a person with a name and a family \u2014 that single beat is the genetic code of every serious mecha show since. Macross. Evangelion. The original drama we run on this very feed."
+            },
+            {
+              "t": 126.72,
+              "end": 134.18,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Ride recommendation: do not binge it like a modern series. Let it breathe. One or two a day, like reading a war diary."
+            },
+            {
+              "t": 134.5,
+              "end": 144.37,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "That is the real robot revolution. Robots stopped being gods and started being machines that people have to live and die inside. Next time, we go loud. Very loud."
+            }
+          ]
         },
         {
-          "t": 25.18,
-          "end": 29.61,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Come on. Come on. There has to be one clean power cell in this whole graveyard."
-        },
-        {
-          "t": 30.33,
-          "end": 36.22,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "Far off, a sound that does not belong to a dead colony. A low thud. Then another, closer."
-        },
-        {
-          "t": 36.5,
-          "end": 38.0,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "That is not the structure settling."
-        },
-        {
-          "t": 38.67,
-          "end": 49.68,
-          "who": "SABINE",
-          "name": "Compact PA",
-          "text": "Attention. This sector is under Meridian Compact jurisdiction. Unauthorized salvage will be met with lethal force. You have thirty seconds to comply."
-        },
-        {
-          "t": 50.0,
-          "end": 52.33,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Thirty seconds. Great. Generous."
-        },
-        {
-          "t": 52.65,
-          "end": 59.41,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "Kestrel runs. Behind him the corridor lights stutter awake, red, one by one, as Compact drones flood the ring."
-        },
-        {
-          "t": 59.69,
-          "end": 63.19,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "The old fabrication bay. They never stripped the fabrication bay."
-        },
-        {
-          "t": 63.51,
-          "end": 78.29,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "He shoulders through a half-sealed blast door into a cavern of black air. His lamp barely reaches the far wall. And then it catches something. A shape. Forty meters of dormant steel hung in a cradle of dead gantries. Humanoid. Sleeping. Waiting."
-        },
-        {
-          "t": 78.57,
-          "end": 80.9,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Okay. That is definitely not a power cell."
-        },
-        {
-          "t": 81.22,
-          "end": 84.35,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "As he steps closer, something deep in the machine answers."
-        },
-        {
-          "t": 84.63,
-          "end": 90.42,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Cradle integrity nominal. Reactor at four percent, and climbing. ... Pilot detected."
-        },
-        {
-          "t": 90.74,
-          "end": 97.07,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Nope. Nope, nope, nope. I am a scavenger. I scavenge. I do not pilot the giant murder machine."
-        },
-        {
-          "t": 97.39,
-          "end": 105.66,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "You are the only living operator in range. Designation of this unit: Exile. I am its intelligence. You may call me Echo."
-        },
-        {
-          "t": 105.98,
-          "end": 107.7,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "I may call you a really bad idea."
-        },
-        {
-          "t": 108.02,
-          "end": 115.69,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
-        },
-        {
-          "t": 116.36,
-          "end": 123.37,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "Compact lance, this is Rask. Heat signature in the fab bay just spiked. Something down there woke up. ... Burn it."
-        },
-        {
-          "t": 123.69,
-          "end": 124.44,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Who is Rask?"
-        },
-        {
-          "t": 124.76,
-          "end": 127.85,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "The man who is about to kill you. Cradle release?"
-        },
-        {
-          "t": 128.17,
-          "end": 130.35,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Do it. Do it, do it, do it."
-        },
-        {
-          "t": 130.67,
-          "end": 141.92,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "The cradle clamps blow. Forty meters of forgotten war drops, catches itself on screaming thrusters, and stands \u2014 for the first time in twelve years \u2014 with a terrified teenager wired into its spine."
-        },
-        {
-          "t": 142.2,
-          "end": 147.47,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Neural sync at sixty percent. Try not to think too hard. It listens."
-        },
-        {
-          "t": 147.79,
-          "end": 151.58,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "It listens to \u2014 whoa. Whoa, I felt that. I felt the arm."
-        },
-        {
-          "t": 152.25,
-          "end": 159.62,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Incoming. Rask's frame. The Harrow. He is the Compact's best. Please understand what that means."
-        },
-        {
-          "t": 159.94,
-          "end": 164.47,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "A child. They woke the Exile for a child. ... This is almost an insult."
-        },
-        {
-          "t": 164.79,
-          "end": 167.21,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "The Harrow comes out of the dark like a thrown knife."
-        },
-        {
-          "t": 167.49,
-          "end": 169.79,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "He is fast \u2014 Echo, he is too fast\u2014"
-        },
-        {
-          "t": 170.11,
-          "end": 176.44,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Then stop aiming. Stop thinking like a gun. Move like you are running. You are good at running."
-        },
-        {
-          "t": 176.76,
-          "end": 179.06,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Yeah. Yeah, okay. Running I can do."
-        },
-        {
-          "t": 179.38,
-          "end": 190.89,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "And the Exile moves \u2014 not like a soldier, but like a kid who has spent his whole life slipping through gaps that were never meant for him. It ducks under the Harrow's blade and lets the colony's broken bones do the rest."
-        },
-        {
-          "t": 191.17,
-          "end": 191.91,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "...Interesting."
-        },
-        {
-          "t": 192.58,
-          "end": 197.75,
-          "who": "RASK",
-          "name": "Rask",
-          "text": "All units, pull back. Mark the frame. We do not lose the Exile twice."
-        },
-        {
-          "t": 198.42,
-          "end": 207.49,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "They break through the colony's shattered outer ring into open dark. Earth hangs below, a bruised blue marble. And for one second there is only the sound of Kestrel breathing."
-        },
-        {
-          "t": 207.77,
-          "end": 208.58,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Did we just\u2014"
-        },
-        {
-          "t": 208.9,
-          "end": 213.17,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Survive? Barely. You are bleeding from a console you headbutted."
-        },
-        {
-          "t": 213.49,
-          "end": 214.09,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Worth it."
-        },
-        {
-          "t": 214.76,
-          "end": 223.94,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "Unregistered Exile-class frame. I have waited twelve years to hear that reactor sing again. ... I did not expect a kid at the helm."
-        },
-        {
-          "t": 224.26,
-          "end": 224.96,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "Who is this?"
-        },
-        {
-          "t": 225.28,
-          "end": 236.42,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "My name is Vale. I lead what is left of the people the Compact tried to erase. And you, son, have just stolen the single most wanted machine in the Tiers."
-        },
-        {
-          "t": 236.74,
-          "end": 238.4,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...I really just wanted a power cell."
-        },
-        {
-          "t": 238.72,
-          "end": 244.3,
-          "who": "VALE",
-          "name": "Vale",
-          "text": "They always do. Bring it home, Kestrel. We have a great deal to talk about."
-        },
-        {
-          "t": 244.97,
-          "end": 253.2,
-          "who": "NARRATOR",
-          "name": "Narrator",
-          "text": "Above a dying world, a stolen legend turns toward the dark \u2014 and the boy inside it has no idea he has just become the most hunted person alive."
+          "id": "primer",
+          "label": "Audio Primer",
+          "tag": "A narrator's spoiler-light field guide.",
+          "blurb": "A short, calm primer that sets up the series before you dive in \u2014 what it is, why it matters, what to listen for. Perfect for the first few minutes of a ride.",
+          "audio": "audio/frame-theory-gundam-primer.mp3",
+          "duration": 74.04,
+          "cues": [
+            {
+              "t": 10.45,
+              "end": 17.41,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "A Frame Theory primer, for the road. No spoilers that matter \u2014 just enough to ride in knowing why this one is a pillar."
+            },
+            {
+              "t": 17.73,
+              "end": 32.41,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "The original Mobile Suit Gundam is the founding text of what fans call the real robot genre. The giant machines are not magic. They are tanks with arms \u2014 mass-produced, fuel-hungry, and only as good as the frightened young pilots strapped inside them."
+            },
+            {
+              "t": 32.73,
+              "end": 42.37,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "The story follows a teenage civilian thrown behind the controls of an experimental unit when his colony is caught in a war between Earth and its breakaway space settlements."
+            },
+            {
+              "t": 42.69,
+              "end": 55.96,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Its lasting ideas are simple and heavy. War is logistics and grief, not glory. The enemy is a person. And a new kind of human, sharpened by life in space, might just be able to feel that across a battlefield."
+            },
+            {
+              "t": 56.28,
+              "end": 66.15,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "If you only know the genre through its descendants, this is the source of the river. Watch for the masked rival; he is the blueprint for nearly every anime antagonist you already love."
+            },
+            {
+              "t": 66.47,
+              "end": 70.12,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "That is your primer. Now go ride in knowing where the road began."
+            }
+          ]
         }
       ]
     },
     {
-      "id": "recap",
-      "label": "Recap Hosts",
-      "tag": "Two hosts react and riff, with clips dropped in.",
-      "blurb": "A podcast ABOUT the episode \u2014 two hosts recap, joke, and pull in real clips. Lightest and most fun, least faithful. Great for catching up without committing.",
-      "audio": "audio/exile-ep1-recap.mp3",
-      "duration": 119.51,
-      "cues": [
+      "id": "frame-theory-dbz",
+      "series": "Frame Theory",
+      "number": 3,
+      "title": "Power Levels & Patience",
+      "logline": "The loudest show in the genre, taken apart with love: why Dragon Ball Z's treadmill of escalation works, and why it's secretly the perfect thing to listen to.",
+      "kind": "Commentary",
+      "styles": [
         {
-          "t": 10.4,
-          "end": 17.73,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "Welcome back to Frame Theory, the show where we watch giant robots make terrible decisions so you do not have to. I am Delray."
+          "id": "recap",
+          "label": "Recap Hosts",
+          "tag": "Two hosts dig into a classic \u2014 pure commentary.",
+          "blurb": "Delray and Pip break down a landmark series in their own words: history, craft, hot takes, and why it still matters. Transformative commentary \u2014 no clips, just analysis.",
+          "audio": "audio/frame-theory-dbz-recap.mp3",
+          "duration": 139.74,
+          "cues": [
+            {
+              "t": 10.4,
+              "end": 19.76,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Frame Theory is back. I am Delray, and after a week in the quiet grief of classic Gundam, we are doing the loudest show in the entire genre. Dragon Ball Z."
+            },
+            {
+              "t": 20.08,
+              "end": 29.98,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Pip here, and let me give you the elevator pitch the way an honest person would: this is the show that taught a whole generation that any problem can be solved by screaming until your hair changes color."
+            },
+            {
+              "t": 30.3,
+              "end": 44.21,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "And structurally it is brilliant and infuriating at the exact same time. It is a treadmill of escalation. Every arc runs the same loop: a new threat stronger than the last one, the heroes train, they surpass it, repeat forever."
+            },
+            {
+              "t": 44.53,
+              "end": 57.53,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "But here is the part people get wrong. The engine of this show is not the fighting. It is the waiting. The charge-up. They monetized anticipation. A single punch can take three episodes to actually land."
+            },
+            {
+              "t": 57.85,
+              "end": 70.99,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "And somehow it works, because the real stakes are emotional, not tactical. The lead is not fighting to save the universe. He is fighting because he wants a stronger opponent. He is a cheerful zen monk with the temperament of a golden retriever."
+            },
+            {
+              "t": 71.31,
+              "end": 85.0,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Meanwhile the prince \u2014 the proud rival \u2014 is the best-written character in the whole thing and everyone quietly knows it. Pride as a tragic flaw. A redemption arc you can measure in how many years it takes him to admit that he cares about anyone."
+            },
+            {
+              "t": 85.32,
+              "end": 100.22,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "We have to mention the power-level discourse. The show introduces these precise numeric strength readings, and then abandons them almost immediately, because numbers physically cannot keep up with that much escalation. After a point it is running on pure vibes."
+            },
+            {
+              "t": 100.54,
+              "end": 108.22,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Fair criticisms: the filler, the recaps, and the way the deep, capable female cast gets benched the second the real punching starts."
+            },
+            {
+              "t": 108.54,
+              "end": 118.67,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "But the craft of a climax? Dragon Ball Z might be the best in all of anime at the long, earned, hair-raising peak. The build is endless, but the payoff genuinely lifts you out of your seat."
+            },
+            {
+              "t": 118.99,
+              "end": 128.61,
+              "who": "HOST_B",
+              "name": "Pip",
+              "text": "Which makes it the perfect audio commute show, weirdly. You do not need a screen to know the hero is powering up. You can hear it. The whole soundtrack is anticipation."
+            },
+            {
+              "t": 128.93,
+              "end": 135.82,
+              "who": "HOST_A",
+              "name": "Delray",
+              "text": "Power levels and patience. That is the entire machine. Ride safe, and we will see you next time on Frame Theory."
+            }
+          ]
         },
         {
-          "t": 18.05,
-          "end": 29.84,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "And I am Pip, and this week \u2014 oh, this week. We are cracking open Mobile Frame: Exile, episode one, Ashfall. Delray. They gave the forty-meter doomsday weapon to a teenager."
-        },
-        {
-          "t": 30.16,
-          "end": 34.01,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "They gave it to a scavenger, Pip. A kid who is, and I quote\u2014"
-        },
-        {
-          "t": 34.45,
-          "end": 36.78,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Okay. That is definitely not a power cell."
-        },
-        {
-          "t": 37.23,
-          "end": 44.02,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "That is not a power cell! He is just trying to find a battery in a dead colony, and he trips over a war crime in a closet."
-        },
-        {
-          "t": 44.34,
-          "end": 54.44,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "And can we talk about Echo? Because the ship A.I. has the driest delivery I have heard in years. The colony is about to be breached, the kid is panicking, and Echo just goes\u2014"
-        },
-        {
-          "t": 54.88,
-          "end": 62.55,
-          "who": "ECHO",
-          "name": "Echo",
-          "text": "Noted. The Compact will breach this bay in ninety seconds. Statistically, the murder machine improves your outcome."
-        },
-        {
-          "t": 63.0,
-          "end": 67.3,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "Statistically. I am obsessed. That is my new coworker."
-        },
-        {
-          "t": 67.62,
-          "end": 80.34,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "Now here is what actually got me. The fight. Rask \u2014 the Compact's best pilot \u2014 he expects a soldier. And instead the show does this really smart thing where the kid's only real skill is running away."
-        },
-        {
-          "t": 80.66,
-          "end": 85.7,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "Right, and the A.I. leans into it. It is not become a warrior, it is\u2014"
-        },
-        {
-          "t": 86.14,
-          "end": 88.44,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...Yeah. Yeah, okay. Running I can do."
-        },
-        {
-          "t": 88.89,
-          "end": 94.98,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "It is a fight scene built entirely around the protagonist's one talent, which is cowardice with excellent cardio."
-        },
-        {
-          "t": 95.3,
-          "end": 102.91,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "And then the gut punch. Vale shows up, tells him he just stole the most wanted machine in the Tiers, and the kid just\u2014"
-        },
-        {
-          "t": 103.35,
-          "end": 105.02,
-          "who": "KESTREL",
-          "name": "Kestrel",
-          "text": "...I really just wanted a power cell."
-        },
-        {
-          "t": 105.47,
-          "end": 110.9,
-          "who": "HOST_A",
-          "name": "Delray",
-          "text": "Best last line of any premiere this season. Episode one, Ashfall. We are so in."
-        },
-        {
-          "t": 111.22,
-          "end": 115.59,
-          "who": "HOST_B",
-          "name": "Pip",
-          "text": "Next week: apparently the murder machine has opinions. We will see you then."
+          "id": "primer",
+          "label": "Audio Primer",
+          "tag": "A narrator's spoiler-light field guide.",
+          "blurb": "A short, calm primer that sets up the series before you dive in \u2014 what it is, why it matters, what to listen for. Perfect for the first few minutes of a ride.",
+          "audio": "audio/frame-theory-dbz-primer.mp3",
+          "duration": 70.61,
+          "cues": [
+            {
+              "t": 10.45,
+              "end": 17.54,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "A Frame Theory primer, for the road. Spoiler-light \u2014 just the shape of the thing, so you can ride in knowing what you are hearing."
+            },
+            {
+              "t": 17.86,
+              "end": 30.17,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Dragon Ball Z is the loudest, most influential action anime ever made. It follows a circle of martial artists who defend their world from a rising ladder of ever-stronger threats \u2014 aliens, androids, and worse."
+            },
+            {
+              "t": 30.49,
+              "end": 42.12,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Its rhythm is unique. Battles are enormous, drawn-out events built around the charge \u2014 the slow, deliberate gathering of power before release. The anticipation is the point, and the sound design carries it."
+            },
+            {
+              "t": 42.44,
+              "end": 53.05,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Underneath the spectacle is a simple emotional core: a hero who fights not for glory but for the joy of a worthy opponent, and a rival whose entire arc is learning, very slowly, how to care."
+            },
+            {
+              "t": 53.37,
+              "end": 63.0,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "Because so much of its drama lives in voice, music, and the rising hum before a clash, it travels beautifully without a screen. You will always know when the moment is coming."
+            },
+            {
+              "t": 63.32,
+              "end": 66.69,
+              "who": "NARRATOR",
+              "name": "Narrator",
+              "text": "That is your primer. Eyes on the road, ears on the charge."
+            }
+          ]
         }
       ]
     }

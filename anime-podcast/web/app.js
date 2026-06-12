@@ -14,24 +14,62 @@
   audio.style.display = "none";
   document.addEventListener("DOMContentLoaded", () => document.body.appendChild(audio));
   if (document.readyState !== "loading") document.body.appendChild(audio);
-  let data = null, styles = [], idx = 0, cues = [], activeCue = -1;
+  let data = null, episodes = [], epi = 0, ep = null;
+  let styles = [], idx = 0, cues = [], activeCue = -1;
   let seeking = false, pendingSeek = 0;
 
   // ---------- boot ----------
   fetch("data/episodes.json")
     .then((r) => r.json())
-    .then((m) => { data = m; styles = m.styles; render(); })
+    .then((m) => {
+      data = m;
+      episodes = m.episodes || (m.episode ? [{ ...m.episode, styles: m.styles }] : []);
+      renderEpisodeChips();
+      loadEpisode(0, false);
+      bindControls();
+      registerSW();
+      refreshOfflineState();
+    })
     .catch((e) => { $("#npLine").textContent = "Could not load episode data."; console.error(e); });
 
-  function render() {
-    const ep = data.episode;
+  function renderEpisodeChips() {
+    const wrap = $("#epTabs");
+    wrap.innerHTML = "";
+    episodes.forEach((e, i) => {
+      const b = document.createElement("button");
+      b.className = "epchip" + (i === epi ? " active" : "");
+      b.innerHTML = `<span class="ec-kind">${e.kind || e.series}</span>
+                     <span class="ec-title">${e.series} · ${e.title}</span>
+                     <span class="ec-meta">${e.styles.length} ${e.styles.length === 1 ? "mix" : "mixes"}</span>`;
+      b.onclick = () => loadEpisode(i, true);
+      wrap.appendChild(b);
+    });
+  }
+
+  function loadEpisode(i, autoplay) {
+    if (i < 0 || i >= episodes.length) return;
+    epi = i;
+    ep = episodes[i];
+    styles = ep.styles;
+    idx = 0;
+    [...$("#epTabs").children].forEach((c, k) => c.classList.toggle("active", k === epi));
+    render(autoplay);
+  }
+
+  function render(autoplay) {
     $("#epSeries").textContent = ep.series;
     $("#epTitle").textContent = ep.title;
     $("#epNum").textContent = String(ep.number).padStart(2, "0");
     $("#epLogline").textContent = ep.logline;
     document.title = `${ep.series} — ${ep.title} · SPOKE`;
+    const n = styles.length;
+    $("#stylesHead").textContent = n === 3 ? "Three ways to listen"
+      : n === 2 ? "Two ways to listen" : "Ways to listen";
+    $("#stylesSub").textContent = (ep.kind === "Commentary")
+      ? "A commentary episode — two hosts, or a calm solo primer. Pick your ride."
+      : "Same scene, different rides. Switch any time — feel the difference.";
 
-    // tabs
+    // style tabs
     const tabs = $("#styleTabs");
     tabs.innerHTML = "";
     styles.forEach((s, i) => {
@@ -61,9 +99,7 @@
     });
 
     loadStyle(idx, false);
-    bindControls();
-    registerSW();
-    refreshOfflineState();
+    if (autoplay) audio.play().catch(() => {});
   }
 
   const fmtLen = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
@@ -193,7 +229,7 @@
   // ---------- MediaSession (lockscreen / handlebars controls) ----------
   function setMediaMeta(cue) {
     if (!("mediaSession" in navigator)) return;
-    const s = styles[idx], ep = data.episode;
+    const s = styles[idx];
     navigator.mediaSession.metadata = new MediaMetadata({
       title: cue ? cue.text.slice(0, 80) : `${ep.title} — ${s.label}`,
       artist: `${s.label} · ${ep.series}`,

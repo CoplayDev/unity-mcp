@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 node_modules/
 .DS_Store
+
+# here.now publish state (contains claim tokens)
+.herenow/
