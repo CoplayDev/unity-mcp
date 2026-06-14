@@ -552,3 +552,95 @@ def screenshot_multiview(max_resolution, view_target, output_folder):
         params["outputFolder"] = output_folder
     result = run_command(config, "manage_camera", params)
     format_output(result, config)
+
+
+@camera.command("pick")
+@click.option("--x", "image_x", type=float, required=True,
+              help="X coordinate in the inspected screenshot image (top-left origin).")
+@click.option("--y", "image_y", type=float, required=True,
+              help="Y coordinate in the inspected screenshot image (top-left origin).")
+@click.option("--image-width", type=int, required=True, help="Width of the inspected image in pixels.")
+@click.option("--image-height", type=int, required=True, help="Height of the inspected image in pixels.")
+@click.option("--camera-ref", default=None,
+              help="Camera name/path/ID. Use only when the camera is unchanged since capture.")
+@click.option("--view-json", default=None,
+              help="pickView JSON object returned by a supported screenshot response.")
+@click.option("--dimension", default="3d", type=click.Choice(["3d", "2d"], case_sensitive=False),
+              help="Physics dimension to query.")
+@click.option("--scale-x", type=float, default=None,
+              help="Scale from inspected image X pixels back to captured Unity viewport pixels.")
+@click.option("--scale-y", type=float, default=None,
+              help="Scale from inspected image Y pixels back to captured Unity viewport pixels. Defaults to scale-x.")
+@click.option("--viewport-width", type=int, default=None,
+              help="Original captured Unity viewport width. Use pickView.viewportWidth when present.")
+@click.option("--viewport-height", type=int, default=None,
+              help="Original captured Unity viewport height. Use pickView.viewportHeight when present.")
+@click.option("--layer-mask", default=None,
+              help="Layer mask as integer mask or layer name(s).")
+@click.option("--max-distance", type=float, default=None, help="Maximum ray distance.")
+@click.option("--query-trigger-interaction", default=None,
+              type=click.Choice(["UseGlobal", "Ignore", "Collide"], case_sensitive=False),
+              help="3D trigger query policy.")
+@handle_unity_errors
+def pick(
+    image_x,
+    image_y,
+    image_width,
+    image_height,
+    camera_ref,
+    view_json,
+    dimension,
+    scale_x,
+    scale_y,
+    viewport_width,
+    viewport_height,
+    layer_mask,
+    max_distance,
+    query_trigger_interaction,
+):
+    """Pick the GameObject at a Unity screenshot coordinate.
+
+    This is for Unity screenshots only. Prefer --view-json with the pickView
+    returned by camera screenshots. --camera-ref is valid only when that camera
+    has not moved or changed projection since the screenshot.
+
+    Scene View pickView screenshots first use Unity Editor Scene View picking,
+    then an Editor mesh-intersection fallback, which can hit visible
+    MeshRenderer/SkinnedMeshRenderer objects without Colliders. Other capture
+    modes use physics ray queries and require Collider/Collider2D.
+
+    \b
+    Examples:
+        unity-mcp camera screenshot --camera-ref MainCamera --include-image
+        unity-mcp camera pick --x 310 --y 180 --image-width 640 --image-height 360 --view-json '{"position":[0,1,-10],"rotation":[0,0,0],"projection":"perspective","fieldOfView":60,"nearClipPlane":0.3,"farClipPlane":1000,"aspect":1.777}'
+        unity-mcp camera pick --x 310 --y 180 --image-width 640 --image-height 360 --camera-ref MainCamera --dimension 3d
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "imageX": image_x,
+        "imageY": image_y,
+        "imageWidth": image_width,
+        "imageHeight": image_height,
+        "dimension": dimension.lower(),
+    }
+    if camera_ref:
+        params["camera"] = camera_ref
+    if view_json:
+        params["pickView"] = parse_json_dict_or_exit(view_json)
+    if scale_x is not None:
+        params["scaleX"] = scale_x
+    if scale_y is not None:
+        params["scaleY"] = scale_y
+    if viewport_width is not None:
+        params["viewportWidth"] = viewport_width
+    if viewport_height is not None:
+        params["viewportHeight"] = viewport_height
+    if layer_mask:
+        params["layerMask"] = layer_mask
+    if max_distance is not None:
+        params["maxDistance"] = max_distance
+    if query_trigger_interaction:
+        params["queryTriggerInteraction"] = query_trigger_interaction
+
+    result = run_command("pick_gameobject_from_image", params, config)
+    format_output(result, config)
