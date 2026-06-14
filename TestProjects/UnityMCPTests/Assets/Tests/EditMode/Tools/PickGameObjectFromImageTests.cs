@@ -114,6 +114,32 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void PickView_CullingMaskExcludesTargetWhenLayerMaskOmitted()
+        {
+            var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            target.name = "PickTest_CullingMaskTarget";
+            target.transform.position = new Vector3(1400, 1400, 0);
+            target.layer = LayerMask.NameToLayer("Ignore Raycast");
+            Physics.SyncTransforms();
+
+            var pickView = PerspectivePickView(new Vector3(1400, 1400, -10));
+            pickView["cullingMask"] = 1 << LayerMask.NameToLayer("Default");
+
+            var result = ToJObject(PickGameObjectFromImage.HandleCommand(new JObject
+            {
+                ["imageX"] = 50,
+                ["imageY"] = 50,
+                ["imageWidth"] = 100,
+                ["imageHeight"] = 100,
+                ["pickView"] = pickView,
+                ["dimension"] = "3d"
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.IsFalse(result["data"].Value<bool>("hit"), result.ToString());
+        }
+
+        [Test]
         public void Pick3D_ScaleCoordinatesMapBackToViewport()
         {
             var camera = CreatePerspectiveCamera("PickTest_ScaleCamera", new Vector3(1500, 1500, -10));
@@ -202,6 +228,54 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(result["data"]["point"], result.ToString());
             Assert.IsNotNull(result["data"]["normal"], result.ToString());
             Assert.Greater(result["data"].Value<float>("distance"), 0f);
+        }
+
+        [Test]
+        public void SceneViewPickView_MeshIntersectionHitsSkinnedRendererWithoutCollider()
+        {
+            Mesh mesh = null;
+            try
+            {
+                var target = new GameObject("PickTest_SceneViewSkinnedRendererOnly");
+                target.transform.position = new Vector3(3060, 3060, 0);
+                mesh = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+                mesh.vertices = new[]
+                {
+                    new Vector3(-1, -1, 0),
+                    new Vector3(1, -1, 0),
+                    new Vector3(-1, 1, 0),
+                    new Vector3(1, 1, 0),
+                };
+                mesh.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+
+                var renderer = target.AddComponent<SkinnedMeshRenderer>();
+                renderer.sharedMesh = mesh;
+                renderer.localBounds = new Bounds(Vector3.zero, new Vector3(2, 2, 0.1f));
+                renderer.updateWhenOffscreen = true;
+
+                var result = ToJObject(PickGameObjectFromImage.HandleCommand(new JObject
+                {
+                    ["imageX"] = 50,
+                    ["imageY"] = 50,
+                    ["imageWidth"] = 100,
+                    ["imageHeight"] = 100,
+                    ["pickView"] = PerspectivePickView(new Vector3(3060, 3060, -10), "scene_view"),
+                    ["dimension"] = "3d"
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsTrue(result["data"].Value<bool>("hit"), result.ToString());
+                Assert.AreEqual("PickTest_SceneViewSkinnedRendererOnly", result["data"]["gameObject"]["name"].ToString());
+                Assert.AreEqual("mesh_intersection", result["data"]["sceneViewPickBackend"].ToString());
+                Assert.IsFalse(result["data"].Value<bool>("requiresCollider"));
+            }
+            finally
+            {
+                if (mesh != null)
+                    UnityEngine.Object.DestroyImmediate(mesh);
+            }
         }
 
         [Test]
@@ -324,6 +398,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void Screenshot_WithExplicitCamera_ReturnsPickView()
         {
             var camera = CreatePerspectiveCamera("PickTest_ScreenshotCamera", new Vector3(2400, 2400, -10));
+            camera.cullingMask = 1 << LayerMask.NameToLayer("Default");
 
             var result = ToJObject(ManageScene.HandleCommand(new JObject
             {
@@ -338,6 +413,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(pickView, result.ToString());
             Assert.AreEqual("game_view", pickView.Value<string>("captureSource"));
             Assert.AreEqual("perspective", pickView.Value<string>("projection"));
+            Assert.AreEqual(camera.cullingMask, pickView.Value<int>("cullingMask"));
             Assert.Greater(pickView.Value<int>("viewportWidth"), 0);
             Assert.Greater(pickView.Value<int>("viewportHeight"), 0);
         }

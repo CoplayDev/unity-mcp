@@ -26,8 +26,9 @@ DESCRIPTION = (
     "fallback can return visible MeshRenderer/SkinnedMeshRenderer objects without Colliders; if both miss, "
     "the tool falls back to physics picking. "
     "For camera, game_view, and view_position/view_target captures, picking uses 3D Collider or 2D Collider2D "
-    "ray queries. UI GraphicRaycaster, non-selectable Scene View visuals, Renderer-only objects in non-Scene View "
-    "captures, and non-Unity images are not supported."
+    "ray queries. If layer_mask is omitted, picking defaults to the screenshot camera culling mask when available. "
+    "UI GraphicRaycaster, non-selectable Scene View visuals, Renderer-only objects in non-Scene View captures, "
+    "and non-Unity images are not supported."
 )
 
 

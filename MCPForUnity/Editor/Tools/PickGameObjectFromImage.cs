@@ -57,6 +57,10 @@ namespace MCPForUnity.Editor.Tools
         }
 
         internal static Func<Vector2, SceneViewPickResult> SceneViewPickOverrideForTests { get; set; }
+        private const float SceneViewPositionTolerance = 0.01f;
+        private const float SceneViewRotationTolerance = 0.1f;
+        private const float SceneViewScalarTolerance = 0.01f;
+        private const float SceneViewViewportTolerancePixels = 1f;
         private static MethodInfo _intersectRayMeshMethod;
         private static bool _intersectRayMeshMethodProbed;
 
@@ -125,7 +129,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!IsFinite(viewportU) || !IsFinite(viewportV) || viewportU < 0f || viewportU > 1f || viewportV < 0f || viewportV > 1f)
                     return new ErrorResponse("Computed viewport coordinate is outside [0, 1]. Check image dimensions, scale, and viewport dimensions.");
 
-                int layerMask = ResolveLayerMask(p.GetRaw("layerMask"));
+                JToken layerMaskToken = p.GetRaw("layerMask");
                 float maxDistance = ParamCoercion.CoerceFloatNullable(p.GetRaw("maxDistance")) ?? Mathf.Infinity;
                 if (!IsFinite(maxDistance) && !float.IsPositiveInfinity(maxDistance))
                     return new ErrorResponse("'max_distance' must be a positive finite number or omitted.");
@@ -150,11 +154,12 @@ namespace MCPForUnity.Editor.Tools
                     if (camera == null)
                         return new ErrorResponse($"Camera '{cameraRef}' not found. Provide a Camera GameObject name, path, or instance ID.");
 
+                    int layerMask = ResolveLayerMask(layerMaskToken, ResolveDefaultLayerMask(pickView, camera));
                     var ray = camera.ViewportPointToRay(new Vector3(viewportU, viewportV, 0f));
                     string viewSource = pickView != null ? "pick_view" : "camera";
 
                     if (IsSceneViewPickView(pickView) &&
-                        TryPickSceneViewObject(ray, viewportU, 1f - viewportV, layerMask, maxDistance, out var sceneViewPick, out var sceneViewPickMessage))
+                        TryPickSceneViewObject(pickView, ray, viewportU, 1f - viewportV, viewportWidth, viewportHeight, layerMask, maxDistance, out var sceneViewPick, out var sceneViewPickMessage))
                     {
                         if (sceneViewPick.GameObject != null)
                         {
@@ -251,9 +256,12 @@ namespace MCPForUnity.Editor.Tools
         }
 
         private static bool TryPickSceneViewObject(
+            JObject pickView,
             Ray ray,
             float viewportU,
             float viewportTopFraction,
+            float viewportWidth,
+            float viewportHeight,
             int layerMask,
             float maxDistance,
             out SceneViewPickResult result,
@@ -275,36 +283,24 @@ namespace MCPForUnity.Editor.Tools
             if (!Application.isBatchMode)
             {
                 var sceneView = SceneView.lastActiveSceneView;
-                if (sceneView == null)
+                if (LiveSceneViewMatchesPickView(sceneView, pickView, viewportWidth, viewportHeight, out Rect viewportRect, out handleUtilityMessage))
                 {
-                    handleUtilityMessage = "No active Scene View is available.";
-                }
-                else
-                {
-                    Rect viewportRect = GetSceneViewViewportRectPoints(sceneView);
-                    if (viewportRect.width <= 0f || viewportRect.height <= 0f)
-                    {
-                        handleUtilityMessage = "Active Scene View viewport is empty.";
-                    }
-                    else
-                    {
-                        guiPoint = new Vector2(
-                            viewportRect.x + viewportU * viewportRect.width,
-                            viewportRect.y + viewportTopFraction * viewportRect.height);
+                    guiPoint = new Vector2(
+                        viewportRect.x + viewportU * viewportRect.width,
+                        viewportRect.y + viewportTopFraction * viewportRect.height);
 
-                        try
-                        {
-                            int materialIndex;
-                            GameObject picked = HandleUtility.PickGameObject(guiPoint, out materialIndex);
-                            var handleUtilityResult = new SceneViewPickResult(picked, materialIndex, "handle_utility");
-                            if (picked != null)
-                                return FilterSceneViewPickByLayerMask(handleUtilityResult, layerMask, out result, out message);
-                            handleUtilityMessage = "HandleUtility.PickGameObject did not hit a selectable object.";
-                        }
-                        catch (Exception ex)
-                        {
-                            handleUtilityMessage = $"HandleUtility.PickGameObject was unavailable: {ex.Message}";
-                        }
+                    try
+                    {
+                        int materialIndex;
+                        GameObject picked = HandleUtility.PickGameObject(guiPoint, out materialIndex);
+                        var handleUtilityResult = new SceneViewPickResult(picked, materialIndex, "handle_utility");
+                        if (picked != null)
+                            return FilterSceneViewPickByLayerMask(handleUtilityResult, layerMask, out result, out message);
+                        handleUtilityMessage = "HandleUtility.PickGameObject did not hit a selectable object.";
+                    }
+                    catch (Exception ex)
+                    {
+                        handleUtilityMessage = $"HandleUtility.PickGameObject was unavailable: {ex.Message}";
                     }
                 }
             }
@@ -356,38 +352,51 @@ namespace MCPForUnity.Editor.Tools
                     boundsDistance > maxDistance)
                     continue;
 
-                Mesh mesh = null;
-                Matrix4x4 matrix = renderer.transform.localToWorldMatrix;
-
-                if (renderer is SkinnedMeshRenderer skinnedRenderer)
+                Mesh bakedMesh = null;
+                try
                 {
-                    mesh = skinnedRenderer.sharedMesh;
+                    Mesh mesh = null;
+                    Matrix4x4 matrix = renderer.transform.localToWorldMatrix;
+
+                    if (renderer is SkinnedMeshRenderer skinnedRenderer)
+                    {
+                        if (skinnedRenderer.sharedMesh == null)
+                            continue;
+                        bakedMesh = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+                        skinnedRenderer.BakeMesh(bakedMesh);
+                        mesh = bakedMesh;
+                    }
+                    else
+                    {
+                        var meshFilter = renderer.GetComponent<MeshFilter>();
+                        if (meshFilter != null)
+                            mesh = meshFilter.sharedMesh;
+                    }
+
+                    if (mesh == null)
+                        continue;
+
+                    if (TryIntersectRayMesh(ray, mesh, matrix, out RaycastHit hit) &&
+                        hit.distance >= 0f &&
+                        hit.distance <= maxDistance &&
+                        hit.distance < nearestDistance)
+                    {
+                        nearestDistance = hit.distance;
+                        result = new SceneViewPickResult(
+                            go,
+                            -1,
+                            "mesh_intersection",
+                            true,
+                            hit.point,
+                            hit.normal,
+                            hit.distance);
+                        nearestObject = go;
+                    }
                 }
-                else
+                finally
                 {
-                    var meshFilter = renderer.GetComponent<MeshFilter>();
-                    if (meshFilter != null)
-                        mesh = meshFilter.sharedMesh;
-                }
-
-                if (mesh == null)
-                    continue;
-
-                if (TryIntersectRayMesh(ray, mesh, matrix, out RaycastHit hit) &&
-                    hit.distance >= 0f &&
-                    hit.distance <= maxDistance &&
-                    hit.distance < nearestDistance)
-                {
-                    nearestDistance = hit.distance;
-                    result = new SceneViewPickResult(
-                        go,
-                        -1,
-                        "mesh_intersection",
-                        true,
-                        hit.point,
-                        hit.normal,
-                        hit.distance);
-                    nearestObject = go;
+                    if (bakedMesh != null)
+                        UnityEngine.Object.DestroyImmediate(bakedMesh);
                 }
             }
 
@@ -697,6 +706,113 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
+        internal static bool LiveSceneViewMatchesPickView(
+            SceneView sceneView,
+            JObject pickView,
+            float fallbackViewportWidth,
+            float fallbackViewportHeight,
+            out Rect viewportRect,
+            out string message)
+        {
+            viewportRect = Rect.zero;
+            message = null;
+
+            if (sceneView == null)
+            {
+                message = "No active Scene View is available.";
+                return false;
+            }
+
+            Camera camera = sceneView.camera;
+            if (camera == null)
+            {
+                message = "Active Scene View has no camera.";
+                return false;
+            }
+
+            if (pickView == null)
+            {
+                message = "Scene View pickView metadata is missing.";
+                return false;
+            }
+
+            Vector3? expectedPosition = ReadVector3(pickView["position"]);
+            Vector3? expectedRotation = ReadVector3(pickView["rotation"] ?? pickView["eulerAngles"] ?? pickView["euler_angles"]);
+            if (!expectedPosition.HasValue || !expectedRotation.HasValue)
+            {
+                message = "Scene View pickView is missing camera position or rotation.";
+                return false;
+            }
+
+            if ((camera.transform.position - expectedPosition.Value).sqrMagnitude >
+                SceneViewPositionTolerance * SceneViewPositionTolerance)
+            {
+                message = "Active Scene View camera position no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            if (Quaternion.Angle(camera.transform.rotation, Quaternion.Euler(expectedRotation.Value)) >
+                SceneViewRotationTolerance)
+            {
+                message = "Active Scene View camera rotation no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            string projection = ParamCoercion.CoerceString(pickView["projection"], null)?.ToLowerInvariant();
+            bool expectedOrthographic = ParamCoercion.CoerceBool(pickView["orthographic"], projection == "orthographic");
+            if (camera.orthographic != expectedOrthographic)
+            {
+                message = "Active Scene View projection no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            float? expectedScalar = expectedOrthographic
+                ? ParamCoercion.CoerceFloatNullable(pickView["orthographicSize"] ?? pickView["orthographic_size"])
+                : ParamCoercion.CoerceFloatNullable(pickView["fieldOfView"] ?? pickView["field_of_view"]);
+            float liveScalar = expectedOrthographic ? camera.orthographicSize : camera.fieldOfView;
+            if (IsFinite(expectedScalar) && Mathf.Abs(liveScalar - expectedScalar.Value) > SceneViewScalarTolerance)
+            {
+                message = "Active Scene View projection settings no longer match the screenshot pickView.";
+                return false;
+            }
+
+            float? expectedNear = ParamCoercion.CoerceFloatNullable(pickView["nearClipPlane"] ?? pickView["near_clip_plane"]);
+            if (IsFinite(expectedNear) && Mathf.Abs(camera.nearClipPlane - expectedNear.Value) > SceneViewScalarTolerance)
+            {
+                message = "Active Scene View near clip plane no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            float? expectedFar = ParamCoercion.CoerceFloatNullable(pickView["farClipPlane"] ?? pickView["far_clip_plane"]);
+            if (IsFinite(expectedFar) && Mathf.Abs(camera.farClipPlane - expectedFar.Value) > SceneViewScalarTolerance)
+            {
+                message = "Active Scene View far clip plane no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            viewportRect = GetSceneViewViewportRectPoints(sceneView);
+            if (viewportRect.width <= 0f || viewportRect.height <= 0f)
+            {
+                message = "Active Scene View viewport is empty.";
+                return false;
+            }
+
+            float pixelsPerPoint = Mathf.Max(0.0001f, EditorGUIUtility.pixelsPerPoint);
+            float liveViewportWidth = Mathf.Round(viewportRect.width * pixelsPerPoint);
+            float liveViewportHeight = Mathf.Round(viewportRect.height * pixelsPerPoint);
+            float expectedViewportWidth = ParamCoercion.CoerceFloatNullable(pickView["viewportWidth"] ?? pickView["viewport_width"]) ?? fallbackViewportWidth;
+            float expectedViewportHeight = ParamCoercion.CoerceFloatNullable(pickView["viewportHeight"] ?? pickView["viewport_height"]) ?? fallbackViewportHeight;
+
+            if (Mathf.Abs(liveViewportWidth - expectedViewportWidth) > SceneViewViewportTolerancePixels ||
+                Mathf.Abs(liveViewportHeight - expectedViewportHeight) > SceneViewViewportTolerancePixels)
+            {
+                message = "Active Scene View viewport size no longer matches the screenshot pickView.";
+                return false;
+            }
+
+            return true;
+        }
+
         private static JObject NormalizePickView(JToken token)
         {
             if (token == null || token.Type == JTokenType.Null)
@@ -750,6 +866,9 @@ namespace MCPForUnity.Editor.Tools
 
             camera.nearClipPlane = ParamCoercion.CoerceFloatNullable(view["nearClipPlane"] ?? view["near_clip_plane"]) ?? 0.3f;
             camera.farClipPlane = ParamCoercion.CoerceFloatNullable(view["farClipPlane"] ?? view["far_clip_plane"]) ?? 1000f;
+            int? cullingMask = ParamCoercion.CoerceIntNullable(view["cullingMask"] ?? view["culling_mask"]);
+            if (cullingMask.HasValue)
+                camera.cullingMask = cullingMask.Value;
             float aspect = ParamCoercion.CoerceFloatNullable(view["aspect"]) ?? (viewportWidth / viewportHeight);
             if (!IsFinite(aspect) || aspect <= 0f)
                 aspect = viewportWidth / viewportHeight;
@@ -817,14 +936,14 @@ namespace MCPForUnity.Editor.Tools
             return null;
         }
 
-        private static int ResolveLayerMask(JToken token)
+        private static int ResolveLayerMask(JToken token, int defaultMask)
         {
             if (token == null || token.Type == JTokenType.Null)
-                return ~0;
+                return defaultMask;
 
             string layerMaskStr = token.ToString();
             if (string.IsNullOrWhiteSpace(layerMaskStr))
-                return ~0;
+                return defaultMask;
 
             if (int.TryParse(layerMaskStr, out int mask))
                 return mask;
@@ -842,7 +961,19 @@ namespace MCPForUnity.Editor.Tools
                 resolved |= 1 << layer;
             }
 
-            return resolved == 0 ? ~0 : resolved;
+            return resolved == 0 ? defaultMask : resolved;
+        }
+
+        private static int ResolveDefaultLayerMask(JObject pickView, Camera camera)
+        {
+            int? pickViewMask = ParamCoercion.CoerceIntNullable(pickView?["cullingMask"] ?? pickView?["culling_mask"]);
+            if (pickViewMask.HasValue)
+                return pickViewMask.Value;
+
+            if (camera != null)
+                return camera.cullingMask;
+
+            return ~0;
         }
 
         private static bool IsFinite(float? value)

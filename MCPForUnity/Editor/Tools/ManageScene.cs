@@ -796,6 +796,7 @@ namespace MCPForUnity.Editor.Tools
                 { "orthographicSize", camera.orthographicSize },
                 { "nearClipPlane", camera.nearClipPlane },
                 { "farClipPlane", camera.farClipPlane },
+                { "cullingMask", camera.cullingMask },
                 { "aspect", camera.aspect },
                 { "viewportWidth", viewportWidth },
                 { "viewportHeight", viewportHeight },

@@ -153,6 +153,7 @@ def test_description_mentions_preconditions_and_unsupported_modes():
     assert "capture_source='scene_view'" in DESCRIPTION
     assert "mesh-intersection" in DESCRIPTION
     assert "without Colliders" in DESCRIPTION
+    assert "culling mask" in DESCRIPTION
     assert "screenshot_multiview" in DESCRIPTION
     assert "batch='surround'" in DESCRIPTION
     assert "batch='orbit'" in DESCRIPTION

@@ -470,7 +470,8 @@ class TestCameraCommands:
             ])
             assert result.exit_code == 0
             mock_run.assert_called_once()
-            params = mock_run.call_args[0][2]
+            command_type, params, _config = mock_run.call_args[0]
+            assert command_type == "manage_camera"
             assert params["captureSource"] == "scene_view"
             assert params["viewTarget"] == "Canvas"
             assert params["includeImage"] is True
