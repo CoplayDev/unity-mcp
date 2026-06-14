@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
@@ -27,12 +28,14 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         private string _savedHttpTransportScope;
         private bool _savedAllowLanHttpBind;
         private bool _savedAllowInsecureRemoteHttp;
+        private bool _savedLaunchConfirmed;
 
         [SetUp]
         public void SetUp()
         {
             _service = new ServerManagementService();
             // Save current settings
+            _savedLaunchConfirmed = EditorPrefs.GetBool(EditorPrefKeys.HttpServerLaunchConfirmed, false);
             _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
             _savedHttpRemoteUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
@@ -72,9 +75,192 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             }
             EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, _savedAllowLanHttpBind);
             EditorPrefs.SetBool(EditorPrefKeys.AllowInsecureRemoteHttp, _savedAllowInsecureRemoteHttp);
+            EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, _savedLaunchConfirmed);
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
         }
+
+        #region StartLocalHttpServer First-Time-Confirm Gating
+
+        // A fake launcher that records the headless launch request, then returns a harmless
+        // no-op process (true / cmd exit) so Process.Start SUCCEEDS and exits immediately — no real
+        // server starts, and (unlike a non-existent path) no exception + error dialog that would
+        // block an interactive test run (Test Runner window / MCP bridge); -batchmode suppresses
+        // dialogs, but interactive runs do not.
+        private sealed class RecordingTerminalLauncher : ITerminalLauncher
+        {
+            public bool HeadlessCalled;
+            public string LastCommand;
+            public string LastLogPath;
+
+            public System.Diagnostics.ProcessStartInfo CreateTerminalProcessStartInfo(string command)
+            {
+                return HarmlessNoOpStartInfo();
+            }
+
+            public System.Diagnostics.ProcessStartInfo CreateHeadlessProcessStartInfo(string command, string logFilePath)
+            {
+                HeadlessCalled = true;
+                LastCommand = command;
+                LastLogPath = logFilePath;
+                return HarmlessNoOpStartInfo();
+            }
+
+            public string GetProjectRootPath()
+            {
+                return System.IO.Path.GetTempPath();
+            }
+
+            // A binary that always launches and exits 0 immediately, so Process.Start does not throw.
+            private static System.Diagnostics.ProcessStartInfo HarmlessNoOpStartInfo()
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                if (Application.platform == RuntimePlatform.WindowsEditor)
+                {
+                    psi.FileName = "cmd.exe";
+                    psi.Arguments = "/c exit";
+                }
+                else
+                {
+                    psi.FileName = System.IO.File.Exists("/usr/bin/true") ? "/usr/bin/true" : "/bin/true";
+                }
+                return psi;
+            }
+        }
+
+        // A fake command builder that always yields a benign, valid command so StartLocalHttpServer
+        // does not bail out before reaching the confirmation gate.
+        private sealed class FakeCommandBuilder : IServerCommandBuilder
+        {
+            public bool TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error)
+            {
+                fileName = "uvx";
+                arguments = "run mcp-for-unity";
+                displayCommand = "uvx run mcp-for-unity";
+                error = null;
+                return true;
+            }
+
+            public string BuildUvPathFromUvx(string uvxPath) => uvxPath;
+            public string GetPlatformSpecificPathPrepend() => string.Empty;
+            public string QuoteIfNeeded(string input) =>
+                (!string.IsNullOrEmpty(input) && input.Contains(" ")) ? "\"" + input + "\"" : input;
+        }
+
+        // A fake process detector that reports no listeners (so the "port in use" branch is skipped).
+        private sealed class NoListenersProcessDetector : IProcessDetector
+        {
+            public bool LooksLikeMcpServerProcess(int pid) => false;
+            public bool TryGetProcessCommandLine(int pid, out string argsLower) { argsLower = string.Empty; return false; }
+            public System.Collections.Generic.List<int> GetListeningProcessIdsForPort(int port) => new System.Collections.Generic.List<int>();
+            public int GetCurrentProcessId() => -1;
+            public bool ProcessExists(int pid) => false;
+            public string NormalizeForMatch(string input) => (input ?? string.Empty).Replace(" ", string.Empty).ToLowerInvariant();
+        }
+
+        private ServerManagementService BuildServiceWithFakeLauncher(RecordingTerminalLauncher launcher)
+        {
+            return new ServerManagementService(
+                new NoListenersProcessDetector(),
+                null,
+                null,
+                new FakeCommandBuilder(),
+                launcher);
+        }
+
+        [Test]
+        public void StartLocalHttpServer_AlreadyConfirmed_SkipsDialogAndLaunchesHeadless()
+        {
+            // Arrange - local URL + HTTP enabled + confirmation already given.
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59998");
+            EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, true);
+            EditorConfigurationCache.Instance.Refresh();
+
+            var launcher = new RecordingTerminalLauncher();
+            var service = BuildServiceWithFakeLauncher(launcher);
+
+            // Act - non-quiet, but confirmed: must NOT show a dialog and must launch headless.
+            // (The fake launcher aborts the real spawn, so the return value may be false; we assert on the launch attempt.)
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                service.StartLocalHttpServer(quiet: false);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+
+            // Assert - the headless launch path was taken (gate passed without a dialog).
+            Assert.IsTrue(launcher.HeadlessCalled, "Confirmed launch should reach the headless launcher without a dialog");
+            StringAssert.Contains("uvx run mcp-for-unity", launcher.LastCommand,
+                "The headless command should be the built server command");
+        }
+
+        [Test]
+        public void StartLocalHttpServer_Quiet_BypassesDialogAndDoesNotSetConfirmedFlag()
+        {
+            // Arrange - local URL + HTTP enabled + NOT yet confirmed.
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59997");
+            EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, false);
+            EditorConfigurationCache.Instance.Refresh();
+
+            var launcher = new RecordingTerminalLauncher();
+            var service = BuildServiceWithFakeLauncher(launcher);
+
+            // Act - quiet (auto-start) path must never show a dialog and must launch headless.
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                service.StartLocalHttpServer(quiet: true);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+
+            // Assert
+            Assert.IsTrue(launcher.HeadlessCalled, "Quiet launch should reach the headless launcher without a dialog");
+            Assert.IsFalse(EditorPrefs.GetBool(EditorPrefKeys.HttpServerLaunchConfirmed, false),
+                "Quiet auto-start must NOT set the first-time-confirm flag");
+        }
+
+        [Test]
+        public void StartLocalHttpServer_LaunchesIntoPerPortLaunchLog()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59996");
+            EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, true);
+            EditorConfigurationCache.Instance.Refresh();
+
+            var launcher = new RecordingTerminalLauncher();
+            var service = BuildServiceWithFakeLauncher(launcher);
+
+            // Act
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                service.StartLocalHttpServer(quiet: false);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+
+            // Assert - the launch log path is the per-port server-launch log.
+            Assert.IsTrue(launcher.HeadlessCalled, "Launch should reach the headless launcher");
+            StringAssert.Contains("server-launch-59996.log", launcher.LastLogPath,
+                "Headless launch should redirect output to the per-port launch log");
+        }
+
+        #endregion
 
         #region IsLocalUrl Tests
 
