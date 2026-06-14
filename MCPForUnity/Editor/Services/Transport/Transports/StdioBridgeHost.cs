@@ -49,6 +49,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         // EditorApplication.timeSinceStartup of the first AddressAlreadyInUse on the configured
         // port; 0 when the port binds cleanly. Drives the same-port retry window (#1173).
         private static double _portBusySince = 0.0;
+        // If the port has been continuously busy longer than this, _portBusySince is treated as a
+        // stale leftover from an abandoned retry and a fresh window is started (#1173).
+        private const double PortBusyStaleResetSeconds = 60.0;
         private static int heartbeatSeq = 0;
         private static Dictionary<string, QueuedCommand> commandQueue = new();
         private static int mainThreadId;
@@ -302,15 +305,24 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         double now = EditorApplication.timeSinceStartup;
                         // Start a fresh window on the first conflict, or if a stale timestamp
                         // survived a long idle gap (a real reload + retry resolves in seconds).
-                        if (_portBusySince <= 0.0 || (now - _portBusySince) > 60.0) _portBusySince = now;
+                        if (_portBusySince <= 0.0 || (now - _portBusySince) > PortBusyStaleResetSeconds) _portBusySince = now;
 
                         if (!PortManager.ShouldAbandonBusyPort(now - _portBusySince))
                         {
+                            try { listener?.Stop(); } catch { }
                             try { listener?.Server?.Dispose(); } catch { }
                             listener = null;
                             McpLog.Warn($"Port {currentUnityPort} not released yet after reload; retrying same port.");
                             WriteHeartbeat(true, "port_busy");
                             nextStartAt = now + 0.3; // throttle the editor-idle retry loop
+                            // Arm the editor-idle retry even when Start() was called directly
+                            // (e.g. StartAutoConnect), not only during reload resume — so a transient
+                            // AddressAlreadyInUse can never leave the bridge permanently stopped.
+                            if (!ensureUpdateHooked)
+                            {
+                                ensureUpdateHooked = true;
+                                EditorApplication.update += EnsureStartedOnEditorIdle;
+                            }
                             return;
                         }
 
