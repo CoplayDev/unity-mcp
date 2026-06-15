@@ -382,7 +382,7 @@ def discover_editor(version: str,
     if sec:
         roots.append(sec)
 
-    best: tuple[tuple[int, int, str], str, str] | None = None  # ((patch, suffix-as-key), binary, dir_version)
+    best: tuple[tuple[int, str], str, str] | None = None  # ((patch, suffix), binary, dir_version)
     for root in roots:
         try:
             entries = _listdir(root)
@@ -1349,8 +1349,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
     legs = parse_legs(args.legs)
+    if not legs:
+        print("::error:: --legs did not include any valid values (allowed: smoke,editmode,playmode)")
+        return 2
     if args.ci:
         args.no_warmup = True
+        if not os.environ.get("UNITY_IMAGE"):
+            print("::error:: --ci requires the UNITY_IMAGE environment variable "
+                  "(the unityci/editor image to run the headless Editor in)")
+            return 2
 
     # Resolve project path (repo-relative or absolute).
     project_path = Path(args.project_path)

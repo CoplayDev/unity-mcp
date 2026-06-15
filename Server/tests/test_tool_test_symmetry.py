@@ -2,9 +2,10 @@
 
 Enforces the CLAUDE.md rule that "Every new feature needs tests". A tool module
 (any file under ``services/tools/`` that exposes an ``@mcp_for_unity_tool``) is
-considered covered when any file under ``Server/tests/`` references it by module
-name -- a dedicated ``test_<module>.py``, a characterization test, or an
-integration test all count.
+considered covered when a ``test_*.py`` file under ``Server/tests/`` references it
+by module name -- a dedicated ``test_<module>.py`` or a characterization test
+counts. Non-``test_*.py`` scripts (e.g. ``tests/e2e/bridge_smoke.py``) are not
+scanned, so a tool exercised only there still needs a unit/characterization test.
 
 Tools that are genuinely untested today live in ``KNOWN_UNTESTED`` so this guard
 fails for *new* untested tools without forcing a full backfill first. SHRINK the
