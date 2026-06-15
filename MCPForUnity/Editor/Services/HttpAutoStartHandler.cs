@@ -108,51 +108,57 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// Waits for the local HTTP server to accept connections, then connects the bridge.
-        /// Mirrors TryAutoStartSessionAsync in McpConnectionSection.
+        /// Mirrors TryAutoStartSessionAsync in McpConnectionSection: keep polling reachability while
+        /// the launched process is alive; declare failure only when it exits without the port coming
+        /// up, or a generous hard cap is reached.
         /// </summary>
         private static async Task WaitForServerAndConnectAsync()
         {
-            const int maxAttempts = 30;
-            var shortDelay = TimeSpan.FromMilliseconds(500);
-            var longDelay = TimeSpan.FromSeconds(3);
+            var server = MCPServiceLocator.Server;
+            string url = HttpEndpointUtility.GetLocalBaseUrl();
+            var pollDelay = TimeSpan.FromMilliseconds(500);
+            var hardCap = TimeSpan.FromMinutes(5);
+            double startTime = EditorApplication.timeSinceStartup;
 
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            while (true)
             {
                 // Abort if user changed settings while we were waiting.
                 if (!EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false)) return;
                 if (!EditorConfigurationCache.Instance.UseHttpTransport) return;
                 if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http)) return;
 
-                bool reachable = MCPServiceLocator.Server.IsLocalHttpServerReachable();
-
-                if (reachable)
+                if (server.IsLocalHttpServerReachable())
                 {
+                    McpLog.Info($"Server ready on {url}");
                     bool started = await MCPServiceLocator.Bridge.StartAsync();
                     if (started)
                     {
-                        McpLog.Info("[HTTP Auto-Start] Bridge started successfully");
-                        MCPForUnityEditorWindow.RequestHealthVerification();
-                        return;
-                    }
-                }
-                else if (attempt >= 20 && (attempt - 20) % 3 == 0)
-                {
-                    // Last-resort: try connecting even if not detected (process detection may fail).
-                    bool started = await MCPServiceLocator.Bridge.StartAsync();
-                    if (started)
-                    {
-                        McpLog.Info("[HTTP Auto-Start] Bridge started successfully (late connect)");
+                        McpLog.Info("Session connected");
                         MCPForUnityEditorWindow.RequestHealthVerification();
                         return;
                     }
                 }
 
-                var delay = attempt < 6 ? shortDelay : longDelay;
-                try { await Task.Delay(delay); }
+                bool processAlive = server.IsManagedServerLaunchProcessAlive();
+                double elapsed = EditorApplication.timeSinceStartup - startTime;
+
+                if ((!processAlive && elapsed > 1.0) || elapsed > hardCap.TotalSeconds)
+                {
+                    // Last-resort connect attempt in case reachability detection missed a live server.
+                    if (await MCPServiceLocator.Bridge.StartAsync())
+                    {
+                        McpLog.Info("Session connected");
+                        MCPForUnityEditorWindow.RequestHealthVerification();
+                        return;
+                    }
+
+                    server.LogLocalHttpServerLaunchFailure();
+                    return;
+                }
+
+                try { await Task.Delay(pollDelay); }
                 catch { return; }
             }
-
-            McpLog.Warn("[HTTP Auto-Start] Server did not become reachable after launch");
         }
 
         /// <summary>
@@ -160,15 +166,17 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         private static async Task ConnectBridgeAsync()
         {
+            string url = HttpEndpointUtility.GetRemoteBaseUrl();
+            McpLog.Info($"Connecting to {url}…");
             bool started = await MCPServiceLocator.Bridge.StartAsync();
             if (started)
             {
-                McpLog.Info("[HTTP Auto-Start] Bridge started successfully (remote)");
+                McpLog.Info("Connected");
                 MCPForUnityEditorWindow.RequestHealthVerification();
             }
             else
             {
-                McpLog.Warn("[HTTP Auto-Start] Failed to connect to remote HTTP server");
+                McpLog.Warn("Connection failed: could not connect to remote HTTP server");
             }
         }
     }

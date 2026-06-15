@@ -167,6 +167,17 @@ tools/check-unity-versions.sh           # compile-only across installed Unity Hu
 tools/check-unity-versions.sh --full    # full EditMode test run
 ```
 
+#### Local headless test harness
+One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge — the same entrypoint CI uses (`.github/workflows/e2e-bridge.yml`):
+
+```bash
+python tools/local_harness.py
+```
+
+Key flags: `--legs smoke,editmode,playmode` (subset to run), `--project-path` (target project, default `TestProjects/UnityMCPTests`), `--reuse` (attach to an already-resident bridge instead of booting one), `--keep-alive` (leave the Editor running after the legs), `--no-warmup` (skip the warm-up import phase).
+
+Exit codes: `0` pass, `1` blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found. Requires a Hub-activated Editor locally (no ULF/serial).
+
 ### Local Development
 1. Set **Server Source Override** in MCP for Unity Advanced Settings to your local `Server/` path
 2. Enable **Dev Mode** checkbox to force fresh installs

@@ -9,11 +9,13 @@ on:
     branches-ignore: [beta, main]
     paths:
       - Server/**
+      - tools/**
       - .github/workflows/python-tests.yml
   pull_request:
     branches: [main, beta]
     paths:
       - Server/**
+      - tools/**
       - .github/workflows/python-tests.yml
   workflow_dispatch: {}
   workflow_call:
@@ -52,6 +54,11 @@ jobs:
         run: |
           cd Server
           uv run pytest tests/ -v --tb=short --cov --cov-report=xml --cov-report=html --cov-report=term
+
+      - name: Run local harness unit tests (hermetic, no Unity)
+        run: |
+          cd Server
+          uv run python -m pytest "$GITHUB_WORKSPACE/tools/tests/" -v --tb=short
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

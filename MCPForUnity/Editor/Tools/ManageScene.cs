@@ -678,24 +678,9 @@ namespace MCPForUnity.Editor.Tools
                     return new SuccessResponse(message, BuildScreenshotResponseData(result, targetCamera.name, includeImage));
                 }
 
-                // Default path: use ScreenCapture API if available, camera fallback otherwise
-                bool screenCaptureAvailable = ScreenshotUtility.IsScreenCaptureModuleAvailable;
+                // Default path: ScreenCapture API for 2022.1+, camera fallback required on older versions.
+#if !UNITY_2022_1_OR_NEWER
                 bool hasCameraFallback = Camera.main != null || UnityFindObjectsCompat.FindAll<Camera>().Length > 0;
-
-#if UNITY_2022_1_OR_NEWER
-                if (!screenCaptureAvailable && !hasCameraFallback)
-                {
-                    return new ErrorResponse(
-                        "Cannot capture screenshot. The Screen Capture module is not enabled and no Camera was found in the scene. " +
-                        "Please either: (1) Enable the Screen Capture module: Window > Package Manager > Built-in > Screen Capture > Enable, " +
-                        "or (2) Add a Camera to your scene for camera-based fallback capture."
-                    );
-                }
-                if (!screenCaptureAvailable)
-                {
-                    McpLog.Warn("[ManageScene] Screen Capture module not enabled. Using camera-based fallback.");
-                }
-#else
                 if (!hasCameraFallback)
                 {
                     return new ErrorResponse(

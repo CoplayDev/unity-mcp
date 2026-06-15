@@ -179,10 +179,12 @@ namespace MCPForUnity.Editor.Clients
                     JToken unityToken = null;
                     if (rootConfig != null)
                     {
+                        string containerKey = string.IsNullOrEmpty(client.ServerContainerKey)
+                            ? "mcpServers" : client.ServerContainerKey;
                         unityToken = client.IsVsCodeLayout
                             ? rootConfig["servers"]?["unityMCP"]
                                 ?? rootConfig["mcp"]?["servers"]?["unityMCP"]
-                            : rootConfig["mcpServers"]?["unityMCP"];
+                            : rootConfig[containerKey]?["unityMCP"];
                     }
 
                     if (unityToken is JObject unityObj)
@@ -360,9 +362,10 @@ namespace MCPForUnity.Editor.Clients
             => client.status == McpStatus.Configured ? "Unregister" : "Configure";
 
         /// <summary>
-        /// Removes the unityMCP entry from the client's JSON config (both VS Code-style
-        /// `servers` / `mcp.servers` layouts and the standard `mcpServers` layout). Leaves
-        /// the file in place so we don't clobber other servers the user has configured.
+        /// Removes the unityMCP entry from the client's JSON config (VS Code-style
+        /// `servers` / `mcp.servers` layouts, the standard `mcpServers` layout, or a
+        /// client-specific container such as Kilo's `mcp`). Leaves the file in place so we
+        /// don't clobber other servers the user has configured.
         /// </summary>
         public override void Unregister()
         {
@@ -392,7 +395,9 @@ namespace MCPForUnity.Editor.Clients
                 }
                 else
                 {
-                    if ((root["mcpServers"] as JObject)?.Remove("unityMCP") == true) removed = true;
+                    string containerKey = string.IsNullOrEmpty(client.ServerContainerKey)
+                        ? "mcpServers" : client.ServerContainerKey;
+                    if ((root[containerKey] as JObject)?.Remove("unityMCP") == true) removed = true;
                 }
 
                 if (removed)

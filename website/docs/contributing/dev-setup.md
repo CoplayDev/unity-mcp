@@ -217,6 +217,10 @@ run_tests(mode="PlayMode", init_timeout=120000)  # PlayMode may need longer init
 get_test_job(job_id="<id>", wait_timeout=60)
 ```
 
+### Local headless test harness
+
+`python tools/local_harness.py` boots a headless Editor and runs the smoke + EditMode + PlayMode legs over the bridge — the same entrypoint CI uses. See [Testing → Local headless test harness](./testing.md#local-headless-test-harness) for the flags and exit-code contract.
+
 ### Code Coverage
 
 ```bash
