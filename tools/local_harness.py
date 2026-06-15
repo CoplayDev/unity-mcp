@@ -706,14 +706,21 @@ classify_editor_log = classify_log
 aggregate_exit_code = aggregate_exit
 
 
+ALLOWED_LEGS = ("smoke", "editmode", "playmode")
+
+
 def parse_legs(legs: str) -> list[str]:
-    """Normalize the --legs CSV into an ordered, de-duplicated list."""
-    allowed = ["smoke", "editmode", "playmode"]
+    """Normalize the --legs CSV into an ordered, de-duplicated list.
+
+    Lenient by design -- unknown values are dropped (see test_drops_unknown_legs).
+    The CLI entry point (main) validates raw input against ALLOWED_LEGS and
+    rejects unknown values before calling this; keep this a pure normalizer.
+    """
     seen: set[str] = set()
     out: list[str] = []
     for part in (legs or "").split(","):
         leg = part.strip().lower()
-        if leg and leg in allowed and leg not in seen:
+        if leg and leg in ALLOWED_LEGS and leg not in seen:
             seen.add(leg)
             out.append(leg)
     return out
@@ -1348,9 +1355,15 @@ def _print_summary(outcomes: list[LegOutcome], exit_code: int) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
+    requested_legs = [p.strip().lower() for p in (args.legs or "").split(",") if p.strip()]
+    invalid_legs = [leg for leg in requested_legs if leg not in ALLOWED_LEGS]
+    if invalid_legs:
+        print(f"::error:: --legs included invalid value(s): {', '.join(invalid_legs)} "
+              f"(allowed: {', '.join(ALLOWED_LEGS)})")
+        return 2
     legs = parse_legs(args.legs)
     if not legs:
-        print("::error:: --legs did not include any valid values (allowed: smoke,editmode,playmode)")
+        print(f"::error:: --legs did not include any valid values (allowed: {', '.join(ALLOWED_LEGS)})")
         return 2
     if args.ci:
         args.no_warmup = True
