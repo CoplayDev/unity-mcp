@@ -422,6 +422,105 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
+        // Reads node graph positions for every state in all layers (recurses into
+        // sub-state-machines). Returns [{ name, x, y, layer }] so a caller can analyze
+        // the current layout before sending back a revised one.
+        public static object GetStatePositions(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            var nodes = new List<object>();
+            for (int li = 0; li < controller.layers.Length; li++)
+                CollectPositions(controller.layers[li].stateMachine, li, nodes);
+
+            return new
+            {
+                success = true,
+                message = $"Read {nodes.Count} state position(s).",
+                data = new { count = nodes.Count, nodes }
+            };
+        }
+
+        private static void CollectPositions(AnimatorStateMachine sm, int layer, List<object> outList)
+        {
+            var children = sm.states;
+            for (int i = 0; i < children.Length; i++)
+                outList.Add(new
+                {
+                    name = children[i].state.name,
+                    x = children[i].position.x,
+                    y = children[i].position.y,
+                    layer
+                });
+            foreach (var sub in sm.stateMachines)
+                CollectPositions(sub.stateMachine, layer, outList);
+        }
+
+        // Sets node graph positions from a 'positions' array of { name, x, y }.
+        // Matches states by name across all layers (recurses into sub-state-machines)
+        // and reassigns stateMachine.states so the edits persist on the asset.
+        public static object SetStatePositions(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            if (!(@params["positions"] is JArray positions) || positions.Count == 0)
+                return new { success = false, message = "'positions' array is required: [{ name, x, y }, ...]" };
+
+            var want = new Dictionary<string, Vector2>();
+            foreach (var token in positions)
+            {
+                string name = token["name"]?.ToString();
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                float x = token["x"]?.ToObject<float>() ?? 0f;
+                float y = token["y"]?.ToObject<float>() ?? 0f;
+                want[name] = new Vector2(x, y);
+            }
+            if (want.Count == 0)
+                return new { success = false, message = "No valid entries in 'positions' (each needs a 'name')." };
+
+            var matched = new HashSet<string>();
+            for (int li = 0; li < controller.layers.Length; li++)
+                ApplyPositions(controller.layers[li].stateMachine, want, matched);
+
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+
+            var unmatched = want.Keys.Where(k => !matched.Contains(k)).ToList();
+            return new
+            {
+                success = true,
+                message = $"Positioned {matched.Count} state(s); {unmatched.Count} name(s) unmatched.",
+                data = new
+                {
+                    matched = matched.Count,
+                    requested = want.Count,
+                    unmatched
+                }
+            };
+        }
+
+        private static void ApplyPositions(AnimatorStateMachine sm, Dictionary<string, Vector2> want, HashSet<string> matched)
+        {
+            var children = sm.states;
+            for (int i = 0; i < children.Length; i++)
+            {
+                if (want.TryGetValue(children[i].state.name, out var p))
+                {
+                    children[i].position = new Vector3(p.x, p.y, 0f);
+                    matched.Add(children[i].state.name);
+                }
+            }
+            sm.states = children; // reassign so position edits persist
+
+            foreach (var sub in sm.stateMachines)
+                ApplyPositions(sub.stateMachine, want, matched);
+        }
+
         private static AnimatorController LoadController(JObject @params)
         {
             string controllerPath = @params["controllerPath"]?.ToString();

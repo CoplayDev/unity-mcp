@@ -15,7 +15,9 @@ ANIMATOR_ACTIONS = [
 ]
 
 CONTROLLER_ACTIONS = [
-    "controller_create", "controller_add_state", "controller_add_transition",
+    "controller_create", "controller_add_state",
+    "controller_set_state_positions", "controller_get_state_positions",
+    "controller_add_transition",
     "controller_add_parameter", "controller_get_info", "controller_assign",
     "controller_add_layer", "controller_remove_layer", "controller_set_layer_weight",
     "controller_create_blend_tree_1d", "controller_create_blend_tree_2d", "controller_add_blend_tree_child",
