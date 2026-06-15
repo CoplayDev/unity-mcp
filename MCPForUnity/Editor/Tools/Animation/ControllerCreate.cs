@@ -422,24 +422,44 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        // Reads node graph positions for every state in all layers (recurses into
-        // sub-state-machines). Returns [{ name, x, y, layer }] so a caller can analyze
-        // the current layout before sending back a revised one.
+        // Reads node graph positions for every state (recurses into sub-state-machines).
+        // Returns [{ name, x, y, layer }] so a caller can analyze the current layout
+        // before sending back a revised one. Pass 'layerIndex' to scope to one layer;
+        // results are paged (page_size/cursor) since controllers can have many states.
         public static object GetStatePositions(JObject @params)
         {
             var controller = LoadController(@params);
             if (controller == null)
                 return ControllerNotFoundError(@params);
 
+            int? layerFilter = @params["layerIndex"]?.ToObject<int>();
+            if (layerFilter.HasValue && (layerFilter < 0 || layerFilter >= controller.layers.Length))
+                return new { success = false, message = $"Layer index {layerFilter} out of range (controller has {controller.layers.Length} layers)" };
+
             var nodes = new List<object>();
             for (int li = 0; li < controller.layers.Length; li++)
+            {
+                if (layerFilter.HasValue && li != layerFilter.Value)
+                    continue;
                 CollectPositions(controller.layers[li].stateMachine, li, nodes);
+            }
+
+            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
+            var paged = PaginationResponse<object>.Create(nodes, pagination);
 
             return new
             {
                 success = true,
-                message = $"Read {nodes.Count} state position(s).",
-                data = new { count = nodes.Count, nodes }
+                message = $"Read {paged.Items.Count} of {paged.TotalCount} state position(s).",
+                data = new
+                {
+                    count = paged.TotalCount,
+                    nodes = paged.Items,
+                    pageSize = paged.PageSize,
+                    cursor = paged.Cursor,
+                    nextCursor = paged.NextCursor,
+                    hasMore = paged.HasMore
+                }
             };
         }
 
@@ -458,9 +478,11 @@ namespace MCPForUnity.Editor.Tools.Animation
                 CollectPositions(sub.stateMachine, layer, outList);
         }
 
-        // Sets node graph positions from a 'positions' array of { name, x, y }.
-        // Matches states by name across all layers (recurses into sub-state-machines)
-        // and reassigns stateMachine.states so the edits persist on the asset.
+        // Sets node graph positions from a 'positions' array of { name, x, y, layer? }.
+        // Each entry's optional 'layer' (falling back to a top-level 'layerIndex') scopes
+        // the match to one layer, so a name reused across layers is no longer ambiguous;
+        // entries with no layer match that name on any layer. Recurses into sub-state-
+        // machines and reassigns stateMachine.states so the edits persist on the asset.
         public static object SetStatePositions(JObject @params)
         {
             var controller = LoadController(@params);
@@ -468,8 +490,11 @@ namespace MCPForUnity.Editor.Tools.Animation
                 return ControllerNotFoundError(@params);
 
             if (!(@params["positions"] is JArray positions) || positions.Count == 0)
-                return new { success = false, message = "'positions' array is required: [{ name, x, y }, ...]" };
+                return new { success = false, message = "'positions' array is required: [{ name, x, y, layer? }, ...]" };
 
+            int? defaultLayer = @params["layerIndex"]?.ToObject<int>();
+
+            // Key is "layer:name" when scoped to a layer, else "*:name" to match any layer.
             var want = new Dictionary<string, Vector2>();
             foreach (var token in positions)
             {
@@ -478,14 +503,16 @@ namespace MCPForUnity.Editor.Tools.Animation
                     continue;
                 float x = token["x"]?.ToObject<float>() ?? 0f;
                 float y = token["y"]?.ToObject<float>() ?? 0f;
-                want[name] = new Vector2(x, y);
+                int? layer = token["layer"]?.ToObject<int>() ?? defaultLayer;
+                want[$"{(layer.HasValue ? layer.Value.ToString() : "*")}:{name}"] = new Vector2(x, y);
             }
             if (want.Count == 0)
                 return new { success = false, message = "No valid entries in 'positions' (each needs a 'name')." };
 
             var matched = new HashSet<string>();
+            Undo.RecordObject(controller, "Set State Positions");
             for (int li = 0; li < controller.layers.Length; li++)
-                ApplyPositions(controller.layers[li].stateMachine, want, matched);
+                ApplyPositions(controller.layers[li].stateMachine, li, want, matched);
 
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
@@ -494,7 +521,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             return new
             {
                 success = true,
-                message = $"Positioned {matched.Count} state(s); {unmatched.Count} name(s) unmatched.",
+                message = $"Positioned {matched.Count} state(s); {unmatched.Count} key(s) unmatched.",
                 data = new
                 {
                     matched = matched.Count,
@@ -504,21 +531,27 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        private static void ApplyPositions(AnimatorStateMachine sm, Dictionary<string, Vector2> want, HashSet<string> matched)
+        private static void ApplyPositions(AnimatorStateMachine sm, int layer, Dictionary<string, Vector2> want, HashSet<string> matched)
         {
             var children = sm.states;
             for (int i = 0; i < children.Length; i++)
             {
-                if (want.TryGetValue(children[i].state.name, out var p))
+                string name = children[i].state.name;
+                // Prefer a layer-scoped entry; fall back to the any-layer entry.
+                string scopedKey = $"{layer}:{name}";
+                string anyKey = $"*:{name}";
+                string key = want.ContainsKey(scopedKey) ? scopedKey
+                           : want.ContainsKey(anyKey) ? anyKey : null;
+                if (key != null)
                 {
-                    children[i].position = new Vector3(p.x, p.y, 0f);
-                    matched.Add(children[i].state.name);
+                    children[i].position = new Vector3(want[key].x, want[key].y, 0f);
+                    matched.Add(key);
                 }
             }
             sm.states = children; // reassign so position edits persist
 
             foreach (var sub in sm.stateMachines)
-                ApplyPositions(sub.stateMachine, want, matched);
+                ApplyPositions(sub.stateMachine, layer, want, matched);
         }
 
         private static AnimatorController LoadController(JObject @params)

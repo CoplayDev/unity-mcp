@@ -73,7 +73,9 @@ class TestActionLists:
         assert expected.issubset(set(ANIMATOR_ACTIONS))
 
     def test_expected_controller_actions_present(self):
-        expected = {"controller_create", "controller_add_state", "controller_add_transition",
+        expected = {"controller_create", "controller_add_state",
+                    "controller_set_state_positions", "controller_get_state_positions",
+                    "controller_add_transition",
                     "controller_add_parameter", "controller_get_info", "controller_assign",
                     "controller_add_layer", "controller_remove_layer", "controller_set_layer_weight",
                     "controller_create_blend_tree_1d", "controller_create_blend_tree_2d", "controller_add_blend_tree_child"}
@@ -145,6 +147,58 @@ class TestManageAnimationToolValidation:
         assert "animator_" in result["message"]
         assert "controller_" in result["message"]
         assert "clip_" in result["message"]
+
+
+class TestStatePositionActions:
+    """State-position actions dispatch through manage_animation with the right payload."""
+
+    def _dispatch(self, action, properties=None):
+        from services.tools import manage_animation as mod
+
+        ctx = MagicMock()
+        ctx.get_state = AsyncMock(return_value=None)
+        with patch.object(mod, "get_unity_instance_from_context", AsyncMock(return_value=None)):
+            with patch.object(mod, "send_with_unity_instance",
+                              AsyncMock(return_value={"success": True, "data": {}})) as mock_send:
+                asyncio.run(mod.manage_animation(
+                    ctx, action=action,
+                    controller_path="Assets/Anim/Player.controller",
+                    properties=properties,
+                ))
+        # send_with_unity_instance(send_fn, unity_instance, command, params)
+        return mock_send.call_args[0][2], mock_send.call_args[0][3]
+
+    def test_get_state_positions_dispatches(self):
+        command, params = self._dispatch("controller_get_state_positions")
+        assert command == "manage_animation"
+        assert params["action"] == "controller_get_state_positions"
+        assert params["controllerPath"] == "Assets/Anim/Player.controller"
+
+    def test_get_state_positions_forwards_paging_and_layer(self):
+        _, params = self._dispatch(
+            "controller_get_state_positions",
+            properties={"layerIndex": 1, "page_size": 10, "cursor": 20},
+        )
+        assert params["properties"]["layerIndex"] == 1
+        assert params["properties"]["page_size"] == 10
+        assert params["properties"]["cursor"] == 20
+
+    def test_set_state_positions_forwards_positions(self):
+        positions = [{"name": "Idle", "x": 100, "y": 0}, {"name": "Walk", "x": 300, "y": 0}]
+        _, params = self._dispatch(
+            "controller_set_state_positions", properties={"positions": positions}
+        )
+        assert params["action"] == "controller_set_state_positions"
+        assert params["properties"]["positions"] == positions
+
+    def test_set_state_positions_forwards_layer_scoping(self):
+        positions = [{"name": "Idle", "x": 0, "y": 0, "layer": 1}]
+        _, params = self._dispatch(
+            "controller_set_state_positions",
+            properties={"positions": positions, "layerIndex": 0},
+        )
+        assert params["properties"]["positions"][0]["layer"] == 1
+        assert params["properties"]["layerIndex"] == 0
 
 
 # =============================================================================
