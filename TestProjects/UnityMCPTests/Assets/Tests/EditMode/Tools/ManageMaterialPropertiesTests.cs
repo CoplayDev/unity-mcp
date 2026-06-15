@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using static MCPForUnityTests.Editor.TestUtilities;
 
@@ -12,6 +13,16 @@ namespace MCPForUnityTests.Editor.Tools
     {
         private const string TempRoot = "Assets/Temp/ManageMaterialPropertiesTests";
         private string _matPath;
+
+        // Built-in's lit shader (Standard) uses "_Color" as its main color property,
+        // while URP/HDRP lit shaders use "_BaseColor". The tool aliases shader "Standard"
+        // to the pipeline-appropriate lit shader, so the color property name must match.
+        private static string MainColorProperty()
+        {
+            return RenderPipelineUtility.GetActivePipeline() == RenderPipelineUtility.PipelineKind.BuiltIn
+                ? "_Color"
+                : "_BaseColor";
+        }
 
         [SetUp]
         public void SetUp()
@@ -42,7 +53,8 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void CreateMaterial_WithValidJsonStringArray_SetsProperty()
         {
-            string jsonProps = "{\"_Color\": [1.0, 0.0, 0.0, 1.0]}";
+            string colorProp = MainColorProperty();
+            string jsonProps = "{\"" + colorProp + "\": [1.0, 0.0, 0.0, 1.0]}";
             var paramsObj = new JObject
             {
                 ["action"] = "create",
@@ -55,14 +67,15 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             var mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath);
-            Assert.AreEqual(Color.red, mat.color);
+            Assert.AreEqual(Color.red, mat.GetColor(colorProp));
         }
 
         [Test]
         public void CreateMaterial_WithJObjectArray_SetsProperty()
         {
+            string colorProp = MainColorProperty();
             var props = new JObject();
-            props["_Color"] = new JArray(0.0f, 1.0f, 0.0f, 1.0f);
+            props[colorProp] = new JArray(0.0f, 1.0f, 0.0f, 1.0f);
 
             var paramsObj = new JObject
             {
@@ -76,7 +89,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             var mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath);
-            Assert.AreEqual(Color.green, mat.color);
+            Assert.AreEqual(Color.green, mat.GetColor(colorProp));
         }
 
         [Test]

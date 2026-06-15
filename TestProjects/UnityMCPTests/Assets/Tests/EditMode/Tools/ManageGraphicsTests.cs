@@ -197,7 +197,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["effect"] = "Bloom"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("already exists"));
+            Assert.That(result["error"].ToString(), Does.Contain("already exists"));
         }
 
         [Test]
@@ -213,7 +213,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["effect"] = "FakeEffect"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("not found"));
+            Assert.That(result["error"].ToString(), Does.Contain("not found"));
         }
 
         [Test]
@@ -311,7 +311,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["effect"] = "DepthOfField"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("not found"));
+            Assert.That(result["error"].ToString(), Does.Contain("not found"));
         }
 
         [Test]
@@ -674,11 +674,11 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageGraphics.HandleCommand(new JObject
             {
                 ["action"] = "feature_add",
-                ["feature_type"] = "NonExistentFeature"
+                ["type"] = "NonExistentFeature"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("not found"));
-            Assert.That(result["message"].ToString(), Does.Contain("Available:"));
+            Assert.That(result["error"].ToString(), Does.Contain("not found"));
+            Assert.That(result["error"].ToString(), Does.Contain("Available:"));
         }
 
         // =====================================================================
