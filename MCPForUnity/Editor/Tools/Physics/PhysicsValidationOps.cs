@@ -57,8 +57,10 @@ namespace MCPForUnity.Editor.Tools.Physics
                     ValidateRecursive(root, dimension, warnings, categoryCounts, ref scanned);
                 }
 
+#if MCP_HAS_PHYSICS
                 if (dimension != "2d")
                     CheckCollisionMatrix(warnings, categoryCounts);
+#endif
             }
 
             int totalWarnings = warnings.Count;
@@ -106,6 +108,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             bool check2D = dimension == "2d" || dimension == "both";
 
             // Check 1: MeshCollider without Convex on non-kinematic Rigidbody
+#if MCP_HAS_PHYSICS
             if (check3D)
             {
                 var rb = go.GetComponent<Rigidbody>();
@@ -122,8 +125,10 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
             // Check 2: Collider without Rigidbody on non-static object
+#if MCP_HAS_PHYSICS
             if (check3D)
             {
                 var colliders3D = go.GetComponents<Collider>();
@@ -143,7 +148,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     categoryCounts[Cat_MissingRigidbody]++;
                 }
             }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
             if (check2D)
             {
                 var colliders2D = go.GetComponents<Collider2D>();
@@ -163,11 +170,20 @@ namespace MCPForUnity.Editor.Tools.Physics
                     categoryCounts[Cat_MissingRigidbody]++;
                 }
             }
+#endif
 
             // Check 3: Non-uniform scale
             {
                 var scale = go.transform.lossyScale;
+#if MCP_HAS_PHYSICS && MCP_HAS_PHYSICS_2D
                 bool hasCollider = go.GetComponent<Collider>() != null || go.GetComponent<Collider2D>() != null;
+#elif MCP_HAS_PHYSICS
+                bool hasCollider = go.GetComponent<Collider>() != null;
+#elif MCP_HAS_PHYSICS_2D
+                bool hasCollider = go.GetComponent<Collider2D>() != null;
+#else
+                bool hasCollider = false;
+#endif
                 if (hasCollider)
                 {
                     bool nonUniform = Mathf.Abs(scale.x - scale.y) > 0.01f
@@ -182,6 +198,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             }
 
             // Check 4: Fast object with Discrete collision detection
+#if MCP_HAS_PHYSICS
             if (check3D)
             {
                 var rb = go.GetComponent<Rigidbody>();
@@ -196,8 +213,10 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
             // Check 5: Missing physics material
+#if MCP_HAS_PHYSICS
             if (check3D)
             {
                 foreach (var col in go.GetComponents<Collider>())
@@ -210,7 +229,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
             if (check2D)
             {
                 foreach (var col in go.GetComponents<Collider2D>())
@@ -223,8 +244,10 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
             // Check 7: 2D/3D physics mixing
+#if MCP_HAS_PHYSICS && MCP_HAS_PHYSICS_2D
             if (dimension == "both")
             {
                 bool has3D = go.GetComponent<Rigidbody>() != null || go.GetComponent<Collider>() != null;
@@ -246,6 +269,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     categoryCounts[Cat_Mixed2D3D]++;
                 }
             }
+#endif
         }
 
         private static bool HasAnimatorInParent(GameObject go)
@@ -260,6 +284,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             return false;
         }
 
+#if MCP_HAS_PHYSICS
         // Check 6 (scene-wide): Unconfigured collision matrix
         private static void CheckCollisionMatrix(List<string> warnings, Dictionary<string, int> categoryCounts)
         {
@@ -292,6 +317,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 categoryCounts[Cat_CollisionMatrix]++;
             }
         }
+#endif
 
         private static List<GameObject> GetAllRootGameObjects()
         {

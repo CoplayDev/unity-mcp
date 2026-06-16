@@ -22,12 +22,17 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
+#if MCP_HAS_PHYSICS_2D
                 Physics2D.SyncTransforms();
                 for (int i = 0; i < steps; i++)
                     Physics2D.Simulate(stepSize);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 UnityEngine.Physics.SyncTransforms();
                 var prevMode = UnityPhysicsCompat.GetPhysicsSimulationMode();
                 if (prevMode != UnityPhysicsCompat.SimulationMode.Script)
@@ -45,6 +50,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                         UnityPhysicsCompat.TrySetPhysicsSimulationMode(prevMode);
                     }
                 }
+#else
+                return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
             }
 
             // Collect rigidbody states after simulation
@@ -81,6 +89,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
+#if MCP_HAS_PHYSICS_2D
                 var rb2d = go.GetComponent<Rigidbody2D>();
                 if (rb2d != null)
                 {
@@ -97,9 +106,11 @@ namespace MCPForUnity.Editor.Tools.Physics
                         angularVelocity = rb2d.angularVelocity
                     });
                 }
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 var rb = go.GetComponent<Rigidbody>();
                 if (rb != null)
                 {
@@ -116,6 +127,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                         angularVelocity = new[] { rb.angularVelocity.x, rb.angularVelocity.y, rb.angularVelocity.z }
                     });
                 }
+#endif
             }
 
             return results;
@@ -128,6 +140,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
+#if MCP_HAS_PHYSICS_2D
                 var allRb2d = UnityFindObjectsCompat.FindAll<Rigidbody2D>();
                 foreach (var rb2d in allRb2d)
                 {
@@ -148,9 +161,11 @@ namespace MCPForUnity.Editor.Tools.Physics
                         angularVelocity = rb2d.angularVelocity
                     });
                 }
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 var allRb = UnityFindObjectsCompat.FindAll<Rigidbody>();
                 foreach (var rb in allRb)
                 {
@@ -171,6 +186,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                         angularVelocity = new[] { rb.angularVelocity.x, rb.angularVelocity.y, rb.angularVelocity.z }
                     });
                 }
+#endif
             }
 
             return results;

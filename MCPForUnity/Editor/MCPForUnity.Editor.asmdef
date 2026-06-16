@@ -19,6 +19,21 @@
             "name": "com.unity.visualeffectgraph",
             "expression": "0.0.0",
             "define": "UNITY_VFX_GRAPH"
+        },
+        {
+            "name": "com.unity.modules.physics",
+            "expression": "1.0.0",
+            "define": "MCP_HAS_PHYSICS"
+        },
+        {
+            "name": "com.unity.modules.physics2d",
+            "expression": "1.0.0",
+            "define": "MCP_HAS_PHYSICS_2D"
+        },
+        {
+            "name": "com.unity.modules.screencapture",
+            "expression": "1.0.0",
+            "define": "MCP_HAS_SCREEN_CAPTURE"
         }
     ],
     "noEngineReferences": false

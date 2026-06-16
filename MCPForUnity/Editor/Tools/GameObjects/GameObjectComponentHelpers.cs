@@ -32,6 +32,9 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 return new ErrorResponse("Cannot add another Transform component.");
             }
 
+            // A 2D-vs-3D conflict is only possible when both physics modules are installed;
+            // if either is absent, its component types can't exist, so there's nothing to check.
+#if MCP_HAS_PHYSICS && MCP_HAS_PHYSICS_2D
             bool isAdding2DPhysics = typeof(Rigidbody2D).IsAssignableFrom(componentType) || typeof(Collider2D).IsAssignableFrom(componentType);
             bool isAdding3DPhysics = typeof(Rigidbody).IsAssignableFrom(componentType) || typeof(Collider).IsAssignableFrom(componentType);
 
@@ -49,6 +52,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     return new ErrorResponse($"Cannot add 3D physics component '{typeName}' because the GameObject '{targetGo.name}' already has a 2D Rigidbody or Collider.");
                 }
             }
+#endif
 
             Component existingComponent = targetGo.GetComponent(componentType);
             if (existingComponent != null && !AllowsMultiple(componentType))
