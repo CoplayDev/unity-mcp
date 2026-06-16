@@ -12,7 +12,9 @@ namespace MCPForUnity.Runtime.Helpers
     /// Version-gated wrappers for the InstanceID ↔ EntityId migration introduced in Unity 6.5
     /// and tightened in 6.6.
     ///   Forward (Object → int): <see cref="GetInstanceIDCompat"/>
+    ///   Forward (Object → ulong, lossless): <see cref="GetInstanceIDLongCompat"/>
     ///   Reverse (int → Object, Editor-only): <see cref="InstanceIDToObjectCompat"/>
+    ///   Reverse (ulong → Object, Editor-only): <see cref="InstanceIDToObjectLongCompat"/>
     /// </summary>
     public static class UnityObjectIdCompat
     {
@@ -33,6 +35,27 @@ namespace MCPForUnity.Runtime.Helpers
             return (int)EntityId.ToULong(obj.GetEntityId());
 #else
             return obj.GetInstanceID();
+#endif
+        }
+
+        /// <summary>
+        /// Like <see cref="GetInstanceIDCompat"/> but returns the full handle without the
+        /// lossy int truncation: on 6.5+ the EntityId's underlying ulong, on older versions
+        /// the int instance ID widened to ulong. Returns null for a null object. Use when
+        /// the handle must round-trip exactly (e.g. matching the same object back across a
+        /// JSON request).
+        /// </summary>
+        public static ulong? GetInstanceIDLongCompat(this Object obj)
+        {
+            if (obj == null)
+            {
+                return null;
+            }
+
+#if UNITY_6000_5_OR_NEWER
+            return EntityId.ToULong(obj.GetEntityId());
+#else
+            return unchecked((ulong)obj.GetInstanceID());
 #endif
         }
 
@@ -68,6 +91,24 @@ namespace MCPForUnity.Runtime.Helpers
             return EditorUtility.EntityIdToObject(instanceId);
 #else
             return EditorUtility.InstanceIDToObject(instanceId);
+#endif
+        }
+
+        /// <summary>
+        /// Resolves a ulong handle (from <see cref="GetInstanceIDLongCompat"/>) back to a
+        /// UnityEngine.Object. Disambiguates by Unity version, not by inspecting the numeric
+        /// range — a wrapped-negative int and a genuine 64-bit EntityId can occupy the same
+        /// high band, so range checks cannot tell them apart.
+        ///   6.5+    : the handle is the EntityId's ulong — resolve via EntityId.FromULong.
+        ///   Pre-6.5 : the handle is an int instance ID round-tripped through an unchecked
+        ///             ulong cast (negatives are valid) — cast back and use the int resolver.
+        /// </summary>
+        public static Object InstanceIDToObjectLongCompat(ulong instanceId)
+        {
+#if UNITY_6000_5_OR_NEWER
+            return EditorUtility.EntityIdToObject(EntityId.FromULong(instanceId));
+#else
+            return InstanceIDToObjectCompat(unchecked((int)instanceId));
 #endif
         }
 #endif

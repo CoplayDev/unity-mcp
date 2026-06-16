@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -423,9 +424,11 @@ namespace MCPForUnity.Editor.Tools.Animation
         }
 
         // Reads node graph positions for every state (recurses into sub-state-machines).
-        // Returns [{ name, x, y, layer }] so a caller can analyze the current layout
-        // before sending back a revised one. Pass 'layerIndex' to scope to one layer;
-        // results are paged (page_size/cursor) since controllers can have many states.
+        // Returns [{ name, instanceId, x, y, layer }] so a caller can analyze the current
+        // layout before sending back a revised one. 'instanceId' round-trips into
+        // set_state_positions for an unambiguous match (duplicate names are fine).
+        // Pass 'layerIndex' to scope to one layer; results are paged (page_size/cursor)
+        // since controllers can have many states.
         public static object GetStatePositions(JObject @params)
         {
             var controller = LoadController(@params);
@@ -470,6 +473,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                 outList.Add(new
                 {
                     name = children[i].state.name,
+                    instanceId = children[i].state.GetInstanceIDLongCompat(),
                     x = children[i].position.x,
                     y = children[i].position.y,
                     layer
@@ -478,11 +482,11 @@ namespace MCPForUnity.Editor.Tools.Animation
                 CollectPositions(sub.stateMachine, layer, outList);
         }
 
-        // Sets node graph positions from a 'positions' array of { name, x, y, layer? }.
-        // Each entry's optional 'layer' (falling back to a top-level 'layerIndex') scopes
-        // the match to one layer, so a name reused across layers is no longer ambiguous;
-        // entries with no layer match that name on any layer. Recurses into sub-state-
-        // machines and reassigns stateMachine.states so the edits persist on the asset.
+        // Sets node graph positions from a 'positions' array of { instanceId, x, y }.
+        // States are matched by 'instanceId' (from get_state_positions) for an exact,
+        // unambiguous hit even when names repeat across layers or sub-state-machines.
+        // Recurses into sub-state-machines and reassigns stateMachine.states so the
+        // edits persist on the asset.
         public static object SetStatePositions(JObject @params)
         {
             var controller = LoadController(@params);
@@ -490,29 +494,27 @@ namespace MCPForUnity.Editor.Tools.Animation
                 return ControllerNotFoundError(@params);
 
             if (!(@params["positions"] is JArray positions) || positions.Count == 0)
-                return new { success = false, message = "'positions' array is required: [{ name, x, y, layer? }, ...]" };
+                return new { success = false, message = "'positions' array is required: [{ instanceId, x, y }, ...]" };
 
-            int? defaultLayer = @params["layerIndex"]?.ToObject<int>();
-
-            // Key is "layer:name" when scoped to a layer, else "*:name" to match any layer.
-            var want = new Dictionary<string, Vector2>();
+            var want = new Dictionary<ulong, Vector2>();
             foreach (var token in positions)
             {
-                string name = token["name"]?.ToString();
-                if (string.IsNullOrEmpty(name))
+                if (!(token is JObject entry))
                     continue;
-                float x = token["x"]?.ToObject<float>() ?? 0f;
-                float y = token["y"]?.ToObject<float>() ?? 0f;
-                int? layer = token["layer"]?.ToObject<int>() ?? defaultLayer;
-                want[$"{(layer.HasValue ? layer.Value.ToString() : "*")}:{name}"] = new Vector2(x, y);
+                ulong? instanceId = entry["instanceId"]?.ToObject<ulong>();
+                if (!instanceId.HasValue)
+                    continue;
+                float x = entry["x"]?.ToObject<float>() ?? 0f;
+                float y = entry["y"]?.ToObject<float>() ?? 0f;
+                want[instanceId.Value] = new Vector2(x, y);
             }
             if (want.Count == 0)
-                return new { success = false, message = "No valid entries in 'positions' (each needs a 'name')." };
+                return new { success = false, message = "No valid entries in 'positions' (each needs an 'instanceId')." };
 
-            var matched = new HashSet<string>();
+            var matched = new HashSet<ulong>();
             Undo.RecordObject(controller, "Set State Positions");
             for (int li = 0; li < controller.layers.Length; li++)
-                ApplyPositions(controller.layers[li].stateMachine, li, want, matched);
+                ApplyPositions(controller.layers[li].stateMachine, want, matched);
 
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
@@ -521,7 +523,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             return new
             {
                 success = true,
-                message = $"Positioned {matched.Count} state(s); {unmatched.Count} key(s) unmatched.",
+                message = $"Positioned {matched.Count} state(s); {unmatched.Count} id(s) unmatched.",
                 data = new
                 {
                     matched = matched.Count,
@@ -531,27 +533,22 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        private static void ApplyPositions(AnimatorStateMachine sm, int layer, Dictionary<string, Vector2> want, HashSet<string> matched)
+        private static void ApplyPositions(AnimatorStateMachine sm, Dictionary<ulong, Vector2> want, HashSet<ulong> matched)
         {
             var children = sm.states;
             for (int i = 0; i < children.Length; i++)
             {
-                string name = children[i].state.name;
-                // Prefer a layer-scoped entry; fall back to the any-layer entry.
-                string scopedKey = $"{layer}:{name}";
-                string anyKey = $"*:{name}";
-                string key = want.ContainsKey(scopedKey) ? scopedKey
-                           : want.ContainsKey(anyKey) ? anyKey : null;
-                if (key != null)
+                ulong? id = children[i].state.GetInstanceIDLongCompat();
+                if (id.HasValue && want.TryGetValue(id.Value, out var p))
                 {
-                    children[i].position = new Vector3(want[key].x, want[key].y, 0f);
-                    matched.Add(key);
+                    children[i].position = new Vector3(p.x, p.y, 0f);
+                    matched.Add(id.Value);
                 }
             }
             sm.states = children; // reassign so position edits persist
 
             foreach (var sub in sm.stateMachines)
-                ApplyPositions(sub.stateMachine, layer, want, matched);
+                ApplyPositions(sub.stateMachine, want, matched);
         }
 
         private static AnimatorController LoadController(JObject @params)

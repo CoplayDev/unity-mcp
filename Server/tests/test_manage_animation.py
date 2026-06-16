@@ -184,21 +184,16 @@ class TestStatePositionActions:
         assert params["properties"]["cursor"] == 20
 
     def test_set_state_positions_forwards_positions(self):
-        positions = [{"name": "Idle", "x": 100, "y": 0}, {"name": "Walk", "x": 300, "y": 0}]
+        # instanceId round-trips from get_state_positions; can exceed 32-bit on Unity 6.5+
+        # (EntityId), and JSON / Python int carry the full 64-bit value losslessly.
+        positions = [{"instanceId": 8412, "x": 100, "y": 0},
+                     {"instanceId": 18446744073709551000, "x": 300, "y": 0}]
         _, params = self._dispatch(
             "controller_set_state_positions", properties={"positions": positions}
         )
         assert params["action"] == "controller_set_state_positions"
         assert params["properties"]["positions"] == positions
-
-    def test_set_state_positions_forwards_layer_scoping(self):
-        positions = [{"name": "Idle", "x": 0, "y": 0, "layer": 1}]
-        _, params = self._dispatch(
-            "controller_set_state_positions",
-            properties={"positions": positions, "layerIndex": 0},
-        )
-        assert params["properties"]["positions"][0]["layer"] == 1
-        assert params["properties"]["layerIndex"] == 0
+        assert params["properties"]["positions"][1]["instanceId"] == 18446744073709551000
 
 
 # =============================================================================
