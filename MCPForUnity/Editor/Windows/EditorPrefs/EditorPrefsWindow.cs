@@ -77,6 +77,7 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.LastLocalHttpServerPidArgsHash, EditorPrefType.String },
             { EditorPrefKeys.LastLocalHttpServerPidFilePath, EditorPrefType.String },
             { EditorPrefKeys.LastLocalHttpServerInstanceToken, EditorPrefType.String },
+            { EditorPrefKeys.MacOSTerminalApp, EditorPrefType.String },
         };
 
         // Templates

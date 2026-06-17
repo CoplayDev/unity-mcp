@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using UnityEditor;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Services.Server
@@ -24,6 +26,21 @@ namespace MCPForUnity.Editor.Services.Server
                 return Application.dataPath;
             }
         }
+
+        /// <summary>
+        /// Resolves the macOS terminal application name, falling back to "Terminal"
+        /// when the configured value is unset, empty, or whitespace-only.
+        /// </summary>
+        internal static string ResolveMacTerminalApp(string configuredApp)
+            => string.IsNullOrWhiteSpace(configuredApp) ? "Terminal" : configuredApp.Trim();
+
+        /// <summary>
+        /// Builds the argument string for <c>/usr/bin/open</c> to launch the given
+        /// script in the configured macOS terminal application. The app name is quoted
+        /// so values containing spaces (e.g. "iTerm 2") resolve correctly.
+        /// </summary>
+        internal static string BuildMacOpenArguments(string configuredApp, string scriptPath)
+            => $"-a \"{ResolveMacTerminalApp(configuredApp)}\" \"{scriptPath}\"";
 
         /// <inheritdoc/>
         public System.Diagnostics.ProcessStartInfo CreateHeadlessProcessStartInfo(string command, string logFilePath)
@@ -94,10 +111,11 @@ namespace MCPForUnity.Editor.Services.Server
                 "clear\n" +
                 $"{command}\n");
             ExecPath.TryRun("/bin/chmod", $"+x \"{scriptPath}\"", Application.dataPath, out _, out _, 3000);
+            string configuredApp = EditorPrefs.GetString(EditorPrefKeys.MacOSTerminalApp, "Terminal");
             return new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "/usr/bin/open",
-                Arguments = $"-a Terminal \"{scriptPath}\"",
+                Arguments = BuildMacOpenArguments(configuredApp, scriptPath),
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
