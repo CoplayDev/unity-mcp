@@ -217,9 +217,10 @@ namespace MCPForUnity.Editor.Tools.Animation
             {
                 case "create": return ControllerCreate.Create(@params);
                 case "add_state": return ControllerCreate.AddState(@params);
-                case "set_state_positions": return ControllerCreate.SetStatePositions(@params);
-                case "get_state_positions": return ControllerCreate.GetStatePositions(@params);
+                case "set_state_properties": return ControllerCreate.SetStateProperties(@params);
+                case "get_state_properties": return ControllerCreate.GetStateProperties(@params);
                 case "add_transition": return ControllerCreate.AddTransition(@params);
+                case "remove_transition": return ControllerCreate.RemoveTransition(@params);
                 case "add_parameter": return ControllerCreate.AddParameter(@params);
                 case "get_info": return ControllerCreate.GetInfo(@params);
                 case "assign": return ControllerCreate.AssignToGameObject(@params);
@@ -230,7 +231,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                 case "create_blend_tree_2d": return ControllerBlendTrees.CreateBlendTree2D(@params);
                 case "add_blend_tree_child": return ControllerBlendTrees.AddBlendTreeChild(@params);
                 default:
-                    return new { success = false, message = $"Unknown controller action: {action}. Valid: create, add_state, set_state_positions, get_state_positions, add_transition, add_parameter, get_info, assign, add_layer, remove_layer, set_layer_weight, create_blend_tree_1d, create_blend_tree_2d, add_blend_tree_child" };
+                    return new { success = false, message = $"Unknown controller action: {action}. Valid: create, add_state, set_state_properties, get_state_properties, add_transition, remove_transition, add_parameter, get_info, assign, add_layer, remove_layer, set_layer_weight, create_blend_tree_1d, create_blend_tree_2d, add_blend_tree_child" };
             }
         }
 

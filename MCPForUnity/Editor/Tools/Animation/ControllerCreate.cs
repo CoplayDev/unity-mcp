@@ -228,6 +228,73 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
+        // Removes transitions from 'fromState' (or AnyState) to 'toState' in a layer.
+        // If 'toState' is omitted, removes ALL outgoing transitions from 'fromState'.
+        // Use with add_transition to "edit" a transition: remove then re-add with new timing.
+        public static object RemoveTransition(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            string fromStateName = @params["fromState"]?.ToString();
+            if (string.IsNullOrEmpty(fromStateName))
+                return new { success = false, message = "'fromState' is required" };
+            string toStateName = @params["toState"]?.ToString(); // optional
+
+            int layerIndex = @params["layerIndex"]?.ToObject<int>() ?? 0;
+            if (layerIndex < 0 || layerIndex >= controller.layers.Length)
+                return new { success = false, message = $"Layer index {layerIndex} out of range" };
+
+            var rootStateMachine = controller.layers[layerIndex].stateMachine;
+
+            bool isAnyState = string.Equals(fromStateName, "AnyState", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(fromStateName, "Any", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(fromStateName, "Any State", StringComparison.OrdinalIgnoreCase);
+
+            int removed = 0;
+
+            if (isAnyState)
+            {
+                foreach (var t in rootStateMachine.anyStateTransitions.ToArray())
+                {
+                    if (string.IsNullOrEmpty(toStateName) || (t.destinationState != null && t.destinationState.name == toStateName))
+                    {
+                        rootStateMachine.RemoveAnyStateTransition(t);
+                        removed++;
+                    }
+                }
+                fromStateName = "AnyState";
+            }
+            else
+            {
+                AnimatorState fromState = null;
+                foreach (var cs in rootStateMachine.states)
+                    if (cs.state.name == fromStateName) fromState = cs.state;
+                if (fromState == null)
+                    return new { success = false, message = $"State '{fromStateName}' not found in layer {layerIndex}" };
+
+                foreach (var t in fromState.transitions.ToArray())
+                {
+                    if (string.IsNullOrEmpty(toStateName) || (t.destinationState != null && t.destinationState.name == toStateName))
+                    {
+                        fromState.RemoveTransition(t);
+                        removed++;
+                    }
+                }
+            }
+
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+
+            return new
+            {
+                success = true,
+                message = $"Removed {removed} transition(s) from '{fromStateName}'" + (string.IsNullOrEmpty(toStateName) ? "" : $" to '{toStateName}'") + ".",
+                data = new { fromState = fromStateName, toState = toStateName, removed }
+            };
+        }
+
         public static object AddParameter(JObject @params)
         {
             var controller = LoadController(@params);
@@ -423,13 +490,13 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        // Reads node graph positions for every state (recurses into sub-state-machines).
-        // Returns [{ name, instanceId, x, y, layer }] so a caller can analyze the current
-        // layout before sending back a revised one. 'instanceId' round-trips into
-        // set_state_positions for an unambiguous match (duplicate names are fine).
-        // Pass 'layerIndex' to scope to one layer; results are paged (page_size/cursor)
-        // since controllers can have many states.
-        public static object GetStatePositions(JObject @params)
+        // Reads per-state properties for every state (recurses into sub-state-machines).
+        // Returns [{ name, instanceId, layer, x, y, speed, motionInstanceId, motionName,
+        // motionType }]. 'instanceId' round-trips into set_state_properties for an exact
+        // match (duplicate names are fine); 'motionInstanceId' lets a caller transfer a
+        // Motion (incl. FBX-embedded clips) to another state BY REFERENCE - no asset path.
+        // Pass 'layerIndex' to scope to one layer; results are paged (page_size/cursor).
+        public static object GetStateProperties(JObject @params)
         {
             var controller = LoadController(@params);
             if (controller == null)
@@ -444,7 +511,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             {
                 if (layerFilter.HasValue && li != layerFilter.Value)
                     continue;
-                CollectPositions(controller.layers[li].stateMachine, li, nodes);
+                CollectProperties(controller.layers[li].stateMachine, li, nodes);
             }
 
             var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
@@ -453,7 +520,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             return new
             {
                 success = true,
-                message = $"Read {paged.Items.Count} of {paged.TotalCount} state position(s).",
+                message = $"Read {paged.Items.Count} of {paged.TotalCount} state(s).",
                 data = new
                 {
                     count = paged.TotalCount,
@@ -466,55 +533,63 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        private static void CollectPositions(AnimatorStateMachine sm, int layer, List<object> outList)
+        private static void CollectProperties(AnimatorStateMachine sm, int layer, List<object> outList)
         {
             var children = sm.states;
             for (int i = 0; i < children.Length; i++)
+            {
+                var st = children[i].state;
+                var motion = st.motion;
                 outList.Add(new
                 {
-                    name = children[i].state.name,
-                    instanceId = children[i].state.GetInstanceIDLongCompat(),
+                    name = st.name,
+                    instanceId = st.GetInstanceIDLongCompat(),
+                    layer,
                     x = children[i].position.x,
                     y = children[i].position.y,
-                    layer
+                    speed = st.speed,
+                    motionInstanceId = motion != null ? motion.GetInstanceIDLongCompat() : (ulong?)null,
+                    motionName = motion != null ? motion.name : null,
+                    motionType = motion != null ? motion.GetType().Name : null
                 });
+            }
             foreach (var sub in sm.stateMachines)
-                CollectPositions(sub.stateMachine, layer, outList);
+                CollectProperties(sub.stateMachine, layer, outList);
         }
 
-        // Sets node graph positions from a 'positions' array of { instanceId, x, y }.
-        // States are matched by 'instanceId' (from get_state_positions) for an exact,
-        // unambiguous hit even when names repeat across layers or sub-state-machines.
-        // Recurses into sub-state-machines and reassigns stateMachine.states so the
-        // edits persist on the asset.
-        public static object SetStatePositions(JObject @params)
+        // Sets per-state properties from a 'states' array of { instanceId, [x], [y],
+        // [speed], [motionInstanceId] }. States are matched by 'instanceId' for an exact,
+        // unambiguous hit. Each field is OPTIONAL - only provided fields are written, so the
+        // same call can move nodes, retime speed, and/or assign motion. 'motionInstanceId'
+        // is resolved to a Motion via UnityObjectIdCompat.InstanceIDToObjectLongCompat and
+        // assigned BY REFERENCE (works for FBX sub-asset clips - no asset-path lookup). Recurses into
+        // sub-state-machines and reassigns stateMachine.states so edits persist.
+        public static object SetStateProperties(JObject @params)
         {
             var controller = LoadController(@params);
             if (controller == null)
                 return ControllerNotFoundError(@params);
 
-            if (!(@params["positions"] is JArray positions) || positions.Count == 0)
-                return new { success = false, message = "'positions' array is required: [{ instanceId, x, y }, ...]" };
+            if (!(@params["states"] is JArray arr) || arr.Count == 0)
+                return new { success = false, message = "'states' array is required: [{ instanceId, x?, y?, speed?, motionInstanceId? }, ...]" };
 
-            var want = new Dictionary<ulong, Vector2>();
-            foreach (var token in positions)
+            var want = new Dictionary<ulong, JObject>();
+            foreach (var token in arr)
             {
                 if (!(token is JObject entry))
                     continue;
                 ulong? instanceId = entry["instanceId"]?.ToObject<ulong>();
-                if (!instanceId.HasValue)
-                    continue;
-                float x = entry["x"]?.ToObject<float>() ?? 0f;
-                float y = entry["y"]?.ToObject<float>() ?? 0f;
-                want[instanceId.Value] = new Vector2(x, y);
+                if (instanceId.HasValue)
+                    want[instanceId.Value] = entry;
             }
             if (want.Count == 0)
-                return new { success = false, message = "No valid entries in 'positions' (each needs an 'instanceId')." };
+                return new { success = false, message = "No valid entries (each needs an 'instanceId')." };
 
             var matched = new HashSet<ulong>();
-            Undo.RecordObject(controller, "Set State Positions");
+            var motionFailures = new List<object>();
+            Undo.RecordObject(controller, "Set State Properties");
             for (int li = 0; li < controller.layers.Length; li++)
-                ApplyPositions(controller.layers[li].stateMachine, want, matched);
+                ApplyProperties(controller.layers[li].stateMachine, want, matched, motionFailures);
 
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
@@ -523,32 +598,73 @@ namespace MCPForUnity.Editor.Tools.Animation
             return new
             {
                 success = true,
-                message = $"Positioned {matched.Count} state(s); {unmatched.Count} id(s) unmatched.",
+                message = $"Updated {matched.Count} state(s); {unmatched.Count} id(s) unmatched; {motionFailures.Count} motion ref(s) failed.",
                 data = new
                 {
                     matched = matched.Count,
                     requested = want.Count,
-                    unmatched
+                    unmatched,
+                    motionFailures
                 }
             };
         }
 
-        private static void ApplyPositions(AnimatorStateMachine sm, Dictionary<ulong, Vector2> want, HashSet<ulong> matched)
+        private static void ApplyProperties(AnimatorStateMachine sm, Dictionary<ulong, JObject> want, HashSet<ulong> matched, List<object> motionFailures)
         {
             var children = sm.states;
             for (int i = 0; i < children.Length; i++)
             {
                 ulong? id = children[i].state.GetInstanceIDLongCompat();
-                if (id.HasValue && want.TryGetValue(id.Value, out var p))
+                if (!id.HasValue || !want.TryGetValue(id.Value, out var entry))
+                    continue;
+
+                var st = children[i].state;
+
+                // Position (x and/or y) - keep the unspecified axis unchanged.
+                if (entry["x"] != null || entry["y"] != null)
                 {
-                    children[i].position = new Vector3(p.x, p.y, 0f);
-                    matched.Add(id.Value);
+                    var pos = children[i].position;
+                    float x = entry["x"]?.ToObject<float>() ?? pos.x;
+                    float y = entry["y"]?.ToObject<float>() ?? pos.y;
+                    children[i].position = new Vector3(x, y, 0f);
                 }
+
+                // Speed
+                if (entry["speed"] != null)
+                    st.speed = entry["speed"].ToObject<float>();
+
+                // Motion by reference (resolve instanceId -> Motion object). 0/null clears it.
+                if (entry["motionInstanceId"] != null)
+                {
+                    var token = entry["motionInstanceId"];
+                    if (token.Type == JTokenType.Null)
+                    {
+                        st.motion = null;
+                    }
+                    else
+                    {
+                        ulong refId = token.ToObject<ulong>();
+                        if (refId == 0UL)
+                        {
+                            st.motion = null;
+                        }
+                        else
+                        {
+                            var obj = UnityObjectIdCompat.InstanceIDToObjectLongCompat(refId) as Motion;
+                            if (obj != null)
+                                st.motion = obj;
+                            else
+                                motionFailures.Add(new { instanceId = id.Value, motionInstanceId = refId });
+                        }
+                    }
+                }
+
+                matched.Add(id.Value);
             }
-            sm.states = children; // reassign so position edits persist
+            sm.states = children; // reassign so edits persist
 
             foreach (var sub in sm.stateMachines)
-                ApplyPositions(sub.stateMachine, want, matched);
+                ApplyProperties(sub.stateMachine, want, matched, motionFailures);
         }
 
         private static AnimatorController LoadController(JObject @params)

@@ -74,8 +74,8 @@ class TestActionLists:
 
     def test_expected_controller_actions_present(self):
         expected = {"controller_create", "controller_add_state",
-                    "controller_set_state_positions", "controller_get_state_positions",
-                    "controller_add_transition",
+                    "controller_set_state_properties", "controller_get_state_properties",
+                    "controller_add_transition", "controller_remove_transition",
                     "controller_add_parameter", "controller_get_info", "controller_assign",
                     "controller_add_layer", "controller_remove_layer", "controller_set_layer_weight",
                     "controller_create_blend_tree_1d", "controller_create_blend_tree_2d", "controller_add_blend_tree_child"}
@@ -149,8 +149,8 @@ class TestManageAnimationToolValidation:
         assert "clip_" in result["message"]
 
 
-class TestStatePositionActions:
-    """State-position actions dispatch through manage_animation with the right payload."""
+class TestStatePropertyActions:
+    """State-property actions dispatch through manage_animation with the right payload."""
 
     def _dispatch(self, action, properties=None):
         from services.tools import manage_animation as mod
@@ -168,32 +168,45 @@ class TestStatePositionActions:
         # send_with_unity_instance(send_fn, unity_instance, command, params)
         return mock_send.call_args[0][2], mock_send.call_args[0][3]
 
-    def test_get_state_positions_dispatches(self):
-        command, params = self._dispatch("controller_get_state_positions")
+    def test_get_state_properties_dispatches(self):
+        command, params = self._dispatch("controller_get_state_properties")
         assert command == "manage_animation"
-        assert params["action"] == "controller_get_state_positions"
+        assert params["action"] == "controller_get_state_properties"
         assert params["controllerPath"] == "Assets/Anim/Player.controller"
 
-    def test_get_state_positions_forwards_paging_and_layer(self):
+    def test_get_state_properties_forwards_paging_and_layer(self):
         _, params = self._dispatch(
-            "controller_get_state_positions",
+            "controller_get_state_properties",
             properties={"layerIndex": 1, "page_size": 10, "cursor": 20},
         )
         assert params["properties"]["layerIndex"] == 1
         assert params["properties"]["page_size"] == 10
         assert params["properties"]["cursor"] == 20
 
-    def test_set_state_positions_forwards_positions(self):
-        # instanceId round-trips from get_state_positions; can exceed 32-bit on Unity 6.5+
+    def test_set_state_properties_forwards_states(self):
+        # instanceId round-trips from get_state_properties; can exceed 32-bit on Unity 6.5+
         # (EntityId), and JSON / Python int carry the full 64-bit value losslessly.
-        positions = [{"instanceId": 8412, "x": 100, "y": 0},
-                     {"instanceId": 18446744073709551000, "x": 300, "y": 0}]
+        # motionInstanceId transfers a Motion by reference (incl. FBX-embedded clips).
+        states = [{"instanceId": 8412, "x": 100, "y": 0, "speed": 1.5},
+                  {"instanceId": 18446744073709551000, "motionInstanceId": 9001}]
         _, params = self._dispatch(
-            "controller_set_state_positions", properties={"positions": positions}
+            "controller_set_state_properties", properties={"states": states}
         )
-        assert params["action"] == "controller_set_state_positions"
-        assert params["properties"]["positions"] == positions
-        assert params["properties"]["positions"][1]["instanceId"] == 18446744073709551000
+        assert params["action"] == "controller_set_state_properties"
+        assert params["properties"]["states"] == states
+        assert params["properties"]["states"][0]["instanceId"] == 8412
+        assert params["properties"]["states"][1]["instanceId"] == 18446744073709551000
+
+    def test_remove_transition_dispatches(self):
+        # fromState required; toState optional (omit to remove all outgoing transitions).
+        _, params = self._dispatch(
+            "controller_remove_transition",
+            properties={"fromState": "Idle", "toState": "Walk", "layerIndex": 0},
+        )
+        assert params["action"] == "controller_remove_transition"
+        assert params["properties"]["fromState"] == "Idle"
+        assert params["properties"]["toState"] == "Walk"
+        assert params["properties"]["layerIndex"] == 0
 
 
 # =============================================================================
