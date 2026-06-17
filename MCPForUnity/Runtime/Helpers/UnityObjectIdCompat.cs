@@ -12,9 +12,9 @@ namespace MCPForUnity.Runtime.Helpers
     /// Version-gated wrappers for the InstanceID ↔ EntityId migration introduced in Unity 6.5
     /// and tightened in 6.6.
     ///   Forward (Object → int): <see cref="GetInstanceIDCompat"/>
-    ///   Forward (Object → ulong, lossless): <see cref="GetInstanceIDLongCompat"/>
+    ///   Forward (Object → string, lossless wire format): <see cref="GetInstanceIDString"/>
     ///   Reverse (int → Object, Editor-only): <see cref="InstanceIDToObjectCompat"/>
-    ///   Reverse (ulong → Object, Editor-only): <see cref="InstanceIDToObjectLongCompat"/>
+    ///   Reverse (string → Object, Editor-only): <see cref="InstanceIDFromString"/>
     /// </summary>
     public static class UnityObjectIdCompat
     {
@@ -39,13 +39,17 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         /// <summary>
-        /// Like <see cref="GetInstanceIDCompat"/> but returns the full handle without the
-        /// lossy int truncation: on 6.5+ the EntityId's underlying ulong, on older versions
-        /// the int instance ID widened to ulong. Returns null for a null object. Use when
-        /// the handle must round-trip exactly (e.g. matching the same object back across a
-        /// JSON request).
+        /// Returns the full object handle as a STRING for lossless JSON round-trips: on 6.5+
+        /// the EntityId's underlying ulong, on older versions the raw signed int instance ID.
+        /// Returns null for a null object.
+        ///
+        /// A string (not a number) because JSON's number type is parsed as an IEEE-754 double
+        /// by some consumers (e.g. JavaScript JSON.parse), which silently collapses integers
+        /// above 2^53 — and instance handles can exceed that (a 64-bit EntityId, or a negative
+        /// int). The handle is an opaque identifier, never arithmetic, so a string is the
+        /// correct wire form. Resolve it back with <see cref="InstanceIDFromString"/>.
         /// </summary>
-        public static ulong? GetInstanceIDLongCompat(this Object obj)
+        public static string GetInstanceIDString(this Object obj)
         {
             if (obj == null)
             {
@@ -53,9 +57,9 @@ namespace MCPForUnity.Runtime.Helpers
             }
 
 #if UNITY_6000_5_OR_NEWER
-            return EntityId.ToULong(obj.GetEntityId());
+            return EntityId.ToULong(obj.GetEntityId()).ToString();
 #else
-            return unchecked((ulong)obj.GetInstanceID());
+            return obj.GetInstanceID().ToString();
 #endif
         }
 
@@ -95,20 +99,27 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         /// <summary>
-        /// Resolves a ulong handle (from <see cref="GetInstanceIDLongCompat"/>) back to a
-        /// UnityEngine.Object. Disambiguates by Unity version, not by inspecting the numeric
-        /// range — a wrapped-negative int and a genuine 64-bit EntityId can occupy the same
-        /// high band, so range checks cannot tell them apart.
-        ///   6.5+    : the handle is the EntityId's ulong — resolve via EntityId.FromULong.
-        ///   Pre-6.5 : the handle is an int instance ID round-tripped through an unchecked
-        ///             ulong cast (negatives are valid) — cast back and use the int resolver.
+        /// Resolves a string handle (from <see cref="GetInstanceIDString"/>) back to a
+        /// UnityEngine.Object. Disambiguates by Unity version, not by inspecting the value.
+        ///   6.5+    : the handle is the EntityId's ulong — parse ulong, resolve via EntityId.FromULong.
+        ///   Pre-6.5 : the handle is a signed int instance ID — parse int, use the int resolver.
+        /// Returns null if the string is null/empty or does not parse.
         /// </summary>
-        public static Object InstanceIDToObjectLongCompat(ulong instanceId)
+        public static Object InstanceIDFromString(string instanceId)
         {
+            if (string.IsNullOrEmpty(instanceId))
+            {
+                return null;
+            }
+
 #if UNITY_6000_5_OR_NEWER
-            return EditorUtility.EntityIdToObject(EntityId.FromULong(instanceId));
+            if (!ulong.TryParse(instanceId, out var entityId))
+                return null;
+            return EditorUtility.EntityIdToObject(EntityId.FromULong(entityId));
 #else
-            return InstanceIDToObjectCompat(unchecked((int)instanceId));
+            if (!int.TryParse(instanceId, out var id))
+                return null;
+            return InstanceIDToObjectCompat(id);
 #endif
         }
 #endif

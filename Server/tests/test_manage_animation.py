@@ -184,18 +184,19 @@ class TestStatePropertyActions:
         assert params["properties"]["cursor"] == 20
 
     def test_set_state_properties_forwards_states(self):
-        # instanceId round-trips from get_state_properties; can exceed 32-bit on Unity 6.5+
-        # (EntityId), and JSON / Python int carry the full 64-bit value losslessly.
-        # motionInstanceId transfers a Motion by reference (incl. FBX-embedded clips).
-        states = [{"instanceId": 8412, "x": 100, "y": 0, "speed": 1.5},
-                  {"instanceId": 18446744073709551000, "motionInstanceId": 9001}]
+        # instanceId/motionInstanceId are STRING handles from get_state_properties: opaque ids
+        # carried as strings so large 64-bit EntityId values (Unity 6.5+) survive JSON without
+        # the IEEE-754 double truncation a numeric form would suffer. motionInstanceId transfers
+        # a Motion by reference (incl. FBX-embedded clips).
+        states = [{"instanceId": "8412", "x": 100, "y": 0, "speed": 1.5},
+                  {"instanceId": "18446744073709551000", "motionInstanceId": "9001"}]
         _, params = self._dispatch(
             "controller_set_state_properties", properties={"states": states}
         )
         assert params["action"] == "controller_set_state_properties"
         assert params["properties"]["states"] == states
-        assert params["properties"]["states"][0]["instanceId"] == 8412
-        assert params["properties"]["states"][1]["instanceId"] == 18446744073709551000
+        assert params["properties"]["states"][0]["instanceId"] == "8412"
+        assert params["properties"]["states"][1]["instanceId"] == "18446744073709551000"
 
     def test_remove_transition_dispatches(self):
         # fromState required; toState optional (omit to remove all outgoing transitions).

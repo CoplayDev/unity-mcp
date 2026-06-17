@@ -543,12 +543,12 @@ namespace MCPForUnity.Editor.Tools.Animation
                 outList.Add(new
                 {
                     name = st.name,
-                    instanceId = st.GetInstanceIDLongCompat(),
+                    instanceId = st.GetInstanceIDString(),
                     layer,
                     x = children[i].position.x,
                     y = children[i].position.y,
                     speed = st.speed,
-                    motionInstanceId = motion != null ? motion.GetInstanceIDLongCompat() : (ulong?)null,
+                    motionInstanceId = motion != null ? motion.GetInstanceIDString() : null,
                     motionName = motion != null ? motion.name : null,
                     motionType = motion != null ? motion.GetType().Name : null
                 });
@@ -558,12 +558,14 @@ namespace MCPForUnity.Editor.Tools.Animation
         }
 
         // Sets per-state properties from a 'states' array of { instanceId, [x], [y],
-        // [speed], [motionInstanceId] }. States are matched by 'instanceId' for an exact,
-        // unambiguous hit. Each field is OPTIONAL - only provided fields are written, so the
-        // same call can move nodes, retime speed, and/or assign motion. 'motionInstanceId'
-        // is resolved to a Motion via UnityObjectIdCompat.InstanceIDToObjectLongCompat and
-        // assigned BY REFERENCE (works for FBX sub-asset clips - no asset-path lookup). Recurses into
-        // sub-state-machines and reassigns stateMachine.states so edits persist.
+        // [speed], [motionInstanceId] }. instanceId and motionInstanceId are STRING handles
+        // (from GetInstanceIDString) - opaque ids carried as strings so large values survive
+        // JSON transport. States are matched by 'instanceId' for an exact, unambiguous hit.
+        // Each field is OPTIONAL - only provided fields are written, so the same call can move
+        // nodes, retime speed, and/or assign motion. 'motionInstanceId' is resolved to a Motion
+        // via UnityObjectIdCompat.InstanceIDFromString and assigned BY REFERENCE (works for FBX
+        // sub-asset clips - no asset-path lookup). Recurses into sub-state-machines and
+        // reassigns stateMachine.states so edits persist.
         public static object SetStateProperties(JObject @params)
         {
             var controller = LoadController(@params);
@@ -573,19 +575,19 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (!(@params["states"] is JArray arr) || arr.Count == 0)
                 return new { success = false, message = "'states' array is required: [{ instanceId, x?, y?, speed?, motionInstanceId? }, ...]" };
 
-            var want = new Dictionary<ulong, JObject>();
+            var want = new Dictionary<string, JObject>();
             foreach (var token in arr)
             {
                 if (!(token is JObject entry))
                     continue;
-                ulong? instanceId = entry["instanceId"]?.ToObject<ulong>();
-                if (instanceId.HasValue)
-                    want[instanceId.Value] = entry;
+                string instanceId = entry["instanceId"]?.ToString();
+                if (!string.IsNullOrEmpty(instanceId))
+                    want[instanceId] = entry;
             }
             if (want.Count == 0)
                 return new { success = false, message = "No valid entries (each needs an 'instanceId')." };
 
-            var matched = new HashSet<ulong>();
+            var matched = new HashSet<string>();
             var motionFailures = new List<object>();
             Undo.RecordObject(controller, "Set State Properties");
             for (int li = 0; li < controller.layers.Length; li++)
@@ -609,13 +611,13 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
-        private static void ApplyProperties(AnimatorStateMachine sm, Dictionary<ulong, JObject> want, HashSet<ulong> matched, List<object> motionFailures)
+        private static void ApplyProperties(AnimatorStateMachine sm, Dictionary<string, JObject> want, HashSet<string> matched, List<object> motionFailures)
         {
             var children = sm.states;
             for (int i = 0; i < children.Length; i++)
             {
-                ulong? id = children[i].state.GetInstanceIDLongCompat();
-                if (!id.HasValue || !want.TryGetValue(id.Value, out var entry))
+                string id = children[i].state.GetInstanceIDString();
+                if (string.IsNullOrEmpty(id) || !want.TryGetValue(id, out var entry))
                     continue;
 
                 var st = children[i].state;
@@ -633,33 +635,26 @@ namespace MCPForUnity.Editor.Tools.Animation
                 if (entry["speed"] != null)
                     st.speed = entry["speed"].ToObject<float>();
 
-                // Motion by reference (resolve instanceId -> Motion object). 0/null clears it.
+                // Motion by reference (resolve string handle -> Motion object). empty/null/"0" clears it.
                 if (entry["motionInstanceId"] != null)
                 {
                     var token = entry["motionInstanceId"];
-                    if (token.Type == JTokenType.Null)
+                    string refId = token.Type == JTokenType.Null ? null : token.ToString();
+                    if (string.IsNullOrEmpty(refId) || refId == "0")
                     {
                         st.motion = null;
                     }
                     else
                     {
-                        ulong refId = token.ToObject<ulong>();
-                        if (refId == 0UL)
-                        {
-                            st.motion = null;
-                        }
+                        var obj = UnityObjectIdCompat.InstanceIDFromString(refId) as Motion;
+                        if (obj != null)
+                            st.motion = obj;
                         else
-                        {
-                            var obj = UnityObjectIdCompat.InstanceIDToObjectLongCompat(refId) as Motion;
-                            if (obj != null)
-                                st.motion = obj;
-                            else
-                                motionFailures.Add(new { instanceId = id.Value, motionInstanceId = refId });
-                        }
+                            motionFailures.Add(new { instanceId = id, motionInstanceId = refId });
                     }
                 }
 
-                matched.Add(id.Value);
+                matched.Add(id);
             }
             sm.states = children; // reassign so edits persist
 
