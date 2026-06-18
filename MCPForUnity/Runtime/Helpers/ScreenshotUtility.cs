@@ -753,9 +753,12 @@ namespace MCPForUnity.Runtime.Helpers
         }
     }
 
+#if MCP_HAS_SCREEN_CAPTURE
     /// <summary>
     /// Transient MonoBehaviour that yields WaitForEndOfFrame, calls
     /// ScreenCapture.CaptureScreenshotAsTexture, invokes the callback, and self-destructs.
+    /// Only compiled when the Screen Capture module is present; callers must gate their use
+    /// behind MCP_HAS_SCREEN_CAPTURE and fall back otherwise.
     /// </summary>
     public sealed class ScreenshotCapturer : MonoBehaviour
     {
@@ -775,12 +778,11 @@ namespace MCPForUnity.Runtime.Helpers
         {
             yield return new WaitForEndOfFrame();
             Texture2D tex = null;
-#if MCP_HAS_SCREEN_CAPTURE
             try { tex = ScreenCapture.CaptureScreenshotAsTexture(_superSize); }
             catch (Exception ex) { Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}"); }
-#endif
             _onComplete?.Invoke(tex);
             Destroy(gameObject);
         }
     }
+#endif
 }
