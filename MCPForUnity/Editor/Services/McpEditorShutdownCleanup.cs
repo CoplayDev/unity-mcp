@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Services
 {
@@ -22,8 +23,19 @@ namespace MCPForUnity.Editor.Services
             EditorApplication.quitting += OnEditorQuitting;
         }
 
+        // A -batchmode/CI instance resolves the interactive editor's server via the global
+        // pidfile+port handshake, so cleanup there would stop another user's server. Mirror the
+        // sibling guards (HttpAutoStartHandler, StdioBridgeHost): skip in batch unless opted in.
+        internal static bool ShouldRunCleanup() =>
+            ShouldRunCleanup(Application.isBatchMode, Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH"));
+
+        internal static bool ShouldRunCleanup(bool isBatchMode, string allowBatchEnv) =>
+            !isBatchMode || !string.IsNullOrWhiteSpace(allowBatchEnv);
+
         private static void OnEditorQuitting()
         {
+            if (!ShouldRunCleanup()) return;
+
             // 1) Stop transports (best-effort, bounded wait).
             try
             {
