@@ -38,7 +38,7 @@ namespace MCPForUnity.Editor.Resources.Project
                         textmeshpro = IsPackageInstalled("com.unity.textmeshpro"),
                         inputsystem = IsPackageInstalled("com.unity.inputsystem"),
                         uiToolkit = true,
-                        screenCapture = MCPForUnity.Runtime.Helpers.ScreenshotUtility.IsScreenCaptureModuleAvailable,
+                        screenCapture = true,
                     }
                 };
 

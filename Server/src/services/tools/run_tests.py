@@ -167,7 +167,13 @@ async def run_tests(
                                     "Include details for failed/skipped tests only (default: false)"] = False,
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
+    init_timeout: Annotated[int | None,
+                            "Initialization timeout in milliseconds. PlayMode tests may need longer "
+                            "due to domain reload (default: 15000). Recommended: 120000 for PlayMode."] = None,
 ) -> RunTestsStartResponse | MCPResponse:
+    if init_timeout is not None and init_timeout <= 0:
+        return MCPResponse(success=False, error="init_timeout must be a positive integer (milliseconds) or None")
+
     unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
@@ -197,6 +203,8 @@ async def run_tests(
         params["includeFailedTests"] = True
     if include_details:
         params["includeDetails"] = True
+    if init_timeout is not None and init_timeout > 0:
+        params["initTimeout"] = init_timeout
 
     response = await unity_transport.send_with_unity_instance(
         async_send_command_with_retry,

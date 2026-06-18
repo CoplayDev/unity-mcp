@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.ProBuilder
 {
@@ -595,7 +596,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             return new SuccessResponse($"Created ProBuilder {shapeTypeStr}: {go.name}", new
             {
                 gameObjectName = go.name,
-                instanceId = go.GetInstanceID(),
+                instanceId = go.GetInstanceIDCompat(),
                 shapeType = shapeTypeStr,
                 faceCount = GetFaceCount(pbMesh),
                 vertexCount = GetVertexCount(pbMesh),
@@ -899,7 +900,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             return new SuccessResponse($"Created poly shape: {go.name}", new
             {
                 gameObjectName = go.name,
-                instanceId = go.GetInstanceID(),
+                instanceId = go.GetInstanceIDCompat(),
                 pointCount = points.Count,
                 extrudeHeight,
                 faceCount = GetFaceCount(pbMesh),
@@ -2294,7 +2295,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             var data = new Dictionary<string, object>
             {
                 ["gameObjectName"] = pbMesh.gameObject.name,
-                ["instanceId"] = pbMesh.gameObject.GetInstanceID(),
+                ["instanceId"] = pbMesh.gameObject.GetInstanceIDCompat(),
                 ["faceCount"] = GetFaceCount(pbMesh),
                 ["vertexCount"] = GetVertexCount(pbMesh),
                 ["bounds"] = new

@@ -34,6 +34,66 @@ async def test_run_tests_async_forwards_params(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_tests_forwards_init_timeout(monkeypatch):
+    from services.tools.run_tests import run_tests
+
+    captured = {}
+
+    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "PlayMode"}}
+
+    import services.tools.run_tests as mod
+    monkeypatch.setattr(
+        mod.unity_transport, "send_with_unity_instance", fake_send_with_unity_instance)
+
+    resp = await run_tests(
+        DummyContext(),
+        mode="PlayMode",
+        init_timeout=120000,
+    )
+    assert captured["params"]["initTimeout"] == 120000
+    assert resp.success is True
+
+
+@pytest.mark.asyncio
+async def test_run_tests_omits_init_timeout_when_none(monkeypatch):
+    from services.tools.run_tests import run_tests
+
+    captured = {}
+
+    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "EditMode"}}
+
+    import services.tools.run_tests as mod
+    monkeypatch.setattr(
+        mod.unity_transport, "send_with_unity_instance", fake_send_with_unity_instance)
+
+    resp = await run_tests(DummyContext(), mode="EditMode")
+    assert "initTimeout" not in captured["params"]
+    assert resp.success is True
+
+
+@pytest.mark.asyncio
+async def test_run_tests_rejects_negative_init_timeout():
+    from services.tools.run_tests import run_tests
+
+    resp = await run_tests(DummyContext(), mode="EditMode", init_timeout=-1)
+    assert resp.success is False
+    assert "init_timeout" in resp.error
+
+
+@pytest.mark.asyncio
+async def test_run_tests_rejects_zero_init_timeout():
+    from services.tools.run_tests import run_tests
+
+    resp = await run_tests(DummyContext(), mode="EditMode", init_timeout=0)
+    assert resp.success is False
+    assert "init_timeout" in resp.error
+
+
+@pytest.mark.asyncio
 async def test_get_test_job_forwards_job_id(monkeypatch):
     from services.tools.run_tests import get_test_job
 

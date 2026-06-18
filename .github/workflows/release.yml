@@ -19,9 +19,23 @@ on:
         required: true
 
 jobs:
+  unity_tests:
+    name: Unity tests gate
+    uses: ./.github/workflows/unity-tests.yml
+    with:
+      ref: beta
+    secrets: inherit
+
+  python_tests:
+    name: Python tests gate
+    uses: ./.github/workflows/python-tests.yml
+    with:
+      ref: beta
+
   bump:
     name: Bump version, tag, and create release
     runs-on: ubuntu-latest
+    needs: [unity_tests, python_tests]
     permissions:
       contents: write
       pull-requests: write

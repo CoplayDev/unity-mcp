@@ -3,12 +3,12 @@
 | [English](../../README.md) | [简体中文](README-zh.md) |
 |----------------------|---------------------------------|
 
-#### 由 [Coplay](https://www.coplay.dev/?ref=unity-mcp) 荣誉赞助并维护 —— Unity 最好的 AI 助手。
+#### 由 [Aura](https://www.tryaura.dev/) 荣誉赞助并维护 —— 面向 Unreal 与 Unity 的 AI 助手。
+##### 别错过 [Godot A](https://github.com/hi-godot/godot-ai)I 🤖，MCP for Unity 团队推出的全新开源 MCP/AI 项目！
 
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
 [![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
-[![Unity Asset Store](https://img.shields.io/badge/Unity%20Asset%20Store-Get%20Package-FF6A00?style=flat&logo=unity&logoColor=white)](https://assetstore.unity.com/packages/tools/generative-ai/mcp-for-unity-ai-driven-development-329908)
 [![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
@@ -46,7 +46,7 @@
 
 * **Unity 2021.3 LTS+** — [下载 Unity](https://unity.com/download)
 * **Python 3.10+** 和 **uv** — [安装 uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **一个 MCP 客户端** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
+* **一个 MCP 客户端** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [OpenClaw](https://openclaw.ai)
 
 ### 1. 安装 Unity 包
 
@@ -81,7 +81,7 @@ openupm add com.coplaydev.unity-mcp
 2. 点击 **Start Server**（会在 `localhost:8080` 启动 HTTP 服务器）
 3. 从下拉菜单选择你的 MCP Client，然后点击 **Configure**
 4. 查找 🟢 "Connected ✓"
-5. **连接你的客户端：** 一些客户端（Cursor、Windsurf、Antigravity）需要在设置里启用 MCP 开关；另一些（Claude Desktop、Claude Code）在配置后会自动连接。
+5. **连接你的客户端：** 一些客户端（Cursor、Antigravity 2.0、Antigravity IDE、OpenClaw）需要在设置里启用 MCP 开关或插件。Antigravity 2.0 与 Antigravity IDE 是分开列出的：Antigravity 2.0 已迁移到 `~/.gemini/config/`，而 Antigravity IDE 仍使用 `~/.gemini/antigravity-ide/`；如果两者都在使用，请分别配置。OpenClaw 还需要启用 `openclaw-mcp-bridge` 插件，并会跟随 MCP for Unity 当前选择的传输方式（HTTP 或 stdio）；另一些（Claude Desktop、Claude Code）在配置后会自动连接。
 
 **就这些！** 试试这样的提示词：*"Create a red, blue and yellow cube"* 或 *"Build a simple player controller"*
 
@@ -252,16 +252,11 @@ series = {SA Technical Communications '25}
 ```
 </details>
 
-## Coplay 的 Unity AI 工具
+## Aura 的 Unity AI 工具
 
-Coplay 提供 3 个 Unity AI 工具：
+Aura 提供 2 个 Unity AI 工具：
 - **MCP for Unity** 在 MIT 许可证下免费提供。
-- **Coplay** 是一个运行在 Unity 内的高级 Unity AI 助手，功能超过 MCP for Unity。
-- **Coplay MCP** 是 Coplay 工具的“目前免费”版 MCP。
-
-（这些工具有不同的技术栈。参见这篇博客文章：[comparing Coplay to MCP for Unity](https://coplay.dev/blog/coplay-vs-coplay-mcp-vs-unity-mcp)。）
-
-<img alt="Coplay" src="../images/coplay-logo.png" />
+- **Aura for Unity** 是一款面向游戏开发者打造的高级 Unity/Unreal AI 助手。
 
 ## 免责声明
 

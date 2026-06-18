@@ -3,47 +3,49 @@
     <ui:VisualElement name="client-section" class="section">
         <ui:Label text="Client Configuration" class="section-title" />
         <ui:VisualElement class="section-content">
-            <ui:VisualElement class="setting-row">
-                <ui:Label text="Client:" class="setting-label" />
-                <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row">
-                <ui:VisualElement class="status-container">
-                    <ui:VisualElement name="client-status-indicator" class="status-dot" />
-                    <ui:Label name="client-status" text="Not Configured" class="status-text" />
+            <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="primary-button" />
+            <ui:Foldout name="client-details-foldout" text="Per-client setup" value="true" class="client-details-foldout">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Client:" class="setting-label" />
+                    <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
                 </ui:VisualElement>
-                <ui:Button name="configure-button" text="Configure" class="action-button" />
-                <ui:Button name="install-skills-button" text="Install Skills" class="action-button" style="display: none;" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="claude-cli-path-row" style="display: none;">
-                <ui:Label text="Claude CLI Path:" class="setting-label-small" />
-                <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
-                <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="client-project-dir-row" style="display: none;">
-                <ui:Label text="Client Project Dir:" class="setting-label-small" />
-                <ui:TextField name="client-project-dir" readonly="true" class="path-display-field" />
-                <ui:Button name="browse-project-dir-button" text="Browse" class="icon-button" />
-                <ui:Button name="clear-project-dir-button" text="Clear" class="icon-button" />
-            </ui:VisualElement>
-            <ui:Foldout name="manual-config-foldout" text="Manual Configuration" value="false" class="manual-config-foldout">
-                <ui:VisualElement class="manual-config-content">
-                    <ui:Label text="Config Path:" class="config-label" />
-                    <ui:VisualElement class="path-row">
-                        <ui:TextField name="config-path" readonly="true" class="config-path-field" />
-                        <ui:Button name="copy-path-button" text="Copy" class="icon-button" />
-                        <ui:Button name="open-file-button" text="Open" class="icon-button" />
+                <ui:VisualElement class="setting-row">
+                    <ui:VisualElement class="status-container">
+                        <ui:VisualElement name="client-status-indicator" class="status-dot" />
+                        <ui:Label name="client-status" text="Not Configured" class="status-text" />
                     </ui:VisualElement>
-                    <ui:Label text="Configuration:" class="config-label" />
-                    <ui:VisualElement class="config-json-row">
-                        <ui:TextField name="config-json" readonly="true" multiline="true" class="config-json-field" />
-                        <ui:Button name="copy-json-button" text="Copy" class="icon-button-vertical" />
-                    </ui:VisualElement>
-                    <ui:Label text="Installation Steps:" class="config-label" />
-                    <ui:Label name="installation-steps" class="installation-steps" />
+                    <ui:Button name="configure-button" text="Configure" class="action-button" />
+                    <ui:Button name="install-skills-button" text="Install Skills" class="action-button" style="display: none;" />
                 </ui:VisualElement>
+                <ui:VisualElement class="setting-row" name="claude-cli-path-row" style="display: none;">
+                    <ui:Label text="Claude CLI Path:" class="setting-label-small" />
+                    <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
+                    <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row" name="client-project-dir-row" style="display: none;">
+                    <ui:Label text="Client Project Dir:" class="setting-label-small" />
+                    <ui:TextField name="client-project-dir" readonly="true" class="path-display-field" />
+                    <ui:Button name="browse-project-dir-button" text="Browse" class="icon-button" />
+                    <ui:Button name="clear-project-dir-button" text="Clear" class="icon-button" />
+                </ui:VisualElement>
+                <ui:Foldout name="manual-config-foldout" text="Manual Configuration" value="false" class="manual-config-foldout">
+                    <ui:VisualElement class="manual-config-content">
+                        <ui:Label text="Config Path:" class="config-label" />
+                        <ui:VisualElement class="path-row">
+                            <ui:TextField name="config-path" readonly="true" class="config-path-field" />
+                            <ui:Button name="copy-path-button" text="Copy" class="icon-button" />
+                            <ui:Button name="open-file-button" text="Open" class="icon-button" />
+                        </ui:VisualElement>
+                        <ui:Label text="Configuration:" class="config-label" />
+                        <ui:VisualElement class="config-json-row">
+                            <ui:TextField name="config-json" readonly="true" multiline="true" class="config-json-field" />
+                            <ui:Button name="copy-json-button" text="Copy" class="icon-button-vertical" />
+                        </ui:VisualElement>
+                        <ui:Label text="Installation Steps:" class="config-label" />
+                        <ui:Label name="installation-steps" class="installation-steps" />
+                    </ui:VisualElement>
+                </ui:Foldout>
             </ui:Foldout>
-            <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="secondary-button" style="width: auto; padding-left: 12px; padding-right: 12px;" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

@@ -816,39 +816,6 @@ namespace MCPForUnity.Editor.Tools
         private static bool s_pendingCaptureDone;
         private static bool s_pendingCaptureStarted;
 
-        // MonoBehaviour that captures a screenshot at end-of-frame in play mode.
-        private sealed class MCP_ScreenCapturer : MonoBehaviour
-        {
-            private System.Collections.IEnumerator Start()
-            {
-                yield return new WaitForEndOfFrame();
-
-                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
-                {
-                    Debug.LogError("[MCP] " + ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
-                    ManageUI.s_pendingCaptureTex = null;
-                    ManageUI.s_pendingCaptureDone = false;
-                    ManageUI.s_pendingCaptureStarted = false;
-                    Destroy(gameObject);
-                    yield break;
-                }
-
-                try
-                {
-                    ManageUI.s_pendingCaptureTex = ScreenCapture.CaptureScreenshotAsTexture();
-                    ManageUI.s_pendingCaptureDone = true;
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[MCP] ScreenCapture failed: {ex.Message}");
-                    ManageUI.s_pendingCaptureTex = null;
-                    ManageUI.s_pendingCaptureDone = false;
-                }
-                ManageUI.s_pendingCaptureStarted = false;
-                Destroy(gameObject);
-            }
-        }
-
         private static object RenderUI(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -860,10 +827,22 @@ namespace MCPForUnity.Editor.Tools
             bool includeImage = p.GetBool("include_image") || p.GetBool("includeImage");
             int maxResolution = p.GetInt("max_resolution") ?? p.GetInt("maxResolution") ?? 640;
             string fileName = p.Get("file_name") ?? p.Get("fileName");
+            string outputFolderOverride = p.Get("output_folder") ?? p.Get("outputFolder");
 
             if (string.IsNullOrEmpty(target) && string.IsNullOrEmpty(uxmlPath))
             {
                 return new ErrorResponse("Either 'target' (GameObject with UIDocument) or 'path' (UXML asset path) is required.");
+            }
+
+            string resolvedFolderSpec = ScreenshotPreferences.Resolve(outputFolderOverride);
+            string resolvedFolderAbs;
+            try
+            {
+                resolvedFolderAbs = ScreenshotUtility.ResolveFolderAbsolute(resolvedFolderSpec);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ErrorResponse(ex.Message);
             }
 
             // ── Play-mode capture via ScreenCapture coroutine ──────────────────────
@@ -882,11 +861,10 @@ namespace MCPForUnity.Editor.Tools
                 if (!resolvedPlayName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                     resolvedPlayName += ".png";
 
-                string playFolder = Path.Combine(Application.dataPath, "Screenshots");
-                Directory.CreateDirectory(playFolder);
-                string playFullPath = Path.Combine(playFolder, resolvedPlayName).Replace('\\', '/');
+                Directory.CreateDirectory(resolvedFolderAbs);
+                string playFullPath = Path.Combine(resolvedFolderAbs, resolvedPlayName).Replace('\\', '/');
                 playFullPath = EnsureUniqueFilePath(playFullPath);
-                string playAssetsRelPath = "Assets/Screenshots/" + Path.GetFileName(playFullPath);
+                string playProjectRelPath = ScreenshotUtility.ToProjectRelativePath(playFullPath);
 
                 // ── Case 1: capture is ready ──────────────────────────────────────
                 if (s_pendingCaptureDone && s_pendingCaptureTex != null)
@@ -901,11 +879,12 @@ namespace MCPForUnity.Editor.Tools
                     UnityEngine.Object.DestroyImmediate(captureTex);
 
                     File.WriteAllBytes(playFullPath, capturePng);
-                    AssetDatabase.ImportAsset(playAssetsRelPath, ImportAssetOptions.ForceSynchronousImport);
+                    if (ScreenshotUtility.IsUnderAssets(playProjectRelPath))
+                        AssetDatabase.ImportAsset(playProjectRelPath, ImportAssetOptions.ForceSynchronousImport);
 
                     var playData = new Dictionary<string, object>
                     {
-                        { "path", playAssetsRelPath },
+                        { "path", playProjectRelPath },
                         { "fullPath", playFullPath },
                         { "width", captureW },
                         { "height", captureH },
@@ -944,16 +923,10 @@ namespace MCPForUnity.Editor.Tools
                         }
                     }
 
-                    return new SuccessResponse($"UI render saved to '{playAssetsRelPath}'.", playData);
+                    return new SuccessResponse($"UI render saved to '{playProjectRelPath}'.", playData);
                 }
 
                 // ── Case 2: start a new capture ───────────────────────────────────
-                // Verify the ScreenCapture module is enabled before attempting capture.
-                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
-                {
-                    return new ErrorResponse(ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
-                }
-
                 // Only one capture in flight at a time.  If one is already pending,
                 // reject rather than silently overwriting the state.
                 if (s_pendingCaptureStarted)
@@ -966,11 +939,12 @@ namespace MCPForUnity.Editor.Tools
                 s_pendingCaptureDone = false;
                 s_pendingCaptureTex = null;
                 s_pendingCaptureStarted = true;
-                var captureGo = new GameObject("__MCP_ScreenCapturer__")
+                ScreenshotCapturer.Begin(1, tex =>
                 {
-                    hideFlags = HideFlags.HideAndDontSave
-                };
-                captureGo.AddComponent<MCP_ScreenCapturer>();
+                    s_pendingCaptureTex = tex;
+                    s_pendingCaptureDone = true;
+                    s_pendingCaptureStarted = false;
+                });
 
                 return new SuccessResponse(
                     "Play-mode screenshot capture queued (WaitForEndOfFrame). Call render_ui again to retrieve the rendered image.",
@@ -1033,7 +1007,7 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse("UIDocument has no PanelSettings assigned.");
 
                 var panelSettings = uiDoc.panelSettings;
-                int psId = panelSettings.GetInstanceID();
+                int psId = panelSettings.GetInstanceIDCompat();
 
                 // Check if we already have a persistent RT assigned to this PanelSettings.
                 // If the RT exists and its size matches, the panel has been rendering into it.
@@ -1134,20 +1108,20 @@ namespace MCPForUnity.Editor.Tools
                 if (!resolvedName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                     resolvedName += ".png";
 
-                string folder = Path.Combine(Application.dataPath, "Screenshots");
-                Directory.CreateDirectory(folder);
-                string fullPath = Path.Combine(folder, resolvedName).Replace('\\', '/');
+                Directory.CreateDirectory(resolvedFolderAbs);
+                string fullPath = Path.Combine(resolvedFolderAbs, resolvedName).Replace('\\', '/');
                 fullPath = EnsureUniqueFilePath(fullPath);
 
                 byte[] png = tex.EncodeToPNG();
                 File.WriteAllBytes(fullPath, png);
 
-                string assetsRelPath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
-                AssetDatabase.ImportAsset(assetsRelPath, ImportAssetOptions.ForceSynchronousImport);
+                string projectRelPath = ScreenshotUtility.ToProjectRelativePath(fullPath);
+                if (ScreenshotUtility.IsUnderAssets(projectRelPath))
+                    AssetDatabase.ImportAsset(projectRelPath, ImportAssetOptions.ForceSynchronousImport);
 
                 var data = new Dictionary<string, object>
                 {
-                    { "path", assetsRelPath },
+                    { "path", projectRelPath },
                     { "fullPath", fullPath },
                     { "width", width },
                     { "height", height },
@@ -1191,10 +1165,10 @@ namespace MCPForUnity.Editor.Tools
                 UnityEngine.Object.DestroyImmediate(tex);
 
                 string msg = hasContent
-                    ? $"UI rendered to '{assetsRelPath}'."
+                    ? $"UI rendered to '{projectRelPath}'."
                     : rtJustAssigned
                         ? $"RenderTexture assigned to PanelSettings. Call render_ui again to capture the rendered content."
-                        : $"UI render saved to '{assetsRelPath}' (no visible content detected).";
+                        : $"UI render saved to '{projectRelPath}' (no visible content detected).";
 
                 return new SuccessResponse(msg, data);
             }

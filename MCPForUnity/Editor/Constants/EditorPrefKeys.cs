@@ -49,6 +49,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string ResourceFoldoutStatePrefix = "MCPForUnity.ResourceFoldout.";
         internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
         internal const string LastSelectedClientId = "MCPForUnity.LastSelectedClientId";
+        internal const string ClientDetailsFoldoutOpen = "MCPForUnity.ClientConfig.DetailsFoldoutOpen";
 
         internal const string SetupCompleted = "MCPForUnity.SetupCompleted";
         internal const string SetupDismissed = "MCPForUnity.SetupDismissed";
@@ -67,6 +68,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string ApiKey = "MCPForUnity.ApiKey";
 
         internal const string AutoStartOnLoad = "MCPForUnity.AutoStartOnLoad";
+        internal const string HttpServerLaunchConfirmed = "MCPForUnity.HttpServerLaunchConfirmed";
         internal const string BatchExecuteMaxCommands = "MCPForUnity.BatchExecute.MaxCommands";
         internal const string LogRecordEnabled = "MCPForUnity.LogRecordEnabled";
 

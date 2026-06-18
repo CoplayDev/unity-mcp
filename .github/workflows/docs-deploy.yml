@@ -1,0 +1,92 @@
+name: Docs — Build & Deploy
+
+# Builds the Docusaurus site under /website and, on push to beta, deploys
+# to GitHub Pages at https://coplaydev.github.io/unity-mcp/.
+#
+# PR runs only build (no deploy) as a preview-validation step.
+# Re-deploys also fire when the Python tool/resource registry changes,
+# so M3's auto-generated reference pages stay fresh.
+
+on:
+  push:
+    branches: [beta]
+    paths:
+      - website/**
+      - docs/**
+      - Server/src/services/tools/**
+      - Server/src/services/resources/**
+      - Server/src/services/registry/**
+      - .github/workflows/docs-deploy.yml
+  pull_request:
+    branches: [beta, main]
+    paths:
+      - website/**
+      - docs/**
+      - Server/src/services/tools/**
+      - Server/src/services/resources/**
+      - Server/src/services/registry/**
+      - .github/workflows/docs-deploy.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so Docusaurus's showLastUpdateTime / showLastUpdateAuthor
+          # can resolve real per-file commit metadata. Shallow clones make every
+          # page report the latest commit instead.
+          fetch-depth: 0
+          # No push back from this workflow — the deploy uses the Pages
+          # OIDC token issued by actions/deploy-pages, not the repo token.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Setup Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+        uses: actions/configure-pages@v5
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

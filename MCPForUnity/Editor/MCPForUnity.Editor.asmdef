@@ -8,12 +8,18 @@
         "Editor"
     ],
     "excludePlatforms": [],
-    "overrideReferences": false,
+    "overrideReferences": true,
     "precompiledReferences": [
         "Newtonsoft.Json.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.visualeffectgraph",
+            "expression": "0.0.0",
+            "define": "UNITY_VFX_GRAPH"
+        }
+    ],
     "noEngineReferences": false
 }

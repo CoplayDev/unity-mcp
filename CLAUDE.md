@@ -140,6 +140,13 @@ Use `CommandRegistry.InvokeCommandAsync` to call other tools from within a handl
 var result = await CommandRegistry.InvokeCommandAsync("read_console", consoleParams);
 ```
 
+### Unity API Compatibility Shims
+We support a wide Unity version range (2021+ → 6.x → CoreCLR 6.8). When an API is renamed, deprecated, or removed across versions, **don't sprinkle `#if UNITY_x_y_OR_NEWER` at every call site** — add a shim in `MCPForUnity/Runtime/Helpers/Unity*Compat.cs` and route every caller through it.
+
+The catalog of active shims, the policy for when to add one, what does NOT belong in a shim, and the reflection-cache pattern all live in **`MCPForUnity/Runtime/Helpers/UnityCompatShims.cs`** — the XML doc on that empty marker class is the source of truth and ships inside the UPM package, so end-users can `F12`/Go-to-definition into it. Sources for current deprecations: Unity 6.x upgrade guides and the [CoreCLR 2026 thread](https://discussions.unity.com/t/path-to-coreclr-2026-upgrade-guide/1714279).
+
+When you touch a shim or anything else gated by `#if UNITY_*_OR_NEWER`, run `tools/check-unity-versions.sh` to compile-check across the CI matrix locally before committing — the matrix lives in `tools/unity-versions.json`.
+
 ## Commands
 
 ### Running Tests
@@ -154,7 +161,22 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 cd Server && uv run pytest tests/ -k "test_create_material" -v
 
 # Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
+
+# Local multi-version compile check (parity with CI matrix, see tools/unity-versions.json)
+tools/check-unity-versions.sh           # compile-only across installed Unity Hub editors
+tools/check-unity-versions.sh --full    # full EditMode test run
 ```
+
+#### Local headless test harness
+One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge — the same entrypoint CI uses (`.github/workflows/e2e-bridge.yml`):
+
+```bash
+python tools/local_harness.py
+```
+
+Key flags: `--legs smoke,editmode,playmode` (subset to run), `--project-path` (target project, default `TestProjects/UnityMCPTests`), `--reuse` (attach to an already-resident bridge instead of booting one), `--keep-alive` (leave the Editor running after the legs), `--no-warmup` (skip the warm-up import phase).
+
+Exit codes: `0` pass, `1` blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found. Requires a Hub-activated Editor locally (no ULF/serial).
 
 ### Local Development
 1. Set **Server Source Override** in MCP for Unity Advanced Settings to your local `Server/` path

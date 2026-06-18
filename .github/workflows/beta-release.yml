@@ -13,9 +13,21 @@ on:
       - "MCPForUnity/**"
 
 jobs:
+  unity_tests:
+    name: Unity tests gate
+    if: github.actor != 'github-actions[bot]'
+    uses: ./.github/workflows/unity-tests.yml
+    secrets: inherit
+
+  python_tests:
+    name: Python tests gate
+    if: github.actor != 'github-actions[bot]'
+    uses: ./.github/workflows/python-tests.yml
+
   update_unity_beta_version:
     name: Update Unity package to beta version
     runs-on: ubuntu-latest
+    needs: [unity_tests, python_tests]
     # Avoid running when the workflow's own automation merges the PR
     # created by this workflow (prevents a version-bump loop).
     if: github.actor != 'github-actions[bot]'
@@ -143,6 +155,7 @@ jobs:
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
     runs-on: ubuntu-latest
+    needs: [unity_tests, python_tests]
     # Avoid double-publish when the bot merges the version bump PR
     if: github.actor != 'github-actions[bot]'
     environment:

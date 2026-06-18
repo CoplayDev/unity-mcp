@@ -17,7 +17,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
    - Install Python and/or uv/uvx if missing so the server can be managed locally.
    - For Claude Code, ensure the `claude` CLI is installed.
 4. Click “Start Bridge” if the Unity Bridge shows “Stopped”.
-5. Use your MCP client (Cursor, VS Code, Windsurf, Claude Code) to connect.
+5. Use your MCP client (Cursor, VS Code, OpenClaw, Claude Code) to connect.
 
 ---
 
@@ -60,6 +60,11 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
     - Register with Claude Code / Unregister MCP for Unity with Claude Code.
     - If the CLI isn’t found, click “Choose Claude Install Location”.
     - The window displays the resolved Claude CLI path when detected.
+  - OpenClaw:
+    - Uses `~/.openclaw/openclaw.json` and the `openclaw-mcp-bridge` plugin.
+    - MCP for Unity writes `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
+    - OpenClaw follows the currently selected MCP for Unity transport (`HTTP` or `stdio`).
+    - The bridge exposes a proxy tool such as `unityMCP__call`.
 
 Notes:
 - The UI shows a status dot and a short status text (e.g., “Configured”, “uv Not Found”, “Claude Not Found”).

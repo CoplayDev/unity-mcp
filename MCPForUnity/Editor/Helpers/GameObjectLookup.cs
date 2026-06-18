@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -69,11 +70,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static UnityEngine.Object ResolveInstanceID(int instanceId)
         {
-#if UNITY_6000_3_OR_NEWER
-            return EditorUtility.EntityIdToObject(instanceId);
-#else
-            return EditorUtility.InstanceIDToObject(instanceId);
-#endif
+            return UnityObjectIdCompat.InstanceIDToObjectCompat(instanceId);
         }
 
         /// <summary>
@@ -155,7 +152,7 @@ namespace MCPForUnity.Editor.Helpers
             if (maxResults > 0)
                 matching = matching.Take(maxResults);
 
-            return matching.Select(go => go.GetInstanceID());
+            return matching.Select(go => go.GetInstanceIDCompat());
         }
 
         private static IEnumerable<int> SearchByPath(string path, bool includeInactive)
@@ -170,7 +167,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     if (MatchesPath(go, path))
                     {
-                        yield return go.GetInstanceID();
+                        yield return go.GetInstanceIDCompat();
                     }
                 }
                 yield break;
@@ -187,7 +184,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     if (MatchesPath(go, path))
                     {
-                        yield return go.GetInstanceID();
+                        yield return go.GetInstanceIDCompat();
                     }
                 }
             }
@@ -197,7 +194,7 @@ namespace MCPForUnity.Editor.Helpers
                 var found = GameObject.Find(path);
                 if (found != null)
                 {
-                    yield return found.GetInstanceID();
+                    yield return found.GetInstanceIDCompat();
                 }
             }
         }
@@ -230,7 +227,7 @@ namespace MCPForUnity.Editor.Helpers
 
             foreach (var go in results)
             {
-                yield return go.GetInstanceID();
+                yield return go.GetInstanceIDCompat();
             }
         }
 
@@ -254,7 +251,7 @@ namespace MCPForUnity.Editor.Helpers
 
             foreach (var go in matching)
             {
-                yield return go.GetInstanceID();
+                yield return go.GetInstanceIDCompat();
             }
         }
 
@@ -274,7 +271,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 if (go.GetComponent(componentType) != null)
                 {
-                    yield return go.GetInstanceID();
+                    yield return go.GetInstanceIDCompat();
                     count++;
 
                     if (maxResults > 0 && count >= maxResults)

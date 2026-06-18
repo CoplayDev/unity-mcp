@@ -110,6 +110,28 @@ namespace MCPForUnityTests.Editor.Services
 #endif
 
         [Test]
+        public void ShouldAbandonBusyPort_KeepsSamePort_WithinReleaseWindow()
+        {
+            // A port busy for less than the fallback window is treated as our own
+            // not-yet-released listener after a domain reload — keep retrying the same
+            // port instead of silently switching and stranding the client (#1173).
+            Assert.IsFalse(PortManager.ShouldAbandonBusyPort(0.0));
+            Assert.IsFalse(PortManager.ShouldAbandonBusyPort(
+                PortManager.BusyPortFallbackWindowSeconds - 0.5));
+        }
+
+        [Test]
+        public void ShouldAbandonBusyPort_FallsBack_AfterReleaseWindow()
+        {
+            // A port that stays busy past the window is a foreign occupant — only then
+            // does the bridge discover and switch to a new port.
+            Assert.IsTrue(PortManager.ShouldAbandonBusyPort(
+                PortManager.BusyPortFallbackWindowSeconds));
+            Assert.IsTrue(PortManager.ShouldAbandonBusyPort(
+                PortManager.BusyPortFallbackWindowSeconds + 5.0));
+        }
+
+        [Test]
         public void DiscoverNewPort_ReturnsAvailablePort()
         {
             int port = PortManager.DiscoverNewPort();

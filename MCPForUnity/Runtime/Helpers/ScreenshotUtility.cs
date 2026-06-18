@@ -9,21 +9,21 @@ namespace MCPForUnity.Runtime.Helpers
 {
     public readonly struct ScreenshotCaptureResult
     {
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize)
-            : this(fullPath, assetsRelativePath, superSize, isAsync: false, imageBase64: null, imageWidth: 0, imageHeight: 0)
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize)
+            : this(fullPath, projectRelativePath, superSize, isAsync: false, imageBase64: null, imageWidth: 0, imageHeight: 0)
         {
         }
 
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync)
-            : this(fullPath, assetsRelativePath, superSize, isAsync, imageBase64: null, imageWidth: 0, imageHeight: 0)
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync)
+            : this(fullPath, projectRelativePath, superSize, isAsync, imageBase64: null, imageWidth: 0, imageHeight: 0)
         {
         }
 
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync,
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
             string imageBase64, int imageWidth, int imageHeight)
         {
             FullPath = fullPath;
-            AssetsRelativePath = assetsRelativePath;
+            ProjectRelativePath = projectRelativePath;
             SuperSize = superSize;
             IsAsync = isAsync;
             ImageBase64 = imageBase64;
@@ -32,7 +32,8 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         public string FullPath { get; }
-        public string AssetsRelativePath { get; }
+        /// <summary>Path relative to the Unity project root (e.g. "Captures/foo.png"). Suitable for ScreenCapture.CaptureScreenshot.</summary>
+        public string ProjectRelativePath { get; }
         public int SuperSize { get; }
         public bool IsAsync { get; }
         /// <summary>Base64-encoded PNG image data. Only populated when include_image is true.</summary>
@@ -43,43 +44,12 @@ namespace MCPForUnity.Runtime.Helpers
 
     public static class ScreenshotUtility
     {
-        private const string ScreenshotsFolderName = "Screenshots";
-        private static bool s_loggedLegacyScreenCaptureFallback;
-        private static bool? s_screenCaptureModuleAvailable;
-        private static System.Reflection.MethodInfo s_captureScreenshotMethod;
-
         /// <summary>
-        /// Checks if the Screen Capture module (com.unity.modules.screencapture) is enabled.
-        /// This module can be disabled in Package Manager > Built-in, which removes the ScreenCapture class.
+        /// Built-in default folder for screenshots, project-relative.
+        /// Callers can override per-call via the <c>folderOverride</c> parameter on capture methods,
+        /// or globally via <c>ScreenshotPreferences</c> in the Editor assembly.
         /// </summary>
-        public static bool IsScreenCaptureModuleAvailable
-        {
-            get
-            {
-                if (!s_screenCaptureModuleAvailable.HasValue)
-                {
-                    // Check if ScreenCapture type exists (module might be disabled in Package Manager > Built-in)
-                    var screenCaptureType = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule")
-                        ?? Type.GetType("UnityEngine.ScreenCapture, UnityEngine.CoreModule");
-                    s_screenCaptureModuleAvailable = screenCaptureType != null;
-                    if (screenCaptureType != null)
-                    {
-                        s_captureScreenshotMethod = screenCaptureType.GetMethod("CaptureScreenshot",
-                            new Type[] { typeof(string), typeof(int) });
-                    }
-                }
-                return s_screenCaptureModuleAvailable.Value;
-            }
-        }
-
-        /// <summary>
-        /// Error message to display when Screen Capture module is not available.
-        /// </summary>
-        public const string ScreenCaptureModuleNotAvailableError =
-            "The Screen Capture module (com.unity.modules.screencapture) is not enabled. " +
-            "To use screenshot capture with ScreenCapture API, please enable it in Unity: " +
-            "Window > Package Manager > Built-in > Screen Capture > Enable. " +
-            "Alternatively, MCP for Unity will use camera-based capture as a fallback if a Camera exists in the scene.";
+        public const string DefaultFolder = "Assets/Screenshots";
 
         private static Camera FindAvailableCamera()
         {
@@ -91,11 +61,7 @@ namespace MCPForUnity.Runtime.Helpers
 
             try
             {
-#if UNITY_2022_2_OR_NEWER
-                var cams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
-#else
-                var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
-#endif
+                var cams = UnityFindObjectsCompat.FindAll<Camera>();
                 return cams.FirstOrDefault();
             }
             catch
@@ -104,45 +70,16 @@ namespace MCPForUnity.Runtime.Helpers
             }
         }
 
-        public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
+        public static ScreenshotCaptureResult CaptureToProjectFolder(
+            string fileName = null,
+            int superSize = 1,
+            bool ensureUniqueFileName = true,
+            string folderOverride = null)
         {
-            // Use reflection to call ScreenCapture.CaptureScreenshot so the code compiles
-            // even when the Screen Capture module (com.unity.modules.screencapture) is disabled.
-            if (IsScreenCaptureModuleAvailable && s_captureScreenshotMethod != null)
-            {
-                ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: true);
-                s_captureScreenshotMethod.Invoke(null, new object[] { result.AssetsRelativePath, result.SuperSize });
-                return result;
-            }
-            else
-            {
-                // Module disabled or unavailable - try camera fallback
-                Debug.LogWarning("[MCP for Unity] " + ScreenCaptureModuleNotAvailableError);
-                return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName);
-            }
-        }
-
-        private static ScreenshotCaptureResult CaptureWithCameraFallback(string fileName, int superSize, bool ensureUniqueFileName)
-        {
-            if (!s_loggedLegacyScreenCaptureFallback)
-            {
-                Debug.Log("[MCP for Unity] Using camera-based screenshot capture. " +
-                    "This requires a Camera in the scene. For best results on Unity 2022.1+, ensure the Screen Capture module is enabled: " +
-                    "Window > Package Manager > Built-in > Screen Capture > Enable.");
-                s_loggedLegacyScreenCaptureFallback = true;
-            }
-
-            var cam = FindAvailableCamera();
-            if (cam == null)
-            {
-                throw new InvalidOperationException(
-                    "No camera found to capture screenshot. Camera-based capture requires a Camera in the scene. " +
-                    "Either add a Camera to your scene, or enable the Screen Capture module: " +
-                    "Window > Package Manager > Built-in > Screen Capture > Enable."
-                );
-            }
-
-            return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: true);
+            // ScreenCapture.CaptureScreenshot accepts paths relative to the project root.
+            ScreenCapture.CaptureScreenshot(result.ProjectRelativePath, result.SuperSize);
+            return result;
         }
 
         /// <summary>
@@ -150,20 +87,21 @@ namespace MCPForUnity.Runtime.Helpers
         /// When <paramref name="includeImage"/> is true, the result includes a base64-encoded PNG (optionally
         /// downscaled so the longest edge is at most <paramref name="maxResolution"/>).
         /// </summary>
-        public static ScreenshotCaptureResult CaptureFromCameraToAssetsFolder(
+        public static ScreenshotCaptureResult CaptureFromCameraToProjectFolder(
             Camera camera,
             string fileName = null,
             int superSize = 1,
             bool ensureUniqueFileName = true,
             bool includeImage = false,
-            int maxResolution = 0)
+            int maxResolution = 0,
+            string folderOverride = null)
         {
             if (camera == null)
             {
                 throw new ArgumentNullException(nameof(camera));
             }
 
-            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: false);
             int size = result.SuperSize;
 
             int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
@@ -222,7 +160,115 @@ namespace MCPForUnity.Runtime.Helpers
             if (includeImage && imageBase64 != null)
             {
                 return new ScreenshotCaptureResult(
-                    result.FullPath, result.AssetsRelativePath, result.SuperSize, false,
+                    result.FullPath, result.ProjectRelativePath, result.SuperSize, false,
+                    imageBase64, imgW, imgH);
+            }
+            return result;
+        }
+
+#if UNITY_EDITOR
+        // Synchronously drive a WaitForEndOfFrame ScreenshotCapturer by pumping the editor's
+        // player loop. Play-mode only; EditorApplication.Step is a no-op in edit mode.
+        private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
+        {
+            Texture2D result = null;
+            bool done = false;
+            bool callerReturned = false;
+            ScreenshotCapturer.Begin(superSize, tex =>
+            {
+                // Late completion after the spin loop timed out: caller will never consume
+                // the texture, so destroy it here to avoid leaking a Unity object.
+                if (callerReturned)
+                {
+                    if (tex != null) DestroyTexture(tex);
+                    return;
+                }
+                result = tex;
+                done = true;
+            });
+            for (int i = 0; i < timeoutSteps && !done; i++)
+            {
+                UnityEditor.EditorApplication.Step();
+            }
+            callerReturned = true;
+            return result;
+        }
+#endif
+
+        /// <summary>
+        /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
+        /// final composited frame including UI Toolkit overlays, post-processing, etc.
+        /// Falls back to camera-based capture if ScreenCapture returns null at runtime.
+        /// </summary>
+        public static ScreenshotCaptureResult CaptureComposited(
+            string fileName = null,
+            int superSize = 1,
+            bool ensureUniqueFileName = true,
+            bool includeImage = false,
+            int maxResolution = 0,
+            string folderOverride = null)
+        {
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
+            Texture2D tex = null;
+            Texture2D downscaled = null;
+            string imageBase64 = null;
+            int imgW = 0, imgH = 0;
+            try
+            {
+#if UNITY_EDITOR
+                // In play mode, inline ScreenCapture reads a backbuffer before UITK has
+                // composited; route through WaitForEndOfFrame instead.
+                tex = Application.isPlaying
+                    ? CaptureCompositedAfterFrame(result.SuperSize)
+                    : ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+#else
+                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+#endif
+                if (tex == null)
+                {
+                    // Fallback to camera-based if ScreenCapture fails
+                    var cam = FindAvailableCamera();
+                    if (cam != null)
+                        return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName,
+                            includeImage, maxResolution, folderOverride: folderOverride);
+                    throw new InvalidOperationException("ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");
+                }
+
+                int width = tex.width;
+                int height = tex.height;
+
+                byte[] png = tex.EncodeToPNG();
+                File.WriteAllBytes(result.FullPath, png);
+
+                if (includeImage)
+                {
+                    int targetMax = maxResolution > 0 ? maxResolution : 640;
+                    if (width > targetMax || height > targetMax)
+                    {
+                        downscaled = DownscaleTexture(tex, targetMax);
+                        byte[] smallPng = downscaled.EncodeToPNG();
+                        imageBase64 = System.Convert.ToBase64String(smallPng);
+                        imgW = downscaled.width;
+                        imgH = downscaled.height;
+                    }
+                    else
+                    {
+                        imageBase64 = System.Convert.ToBase64String(png);
+                        imgW = width;
+                        imgH = height;
+                    }
+                }
+            }
+            finally
+            {
+                DestroyTexture(tex);
+                DestroyTexture(downscaled);
+            }
+
+            if (includeImage && imageBase64 != null)
+            {
+                return new ScreenshotCaptureResult(
+                    result.FullPath, result.ProjectRelativePath, result.SuperSize, false,
                     imageBase64, imgW, imgH);
             }
             return result;
@@ -550,34 +596,85 @@ namespace MCPForUnity.Runtime.Helpers
                 UnityEngine.Object.DestroyImmediate(tex);
         }
 
-        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, bool isAsync)
+        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, string folderOverride, bool isAsync)
         {
             int size = Mathf.Max(1, superSize);
             string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
-            Directory.CreateDirectory(folder);
+            string folderAbsolute = ResolveFolderAbsolute(folderOverride);
+            Directory.CreateDirectory(folderAbsolute);
 
-            string fullPath = Path.Combine(folder, resolvedName);
+            string fullPath = Path.Combine(folderAbsolute, resolvedName);
             if (ensureUniqueFileName)
             {
                 fullPath = EnsureUnique(fullPath);
             }
 
             string normalizedFullPath = fullPath.Replace('\\', '/');
-            string assetsRelativePath = ToAssetsRelativePath(normalizedFullPath);
+            string projectRelativePath = ToProjectRelativePath(normalizedFullPath);
 
-            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size, isAsync);
+            return new ScreenshotCaptureResult(normalizedFullPath, projectRelativePath, size, isAsync);
         }
 
-        private static string ToAssetsRelativePath(string normalizedFullPath)
+        /// <summary>
+        /// Resolves a folder spec (which may be project-relative like "Assets/Screenshots",
+        /// absolute, or null/empty) to an absolute filesystem path inside the project root.
+        /// Throws on traversal escape or absolute paths outside the project.
+        /// </summary>
+        public static string ResolveFolderAbsolute(string folderOverride)
         {
-            string projectRoot = GetProjectRootPath();
-            string assetsRelativePath = normalizedFullPath;
-            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            string projectRoot = GetProjectRootPath().TrimEnd('/');
+            string requested = string.IsNullOrWhiteSpace(folderOverride) ? DefaultFolder : folderOverride.Trim();
+            requested = requested.Replace('\\', '/').TrimEnd('/');
+
+            string combined = Path.IsPathRooted(requested)
+                ? requested
+                : Path.Combine(projectRoot, requested);
+
+            string fullFolder = Path.GetFullPath(combined).Replace('\\', '/').TrimEnd('/');
+            string normalizedRoot = projectRoot;
+
+            // Reject paths that escape the project root (case-insensitive on Windows, exact elsewhere).
+            var rootComparison = Application.platform == RuntimePlatform.WindowsEditor
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!fullFolder.Equals(normalizedRoot, rootComparison) &&
+                !fullFolder.StartsWith(normalizedRoot + "/", rootComparison))
             {
-                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
+                throw new InvalidOperationException(
+                    $"Screenshot folder '{folderOverride}' resolves outside the Unity project root ('{fullFolder}'). " +
+                    $"Use a project-relative path (e.g. 'Assets/Screenshots' or 'Captures').");
             }
-            return assetsRelativePath;
+
+            return fullFolder;
+        }
+
+        /// <summary>
+        /// Converts an absolute filesystem path inside the project to a project-relative path
+        /// (forward slashes, no leading separator). Returns the input unchanged when it does
+        /// not live under the project root.
+        /// </summary>
+        public static string ToProjectRelativePath(string normalizedFullPath)
+        {
+            if (string.IsNullOrEmpty(normalizedFullPath)) return normalizedFullPath;
+            string projectRoot = GetProjectRootPath();
+            string normalized = normalizedFullPath.Replace('\\', '/');
+            if (normalized.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized.Substring(projectRoot.Length).TrimStart('/');
+            }
+            return normalized;
+        }
+
+        /// <summary>
+        /// True when <paramref name="projectRelativePath"/> lives under the Unity Assets/ folder
+        /// (and therefore should be imported via AssetDatabase).
+        /// </summary>
+        public static bool IsUnderAssets(string projectRelativePath)
+        {
+            if (string.IsNullOrEmpty(projectRelativePath)) return false;
+            string norm = projectRelativePath.Replace('\\', '/').TrimStart('/');
+            return norm.Equals("Assets", StringComparison.OrdinalIgnoreCase)
+                || norm.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildFileName(string fileName)
@@ -600,8 +697,11 @@ namespace MCPForUnity.Runtime.Helpers
 
         private static string SanitizeFileName(string fileName)
         {
+            // GetInvalidFileNameChars() doesn't include '\' or '/' on Unix, so a caller-supplied
+            // name like "foo\bar" would survive and later get spliced into the directory portion.
             var invalidChars = Path.GetInvalidFileNameChars();
-            string cleaned = new string(fileName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+            string cleaned = new string(
+                fileName.Select(ch => invalidChars.Contains(ch) || ch == '/' || ch == '\\' ? '_' : ch).ToArray());
 
             return string.IsNullOrWhiteSpace(cleaned) ? "screenshot" : cleaned;
         }
@@ -637,6 +737,35 @@ namespace MCPForUnity.Runtime.Helpers
                 root += "/";
             }
             return root;
+        }
+    }
+
+    /// <summary>
+    /// Transient MonoBehaviour that yields WaitForEndOfFrame, calls
+    /// ScreenCapture.CaptureScreenshotAsTexture, invokes the callback, and self-destructs.
+    /// </summary>
+    public sealed class ScreenshotCapturer : MonoBehaviour
+    {
+        private int _superSize = 1;
+        private Action<Texture2D> _onComplete;
+
+        /// <summary>Spawns a hidden GameObject, attaches a capturer, returns immediately.</summary>
+        public static void Begin(int superSize, Action<Texture2D> onComplete)
+        {
+            var go = new GameObject("__MCP_ScreenshotCapturer__") { hideFlags = HideFlags.HideAndDontSave };
+            var c = go.AddComponent<ScreenshotCapturer>();
+            c._superSize = Mathf.Max(1, superSize);
+            c._onComplete = onComplete;
+        }
+
+        private System.Collections.IEnumerator Start()
+        {
+            yield return new WaitForEndOfFrame();
+            Texture2D tex = null;
+            try { tex = ScreenCapture.CaptureScreenshotAsTexture(_superSize); }
+            catch (Exception ex) { Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}"); }
+            _onComplete?.Invoke(tex);
+            Destroy(gameObject);
         }
     }
 }

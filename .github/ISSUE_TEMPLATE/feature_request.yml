@@ -1,0 +1,63 @@
+name: Feature request
+description: Suggest a new tool, capability, or quality-of-life improvement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Great. The more concrete you can be about *who* this helps and *what* they're trying to do, the easier it is to scope.
+
+        For tool requests: please name the Unity API/system you'd be wrapping and what your MCP client would actually say.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Frame the user need first, not the implementation.
+      placeholder: |
+        When I'm prototyping with the LLM, I can't get it to build a NavMesh because there's no MCP tool for the AI navigation system. I have to flip back to the Editor manually.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+      description: Be specific. New tool? New action on an existing tool? New resource? Workflow change?
+      placeholder: |
+        A new `manage_navigation` tool with actions: bake, clear, set_agent_radius, query_nearest_edge, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: prior-art
+    attributes:
+      label: Prior art / how do you work around this today?
+      placeholder: I currently bake manually via Window > AI > Navigation, then ask the LLM to reason about it.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope hint
+      options:
+        - New tool (substantial)
+        - New action on an existing tool
+        - New resource
+        - UX / editor window
+        - CLI improvement
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you be willing to help build this?
+      options:
+        - label: I can open a PR if a maintainer sketches the approach
+        - label: I can help test
+        - label: I can write the docs

@@ -1,0 +1,180 @@
+/* HomeCloser — closing CTA + uncollapsed research citation block.
+ * Echoes the hero's dot-grid backdrop for visual rhyme between the
+ * top and bottom of the page. */
+
+.section {
+  position: relative;
+  padding: 6rem 1.5rem 7rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-color);
+  overflow: hidden;
+}
+
+.gridBackdrop {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    var(--ifm-color-emphasis-300) 1px,
+    transparent 0
+  );
+  background-size: 24px 24px;
+  opacity: 0.35;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent 0%, black 40%, black 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 40%, black 100%);
+}
+
+.inner {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.copy {
+  max-width: 720px;
+  margin-bottom: 2.5rem;
+}
+
+.eyebrow {
+  display: block;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+}
+
+.title {
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  margin: 0 0 1rem;
+  color: var(--ifm-color-emphasis-1000);
+}
+
+.lede {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.75rem;
+  margin-bottom: 4rem;
+}
+
+.ctaPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  /* --ifm-color-emphasis-1000 = solid foreground (black in light, white in
+   * dark). --ifm-color-emphasis-0 = solid background (the opposite). These
+   * are guaranteed defined by Docusaurus, unlike --ifm-heading-color which
+   * is "inherit" by default and collapses to context-dependent values. */
+  color: var(--ifm-color-emphasis-0);
+  background: var(--ifm-color-emphasis-1000);
+  text-decoration: none;
+  transition: background-color 0.18s ease, transform 0.18s ease, color 0.18s ease;
+}
+.ctaPrimary:hover {
+  background: var(--ifm-color-primary);
+  color: #ffffff;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.ctaPrimary span {
+  font-family: var(--ifm-font-family-monospace);
+  transition: transform 0.2s ease;
+}
+.ctaPrimary:hover span {
+  transform: translate(2px, -2px);
+}
+
+.ctaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-1000);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.ctaLink:hover {
+  color: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+.ctaLink span {
+  font-family: var(--ifm-font-family-monospace);
+  transition: transform 0.18s ease;
+}
+.ctaLink:hover span {
+  transform: translateX(3px);
+}
+
+/* Citation block — uncollapsed, presented as a refined "spec entry" */
+.cite {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-color);
+  padding: 1.6rem;
+  max-width: 820px;
+}
+
+.citeHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.citeHead .eyebrow {
+  margin-bottom: 0;
+}
+
+.citeMeta {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-500);
+}
+
+.citeBody {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0 0 1rem;
+}
+.citeBody em {
+  font-style: italic;
+  color: var(--ifm-color-emphasis-1000);
+}
+
+.citeBlock {
+  margin: 0;
+  padding: 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ifm-color-emphasis-1000);
+  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  overflow-x: auto;
+  white-space: pre;
+}

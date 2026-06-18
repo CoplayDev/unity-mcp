@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Graphics
 {
@@ -162,7 +163,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 {
                     name = displayName,
                     type = featureType.Name,
-                    instanceId = feature.GetInstanceID()
+                    instanceId = feature.GetInstanceIDCompat()
                 }
             };
         }

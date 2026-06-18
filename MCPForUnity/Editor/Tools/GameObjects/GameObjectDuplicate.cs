@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.GameObjects
 {
@@ -77,7 +78,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 new
                 {
                     originalName = sourceGo.name,
-                    originalId = sourceGo.GetInstanceID(),
+                    originalId = sourceGo.GetInstanceIDCompat(),
                     duplicatedObject = Helpers.GameObjectSerializer.GetGameObjectData(duplicatedGo)
                 }
             );

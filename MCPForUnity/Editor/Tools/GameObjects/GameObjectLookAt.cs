@@ -3,6 +3,7 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.GameObjects
 {
@@ -53,7 +54,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 new
                 {
                     name = targetGo.name,
-                    instanceID = targetGo.GetInstanceID(),
+                    instanceID = targetGo.GetInstanceIDCompat(),
                     rotation = new[] { euler.x, euler.y, euler.z },
                     lookAtPosition = new[] { lookAtPos.Value.x, lookAtPos.Value.y, lookAtPos.Value.z },
                 }

@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.GameObjects
 {
@@ -68,7 +69,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     if (int.TryParse(searchTerm, out int instanceId))
                     {
                         var allObjects = GetAllSceneObjects(searchInactive);
-                        GameObject obj = allObjects.FirstOrDefault(go => go.GetInstanceID() == instanceId);
+                        GameObject obj = allObjects.FirstOrDefault(go => go.GetInstanceIDCompat() == instanceId);
                         if (obj != null)
                             results.Add(obj);
                     }
@@ -154,16 +155,9 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                         }
                         else
                         {
-#if UNITY_2023_1_OR_NEWER
-                            var inactive = searchInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude;
-                            searchPoolComp = UnityEngine.Object.FindObjectsByType(componentType, inactive, FindObjectsSortMode.None)
+                            searchPoolComp = UnityFindObjectsCompat.FindAll(componentType, searchInactive)
                                 .Cast<Component>()
                                 .Select(c => c.gameObject);
-#else
-                            searchPoolComp = UnityEngine.Object.FindObjectsOfType(componentType, searchInactive)
-                                .Cast<Component>()
-                                .Select(c => c.gameObject);
-#endif
                         }
                         results.AddRange(searchPoolComp.Where(go => go != null));
                     }
@@ -177,7 +171,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     if (int.TryParse(searchTerm, out int id))
                     {
                         var allObjectsId = GetAllSceneObjects(true);
-                        GameObject objById = allObjectsId.FirstOrDefault(go => go.GetInstanceID() == id);
+                        GameObject objById = allObjectsId.FirstOrDefault(go => go.GetInstanceIDCompat() == id);
                         if (objById != null)
                         {
                             results.Add(objById);

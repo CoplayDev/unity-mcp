@@ -16,6 +16,8 @@ namespace MCPForUnity.Editor.Clients.Configurators
     {
         private const string ServerName = "unityMCP";
         private const string SchemaUrl = "https://opencode.ai/config.json";
+        private const string RemoteType = "remote";
+        private const string LocalType = "local";
 
         public OpenCodeConfigurator() : base(new McpClient
         {
@@ -96,10 +98,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
                     return client.status;
                 }
 
-                string configuredUrl = unityMcp["url"]?.ToString();
-                string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
-
-                if (UrlsEqual(configuredUrl, expectedUrl))
+                if (EntryMatchesCurrentTransport(unityMcp))
                 {
                     client.SetStatus(McpStatus.Configured);
                 }
@@ -168,11 +167,58 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "The Unity MCP server should be detected automatically"
         };
 
-        private static JObject BuildServerEntry() => new JObject
+        private static JObject BuildServerEntry()
         {
-            ["type"] = "remote",
-            ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
-            ["enabled"] = true
-        };
+            if (HttpEndpointUtility.GetCurrentServerTransport() == ConfiguredTransport.Stdio)
+            {
+                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                if (string.IsNullOrWhiteSpace(uvxPath))
+                {
+                    throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
+                }
+
+                var command = new JArray { uvxPath };
+                foreach (string value in AssetPathUtility.GetUvxDevFlagsList())
+                {
+                    command.Add(value);
+                }
+                foreach (string value in AssetPathUtility.GetBetaServerFromArgsList())
+                {
+                    command.Add(value);
+                }
+                command.Add(packageName);
+                command.Add("--transport");
+                command.Add("stdio");
+
+                return new JObject
+                {
+                    ["type"] = LocalType,
+                    ["command"] = command,
+                    ["enabled"] = true
+                };
+            }
+
+            return new JObject
+            {
+                ["type"] = RemoteType,
+                ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
+                ["enabled"] = true
+            };
+        }
+
+        private bool EntryMatchesCurrentTransport(JObject entry)
+        {
+            string entryType = entry["type"]?.ToString();
+            ConfiguredTransport expected = HttpEndpointUtility.GetCurrentServerTransport();
+
+            if (expected == ConfiguredTransport.Stdio)
+            {
+                return string.Equals(entryType, LocalType, StringComparison.OrdinalIgnoreCase)
+                    && entry["command"] is JArray;
+            }
+
+            return string.Equals(entryType, RemoteType, StringComparison.OrdinalIgnoreCase)
+                && UrlsEqual(entry["url"]?.ToString(), HttpEndpointUtility.GetMcpRpcUrl());
+        }
     }
 }

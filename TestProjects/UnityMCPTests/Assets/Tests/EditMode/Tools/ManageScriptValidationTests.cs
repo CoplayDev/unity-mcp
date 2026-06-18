@@ -321,6 +321,110 @@ public class Foo : MonoBehaviour
         }
 
         [Test]
+        public void DuplicateMethodCheck_ConstructorInvocations_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        GameObject a = new GameObject(""A"");
+        GameObject b = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Constructor invocations (new Type(...)) should not be flagged as duplicate methods");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_MultipleDistinctConstructors_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        var mpb1 = new MaterialPropertyBlock();
+        var mpb2 = new MaterialPropertyBlock();
+        var go1 = new GameObject(""A"");
+        var go2 = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Multiple constructor invocations of different types should not be flagged");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_NewModifierWithConstructors_CorrectBehavior()
+        {
+            string code = @"using UnityEngine;
+public class Base : MonoBehaviour
+{
+    public virtual void Init() { }
+}
+public class Derived : Base
+{
+    public new void Init() { }
+    void Start()
+    {
+        var a = new GameObject(""A"");
+        var b = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "new modifier on method should not interfere with constructor invocation filtering");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_LocalFunctionsInDifferentMethods_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        int ClampScore(int value) { return Mathf.Clamp(value, 0, 100); }
+        Debug.Log(ClampScore(10));
+    }
+
+    void Reset()
+    {
+        int ClampScore(int value) { return Mathf.Clamp(value, 0, 100); }
+        Debug.Log(ClampScore(0));
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Same-signature local functions in different methods are valid C# and should not be flagged as duplicate class methods");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_RepeatedMethodInvocations_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    int First()
+    {
+        return Compute();
+    }
+
+    int Second()
+    {
+        return Compute();
+    }
+
+    int Compute() { return 1; }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Repeated method invocations inside method bodies should not be treated as duplicate method declarations");
+        }
+
+        [Test]
         public void HandleCommand_PathWithCsExtension_StripsFilename()
         {
             // When path ends with .cs (full file path instead of directory),

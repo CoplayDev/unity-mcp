@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -28,7 +29,7 @@ namespace MCPForUnity.Editor.Helpers
             return new
             {
                 name = go.name,
-                instanceID = go.GetInstanceID(),
+                instanceID = go.GetInstanceIDCompat(),
                 tag = go.tag,
                 layer = go.layer,
                 activeSelf = go.activeSelf,
@@ -88,7 +89,7 @@ namespace MCPForUnity.Editor.Helpers
                         z = go.transform.right.z,
                     },
                 },
-                parentInstanceID = go.transform.parent?.gameObject.GetInstanceID() ?? 0, // 0 if no parent
+                parentInstanceID = go.transform.parent?.gameObject.GetInstanceIDCompat() ?? 0, // 0 if no parent
                 // Optionally include components, but can be large
                 // components = go.GetComponents<Component>().Select(c => GetComponentData(c)).ToList()
                 // Or just component names:
@@ -130,6 +131,73 @@ namespace MCPForUnity.Editor.Helpers
             return false;
         }
 
+        // Type full names that are known to crash the Editor when accessed via reflection.
+        // Photon Fusion uses IL weaving to inject fields with these types into NetworkBehaviour
+        // subclasses. They contain native/unmanaged memory and cannot be safely serialized.
+        private static readonly HashSet<string> _crashingTypeNames = new HashSet<string>
+        {
+            "Fusion.NetworkBehaviourBuffer",
+            "Fusion.NetworkBehaviourCallbackBuffer",
+            "Fusion.Networked+Internals",
+            "Fusion.Changed`1",
+        };
+        private static readonly PropertyInfo _isByRefLikeProperty = typeof(Type).GetProperty("IsByRefLike");
+
+        /// <summary>
+        /// Checks if a type is unsafe to access via reflection or serialize.
+        /// Returns true for ref structs (Span, ReadOnlySpan), pointer types,
+        /// by-ref types, and known IL-weaved types that crash the Editor.
+        /// </summary>
+        private static bool IsUnsafeType(Type type)
+        {
+            return IsUnsafeType(type, new HashSet<Type>());
+        }
+
+        private static bool IsUnsafeType(Type type, HashSet<Type> visitedTypes)
+        {
+            if (type == null) return false;
+            if (!visitedTypes.Add(type)) return false;
+
+            // Pointer and by-ref types cannot be serialized
+            if (type.IsPointer || type.IsByRef)
+                return true;
+
+            // Ref structs (Span<>, ReadOnlySpan<>, etc.) cannot be boxed. Use reflection
+            // so Unity versions without Type.IsByRefLike still compile.
+            if (type.IsValueType && _isByRefLikeProperty != null && (bool)_isByRefLikeProperty.GetValue(type, null))
+                return true;
+
+            // Check the type and its generic definition against the blacklist
+            string fullName = type.FullName;
+            if (fullName != null && _crashingTypeNames.Contains(fullName))
+                return true;
+
+            if (type.IsGenericType)
+            {
+                string genericFullName = type.GetGenericTypeDefinition()?.FullName;
+                if (genericFullName != null && _crashingTypeNames.Contains(genericFullName))
+                    return true;
+            }
+
+            // Catch-all for Fusion buffer types injected by IL weaving
+            if (fullName != null && fullName.StartsWith("Fusion.") && fullName.Contains("Buffer"))
+                return true;
+
+            // Arrays and generic containers can wrap unsafe Fusion/ref-like types.
+            // Newtonsoft.Json would still recurse into those values during serialization.
+            Type elementType = type.GetElementType();
+            if (elementType != null && IsUnsafeType(elementType, visitedTypes))
+                return true;
+
+            foreach (Type genericArgument in type.GetGenericArguments())
+            {
+                if (IsUnsafeType(genericArgument, visitedTypes))
+                    return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Serializes a UnityEngine.Object reference to a dictionary with name, instanceID, and assetPath.
         /// Used for consistent serialization of asset references in special-case component handlers.
@@ -144,7 +212,7 @@ namespace MCPForUnity.Editor.Helpers
             var result = new Dictionary<string, object>
             {
                 { "name", obj.name },
-                { "instanceID", obj.GetInstanceID() }
+                { "instanceID", obj.GetInstanceIDCompat() }
             };
             
             if (includeAssetPath)
@@ -164,7 +232,7 @@ namespace MCPForUnity.Editor.Helpers
         public static object GetComponentData(Component c, bool includeNonPublicSerializedFields = true)
         {
             // --- Add Early Logging --- 
-            // McpLog.Info($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceID() ?? 0})");
+            // McpLog.Info($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceIDCompat() ?? 0})");
             // --- End Early Logging ---
 
             if (c == null) return null;
@@ -174,11 +242,11 @@ namespace MCPForUnity.Editor.Helpers
             if (componentType == typeof(Transform))
             {
                 Transform tr = c as Transform;
-                // McpLog.Info($"[GetComponentData] Manually serializing Transform (ID: {tr.GetInstanceID()})");
+                // McpLog.Info($"[GetComponentData] Manually serializing Transform (ID: {tr.GetInstanceIDCompat()})");
                 return new Dictionary<string, object>
                 {
                     { "typeName", componentType.FullName },
-                    { "instanceID", tr.GetInstanceID() },
+                    { "instanceID", tr.GetInstanceIDCompat() },
                     // Manually extract known-safe properties. Avoid Quaternion 'rotation' and 'lossyScale'.
                     { "position", CreateTokenFromValue(tr.position, typeof(Vector3))?.ToObject<object>() ?? new JObject() },
                     { "localPosition", CreateTokenFromValue(tr.localPosition, typeof(Vector3))?.ToObject<object>() ?? new JObject() },
@@ -188,13 +256,13 @@ namespace MCPForUnity.Editor.Helpers
                     { "right", CreateTokenFromValue(tr.right, typeof(Vector3))?.ToObject<object>() ?? new JObject() },
                     { "up", CreateTokenFromValue(tr.up, typeof(Vector3))?.ToObject<object>() ?? new JObject() },
                     { "forward", CreateTokenFromValue(tr.forward, typeof(Vector3))?.ToObject<object>() ?? new JObject() },
-                    { "parentInstanceID", tr.parent?.gameObject.GetInstanceID() ?? 0 },
-                    { "rootInstanceID", tr.root?.gameObject.GetInstanceID() ?? 0 },
+                    { "parentInstanceID", tr.parent?.gameObject.GetInstanceIDCompat() ?? 0 },
+                    { "rootInstanceID", tr.root?.gameObject.GetInstanceIDCompat() ?? 0 },
                     { "childCount", tr.childCount },
                     // Include standard Object/Component properties
                     { "name", tr.name },
                     { "tag", tr.tag },
-                    { "gameObjectInstanceID", tr.gameObject?.GetInstanceID() ?? 0 }
+                    { "gameObjectInstanceID", tr.gameObject?.GetInstanceIDCompat() ?? 0 }
                 };
             }
             // --- End Special handling for Transform --- 
@@ -233,7 +301,7 @@ namespace MCPForUnity.Editor.Helpers
                     { "enabled", () => cam.enabled },
                     { "name", () => cam.name },
                     { "tag", () => cam.tag },
-                    { "gameObject", () => new { name = cam.gameObject.name, instanceID = cam.gameObject.GetInstanceID() } }
+                    { "gameObject", () => new { name = cam.gameObject.name, instanceID = cam.gameObject.GetInstanceIDCompat() } }
                 };
 
                 foreach (var prop in safeProperties)
@@ -256,7 +324,7 @@ namespace MCPForUnity.Editor.Helpers
                 return new Dictionary<string, object>
                 {
                     { "typeName", componentType.FullName },
-                    { "instanceID", cam.GetInstanceID() },
+                    { "instanceID", cam.GetInstanceIDCompat() },
                     { "properties", cameraProperties }
                 };
             }
@@ -322,7 +390,7 @@ namespace MCPForUnity.Editor.Helpers
                 return new Dictionary<string, object>
                 {
                     { "typeName", componentType.FullName },
-                    { "instanceID", c.GetInstanceID() },
+                    { "instanceID", c.GetInstanceIDCompat() },
                     { "properties", uiDocProperties }
                 };
             }
@@ -331,7 +399,7 @@ namespace MCPForUnity.Editor.Helpers
             var data = new Dictionary<string, object>
             {
                 { "typeName", componentType.FullName },
-                { "instanceID", c.GetInstanceID() }
+                { "instanceID", c.GetInstanceIDCompat() }
             };
 
             // --- Get Cached or Generate Metadata (using new cache key) ---
@@ -351,6 +419,9 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         // Basic filtering (readable, not indexer, not transform which is handled elsewhere)
                         if (!propInfo.CanRead || propInfo.GetIndexParameters().Length > 0 || propInfo.Name == "transform") continue;
+                        // Skip properties whose return type would crash when accessed via reflection
+                        // (e.g. Fusion IL-weaved types, Span<>, ReadOnlySpan<>, pointers)
+                        if (IsUnsafeType(propInfo.PropertyType)) continue;
                         // Add if not already added (handles overrides - keep the most derived version)
                         if (!propertiesToCache.Any(p => p.Name == propInfo.Name))
                         {
@@ -366,6 +437,9 @@ namespace MCPForUnity.Editor.Helpers
                     foreach (var fieldInfo in declaredFields)
                     {
                         if (fieldInfo.Name.EndsWith("k__BackingField")) continue; // Skip backing fields
+                        // Skip fields whose type would crash when accessed via reflection
+                        // (e.g. Fusion IL-weaved types, Span<>, ReadOnlySpan<>, pointers)
+                        if (IsUnsafeType(fieldInfo.FieldType)) continue;
 
                         // Add if not already added (handles hiding - keep the most derived version)
                         if (fieldsToCache.Any(f => f.Name == fieldInfo.Name)) continue;

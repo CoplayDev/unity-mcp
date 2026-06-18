@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -109,11 +110,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             string target = p.Get("target");
             if (string.IsNullOrEmpty(target))
             {
-#if UNITY_2022_2_OR_NEWER
-                var allVolumes = UnityEngine.Object.FindObjectsByType(VolumeType, FindObjectsSortMode.None);
-#else
-                var allVolumes = UnityEngine.Object.FindObjectsOfType(VolumeType);
-#endif
+                var allVolumes = UnityFindObjectsCompat.FindAll(VolumeType);
                 return allVolumes.Length > 0 ? allVolumes[0] as Component : null;
             }
 

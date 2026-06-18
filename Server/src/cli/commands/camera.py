@@ -488,8 +488,11 @@ def release_override():
               help="Batch capture mode.")
 @click.option("--view-target", default=None,
               help="Target to focus on (name/path/ID or [x,y,z]). Aims camera (game_view) or frames Scene View (scene_view).")
+@click.option("--output-folder", default=None,
+              help="Output folder, project-relative (e.g. 'Assets/Screenshots' or 'Captures') or absolute inside the project. "
+                   "Overrides Editor preference; falls back to Assets/Screenshots when unset.")
 @handle_unity_errors
-def screenshot(camera_ref, file_name, super_size, include_image, max_resolution, capture_source, batch, view_target):
+def screenshot(camera_ref, file_name, super_size, include_image, max_resolution, capture_source, batch, view_target, output_folder):
     """Capture a screenshot from a camera.
 
     \b
@@ -498,6 +501,7 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
         unity-mcp camera screenshot --camera-ref "CM FollowCam" --include-image --max-resolution 512
         unity-mcp camera screenshot --capture-source scene_view --view-target Canvas --include-image
         unity-mcp camera screenshot --batch surround --view-target Player
+        unity-mcp camera screenshot --output-folder Captures
     """
     config = get_config()
     params: dict[str, Any] = {"action": "screenshot"}
@@ -517,6 +521,8 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
         params["batch"] = batch
     if view_target:
         params["viewTarget"] = view_target
+    if output_folder:
+        params["outputFolder"] = output_folder
     result = run_command(config, "manage_camera", params)
     format_output(result, config)
 
@@ -524,8 +530,11 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
 @camera.command("screenshot-multiview")
 @click.option("--max-resolution", type=int, default=None, help="Max resolution per tile.")
 @click.option("--view-target", default=None, help="Center target for the multiview capture.")
+@click.option("--output-folder", default=None,
+              help="Output folder, project-relative or absolute inside the project. "
+                   "Overrides Editor preference; falls back to Assets/Screenshots when unset.")
 @handle_unity_errors
-def screenshot_multiview(max_resolution, view_target):
+def screenshot_multiview(max_resolution, view_target, output_folder):
     """Capture a 6-angle contact sheet around the scene.
 
     \b
@@ -539,5 +548,7 @@ def screenshot_multiview(max_resolution, view_target):
         params["maxResolution"] = max_resolution
     if view_target:
         params["viewTarget"] = view_target
+    if output_folder:
+        params["outputFolder"] = output_folder
     result = run_command(config, "manage_camera", params)
     format_output(result, config)

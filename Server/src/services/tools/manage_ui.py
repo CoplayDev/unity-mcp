@@ -120,6 +120,11 @@ async def manage_ui(
     screenshot_file_name: Annotated[str,
                                      "Custom file name for the render output (default: auto-generated). "
                                      "For render_ui."] | None = None,
+    output_folder: Annotated[str,
+                              "Optional folder for the render output. Project-relative (e.g. 'Assets/Screenshots' or "
+                              "'Captures') or absolute path inside the project. Overrides the user's Editor preference. "
+                              "If omitted, falls back to the Editor preference, then to the built-in default "
+                              "(Assets/Screenshots). For render_ui."] | None = None,
 
     # link_stylesheet
     stylesheet: Annotated[str,
@@ -219,6 +224,8 @@ async def manage_ui(
         params_dict["max_resolution"] = max_resolution
     if screenshot_file_name is not None:
         params_dict["file_name"] = screenshot_file_name
+    if output_folder is not None and output_folder.strip():
+        params_dict["output_folder"] = output_folder.strip()
 
     # link_stylesheet params
     if stylesheet is not None:

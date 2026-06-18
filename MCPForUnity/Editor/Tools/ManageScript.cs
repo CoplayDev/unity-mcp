@@ -2714,12 +2714,18 @@ namespace MCPForUnity.Editor.Tools
             }
             // Second pass: build per-position containing type array
             var containingTypeArr = new string[codeOnly.Length];
+            var braceDepthArr = new int[codeOnly.Length];
+            var typeMemberDepthArr = new int[codeOnly.Length];
             {
                 var stack = new System.Collections.Generic.List<(string name, int openDepth)>();
                 int bd2 = 0;
                 string current = "";
                 for (int i = 0; i < codeOnly.Length; i++)
                 {
+                    containingTypeArr[i] = current;
+                    braceDepthArr[i] = bd2;
+                    typeMemberDepthArr[i] = stack.Count > 0 ? stack[stack.Count - 1].openDepth + 1 : -1;
+
                     if (codeOnly[i] == '{')
                     {
                         if (typeBraceMap.TryGetValue(i, out string tn))
@@ -2738,23 +2744,26 @@ namespace MCPForUnity.Editor.Tools
                             current = stack.Count > 0 ? stack[stack.Count - 1].name : "";
                         }
                     }
-                    containingTypeArr[i] = current;
                 }
             }
 
             // Step 3: Match method signatures on code-only text (includes => for expression-bodied)
             var methodSigPattern = new Regex(
-                @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|abstract|sealed|async|new)\s+)*\S+\s+(\w+)\s*\(([^)]*)\)\s*(?:where\s+\S+\s*:\s*\S+\s*)?(?:[{;]|=>)",
+                @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|abstract|sealed|async|new)\s+)*(\S+)\s+(\w+)\s*\(([^)]*)\)\s*(?:where\s+\S+\s*:\s*\S+\s*)?(?:[{;]|=>)",
                 RegexOptions.Multiline | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
             var sigMatches = methodSigPattern.Matches(codeOnly);
             var seen = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal);
             foreach (Match sm in sigMatches)
             {
-                string methodName = sm.Groups[1].Value;
+                string returnType = sm.Groups[1].Value;
+                string methodName = sm.Groups[2].Value;
+                if (string.Equals(returnType, "new", StringComparison.Ordinal)) continue; // constructor invocation, not a method declaration
                 if (IsCSharpKeyword(methodName)) continue;
-                int paramCount = CountTopLevelParams(sm.Groups[2].Value);
-                string paramTypes = ExtractParamTypes(sm.Groups[2].Value);
+                int paramCount = CountTopLevelParams(sm.Groups[3].Value);
+                string paramTypes = ExtractParamTypes(sm.Groups[3].Value);
                 string containingType = containingTypeArr[sm.Index];
+                if (string.IsNullOrEmpty(containingType)) continue;
+                if (braceDepthArr[sm.Index] != typeMemberDepthArr[sm.Index]) continue;
                 string key = $"{containingType}/{methodName}/{paramCount}/{paramTypes}";
                 if (seen.TryGetValue(key, out _))
                     errors.Add($"ERROR: Duplicate method signature detected: '{methodName}' with {paramCount} parameter(s). This may indicate a corrupted edit.");

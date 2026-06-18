@@ -2,11 +2,29 @@ name: Python Tests
 
 on:
   push:
-    branches: ["**"]
+    # Exclude beta and main: those branches re-trigger this workflow via
+    # workflow_call from beta-release.yml / release.yml. Without the exclusion,
+    # a push to beta that touches Server/** fires this workflow twice for the
+    # same SHA, and GitHub auto-cancels the duplicate.
+    branches-ignore: [beta, main]
     paths:
       - Server/**
+      - tools/**
+      - .github/workflows/python-tests.yml
+  pull_request:
+    branches: [main, beta]
+    paths:
+      - Server/**
+      - tools/**
       - .github/workflows/python-tests.yml
   workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (defaults to the triggering ref)."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   test:
@@ -15,6 +33,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -34,6 +54,11 @@ jobs:
         run: |
           cd Server
           uv run pytest tests/ -v --tb=short --cov --cov-report=xml --cov-report=html --cov-report=term
+
+      - name: Run local harness unit tests (hermetic, no Unity)
+        run: |
+          cd Server
+          uv run python -m pytest "$GITHUB_WORKSPACE/tools/tests/" -v --tb=short
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

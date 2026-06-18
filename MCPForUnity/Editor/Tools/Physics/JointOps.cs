@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Physics
 {
@@ -140,8 +141,8 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new
                 {
                     jointType = jointComponentType.Name,
-                    instanceID = joint.GetInstanceID(),
-                    gameObjectInstanceID = go.GetInstanceID()
+                    instanceID = joint.GetInstanceIDCompat(),
+                    gameObjectInstanceID = go.GetInstanceIDCompat()
                 }
             };
         }
@@ -312,7 +313,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     jointType = joint.GetType().Name,
                     configured,
-                    instanceID = joint.GetInstanceID()
+                    instanceID = joint.GetInstanceIDCompat()
                 }
             };
         }
@@ -397,7 +398,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new
                 {
                     removedCount,
-                    gameObjectInstanceID = go.GetInstanceID()
+                    gameObjectInstanceID = go.GetInstanceIDCompat()
                 }
             };
         }

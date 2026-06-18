@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEditor;
 using Newtonsoft.Json.Linq;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using MCPForUnity.Editor.Tools.GameObjects;
 using System;
@@ -327,8 +328,17 @@ namespace MCPForUnityTests.Editor.Tools
                 var modifyResult6 = modifyRaw6 as JObject ?? JObject.FromObject(modifyRaw6);
                 Assert.IsTrue(modifyResult6.Value<bool>("success"), $"Test 9 failed: {modifyResult6}");
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.AreEqual("Standard", mat.shader.name, "Test 9: Shader should be Standard");
-                var c9 = mat.GetColor("_Color");
+                // The "Standard" shader request is aliased to the active pipeline's lit shader.
+                var pipeline9 = RenderPipelineUtility.GetActivePipeline();
+                string expectedShader9 = pipeline9 switch
+                {
+                    RenderPipelineUtility.PipelineKind.Universal => "Universal Render Pipeline/Lit",
+                    RenderPipelineUtility.PipelineKind.HighDefinition => "HDRP/Lit",
+                    _ => "Standard"
+                };
+                Assert.AreEqual(expectedShader9, mat.shader.name, $"Test 9: Shader should be {expectedShader9}");
+                string colorProp9 = mat.HasProperty("_BaseColor") ? "_BaseColor" : "_Color";
+                var c9 = mat.GetColor(colorProp9);
                 // Looser tolerance (0.02) for shader-switched colors due to color space conversion differences
                 Assert.IsTrue(Mathf.Abs(c9.r - 1f) < 0.02f && Mathf.Abs(c9.g - 1f) < 0.02f && Mathf.Abs(c9.b - 0f) < 0.02f,
                     "Test 9: Color should be near yellow");
@@ -350,7 +360,9 @@ namespace MCPForUnityTests.Editor.Tools
                 Assert.IsTrue(modifyResult7.Value<bool>("success"), $"Test 10 failed: {modifyResult7}");
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Assert.AreEqual(0.8f, mat.GetFloat("_Metallic"), 0.001f, "Test 10: Metallic should be 0.8");
-                Assert.AreEqual(0.3f, mat.GetFloat("_Glossiness"), 0.001f, "Test 10: Smoothness should be 0.3");
+                // Built-in Standard stores smoothness in "_Glossiness"; URP/HDRP Lit uses "_Smoothness".
+                string smoothnessProp10 = mat.HasProperty("_Smoothness") ? "_Smoothness" : "_Glossiness";
+                Assert.AreEqual(0.3f, mat.GetFloat(smoothnessProp10), 0.001f, "Test 10: Smoothness should be 0.3");
             }
             finally
             {

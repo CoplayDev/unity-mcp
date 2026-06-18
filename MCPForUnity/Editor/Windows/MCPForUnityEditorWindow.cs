@@ -73,8 +73,42 @@ namespace MCPForUnity.Editor.Windows
 
         public static void ShowWindow()
         {
-            var window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+            var existingWindows = UnityEngine.Resources.FindObjectsOfTypeAll<MCPForUnityEditorWindow>();
+            MCPForUnityEditorWindow window = null;
+
+            if (existingWindows.Length > 0)
+            {
+                window = existingWindows[0];
+
+                // If multiple instances exist, keep one and close the extras to avoid stale hidden tabs.
+                for (int i = 1; i < existingWindows.Length; i++)
+                {
+                    try
+                    {
+                        existingWindows[i].Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Error closing duplicate MCP window: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+            }
+
+            window.titleContent = new GUIContent("MCP For Unity");
             window.minSize = new Vector2(500, 340);
+
+            if (window.position.width < 100 || window.position.height < 100)
+            {
+                window.position = new Rect(120, 120, 900, 700);
+            }
+
+            window.Show();
+            window.ShowTab();
+            window.Focus();
         }
 
         // Helper to check and manage open windows from other classes
@@ -125,6 +159,7 @@ namespace MCPForUnity.Editor.Windows
                 return;
             }
 
+            rootVisualElement.Clear();
             visualTree.CloneTree(rootVisualElement);
 
             // Load main window USS
@@ -797,8 +832,10 @@ namespace MCPForUnity.Editor.Windows
                     ? "Installed via Plugins/Roslyn \u2014 execute_code uses Roslyn"
                     : "Available (loaded from NuGet/external) \u2014 execute_code uses Roslyn",
                 "Not installed \u2014 execute_code falls back to C# 6 (CodeDom)",
-                () => RoslynInstaller.Install(interactive: true),
-                roslynInstalledLocally ? (Action)(() => UninstallRoslyn()) : null);
+                done => { RoslynInstaller.Install(interactive: true); done?.Invoke(); },
+                roslynInstalledLocally
+                    ? (Action<Action>)(done => { UninstallRoslyn(); done?.Invoke(); })
+                    : null);
 
             // ProBuilder
             bool hasProBuilder = Type.GetType("UnityEngine.ProBuilder.ProBuilderMesh, Unity.ProBuilder") != null;
@@ -808,8 +845,8 @@ namespace MCPForUnity.Editor.Windows
                 hasProBuilder,
                 "Installed",
                 "Not installed",
-                () => InstallUpmPackage("com.unity.probuilder"),
-                () => RemoveUpmPackage("com.unity.probuilder"));
+                done => InstallUpmPackage("com.unity.probuilder", done),
+                done => RemoveUpmPackage("com.unity.probuilder", done));
 
             // Cinemachine
             bool hasCinemachine = Type.GetType("Unity.Cinemachine.CinemachineCamera, Unity.Cinemachine") != null
@@ -820,8 +857,8 @@ namespace MCPForUnity.Editor.Windows
                 hasCinemachine,
                 "Installed",
                 "Not installed \u2014 camera tool works without it",
-                () => InstallUpmPackage("com.unity.cinemachine"),
-                () => RemoveUpmPackage("com.unity.cinemachine"));
+                done => InstallUpmPackage("com.unity.cinemachine", done),
+                done => RemoveUpmPackage("com.unity.cinemachine", done));
 
             // VFX Graph — uses preprocessor symbol, so check via UPM package list
             bool hasVfxGraph = IsUpmPackageInstalled("com.unity.visualeffectgraph");
@@ -831,8 +868,8 @@ namespace MCPForUnity.Editor.Windows
                 hasVfxGraph,
                 "Installed",
                 "Not installed \u2014 VFX tool falls back to ParticleSystem/LineRenderer",
-                () => InstallUpmPackage("com.unity.visualeffectgraph"),
-                () => RemoveUpmPackage("com.unity.visualeffectgraph"));
+                done => InstallUpmPackage("com.unity.visualeffectgraph", done),
+                done => RemoveUpmPackage("com.unity.visualeffectgraph", done));
 
             section.Add(content);
             container.Add(section);
@@ -840,7 +877,7 @@ namespace MCPForUnity.Editor.Windows
 
         private static void AddDependencyRow(VisualElement parent, string name, string description,
             bool isInstalled, string installedText, string missingText,
-            Action installAction, Action uninstallAction)
+            Action<Action> installAction, Action<Action> uninstallAction)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -886,12 +923,16 @@ namespace MCPForUnity.Editor.Windows
                 {
                     btn.SetEnabled(false);
                     btn.text = "Installing...";
-                    try { installAction(); }
+                    Action restore = () =>
+                    {
+                        btn.SetEnabled(true);
+                        btn.text = "Install";
+                    };
+                    try { installAction(restore); }
                     catch (Exception e)
                     {
                         Debug.LogError($"[MCP] Install failed: {e.Message}");
-                        btn.SetEnabled(true);
-                        btn.text = "Install";
+                        restore();
                     }
                 });
                 btn.text = "Install";
@@ -908,12 +949,16 @@ namespace MCPForUnity.Editor.Windows
                         $"Are you sure you want to remove {name}?", "Remove", "Cancel")) return;
                     btn.SetEnabled(false);
                     btn.text = "Removing...";
-                    try { uninstallAction(); }
+                    Action restore = () =>
+                    {
+                        btn.SetEnabled(true);
+                        btn.text = "Uninstall";
+                    };
+                    try { uninstallAction(restore); }
                     catch (Exception e)
                     {
                         Debug.LogError($"[MCP] Uninstall failed: {e.Message}");
-                        btn.SetEnabled(true);
-                        btn.text = "Uninstall";
+                        restore();
                     }
                 });
                 btn.text = "Uninstall";

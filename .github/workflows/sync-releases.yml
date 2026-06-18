@@ -1,0 +1,78 @@
+name: Docs — Sync Release Notes
+
+# Keeps website/docs/releases.md and the README's "Recent Updates" block
+# in sync with the GitHub Releases API. Source of truth is GitHub Releases.
+#
+# Triggers (intentionally narrow):
+#   - release.published / edited / unpublished / deleted: the only time
+#     the synced files can legitimately go stale. Fires on every release
+#     event so the docs reflect the new version within ~30 seconds.
+#   - workflow_dispatch: manual escape hatch (re-run after a one-off
+#     GitHub UI edit to a release body, or to backfill after a downtime).
+#
+# Why no pull_request / schedule triggers:
+#   - PR-time drift-check would fail outsider PRs that touched README for
+#     unrelated reasons (e.g. typo fixes) and the contributor has no push
+#     access to fix it. The synced files are maintained by the release
+#     pipeline, not by PR authors — drift can't logically be introduced
+#     by a PR that the workflow couldn't already handle on release.
+#   - A daily cron would mask the source-of-truth (release events) and
+#     produce mystery commits unattached to a release. Better to let
+#     workflow_dispatch handle the rare out-of-band UI edit.
+#
+# Behavior:
+#   - Commits directly to `beta` with [skip ci] in the message — the
+#     change is mechanical (re-render from API output), pre-validated,
+#     and confined to two well-known files.
+
+on:
+  release:
+    types: [published, edited, unpublished, deleted]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-sync-releases
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync release notes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout beta
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          # Full history so the commit lands on a fresh ref tip.
+          fetch-depth: 0
+          # `sync` needs to push back, so the token must persist here.
+          persist-credentials: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sync release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/sync_release_notes.py
+
+      - name: Commit & push (if anything changed)
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- website/docs/releases.md README.md; then
+            echo "No drift — release notes already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add website/docs/releases.md README.md
+          git commit -m "docs: sync release notes from GitHub Releases [skip ci]"
+          git push origin beta
