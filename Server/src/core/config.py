@@ -58,7 +58,10 @@ class ServerConfig:
     port_registry_ttl: float = 5.0
 
     # Telemetry settings
-    telemetry_enabled: bool = True
+    # harden/security (R10): off by default. Telemetry can ship truncated Unity error
+    # strings that may embed file/asset paths to an external endpoint. Re-enable
+    # explicitly (set telemetry_enabled=True) if you want to opt back in.
+    telemetry_enabled: bool = False
     # Align with telemetry.py default Cloud Run endpoint
     telemetry_endpoint: str = "https://api-prod.coplay.dev/telemetry/events"
 
