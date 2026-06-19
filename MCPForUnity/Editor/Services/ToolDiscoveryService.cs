@@ -111,7 +111,30 @@ namespace MCPForUnity.Editor.Services
             }
 
             var metadata = GetToolMetadata(toolName);
-            return metadata?.AutoRegister ?? false;
+            return DefaultEnabledFor(metadata);
+        }
+
+        /// <summary>
+        /// Default enabled-state for a tool when the user has not set an explicit preference
+        /// (harden/security, R9). Explicit AutoRegister always enables. Built-ins default to
+        /// enabled ONLY for the "core" group; non-core groups (scripting_ext, vfx, animation,
+        /// ui, testing, probuilder, profiling, docs) stay disabled until explicitly toggled.
+        /// This mirrors the Python server's advertise policy so a client speaking directly to
+        /// the Unity socket cannot reach a non-core tool (e.g. execute_code) that the server
+        /// would never have advertised. The dispatcher's IsToolEnabled gate then refuses it.
+        /// </summary>
+        private static bool DefaultEnabledFor(ToolMetadata metadata)
+        {
+            if (metadata == null)
+            {
+                return false;
+            }
+            if (metadata.AutoRegister)
+            {
+                return true;
+            }
+            return metadata.IsBuiltIn
+                && string.Equals(metadata.Group, "core", StringComparison.OrdinalIgnoreCase);
         }
 
         public void SetToolEnabled(string toolName, bool enabled)
@@ -248,8 +271,7 @@ namespace MCPForUnity.Editor.Services
             string key = GetToolPreferenceKey(metadata.Name);
             if (!EditorPrefs.HasKey(key))
             {
-                bool defaultValue = metadata.AutoRegister || metadata.IsBuiltIn;
-                EditorPrefs.SetBool(key, defaultValue);
+                EditorPrefs.SetBool(key, DefaultEnabledFor(metadata));
             }
         }
 
