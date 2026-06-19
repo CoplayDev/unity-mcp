@@ -124,11 +124,11 @@ namespace MCPForUnity.Editor.Setup
                     EditorUtility.DisplayDialog(
                         "Roslyn Installed",
                         $"Roslyn DLLs and dependencies installed to Assets/{PluginsRelPath}/.\n\n" +
-                        "The runtime_compilation tool is now available via MCP.",
+                        "execute_code will now use the Roslyn compiler (C# 12+).",
                         "OK");
                 }
 
-                Debug.Log($"[MCP] Roslyn installation complete ({NuGetEntries.Length} DLLs). runtime_compilation is now available.");
+                Debug.Log($"[MCP] Roslyn installation complete ({NuGetEntries.Length} DLLs). execute_code will now use the Roslyn compiler.");
             }
             catch (Exception e)
             {
