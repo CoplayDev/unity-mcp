@@ -58,6 +58,23 @@ namespace MCPForUnity.Editor.Setup
 
         public static void Install(bool interactive = true)
         {
+            // Hardened fork (harden/security, R1/R11): the auto-fetch path is disabled.
+            // Roslyn DLLs are downloaded from NuGet over HTTPS with no hash/signature
+            // verification, then loaded into the Editor process — an unverified fetch-and-run
+            // supply-chain surface. execute_code still works without these DLLs (it falls back
+            // to the built-in CodeDom / C# 6 compiler). If you specifically need Roslyn's
+            // C# 12 support, place the reviewed DLLs into Assets/Plugins/Roslyn/ manually.
+            const string disabledMsg =
+                "Automatic Roslyn DLL download is disabled in this hardened build. " +
+                "execute_code will use the built-in CodeDom compiler (C# 6). " +
+                "To enable C# 12 support, place verified Microsoft.CodeAnalysis DLLs into " +
+                "Assets/Plugins/Roslyn/ manually.";
+            Debug.LogWarning($"[MCP] {disabledMsg}");
+            if (interactive)
+                EditorUtility.DisplayDialog("Roslyn Auto-Install Disabled", disabledMsg, "OK");
+            return;
+
+#pragma warning disable CS0162 // Unreachable code: auto-fetch intentionally disabled above.
             if (IsInstalled() && interactive)
             {
                 if (!EditorUtility.DisplayDialog(
@@ -145,6 +162,7 @@ namespace MCPForUnity.Editor.Setup
                         "OK");
                 }
             }
+#pragma warning restore CS0162
         }
 
         private static byte[] ExtractFileFromZip(byte[] zipBytes, string entryPath)
