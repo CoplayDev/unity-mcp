@@ -113,6 +113,54 @@ namespace MCPForUnity.Editor.Tests.EditMode.Services
             Assert.IsFalse(result, "Tool state should persist across service instances");
         }
 
+        // ---- harden/security: default enable/disable is a real boundary ----
+
+        /// <summary>
+        /// Helper: assert the default enabled-state of a tool with no stored preference,
+        /// restoring any pre-existing preference afterwards.
+        /// </summary>
+        private static void AssertDefaultEnabled(string toolName, bool expected, string because)
+        {
+            var service = new ToolDiscoveryService();
+            string key = EditorPrefKeys.ToolEnabledPrefix + toolName;
+            bool had = EditorPrefs.HasKey(key);
+            bool orig = had && EditorPrefs.GetBool(key, true);
+            try
+            {
+                EditorPrefs.DeleteKey(key);
+                Assert.AreEqual(expected, service.IsToolEnabled(toolName), because);
+            }
+            finally
+            {
+                if (had) EditorPrefs.SetBool(key, orig);
+                else EditorPrefs.DeleteKey(key);
+            }
+        }
+
+        [Test]
+        public void IsToolEnabled_NonCoreBuiltIn_DisabledByDefault_R9()
+        {
+            // execute_code is group "scripting_ext" (non-core). A client speaking directly
+            // to the socket must NOT reach it by default; the dispatcher consults IsToolEnabled.
+            AssertDefaultEnabled("execute_code", false,
+                "Non-core tool 'execute_code' must be disabled by default (R9).");
+        }
+
+        [Test]
+        public void IsToolEnabled_CoreBuiltIn_EnabledByDefault_R9()
+        {
+            AssertDefaultEnabled("manage_scene", true,
+                "Core built-in 'manage_scene' must remain enabled by default.");
+        }
+
+        [Test]
+        public void IsToolEnabled_ExecuteMenuItem_DisabledByDefault_R6()
+        {
+            // execute_menu_item is core but on the default-disabled set.
+            AssertDefaultEnabled("execute_menu_item", false,
+                "'execute_menu_item' must be disabled by default (R6).");
+        }
+
         [Test]
         public void DiscoverAllTools_DoesNotOverrideStoredFalse_ForBuiltInAutoRegisterFalseTool()
         {
