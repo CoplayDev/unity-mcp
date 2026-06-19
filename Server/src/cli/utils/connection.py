@@ -18,6 +18,27 @@ class UnityConnectionError(Exception):
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _bridge_token() -> str:
+    """Resolve the local-bridge shared secret for the /api/command header.
+
+    Mirrors the server-side resolver: UNITY_MCP_BRIDGE_TOKEN env wins, else the
+    0600 file at ~/.unity-mcp/bridge-token written by the Unity Editor.
+    """
+    import os
+    from pathlib import Path
+
+    from_env = os.environ.get("UNITY_MCP_BRIDGE_TOKEN")
+    if from_env and from_env.strip():
+        return from_env.strip()
+    try:
+        path = Path.home().joinpath(".unity-mcp", "bridge-token")
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def handle_unity_errors(func: F) -> F:
     """Decorator that handles UnityConnectionError consistently.
 
@@ -98,11 +119,17 @@ async def send_command(
     if cfg.unity_instance:
         payload["unity_instance"] = cfg.unity_instance
 
+    headers: Dict[str, str] = {}
+    token = _bridge_token()
+    if token:
+        headers["X-Bridge-Token"] = token
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 json=payload,
+                headers=headers,
                 timeout=timeout or cfg.timeout,
             )
             response.raise_for_status()

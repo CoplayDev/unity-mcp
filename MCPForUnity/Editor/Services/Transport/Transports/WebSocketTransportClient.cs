@@ -271,6 +271,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     _socket.Options.SetRequestHeader(AuthConstants.ApiKeyHeader, _apiKey);
                 }
+                else
+                {
+                    // Local-bridge shared secret (harden/security, R5): present the bridge
+                    // token so the HTTP-local hub can reject unauthenticated WebSocket clients.
+                    string bridgeToken = BridgeAuth.GetToken();
+                    if (!string.IsNullOrEmpty(bridgeToken))
+                    {
+                        _socket.Options.SetRequestHeader(AuthConstants.BridgeTokenHeader, bridgeToken);
+                    }
+                }
 
                 try
                 {

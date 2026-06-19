@@ -546,9 +546,43 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         return;
                     }
 
+                    // Auth gate (harden/security, R4): the client must present the shared
+                    // bridge token as its first framed message before any command is accepted.
+                    // Critically, this runs BEFORE the stale-client close below, so a connection
+                    // that cannot authenticate can never displace the live authenticated session.
+                    try
+                    {
+                        string authFrame = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs, token).ConfigureAwait(false);
+                        string presented = null;
+                        try { presented = JObject.Parse(authFrame)["auth_token"]?.ToString(); }
+                        catch { /* malformed auth frame → treated as invalid below */ }
+
+                        if (!BridgeAuth.IsValid(presented))
+                        {
+                            McpLog.Warn("Bridge auth failed: rejecting unauthenticated connection.");
+                            try
+                            {
+                                byte[] denyBytes = System.Text.Encoding.UTF8.GetBytes(
+                                    "{\"status\":\"error\",\"error\":\"unauthorized: invalid or missing bridge token\"}");
+                                await WriteFrameAsync(stream, denyBytes);
+                            }
+                            catch { }
+                            return; // close only THIS client; live session untouched
+                        }
+
+                        byte[] okBytes = System.Text.Encoding.UTF8.GetBytes(
+                            "{\"status\":\"success\",\"result\":{\"message\":\"authenticated\"}}");
+                        await WriteFrameAsync(stream, okBytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (IsDebugEnabled()) McpLog.Info($"Auth handshake aborted: {ex.Message}", always: false);
+                        return;
+                    }
+
                     // In stdio transport there is only ever one active Python server.
-                    // A new connection means the old one is dead — close stale clients so
-                    // their hung ReadFrameAsUtf8Async calls throw and exit cleanly.
+                    // A new (now-authenticated) connection means the old one is dead — close
+                    // stale clients so their hung ReadFrameAsUtf8Async calls throw and exit cleanly.
                     TcpClient[] staleClients;
                     lock (clientsLock)
                     {

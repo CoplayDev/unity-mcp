@@ -26,6 +26,29 @@ _connection_lock = threading.Lock()
 # Maximum allowed framed payload size (64 MiB)
 FRAMED_MAX = 64 * 1024 * 1024
 
+# Shared-secret authentication for the local bridge (harden/security, R4).
+BRIDGE_TOKEN_ENV = "UNITY_MCP_BRIDGE_TOKEN"
+
+
+def resolve_bridge_token() -> str:
+    """Resolve the local-bridge shared secret.
+
+    Mirrors the Unity Editor's BridgeAuth helper: the UNITY_MCP_BRIDGE_TOKEN
+    environment variable wins; otherwise the 0600 file at ~/.unity-mcp/bridge-token
+    (written by the Editor) is read. Returns "" when neither is available, which
+    causes the bridge to reject the connection (fail closed).
+    """
+    from_env = os.environ.get(BRIDGE_TOKEN_ENV)
+    if from_env and from_env.strip():
+        return from_env.strip()
+    try:
+        token_path = Path.home().joinpath(".unity-mcp", "bridge-token")
+        if token_path.is_file():
+            return token_path.read_text(encoding="utf-8").strip()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Could not read bridge token file: %s", exc)
+    return ""
+
 
 @dataclass
 class UnityConnection:
@@ -107,6 +130,20 @@ class UnityConnection:
                                 'MCP for Unity handshake missing FRAMING=1; proceeding in legacy mode by configuration')
                 finally:
                     self.sock.settimeout(config.connection_timeout)
+
+                # Auth handshake (harden/security, R4): present the shared bridge
+                # token as the first framed message before issuing any command.
+                if self.use_framing:
+                    auth_payload = json.dumps(
+                        {"auth_token": resolve_bridge_token()}).encode("utf-8")
+                    self.sock.sendall(struct.pack('>Q', len(auth_payload)))
+                    self.sock.sendall(auth_payload)
+                    ack = self.receive_full_response(self.sock)
+                    ack_obj = json.loads(ack.decode("utf-8", errors="replace"))
+                    if ack_obj.get("status") != "success":
+                        raise ConnectionError(
+                            f"Bridge auth rejected: {ack_obj.get('error', 'unauthorized')}")
+                    logger.debug("Bridge auth handshake succeeded")
                 return True
             except Exception as e:
                 logger.error(f"Failed to connect to Unity: {str(e)}")

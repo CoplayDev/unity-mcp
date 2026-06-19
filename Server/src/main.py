@@ -409,6 +409,21 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
         async def cli_command_route(request: Request) -> JSONResponse:
             """REST endpoint for CLI commands to Unity."""
             try:
+                # Local-bridge auth (harden/security, R5): this route forwards arbitrary
+                # commands (incl. execute_code) to Unity, so require the shared token.
+                import hmac
+                from transport.legacy.unity_connection import resolve_bridge_token
+                from core.constants import BRIDGE_TOKEN_HEADER
+
+                expected_token = resolve_bridge_token()
+                if expected_token:
+                    presented_token = request.headers.get(BRIDGE_TOKEN_HEADER) or ""
+                    if not hmac.compare_digest(presented_token, expected_token):
+                        return JSONResponse(
+                            {"success": False, "error": "unauthorized: invalid or missing bridge token"},
+                            status_code=401,
+                        )
+
                 body = await request.json()
 
                 command_type = body.get("type")

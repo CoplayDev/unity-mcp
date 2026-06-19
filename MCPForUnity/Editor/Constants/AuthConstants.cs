@@ -6,5 +6,11 @@ namespace MCPForUnity.Editor.Constants
     internal static class AuthConstants
     {
         internal const string ApiKeyHeader = "X-API-Key";
+
+        /// <summary>
+        /// Header carrying the local-bridge shared secret in HTTP-local mode
+        /// (harden/security, R5). Distinct from the remote-hosted API key.
+        /// </summary>
+        internal const string BridgeTokenHeader = "X-Bridge-Token";
     }
 }

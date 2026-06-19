@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
 import time
@@ -186,6 +187,20 @@ class PluginHub(WebSocketEndpoint):
             # Store user_id in websocket state for later use during registration
             websocket.state.user_id = result.user_id
             websocket.state.api_key_metadata = result.metadata
+        else:
+            # HTTP-local mode (harden/security, R5): require the shared bridge token so
+            # an arbitrary local process cannot register/drive a Unity session. Fail closed.
+            from transport.legacy.unity_connection import resolve_bridge_token
+            from core.constants import BRIDGE_TOKEN_HEADER
+
+            expected = resolve_bridge_token()
+            if expected:
+                presented = websocket.headers.get(BRIDGE_TOKEN_HEADER) or ""
+                if not hmac.compare_digest(presented, expected):
+                    logger.debug(
+                        "WebSocket connection rejected: invalid or missing bridge token")
+                    await websocket.close(code=4403, reason="Invalid bridge token")
+                    return
 
         await websocket.accept()
         msg = WelcomeMessage(
