@@ -133,9 +133,22 @@ namespace MCPForUnity.Editor.Services
             {
                 return true;
             }
+            // High-blast-radius core tools stay disabled by default even though they are
+            // "core" (harden/security, R6). execute_menu_item can run almost any Editor
+            // command; require an explicit opt-in before it is reachable.
+            if (_defaultDisabledCoreTools.Contains(metadata.Name))
+            {
+                return false;
+            }
             return metadata.IsBuiltIn
                 && string.Equals(metadata.Group, "core", StringComparison.OrdinalIgnoreCase);
         }
+
+        private static readonly HashSet<string> _defaultDisabledCoreTools =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "execute_menu_item",
+            };
 
         public void SetToolEnabled(string toolName, bool enabled)
         {

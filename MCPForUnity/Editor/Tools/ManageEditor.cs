@@ -1,4 +1,5 @@
 using System;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
@@ -51,6 +52,14 @@ namespace MCPForUnity.Editor.Tools
             {
                 // Play Mode Control
                 case "play":
+                    // harden/security (R3/R6 posture): entering play mode runs project/game
+                    // code — including any scripts the AI just authored — so it is opt-in.
+                    if (!EditorPrefs.GetBool(EditorPrefKeys.AllowPlayMode, false))
+                    {
+                        return new ErrorResponse(
+                            "Entering play mode is disabled by default in this hardened build. " +
+                            "Enable 'Allow Play Mode' in MCP for Unity Advanced Settings to permit it.");
+                    }
                     try
                     {
                         if (!EditorApplication.isPlaying)

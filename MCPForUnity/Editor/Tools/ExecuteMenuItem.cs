@@ -12,12 +12,36 @@ namespace MCPForUnity.Editor.Tools
     /// </summary>
     public static class ExecuteMenuItem
     {
-        // Basic blacklist to prevent execution of disruptive menu items.
-        private static readonly HashSet<string> _menuPathBlacklist = new HashSet<string>(
-            StringComparer.OrdinalIgnoreCase)
+        // Allow-list policy (harden/security, R6). The previous one-entry deny-list allowed
+        // almost everything — builds, asset deletion, package ops, third-party plugin menus.
+        // We instead permit only menu paths under these prefixes and reject everything else.
+        // This intentionally covers the scene/object/asset authoring workflows while blocking
+        // build, delete, package, project-settings and quit operations. Extend deliberately.
+        private static readonly string[] _menuPathAllowPrefixes =
         {
-            "File/Quit",
+            "GameObject/",
+            "Component/",
+            "Assets/Create/",
+            "Window/",
+            "Edit/Undo",
+            "Edit/Redo",
+            "Edit/Duplicate",
+            "Edit/Frame Selected",
+            "Edit/Select All",
+            "File/Save",
         };
+
+        private static bool IsAllowed(string menuPath)
+        {
+            foreach (var prefix in _menuPathAllowPrefixes)
+            {
+                if (menuPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         public static object HandleCommand(JObject @params)
         {
@@ -28,9 +52,12 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("Required parameter 'menu_path' or 'menuPath' is missing or empty.");
             }
 
-            if (_menuPathBlacklist.Contains(menuPath))
+            if (!IsAllowed(menuPath))
             {
-                return new ErrorResponse($"Execution of menu item '{menuPath}' is blocked for safety reasons.");
+                return new ErrorResponse(
+                    $"Menu item '{menuPath}' is not on the allow-list and was blocked for safety. " +
+                    "Permitted prefixes: GameObject/, Component/, Assets/Create/, Window/, " +
+                    "Edit/Undo|Redo|Duplicate|Frame Selected|Select All, File/Save.");
             }
 
             try

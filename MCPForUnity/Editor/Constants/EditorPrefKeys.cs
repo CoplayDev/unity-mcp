@@ -33,6 +33,9 @@ namespace MCPForUnity.Editor.Constants
         internal const string ProjectScopedToolsLocalHttp = "MCPForUnity.ProjectScopedTools.LocalHttp";
         internal const string AllowLanHttpBind = "MCPForUnity.Security.AllowLanHttpBind";
         internal const string AllowInsecureRemoteHttp = "MCPForUnity.Security.AllowInsecureRemoteHttp";
+        // harden/security (R3/R6 posture): play-mode entry is opt-in (default off) because
+        // entering play mode runs project/game code, including scripts just authored by the AI.
+        internal const string AllowPlayMode = "MCPForUnity.Security.AllowPlayMode";
 
         internal const string PackageDeploySourcePath = "MCPForUnity.PackageDeploy.SourcePath";
         internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";
