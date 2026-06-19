@@ -226,23 +226,21 @@ namespace MCPForUnity.Editor.Helpers
                 return resolved;
             }
 
-            // Default to PyPI package (avoids Windows long path issues with git clone)
-            string version = GetPackageVersion();
-            if (version == "unknown")
-            {
-                // Fall back to latest PyPI version so configs remain valid in test scenarios
-                return "mcpforunityserver";
-            }
-
-            // Package.json uses semver prerelease tags (e.g., 9.4.5-beta.1) that are not valid
-            // PEP 440 pins for uvx. Use the beta prerelease range instead of a pinned prerelease.
-            if (IsSemVerPreRelease(version))
-            {
-                return "mcpforunityserver>=0.0.0a0";
-            }
-
-            return $"mcpforunityserver=={version}";
+            // harden/security (R11): pin the launch to an exact, reviewed server version
+            // instead of a floating "latest"/prerelease range, so the code that runs is the
+            // code that was audited. Replaces the previous version-derived float that used
+            // "mcpforunityserver" (unknown) or the open prerelease range "mcpforunityserver>=0.0.0a0".
+            // Keep PinnedServerVersion in sync with Server/pyproject.toml; re-pinning is a
+            // deliberate, reviewed action. See docs/security/server-pin.md.
+            return $"mcpforunityserver=={PinnedServerVersion}";
         }
+
+        /// <summary>
+        /// Exact PyPI version the local launch is pinned to (harden/security, R11). Mirrors
+        /// the reviewed Server/pyproject.toml version. Bumping this is a deliberate act that
+        /// should follow a re-review of the server source.
+        /// </summary>
+        public const string PinnedServerVersion = "9.7.3";
 
         /// <summary>
         /// Validates and auto-corrects a local server source path to ensure it points to the
