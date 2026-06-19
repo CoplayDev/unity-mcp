@@ -230,8 +230,10 @@ namespace MCPForUnity.Editor.Tools.Animation
                 case "create_blend_tree_1d": return ControllerBlendTrees.CreateBlendTree1D(@params);
                 case "create_blend_tree_2d": return ControllerBlendTrees.CreateBlendTree2D(@params);
                 case "add_blend_tree_child": return ControllerBlendTrees.AddBlendTreeChild(@params);
+                case "get_blend_tree": return ControllerBlendTrees.GetBlendTree(@params);
+                case "edit_blend_tree": return ControllerBlendTrees.EditBlendTree(@params);
                 default:
-                    return new { success = false, message = $"Unknown controller action: {action}. Valid: create, add_state, set_state_properties, get_state_properties, add_transition, remove_transition, add_parameter, get_info, assign, add_layer, remove_layer, set_layer_weight, create_blend_tree_1d, create_blend_tree_2d, add_blend_tree_child" };
+                    return new { success = false, message = $"Unknown controller action: {action}. Valid: create, add_state, set_state_properties, get_state_properties, add_transition, remove_transition, add_parameter, get_info, assign, add_layer, remove_layer, set_layer_weight, create_blend_tree_1d, create_blend_tree_2d, add_blend_tree_child, get_blend_tree, edit_blend_tree" };
             }
         }
 
@@ -241,6 +243,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             {
                 case "create": return ClipCreate.Create(@params);
                 case "get_info": return ClipCreate.GetInfo(@params);
+                case "get_root_motion": return ClipCreate.GetRootMotion(@params);
                 case "add_curve": return ClipCreate.AddCurve(@params);
                 case "set_curve": return ClipCreate.SetCurve(@params);
                 case "set_vector_curve": return ClipCreate.SetVectorCurve(@params);
@@ -249,7 +252,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                 case "add_event": return ClipCreate.AddEvent(@params);
                 case "remove_event": return ClipCreate.RemoveEvent(@params);
                 default:
-                    return new { success = false, message = $"Unknown clip action: {action}. Valid: create, get_info, add_curve, set_curve, set_vector_curve, create_preset, assign, add_event, remove_event" };
+                    return new { success = false, message = $"Unknown clip action: {action}. Valid: create, get_info, get_root_motion, add_curve, set_curve, set_vector_curve, create_preset, assign, add_event, remove_event" };
             }
         }
     }

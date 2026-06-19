@@ -21,10 +21,11 @@ CONTROLLER_ACTIONS = [
     "controller_add_parameter", "controller_get_info", "controller_assign",
     "controller_add_layer", "controller_remove_layer", "controller_set_layer_weight",
     "controller_create_blend_tree_1d", "controller_create_blend_tree_2d", "controller_add_blend_tree_child",
+    "controller_get_blend_tree", "controller_edit_blend_tree",
 ]
 
 CLIP_ACTIONS = [
-    "clip_create", "clip_get_info",
+    "clip_create", "clip_get_info", "clip_get_root_motion",
     "clip_add_curve", "clip_set_curve", "clip_set_vector_curve",
     "clip_create_preset", "clip_assign",
     "clip_add_event", "clip_remove_event",
