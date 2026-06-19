@@ -25,6 +25,35 @@ if SRC is None:
 # Tests can now import directly from parent package
 
 
+def _read_exact_from(conn, n: int) -> bytes:
+    buf = b""
+    while len(buf) < n:
+        chunk = conn.recv(n - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+    return buf
+
+
+def _consume_auth_and_ack(conn) -> bytes:
+    """Mimic the Unity bridge auth handshake (harden/security, R4).
+
+    After the FRAMING greeting the client sends an auth frame as its first framed
+    message. This fake bridge reads it and replies with the success ack so the
+    connect() handshake completes. It accepts any token — it exercises the framing
+    protocol, not token validation (that lives in the C# BridgeAuth).
+    Returns the raw auth payload the client sent.
+    """
+    hdr = _read_exact_from(conn, 8)
+    if len(hdr) != 8:
+        return b""
+    alen = struct.unpack(">Q", hdr)[0]
+    payload = _read_exact_from(conn, alen)
+    ack = b'{"status":"success","result":{"message":"authenticated"}}'
+    conn.sendall(struct.pack(">Q", len(ack)) + ack)
+    return payload
+
+
 def start_dummy_server(greeting: bytes, respond_ping: bool = False):
     """Start a minimal TCP server for handshake tests."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -39,22 +68,17 @@ def start_dummy_server(greeting: bytes, respond_ping: bool = False):
         conn.settimeout(1.0)
         if greeting:
             conn.sendall(greeting)
+        framed = b"FRAMING=1" in greeting
         if respond_ping:
             try:
-                # Read exactly n bytes helper
-                def _read_exact(n: int) -> bytes:
-                    buf = b""
-                    while len(buf) < n:
-                        chunk = conn.recv(n - len(buf))
-                        if not chunk:
-                            break
-                        buf += chunk
-                    return buf
+                # New protocol: consume + ack the client's auth frame first.
+                if framed:
+                    _consume_auth_and_ack(conn)
 
-                header = _read_exact(8)
+                header = _read_exact_from(conn, 8)
                 if len(header) == 8:
                     length = struct.unpack(">Q", header)[0]
-                    payload = _read_exact(length)
+                    payload = _read_exact_from(conn, length)
                     if payload == b'{"type":"ping"}':
                         resp = b'{"type":"pong"}'
                         conn.sendall(struct.pack(">Q", len(resp)) + resp)
@@ -171,8 +195,12 @@ def test_zero_length_payload_heartbeat():
     def _run():
         ready.set()
         conn, _ = sock.accept()
+        conn.settimeout(1.0)
         try:
             conn.sendall(b"MCP/0.1 FRAMING=1\n")
+            time.sleep(0.02)
+            # New protocol: consume + ack the client's auth frame first (R4).
+            _consume_auth_and_ack(conn)
             time.sleep(0.02)
             # Heartbeat frame (length=0)
             conn.sendall(struct.pack(">Q", 0))
