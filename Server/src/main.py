@@ -878,6 +878,31 @@ Examples:
     os.environ["UNITY_MCP_HTTP_HOST"] = http_host
     os.environ["UNITY_MCP_HTTP_PORT"] = str(http_port)
 
+    # harden/security (R8): fail loud on off-loopback binds. Loopback is the only safe
+    # default; binding to a routable / all-interfaces address (e.g. 0.0.0.0, ::) exposes
+    # the control plane to the network. In local (non-remote-hosted) mode that plane is
+    # protected only by the bridge token, so refuse to start off-loopback unless a token
+    # is configured (Task 2). Remote-hosted mode is allowed because API-key auth applies.
+    _loopback_hosts = {"127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"}
+    if http_host not in _loopback_hosts:
+        if config.http_remote_hosted:
+            logger.warning(
+                "Binding to non-loopback host %s in remote-hosted mode; API-key auth is required.",
+                http_host)
+        else:
+            from transport.legacy.unity_connection import resolve_bridge_token
+            if not resolve_bridge_token():
+                logger.error(
+                    "Refusing to bind to non-loopback host %s without authentication. The "
+                    "local control plane has no API-key auth; set UNITY_MCP_BRIDGE_TOKEN (or "
+                    "create ~/.unity-mcp/bridge-token) to enable the bridge-token gate, or bind "
+                    "to 127.0.0.1.", http_host)
+                raise SystemExit(2)
+            logger.warning(
+                "⚠️  Binding to non-loopback host %s. The local control plane is "
+                "protected only by the bridge token — keep the token secret and only do "
+                "this on a trusted network.", http_host)
+
     # Optional lifecycle handshake for Unity-managed terminal launches
     if args.unity_instance_token:
         os.environ["UNITY_MCP_INSTANCE_TOKEN"] = args.unity_instance_token
