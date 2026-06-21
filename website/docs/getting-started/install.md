@@ -1,4 +1,3 @@
----
 id: install
 slug: /getting-started/install
 title: Install
