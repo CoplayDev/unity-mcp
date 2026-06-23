@@ -352,12 +352,61 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (blendTree == null) return error;
 
             var edits = @params["children"] as JArray;
-            if (edits == null || edits.Count == 0)
-                return new { success = false, message = "'children' array is required: [{index, position:[x,y], threshold?, timeScale?, cycleOffset?, mirror?}]" };
+
+            Undo.RecordObject(blendTree, "Edit Blend Tree");
+
+            // Tree-level properties (optional). Lets a blend tree be retyped/reparameterized
+            // in place — needed to copy a source tree's type+params onto an existing state.
+            int treeProps = 0;
+            if (@params["blendType"] != null &&
+                Enum.TryParse<BlendTreeType>(@params["blendType"].ToString(), true, out var bt))
+            { blendTree.blendType = bt; treeProps++; }
+            if (@params["blendParameter"] != null)
+            { blendTree.blendParameter = @params["blendParameter"].ToString(); treeProps++; }
+            if (@params["blendParameterY"] != null)
+            { blendTree.blendParameterY = @params["blendParameterY"].ToString(); treeProps++; }
+            if (@params["useAutomaticThresholds"] != null)
+            { blendTree.useAutomaticThresholds = @params["useAutomaticThresholds"].ToObject<bool>(); treeProps++; }
+
+            // Optional: REPLACE the entire clip-child list (clears then re-adds). Lets a tree be
+            // restructured in one call — needed when extracting children into a nested sub-tree,
+            // since there is no per-child remove. Each item: {clipInstanceId|clipPath, position?:[x,y], threshold?}
+            int replaced = -1;
+            if (@params["setChildren"] is JArray setKids)
+            {
+                var fresh = new System.Collections.Generic.List<ChildMotion>();
+                foreach (var kt in setKids)
+                {
+                    if (!(kt is JObject kid)) continue;
+                    AnimationClip clip = null;
+                    string cInst = kid["clipInstanceId"]?.ToString();
+                    string cPath = kid["clipPath"]?.ToString();
+                    if (!string.IsNullOrEmpty(cInst))
+                        clip = UnityObjectIdCompat.InstanceIDFromString(cInst) as AnimationClip;
+                    else if (!string.IsNullOrEmpty(cPath))
+                        clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(AssetPathUtility.SanitizeAssetPath(cPath));
+                    if (clip == null)
+                        return new { success = false, message = $"setChildren clip not resolved (instanceId '{cInst}', path '{cPath}')" };
+
+                    var cm = new ChildMotion { motion = clip, timeScale = 1f, directBlendParameter = blendTree.blendParameter };
+                    if (kid["position"] is JArray kpos && kpos.Count >= 2)
+                        cm.position = new Vector2(kpos[0].ToObject<float>(), kpos[1].ToObject<float>());
+                    if (kid["threshold"] != null) cm.threshold = kid["threshold"].ToObject<float>();
+                    if (kid["timeScale"] != null) cm.timeScale = kid["timeScale"].ToObject<float>();
+                    if (kid["cycleOffset"] != null) cm.cycleOffset = kid["cycleOffset"].ToObject<float>();
+                    if (kid["mirror"] != null) cm.mirror = kid["mirror"].ToObject<bool>();
+                    fresh.Add(cm);
+                }
+                blendTree.children = fresh.ToArray();
+                replaced = fresh.Count;
+            }
+
+            if ((edits == null || edits.Count == 0) && treeProps == 0 && replaced < 0 && @params["addChildTree"] == null)
+                return new { success = false, message = "Provide tree-level props, 'children' (index edits), 'setChildren' (replace all), and/or 'addChildTree' (nested)." };
 
             // ChildMotion is a struct; must reassign the whole array.
             var children = blendTree.children;
-            Undo.RecordObject(blendTree, "Edit Blend Tree");
+            if (edits == null) edits = new JArray();
 
             int applied = 0;
             foreach (var token in edits)
@@ -385,14 +434,75 @@ namespace MCPForUnity.Editor.Tools.Animation
             }
 
             blendTree.children = children;
+
+            // Optional: create a NESTED child blend tree inside this tree and populate it.
+            // This is the only way to reach a true 3rd blend dimension (Unity trees are max 2D);
+            // the nested tree blends on its own parameter, independent of the parent's axes.
+            // Shape: addChildTree: { name?, position:[x,y], threshold?, blendType, blendParameter,
+            //   blendParameterY?, useAutomaticThresholds?, children:[{clipInstanceId|clipPath, threshold?, position?:[x,y]}] }
+            object nestedInfo = null;
+            if (@params["addChildTree"] is JObject ct)
+            {
+                BlendTree child;
+                if (blendTree.blendType == BlendTreeType.Simple1D)
+                {
+                    float thr = ct["threshold"]?.ToObject<float>() ?? 0f;
+                    child = blendTree.CreateBlendTreeChild(thr);
+                }
+                else
+                {
+                    if (!(ct["position"] is JArray cpos) || cpos.Count < 2)
+                        return new { success = false, message = "addChildTree.position [x,y] is required when parent is a 2D tree" };
+                    child = blendTree.CreateBlendTreeChild(new Vector2(cpos[0].ToObject<float>(), cpos[1].ToObject<float>()));
+                }
+
+                child.name = ct["name"]?.ToString() ?? "Look Blend Tree";
+                child.hideFlags = HideFlags.HideInHierarchy;
+                if (ct["blendType"] != null && Enum.TryParse<BlendTreeType>(ct["blendType"].ToString(), true, out var cbt))
+                    child.blendType = cbt;
+                if (ct["blendParameter"] != null) child.blendParameter = ct["blendParameter"].ToString();
+                if (ct["blendParameterY"] != null) child.blendParameterY = ct["blendParameterY"].ToString();
+                if (ct["useAutomaticThresholds"] != null) child.useAutomaticThresholds = ct["useAutomaticThresholds"].ToObject<bool>();
+
+                int nestedAdded = 0;
+                if (ct["children"] is JArray nestedKids)
+                {
+                    foreach (var kt in nestedKids)
+                    {
+                        if (!(kt is JObject kid)) continue;
+                        AnimationClip clip = null;
+                        string cInst = kid["clipInstanceId"]?.ToString();
+                        string cPath = kid["clipPath"]?.ToString();
+                        if (!string.IsNullOrEmpty(cInst))
+                            clip = UnityObjectIdCompat.InstanceIDFromString(cInst) as AnimationClip;
+                        else if (!string.IsNullOrEmpty(cPath))
+                            clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(AssetPathUtility.SanitizeAssetPath(cPath));
+                        if (clip == null)
+                            return new { success = false, message = $"addChildTree child clip not resolved (instanceId '{cInst}', path '{cPath}')" };
+
+                        if (child.blendType == BlendTreeType.Simple1D)
+                            child.AddChild(clip, kid["threshold"]?.ToObject<float>() ?? 0f);
+                        else if (kid["position"] is JArray kpos && kpos.Count >= 2)
+                            child.AddChild(clip, new Vector2(kpos[0].ToObject<float>(), kpos[1].ToObject<float>()));
+                        else
+                            child.AddChild(clip);
+                        nestedAdded++;
+                    }
+                }
+
+                EditorUtility.SetDirty(child);
+                nestedInfo = new { name = child.name, blendType = child.blendType.ToString(), blendParameter = child.blendParameter, childCount = child.children.Length, added = nestedAdded };
+            }
+
             EditorUtility.SetDirty(blendTree);
             AssetDatabase.SaveAssets();
 
             return new
             {
                 success = true,
-                message = $"Applied {applied} edit(s) to blend tree '{blendTree.name}'",
-                data = new { name = blendTree.name, edited = applied, childCount = children.Length }
+                nestedChildTree = nestedInfo,
+                message = $"Applied {treeProps} tree prop(s), {applied} child edit(s), replaced={replaced} on blend tree '{blendTree.name}'",
+                data = new { name = blendTree.name, treeProps, edited = applied, replaced, childCount = blendTree.children.Length, blendType = blendTree.blendType.ToString() }
             };
         }
     }

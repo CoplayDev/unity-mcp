@@ -174,6 +174,30 @@ namespace MCPForUnity.Editor.Tools.Animation
             float exitTime = @params["exitTime"]?.ToObject<float>() ?? 0.75f;
             transition.exitTime = exitTime;
 
+            // Optional fields: only override Unity's defaults when supplied, so a faithful
+            // remove+re-add round-trip (paired with get_info) loses nothing. Names match the
+            // keys emitted by GetInfo.
+            if (@params["offset"] != null)
+                transition.offset = @params["offset"].ToObject<float>();
+            if (@params["hasFixedDuration"] != null)
+                transition.hasFixedDuration = @params["hasFixedDuration"].ToObject<bool>();
+            if (@params["canTransitionToSelf"] != null)
+                transition.canTransitionToSelf = @params["canTransitionToSelf"].ToObject<bool>();
+            if (@params["orderedInterruption"] != null)
+                transition.orderedInterruption = @params["orderedInterruption"].ToObject<bool>();
+            if (@params["interruptionSource"] != null)
+            {
+                if (Enum.TryParse<TransitionInterruptionSource>(@params["interruptionSource"].ToString(), true, out var src))
+                    transition.interruptionSource = src;
+            }
+            if (@params["mute"] != null)
+                transition.mute = @params["mute"].ToObject<bool>();
+            if (@params["solo"] != null)
+                transition.solo = @params["solo"].ToObject<bool>();
+            string transitionName = @params["name"]?.ToString();
+            if (!string.IsNullOrEmpty(transitionName))
+                transition.name = transitionName;
+
             // Add conditions
             JToken conditionsToken = @params["conditions"];
             int conditionCount = 0;
@@ -397,10 +421,18 @@ namespace MCPForUnity.Editor.Tools.Animation
 
                         transitions.Add(new
                         {
+                            name = t.name,
                             destinationState = t.destinationState?.name,
                             hasExitTime = t.hasExitTime,
                             exitTime = t.exitTime,
                             duration = t.duration,
+                            offset = t.offset,
+                            hasFixedDuration = t.hasFixedDuration,
+                            canTransitionToSelf = t.canTransitionToSelf,
+                            orderedInterruption = t.orderedInterruption,
+                            interruptionSource = t.interruptionSource.ToString(),
+                            mute = t.mute,
+                            solo = t.solo,
                             conditionCount = t.conditions.Length,
                             conditions
                         });
