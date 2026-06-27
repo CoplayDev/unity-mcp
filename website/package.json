@@ -11,12 +11,13 @@
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
-    "write-heading-ids": "docusaurus write-heading-ids"
+    "write-heading-ids": "docusaurus write-heading-ids",
+    "gen:brand": "node scripts/gen-brand-assets.mjs"
   },
   "dependencies": {
     "@docusaurus/core": "^3.6.3",
-    "@docusaurus/preset-classic": "^3.6.3",
     "@docusaurus/plugin-client-redirects": "^3.6.3",
+    "@docusaurus/preset-classic": "^3.6.3",
     "@easyops-cn/docusaurus-search-local": "^0.46.1",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
@@ -26,10 +27,15 @@
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "^3.6.3",
-    "@docusaurus/types": "^3.6.3"
+    "@docusaurus/types": "^3.6.3",
+    "sharp": "^0.35.2"
   },
   "browserslist": {
-    "production": [">0.5%", "not dead", "not op_mini all"],
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
     "development": [
       "last 3 chrome version",
       "last 3 firefox version",
