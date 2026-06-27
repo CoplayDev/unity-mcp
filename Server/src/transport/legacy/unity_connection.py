@@ -130,12 +130,13 @@ class UnityConnection:
                 self.sock = None
 
     def _ensure_live_connection(self) -> None:
-        """Detect and discard stale (peer-closed) sockets before sending.
+        """Detect and discard cleanly-closed sockets before sending.
 
-        After domain reload Unity closes all TCP connections. The Python side
-        may still hold a reference to the dead socket. A non-blocking peek
-        detects this so send_command can reconnect instead of writing to a dead
-        socket and getting 'Connection closed before reading expected bytes'.
+        A graceful domain reload closes the bridge's TCP connections (FIN), so a
+        non-blocking peek sees EOF and lets send_command reconnect instead of
+        writing to a dead socket. A half-open socket left without a FIN is not
+        caught here; that case is bounded by the per-command deadline and the
+        reloading-status preflight.
         """
         if not self.sock:
             return
@@ -338,8 +339,8 @@ class UnityConnection:
         try:
             status = read_status_file(target_hash)
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
-                # Reload invalidates the socket; drop it under the I/O lock so we never
-                # close it under a concurrent send/recv, then reconnect on the next call.
+                # Reload invalidates the socket; drop it under the I/O lock so this
+                # close is serialized against the send/recv block, then reconnect next call.
                 with self._io_lock:
                     self.disconnect()
                 return MCPResponse(
@@ -352,6 +353,9 @@ class UnityConnection:
 
         for attempt in range(attempts + 1):
             if deadline is not None and time.monotonic() >= deadline:
+                logger.warning(
+                    "Command '%s' exceeded total deadline of %.1fs after %d attempt(s); giving up",
+                    command_type, total_timeout, attempt)
                 raise TimeoutError(
                     f"Command '{command_type}' exceeded total deadline of "
                     f"{total_timeout:.1f}s (connection wedged or Unity unresponsive)")
