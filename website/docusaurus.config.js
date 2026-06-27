@@ -20,6 +20,8 @@ function countConfigurators() {
 }
 const supportedClientCount = countConfigurators();
 
+const baseUrl = '/unity-mcp/';
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'MCP for Unity',
@@ -29,7 +31,7 @@ const config = {
   // Hosted on GitHub Pages under the CoplayDev org.
   // Custom domain (CNAME) deferred — see plan Phase 2.
   url: 'https://coplaydev.github.io',
-  baseUrl: '/unity-mcp/',
+  baseUrl,
 
   organizationName: 'CoplayDev',
   projectName: 'unity-mcp',
@@ -58,6 +60,18 @@ const config = {
         href: 'https://fonts.gstatic.com',
         crossorigin: 'anonymous',
       },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: `${baseUrl}img/apple-touch-icon.png` },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${baseUrl}img/android-chrome-192.png` },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '512x512', href: `${baseUrl}img/android-chrome-512.png` },
     },
   ],
   stylesheets: [
@@ -124,18 +138,20 @@ const config = {
         ],
       },
     ],
+    ...(process.env.GOATCOUNTER_CODE ? ['docusaurus-plugin-goatcounter'] : []),
   ],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: 'img/social-card.png',
+      metadata: [{ name: 'theme-color', content: '#4f46e5' }],
       navbar: {
         title: 'MCP for Unity',
         logo: {
           alt: 'MCP for Unity logo',
           src: 'img/logo-mark.svg',
-          srcDark: 'img/logo-mark-dark.svg',
+          srcDark: 'img/logo-mark.svg',
         },
         items: [
           {
@@ -152,6 +168,11 @@ const config = {
           {
             to: '/releases',
             label: 'Releases',
+            position: 'left',
+          },
+          {
+            to: '/stats',
+            label: 'Stats',
             position: 'left',
           },
           {
@@ -205,6 +226,7 @@ const config = {
         defaultMode: 'light',
         respectPrefersColorScheme: true,
       },
+      ...(process.env.GOATCOUNTER_CODE ? { goatcounter: { code: process.env.GOATCOUNTER_CODE } } : {}),
     }),
 };
 

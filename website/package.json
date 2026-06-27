@@ -28,6 +28,7 @@
   "devDependencies": {
     "@docusaurus/module-type-aliases": "^3.6.3",
     "@docusaurus/types": "^3.6.3",
+    "docusaurus-plugin-goatcounter": "^4.0.0",
     "sharp": "^0.35.2"
   },
   "browserslist": {

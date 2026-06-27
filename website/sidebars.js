@@ -75,6 +75,7 @@ const sidebars = {
         'architecture/manage-physics',
         'architecture/project-roadmap',
         'architecture/roadmap',
+        'architecture/external-analytics',
       ],
     },
     {
