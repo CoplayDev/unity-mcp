@@ -265,13 +265,14 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] = None, max_attempts: int | None = None) -> dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] = None, max_attempts: int | None = None, deadline: float | None = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested.
 
         Args:
             command_type: The Unity command to send
             params: Command parameters
             max_attempts: Maximum retry attempts (None = use config default, 0 = no retries)
+            deadline: Shared monotonic() ceiling across retries (None = derive from command_total_timeout)
         """
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
@@ -281,6 +282,11 @@ class UnityConnection:
         attempts = max(config.max_retries,
                        5) if max_attempts is None else max_attempts
         base_backoff = max(0.5, config.retry_delay)
+
+        # Cap total time across all retries so a wedged socket can't block unbounded.
+        total_timeout = max(0.0, float(getattr(config, "command_total_timeout", 90.0)))
+        if deadline is None and total_timeout > 0:
+            deadline = time.monotonic() + total_timeout
 
         def read_status_file(target_hash: str | None = None) -> dict | None:
             try:
@@ -327,6 +333,10 @@ class UnityConnection:
         try:
             status = read_status_file(target_hash)
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
+                # Reload invalidates the socket; drop it under the I/O lock so we never
+                # close it under a concurrent send/recv, then reconnect on the next call.
+                with self._io_lock:
+                    self.disconnect()
                 return MCPResponse(
                     success=False,
                     error="Unity is reloading; please retry",
@@ -336,6 +346,10 @@ class UnityConnection:
             logger.debug(f"Preflight status check failed: {exc}")
 
         for attempt in range(attempts + 1):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Command '{command_type}' exceeded total deadline of "
+                    f"{total_timeout:.1f}s (connection wedged or Unity unresponsive)")
             try:
                 # Discard stale sockets left over from a previous domain reload
                 # so we reconnect instead of writing to a dead connection.
@@ -834,16 +848,19 @@ def send_command_with_retry(
     # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
     max_wait_s = max(0.0, min(max_wait_s, 20.0))
 
+    total_timeout = max(0.0, float(getattr(config, "command_total_timeout", 90.0)))
+    deadline = time.monotonic() + total_timeout if total_timeout > 0 else None
+
     # If retry_on_reload=False, disable connection-level retries too (issue #577)
     # Commands that trigger compilation/reload shouldn't retry on disconnect
     send_max_attempts = None if retry_on_reload else 0
 
     response = conn.send_command(
-        command_type, params, max_attempts=send_max_attempts)
+        command_type, params, max_attempts=send_max_attempts, deadline=deadline)
     retries = 0
     wait_started = None
     reason = _extract_response_reason(response)
-    while retry_on_reload and _is_reloading_response(response) and retries < max_retries:
+    while retry_on_reload and _is_reloading_response(response) and retries < max_retries and (deadline is None or time.monotonic() < deadline):
         if wait_started is None:
             wait_started = time.monotonic()
             logger.debug(
@@ -876,7 +893,7 @@ def send_command_with_retry(
         )
         time.sleep(max(0.0, sleep_ms / 1000.0))
         retries += 1
-        response = conn.send_command(command_type, params)
+        response = conn.send_command(command_type, params, deadline=deadline)
         reason = _extract_response_reason(response)
 
     if wait_started is not None:
