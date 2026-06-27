@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 30 140 140" fill="none" role="img" aria-label="MCP for Unity">
+  <title>MCP for Unity</title>
+  <path d="M94,40 L42,70 L42,130 L94,160 Z" fill="none" stroke="#60A5FA" stroke-width="6.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M106,40 L158,70 L158,130 L106,160 Z" fill="none" stroke="#2DD4BF" stroke-width="6.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <g stroke="#22D3EE" stroke-width="6.5" stroke-linecap="round">
+    <path d="M95,74 L105,74"/><path d="M95,126 L105,126"/>
+  </g>
+</svg>
