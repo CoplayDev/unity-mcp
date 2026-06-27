@@ -40,17 +40,17 @@ This is **not** a docs rebuild — the Docusaurus site is already strong. The wo
 
 ---
 
-## 3. Program structure — one branch → 3 focused PRs
+## 3. Program structure — a single PR, organized in phases
 
-Upstream reviewers want focused, reviewable PRs. Decompose into three, off the umbrella branch:
+Per decision (§9), this ships as **one PR** to `CoplayDev:beta`, structured as ordered commits so a reviewer can follow the progression. (If maintainers later ask to split, the commit boundaries make that trivial.)
 
-| PR | Title | Depends on | Can land independently? |
-|---|---|---|---|
-| **PR 1** | Brand system & standardization | — | Yes (foundation) |
-| **PR 2** | README + distribution front door | PR 1 (consumes new brand assets) | After PR 1 |
-| **PR 3** | Unified analytics dashboard | — (independent) | Yes, in parallel; but full activation needs CoplayDev account provisioning |
+| Phase | Scope | Commit boundary |
+|---|---|---|
+| **P1** | Brand system & standardization | new assets + favicon fix + name constant + sweep |
+| **P2** | README + distribution front door | README rewrite + PyPI metadata + discoverability |
+| **P3** | Unified analytics dashboard | pypistats + GoatCounter + stats workflow + /stats page |
 
-Each PR gets its own branch cut from this umbrella when ready, so they can be reviewed/merged separately.
+Within the PR, P1 lands first (P2 consumes its assets); P3 is independent. **The user reviews at each phase boundary** before the next phase begins.
 
 ---
 
@@ -60,7 +60,7 @@ Each PR gets its own branch cut from this umbrella when ready, so they can be re
 
 I propose **2–3 SVG mark directions** for the user to pick from (visual-companion offered at that step). Constraints to honor:
 
-- Preserve the **indigo** identity (`#4f46e5` / `#818cf8`) unless the user wants a palette refresh — proposed as "evolve, not revolution."
+- **Evolve** the current identity (decided): keep the **indigo** palette (`#4f46e5` / `#818cf8`) and refine the mark — not a full rebrand.
 - Keep **Satoshi + JetBrains Mono** typography.
 - Marks must work at favicon scale (square) **and** wide (navbar 40×16).
 - SVGs should use `currentColor`/CSS vars where possible instead of hardcoded `#0a0a0b`/`#fafafa`, so light/dark derive cleanly.
@@ -82,9 +82,9 @@ Pick **"MCP for Unity"** (lowercase f) as the canonical user-facing name. Change
 
 - C# Editor UI: `"MCP For Unity"` → `"MCP for Unity"` in menu paths (`MCPForUnityMenu.cs`), window titles (`MCPForUnityEditorWindow.cs`), `MCPSetupWindow`. Introduce a single `const string ProductName = "MCP for Unity"` source of truth and route user-facing strings through it.
 - **Keep** internal names untouched: namespace `MCPForUnity`, package id `com.coplaydev.unity-mcp`, PyPI `mcpforunityserver`, CLI verbs `UnityMCP` (these are correct as URLs/identifiers).
-- `manifest.json` `"name": "Unity MCP"` → **OPEN DECISION** (§9): align to "MCP for Unity" vs keep if the MCP registry requires the current string. Verify before changing.
+- `manifest.json` `"name": "Unity MCP"` → **keep** (decided): it's the MCP-registry identifier likely expected by clients; leave as-is rather than risk breaking registry/client lookups.
 
-> ⚠️ Menu-path rename is mildly user-facing (muscle memory / saved layouts). Low risk, but call it out in the PR.
+> ⚠️ Menu-path rename is mildly user-facing (muscle memory / saved layouts). Low risk — **the user reviews the exact diff before it's finalized** (decision §9.3), and it's called out in the PR.
 
 ### 4.3 Apply brand everywhere (standardization sweep)
 
@@ -146,7 +146,7 @@ Items needing a maintainer get a clearly-labeled "**requires CoplayDev maintaine
 
 - **PyPI downloads → `pypistats.org` JSON API** (keyless): recent totals + per-version / per-python / per-OS. Supplement with **ClickPy** only if >180-day history is needed. **Skip BigQuery** (cost trap at 170TB+).
 - **README badge → pepy.tech** total-downloads (most reliable headline number).
-- **Docs web analytics → GoatCounter** (RECOMMENDED): cookieless, no consent banner, free for OSS, first-class Docusaurus SPA plugin, **clean CSV/JSON export** (needed to feed the unified page). **Alternative: Cloudflare Web Analytics** (zero-ops, but fiddly export). See §9 open decision.
+- **Docs web analytics → GoatCounter** (DECIDED — free, works on GitHub Pages): cookieless, no consent banner, free for open-source, a first-class Docusaurus SPA plugin (handles client-side route changes on the static site), and a **clean CSV/JSON export** to feed the unified page. It's a client-side beacon — exactly what a static GitHub Pages host supports. *No-strings free fallback if the hosted free tier is ever a concern for a company-sponsored project: Cloudflare Web Analytics (also free, also works on GH Pages).*
 
 ### 6.2 Unification — scheduled GitHub Action → `stats.json` → `/stats` page
 
@@ -176,12 +176,14 @@ PR 3 lands the **code**, but full activation needs the org to provision (the cod
 
 ## 7. Sequencing & dependencies
 
+Single PR, internal phase order:
+
 ```
-PR 1 (brand) ──> PR 2 (README/distribution, consumes brand)
-PR 3 (analytics) ── independent ──> [maintainer provisions accounts] ──> full activation
+P1 (brand) ──> P2 (README/distribution, consumes brand assets)
+P3 (analytics) ── independent ──> [maintainer provisions GoatCounter token] ──> full activation
 ```
 
-Recommended order: **PR 1 → PR 2**, with **PR 3 in parallel**. Brand-concept selection (visual companion) is the first interactive step inside PR 1.
+P1 first (P2 depends on its assets); P3 independent. Brand-concept selection (visual companion) is the first interactive step in P1. The user reviews at each phase boundary.
 
 ---
 
@@ -195,13 +197,13 @@ Recommended order: **PR 1 → PR 2**, with **PR 3 in parallel**. Brand-concept s
 
 ---
 
-## 9. Open decisions (for user review)
+## 9. Decisions log (resolved 2026-06-27)
 
-1. **Web-analytics provider:** GoatCounter (recommended — API-first, best for the unified page) vs Cloudflare (zero-ops) vs run both. *Default if you don't pick: GoatCounter.*
-2. **Brand visual direction:** evolve the current indigo + Satoshi identity (recommended) vs a fuller palette/type refresh. *(Concrete 2–3 mark concepts come during PR 1, with the visual companion.)*
-3. **Editor menu casing:** apply `"MCP For Unity"` → `"MCP for Unity"` (recommended) — accept the minor menu-path churn?
-4. **`manifest.json` name:** align `"Unity MCP"` → `"MCP for Unity"`, or keep (pending MCP-registry requirement check)? *Default: verify first, keep if required.*
-5. **PR granularity:** 3 PRs as scoped (recommended) vs different split.
+1. **Web-analytics provider:** ✅ **GoatCounter** — free, cookieless, works on the GitHub Pages static site, clean export for the unified page. (Cloudflare Web Analytics retained as a no-strings free fallback.)
+2. **Brand visual direction:** ✅ **Evolve** — keep indigo + Satoshi, refine the mark (not a full rebrand).
+3. **Editor menu casing:** ✅ **Apply** `"MCP For Unity"` → `"MCP for Unity"` — the user reviews the exact diff before finalizing.
+4. **`manifest.json` name:** ✅ **Keep** `"Unity MCP"` (registry identifier).
+5. **Packaging:** ✅ **Single PR** with phased commits (P1→P2→P3), not three.
 
 ---
 
