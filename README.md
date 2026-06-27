@@ -13,6 +13,12 @@
 [![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
+[![PyPI version](https://img.shields.io/pypi/v/mcpforunityserver?label=PyPI)](https://pypi.org/project/mcpforunityserver/)
+[![Downloads](https://static.pepy.tech/badge/mcpforunityserver)](https://pepy.tech/project/mcpforunityserver)
+[![Release](https://img.shields.io/github/v/release/CoplayDev/unity-mcp)](https://github.com/CoplayDev/unity-mcp/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/CoplayDev/unity-mcp/python-tests.yml?branch=beta&label=tests)](https://github.com/CoplayDev/unity-mcp/actions/workflows/python-tests.yml)
+[![OpenUPM](https://img.shields.io/npm/v/com.coplaydev.unity-mcp?label=OpenUPM&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.coplaydev.unity-mcp/)
+[![Stars](https://img.shields.io/github/stars/CoplayDev/unity-mcp?style=flat)](https://github.com/CoplayDev/unity-mcp/stargazers)
 
 **Create your Unity apps with LLMs.** MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate workflows.
 
@@ -20,27 +26,82 @@
 
 ---
 
-## Read the Docs
+## What it does
 
-### **→ [coplaydev.github.io/unity-mcp](https://coplaydev.github.io/unity-mcp/)**
+Control the Unity Editor in natural language from any MCP client. Describe what
+you want — "add a player with a rigidbody", "write a save system", "run the
+tests" — and the assistant drives the Editor through 40+ focused tools.
+
+- **Scenes & GameObjects** — create, query, modify hierarchies, components, prefabs
+- **Scripts** — create/edit C# with Roslyn validation
+- **Assets & rendering** — materials, shaders, textures, VFX
+- **Build, test & profile** — run EditMode/PlayMode tests, the profiler, builds
+- **Any MCP client** — Claude, Cursor, VS Code, Windsurf, Gemini CLI, and more
+- **Free & MIT**, multi-instance ready
+
+<details>
+<summary><b>Full tool catalog (40+ tools across 9 groups)</b></summary>
+
+See the [tool reference](https://coplaydev.github.io/unity-mcp/reference/tools/) for
+every tool: **core** (scenes, GameObjects, scripts, assets, prefabs, components,
+editor control, console, menus), **scripting_ext**, **vfx** (shaders, textures),
+**ui**, **animation**, **testing**, **probuilder**, **profiling**, **docs**.
+</details>
 
 ---
 
-## Install
+## Supported clients & versions
 
-In Unity: **Window → Package Manager → + → Add package from git URL**, paste:
+| MCP client | Auto-configure | Notes |
+|---|---|---|
+| Claude Desktop / Claude Code | ✅ | stdio |
+| Cursor | ✅ | stdio |
+| VS Code (Copilot) | ✅ | stdio |
+| Windsurf | ✅ | stdio |
+| Cline | ✅ | stdio |
+| Gemini CLI / Qwen Code | ✅ | stdio |
+| Copilot CLI / OpenClaw / Antigravity | ✅ | stdio |
 
-```text
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main
+**Requirements:** Unity **2021.3 LTS → Unity 6.x**, Python **3.10+** (managed via `uv`).
+Use **Window → MCP for Unity → Configure All Detected Clients** to set up every detected client at once.
+
+---
+
+## 60-second quickstart
+
+**Prerequisites:** Unity 2021.3 LTS+, an MCP client, and [uv](https://docs.astral.sh/uv/) (auto-installed if missing).
+
+1. **Install the package** (Unity → Package Manager → Add from git URL):
+   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta`
+2. **Configure your client:** `Window → MCP for Unity → Configure All Detected Clients`.
+3. **Prompt it:** *"Create a cube at the origin and add a Rigidbody."*
+   You should see the cube appear in the scene within a couple of seconds.
+
+<details>
+<summary>Alternative installs (Asset Store, OpenUPM)</summary>
+
+- **OpenUPM:** `openupm add com.coplaydev.unity-mcp`
+- **Asset Store:** [MCP for Unity](https://assetstore.unity.com/packages/slug/329908)
+</details>
+
+---
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[AI assistant<br/>Claude · Cursor · …] -- MCP (stdio/HTTP) --> B[Python server]
+  B -- WebSocket + HTTP --> C[Unity Editor plugin]
+  C -- Editor API --> D[Scene · Assets · Scripts]
 ```
 
-Beta channel uses `#beta`. Asset Store and OpenUPM paths are documented in the [Install guide](https://coplaydev.github.io/unity-mcp/getting-started/install).
+---
 
-Then **Window → MCP for Unity → Configure All Detected Clients**. That's it — try a prompt:
+## How it compares
 
-> Create a red, blue, and yellow cube in the current scene.
-
-Full walkthrough: [Your First Prompt](https://coplaydev.github.io/unity-mcp/getting-started/first-prompt).
+- **MCP for Unity** — free, MIT, MCP-native Editor control from any client.
+- **[Aura for Unity](https://www.tryaura.dev/)** — premium in-Editor AI assistant (sponsor).
+- **Hand-rolled Editor scripting** — full control, but you build and maintain everything.
 
 ---
 
