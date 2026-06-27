@@ -11,7 +11,7 @@ MCP for Unity uses two external data sources to understand adoption:
 - **PyPI installs** — daily, weekly, and monthly download counts for `mcpforunityserver`, fetched from the public [pypistats.org](https://pypistats.org/packages/mcpforunityserver) API. No API key required; the data is already public.
 - **Docs traffic** — aggregate pageview totals from the docs site, collected via [GoatCounter](https://www.goatcounter.com/) when provisioned.
 
-Both sources are **cookieless, store no personal data, and expose only aggregates**. This is distinct from the in-product telemetry (`architecture/telemetry`) which runs inside the Unity Editor and is controlled by the user from the MCP for Unity settings window.
+Both sources are **cookieless, store no personal data, and expose only aggregates**. This is distinct from the [in-product telemetry](./telemetry) which runs inside the Unity Editor and is controlled by the user from the MCP for Unity settings window.
 
 ## Privacy stance
 

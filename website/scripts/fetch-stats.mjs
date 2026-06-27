@@ -23,7 +23,8 @@ async function main() {
   const stats = buildStats({ recent, webPageviews: web, generatedAt: new Date().toISOString() });
   const fs = await import('node:fs/promises');
   const path = await import('node:path');
-  const out = path.join(process.cwd(), 'website', 'static', 'stats', 'data.json');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const out = path.join(here, '..', 'static', 'stats', 'data.json');
   await fs.mkdir(path.dirname(out), { recursive: true });
   await fs.writeFile(out, JSON.stringify(stats, null, 2) + '\n');
   console.log(`Wrote ${out}`);
