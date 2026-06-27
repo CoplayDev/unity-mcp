@@ -50,7 +50,7 @@ class UnityConnection:
         except OSError as exc:
             logger.debug(f"Unable to set TCP_NODELAY: {exc}")
 
-    def connect(self) -> bool:
+    def connect(self, connect_timeout: float | None = None) -> bool:
         """Establish a connection to the Unity Editor."""
         if self.sock:
             return True
@@ -59,8 +59,9 @@ class UnityConnection:
                 return True
             try:
                 # Bounded connect to avoid indefinite blocking
-                connect_timeout = float(
-                    getattr(config, "connection_timeout", 1.0))
+                if connect_timeout is None:
+                    connect_timeout = float(
+                        getattr(config, "connection_timeout", 1.0))
                 # We trust config.unity_host (default 127.0.0.1) but future improvements
                 # could dynamically prefer 'localhost' depending on OS resolver behavior.
                 self.sock = socket.create_connection(
@@ -265,7 +266,13 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] = None, max_attempts: int | None = None, deadline: float | None = None) -> dict[str, Any]:
+    def _cap_to_deadline(self, timeout: float, deadline: float | None, floor: float = 0.05) -> float:
+        """Shrink a blocking timeout to whatever budget remains before the deadline."""
+        if deadline is None:
+            return timeout
+        return max(floor, min(timeout, deadline - time.monotonic()))
+
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None, max_attempts: int | None = None, deadline: float | None = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested.
 
         Args:
@@ -320,8 +327,6 @@ class UnityConnection:
                 logger.debug(f"Preflight status check failed: {exc}")
                 return None
 
-        last_short_timeout = None
-
         # Extract hash suffix from instance id (e.g., Project@hash)
         target_hash: str | None = None
         if self.instance_id and '@' in self.instance_id:
@@ -356,7 +361,7 @@ class UnityConnection:
                 self._ensure_live_connection()
                 # Ensure connected (handshake occurs within connect())
                 t_conn_start = time.time()
-                if not self.sock and not self.connect():
+                if not self.sock and not self.connect(self._cap_to_deadline(config.connection_timeout, deadline)):
                     raise ConnectionError("Could not connect to Unity")
                 logger.info("[TIMING-STDIO] connect took %.3fs command=%s", time.time() - t_conn_start, command_type)
 
@@ -384,11 +389,17 @@ class UnityConnection:
                         self.sock.sendall(payload)
                     logger.info("[TIMING-STDIO] sendall took %.3fs command=%s", time.time() - t_send_start, command_type)
 
-                    # During retry bursts use a short receive timeout and ensure restoration
+                    # Cap the receive timeout to the remaining command budget (and use a
+                    # short timeout during retry bursts) so a wedged socket can't block
+                    # past the deadline.
                     restore_timeout = None
-                    if attempt > 0 and last_short_timeout is None:
+                    recv_timeout = 1.0 if attempt > 0 else self.sock.gettimeout()
+                    if deadline is not None:
+                        recv_timeout = self._cap_to_deadline(
+                            recv_timeout or config.connection_timeout, deadline)
+                    if recv_timeout is not None and recv_timeout != self.sock.gettimeout():
                         restore_timeout = self.sock.gettimeout()
-                        self.sock.settimeout(1.0)
+                        self.sock.settimeout(recv_timeout)
                     try:
                         t_recv_start = time.time()
                         response_data = self.receive_full_response(self.sock)
@@ -399,7 +410,6 @@ class UnityConnection:
                     finally:
                         if restore_timeout is not None:
                             self.sock.settimeout(restore_timeout)
-                            last_short_timeout = None
 
                 # Parse
                 if command_type == 'ping':
@@ -482,6 +492,7 @@ class UnityConnection:
                         cap = 3.0
 
                     sleep_s = min(cap, jitter * (2 ** attempt))
+                    sleep_s = self._cap_to_deadline(sleep_s, deadline, floor=0.0)
                     time.sleep(sleep_s)
                     continue
                 raise

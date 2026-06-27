@@ -74,8 +74,11 @@ def silent_bridge(monkeypatch, tmp_path):
                 pass
 
 
-def test_send_command_against_wedged_socket_is_bounded(silent_bridge):
-    """send_command on a silent socket hits the deadline instead of stacking retries."""
+def test_send_command_against_wedged_socket_is_bounded(silent_bridge, monkeypatch):
+    """A connection_timeout longer than the total budget must not let a single blocking
+    recv overrun the ceiling: the deadline caps each recv, so the call still stops near
+    command_total_timeout rather than connection_timeout."""
+    monkeypatch.setattr(config, "connection_timeout", 5.0)
     conn = UnityConnection(port=silent_bridge, instance_id="Repro@deadbeef")
     start = time.monotonic()
     with pytest.raises(TimeoutError, match="exceeded total deadline"):
