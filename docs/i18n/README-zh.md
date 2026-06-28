@@ -1,4 +1,7 @@
-<img width="676" height="380" alt="MCP for Unity" src="../images/logo.png" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../images/logo-header-dark.png">
+  <img alt="MCP for Unity" src="../images/logo-header-light.png" width="400">
+</picture>
 
 | [English](../../README.md) | [简体中文](README-zh.md) |
 |----------------------|---------------------------------|
