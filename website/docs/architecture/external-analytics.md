@@ -6,12 +6,15 @@ description: How MCP for Unity tracks adoption with cookieless, aggregate-only a
 
 ## What is tracked and why
 
-MCP for Unity uses two external data sources to understand adoption:
+MCP for Unity tracks adoption with several aggregate signals, ordered from most to least honest about *real users*:
 
-- **PyPI installs** — daily, weekly, and monthly download counts for `mcpforunityserver`, fetched from the public [pypistats.org](https://pypistats.org/packages/mcpforunityserver) API. No API key required; this data is already public, and a downloads badge appears in the README.
-- **Docs traffic** — aggregate pageview totals for this site, collected via [GoatCounter](https://www.goatcounter.com/) when provisioned.
+- **In-product DAU / WAU** — the true active-user count, deduplicated per anonymous install UUID by the in-product telemetry (`Server/src/core/telemetry.py`). Surfacing it on this dashboard needs a read API on the Coplay telemetry backend.
+- **Unique repo cloners / viewers (14-day)** — from the GitHub repository traffic API; a strong proxy for developers actually pulling the code. Only collaborators can read it (needs a token), so it is private by nature.
+- **GitHub stars / forks** — real accounts that starred or forked; public, an interest (not usage) signal.
+- **PyPI installs** — daily/weekly/monthly download counts for `mcpforunityserver` from the public [pypistats.org](https://pypistats.org/packages/mcpforunityserver) API. **Heavily inflated** by CI, mirrors, `uvx` re-fetches, and Docker rebuilds — an install-event *reach* number, not a user count. A downloads badge appears in the README.
+- **Docs traffic** — aggregate pageview totals from [GoatCounter](https://www.goatcounter.com/) when provisioned.
 
-Both sources are **cookieless, store no personal data, and expose only aggregates**. This is distinct from the [in-product telemetry](./telemetry) which runs inside the Unity Editor and is controlled by the user from the MCP for Unity settings window.
+All sources are **cookieless, store no personal data, and expose only aggregates**. The DAU/WAU source is the [in-product telemetry](./telemetry) that runs inside the Unity Editor and is controlled by the user from the MCP for Unity settings window.
 
 ## What is public vs private
 
@@ -34,16 +37,21 @@ Both sources are **cookieless, store no personal data, and expose only aggregate
 
 ## Maintainer provisioning
 
-The docs-traffic half activates only when GoatCounter is configured. Until then the PyPI numbers still appear in the summary and the docs-traffic line reads "pending GoatCounter provisioning".
+Stars, forks, and PyPI numbers work out of the box. The two highest-signal rows need setup:
 
-**Steps for a CoplayDev maintainer:**
+**Unique repo cloners / viewers (GitHub traffic):**
 
-1. Create a free GoatCounter account at [goatcounter.com](https://www.goatcounter.com/) for the docs site (e.g. site code `mcp-for-unity`); keep its dashboard **private**.
+1. Create a fine-grained PAT scoped to `CoplayDev/unity-mcp` with **Repository permissions → Administration: read** (the traffic API requires it; the default `GITHUB_TOKEN` returns 401/403).
+2. Add it as the repository **secret** `STATS_GITHUB_TOKEN`.
+
+**In-product DAU / WAU (the true active-user count):**
+
+- The data is already collected by `Server/src/core/telemetry.py` (deduplicated per anonymous install UUID) and POSTed to the Coplay telemetry backend. Surfacing it here needs a **read / aggregate API** on that backend plus a token — back-end work owned by Coplay. Once available, add a `COPLAY_STATS_TOKEN` secret and a fetch in `fetch-stats.mjs`.
+
+**Docs traffic (GoatCounter):**
+
+1. Create a free [goatcounter.com](https://www.goatcounter.com/) site (e.g. code `mcp-for-unity`); keep its dashboard **private**.
 2. Generate an API token with read access to stats.
-3. Add two repository **secrets** (Settings → Secrets and variables → Actions):
-   - `GOATCOUNTER_TOKEN` — the API token.
-   - `GOATCOUNTER_SITE` — the site code (e.g. `mcp-for-unity`).
-4. Add `GOATCOUNTER_CODE` as an **Actions variable** with the same site code, so the docs build injects the cookieless tracking beacon. This enables docs-traffic *collection* on the public site; the numbers themselves stay private in GoatCounter and the Actions summary.
-5. Run **Actions → Adoption stats → Run workflow** to generate the first summary.
+3. Add secrets `GOATCOUNTER_TOKEN` (token) and `GOATCOUNTER_SITE` (site code), and an **Actions variable** `GOATCOUNTER_CODE` (same site code) so the docs build injects the cookieless beacon — collection happens on the public site, the numbers stay private.
 
-The `stats` workflow needs only `contents: read` — it posts to the run summary and never commits.
+Then run **Actions → Adoption stats → Run workflow**. The `stats` workflow needs only `contents: read` — it posts to the run summary and never commits.
