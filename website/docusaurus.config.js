@@ -171,11 +171,6 @@ const config = {
             position: 'left',
           },
           {
-            to: '/stats',
-            label: 'Stats',
-            position: 'left',
-          },
-          {
             href: 'https://github.com/CoplayDev/unity-mcp',
             position: 'right',
             className: 'header-icon-link header-github-link',

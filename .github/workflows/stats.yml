@@ -1,31 +1,21 @@
-name: Update adoption stats
+name: Adoption stats (maintainer-only)
+# Posts unified PyPI install + docs-traffic numbers to the workflow run summary,
+# which is visible ONLY to repo collaborators. Nothing is published publicly.
 on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch: {}
 permissions:
-  contents: write
+  contents: read
 jobs:
   stats:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { ref: beta }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - name: Fetch stats
+      - name: Fetch + summarize stats (private to collaborators)
         env:
           GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
           GOATCOUNTER_SITE: ${{ secrets.GOATCOUNTER_SITE }}
-        run: node website/scripts/fetch-stats.mjs
-      - name: Commit if changed
-        run: |
-          if [[ -n "$(git status --porcelain website/static/stats/data.json)" ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add website/static/stats/data.json
-            git commit -m "chore: update adoption stats [skip ci]"
-            git push
-          else
-            echo "No changes"
-          fi
+        run: node website/scripts/fetch-stats.mjs >> "$GITHUB_STEP_SUMMARY"

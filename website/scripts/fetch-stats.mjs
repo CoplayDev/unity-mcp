@@ -7,6 +7,34 @@ export function buildStats({ recent, webPageviews = null, generatedAt }) {
   return { generatedAt, pypi: normalizePypiRecent(recent), web: webPageviews };
 }
 
+// Renders the unified stats as a Markdown table. The workflow appends this to
+// the GitHub Actions run summary, which is visible only to repo collaborators —
+// nothing is published to the public docs site.
+export function renderSummary(stats) {
+  const p = stats.pypi;
+  const n = (x) => Number(x).toLocaleString('en-US');
+  const web = stats.web && stats.web.total != null
+    ? `${n(stats.web.total)} total pageviews`
+    : '_pending GoatCounter provisioning_';
+  return [
+    '## MCP for Unity — adoption stats (maintainer-only)',
+    `_generated ${stats.generatedAt}_`,
+    '',
+    '### PyPI installs (`mcpforunityserver`)',
+    '| Window | Downloads |',
+    '| --- | ---: |',
+    `| Last day | ${n(p.lastDay)} |`,
+    `| Last week | ${n(p.lastWeek)} |`,
+    `| Last month | ${n(p.lastMonth)} |`,
+    '',
+    '> PyPI counts are install events — CI, mirrors, and Docker rebuilds inflate them, so read as a trend, not a user count.',
+    '',
+    '### Docs traffic',
+    web,
+    '',
+  ].join('\n');
+}
+
 async function main() {
   const pkg = 'mcpforunityserver';
   const recent = await (await fetch(`https://pypistats.org/api/packages/${pkg}/recent`)).json();
@@ -21,13 +49,7 @@ async function main() {
     } catch { /* leave web=null on failure */ }
   }
   const stats = buildStats({ recent, webPageviews: web, generatedAt: new Date().toISOString() });
-  const fs = await import('node:fs/promises');
-  const path = await import('node:path');
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const out = path.join(here, '..', 'static', 'stats', 'data.json');
-  await fs.mkdir(path.dirname(out), { recursive: true });
-  await fs.writeFile(out, JSON.stringify(stats, null, 2) + '\n');
-  console.log(`Wrote ${out}`);
+  process.stdout.write(renderSummary(stats));
 }
 
 import { fileURLToPath } from 'node:url';
