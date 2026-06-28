@@ -63,6 +63,10 @@ const config = {
     },
     {
       tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${baseUrl}img/favicon-32.png` },
+    },
+    {
+      tagName: 'link',
       attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: `${baseUrl}img/apple-touch-icon.png` },
     },
     {
