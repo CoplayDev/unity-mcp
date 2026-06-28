@@ -11,6 +11,7 @@
             <uie:ToolbarToggle name="clients-tab" text="Connect" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
             <uie:ToolbarToggle name="resources-tab" text="Resources" />
+            <uie:ToolbarToggle name="assetgen-tab" text="Asset Gen" />
             <uie:ToolbarToggle name="deps-tab" text="Deps" />
             <uie:ToolbarToggle name="advanced-tab" text="Advanced" />
         </uie:Toolbar>
@@ -28,6 +29,9 @@
         </ui:ScrollView>
         <ui:ScrollView name="resources-panel" class="panel-scroll hidden" style="flex-grow: 1;">
             <ui:VisualElement name="resources-container" class="section-stack" />
+        </ui:ScrollView>
+        <ui:ScrollView name="assetgen-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="assetgen-container" class="section-stack" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>
