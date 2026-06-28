@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Http;
@@ -44,8 +45,24 @@ namespace MCPForUnityTests.Editor.AssetGen
         private static HttpResult Json(string body)
             => new HttpResult { Status = 200, IsSuccess = true, Text = body, Body = Encoding.UTF8.GetBytes(body) };
 
+        // HandleCommand is async; the fake transport completes synchronously so awaiting here
+        // never blocks on the editor loop (unlike the live UnityWebRequest path).
         private static JObject Call(JObject p)
-            => JObject.Parse(JsonConvert.SerializeObject(ImportModel.HandleCommand(p)));
+            => JObject.Parse(JsonConvert.SerializeObject(ImportModel.HandleCommand(p).GetAwaiter().GetResult()));
+
+        [Test]
+        public void HandleCommand_IsAsync()
+        {
+            // Regression: search/preview hit UnityWebRequest, whose completion is pumped by the
+            // editor loop. A synchronous handler that blocks on .GetResult() deadlocks the main
+            // thread and freezes the editor. The handler must be async so the request can finish
+            // on a later tick. See the import_model editor-freeze investigation.
+            var ret = typeof(ImportModel)
+                .GetMethod(nameof(ImportModel.HandleCommand))
+                .ReturnType;
+            Assert.IsTrue(typeof(Task).IsAssignableFrom(ret),
+                "ImportModel.HandleCommand must return Task (async) to avoid blocking the Unity main thread.");
+        }
 
         [Test]
         public void Search_WithKey_ReturnsResults()

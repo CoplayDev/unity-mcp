@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Services.AssetGen;
@@ -11,8 +12,11 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
     /// <summary>
-    /// 3D marketplace import (Sketchfab). Search/preview are quick read-only calls run inline;
-    /// import downloads the model archive and unpacks it into the project as a long-running job
+    /// 3D marketplace import (Sketchfab). Search/preview are read-only calls awaited directly:
+    /// the handler is async so the underlying UnityWebRequest completes on the editor loop
+    /// rather than blocking the main thread (a synchronous .GetResult() here deadlocks the
+    /// editor — the request can only finish on a tick the blocked main thread can't run).
+    /// Import downloads the model archive and unpacks it into the project as a long-running job
     /// (returns a job_id; the client polls the `status` action). The provider key is read from
     /// the secure store on the C# side and never transits the bridge.
     /// </summary>
@@ -21,11 +25,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
     {
         private const string Provider = "sketchfab";
 
-        // Test seam for the inline search/preview calls (import routes through the job manager's
+        // Test seam for the search/preview calls (import routes through the job manager's
         // own transport seam). Defaults to the production UnityWebRequest transport.
         internal static IHttpTransport TransportOverrideForTests;
 
-        public static object HandleCommand(JObject @params)
+        public static async Task<object> HandleCommand(JObject @params)
         {
             if (@params == null) return new ErrorResponse("Parameters cannot be null.");
             var p = new ToolParams(@params);
@@ -34,8 +38,8 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             {
                 switch (action)
                 {
-                    case "search": return Search(p);
-                    case "preview": return Preview(p);
+                    case "search": return await Search(p);
+                    case "preview": return await Preview(p);
                     case "import": return Import(p);
                     case "status": return Status(p);
                     case "cancel": return Cancel(p);
@@ -57,7 +61,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
 
         private static IHttpTransport Transport() => TransportOverrideForTests ?? new UnityWebRequestTransport();
 
-        private static object Search(ToolParams p)
+        private static async Task<object> Search(ToolParams p)
         {
             string query = p.Get("query");
             if (string.IsNullOrWhiteSpace(query)) return new ErrorResponse("'query' is required for search.");
@@ -65,12 +69,12 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 return KeyError();
 
             IMarketplaceProviderAdapter adapter = AssetGenProviders.Marketplace(Provider);
-            string results = adapter.SearchAsync(query, key, Transport(), CancellationToken.None).GetAwaiter().GetResult();
+            string results = await adapter.SearchAsync(query, key, Transport(), CancellationToken.None);
             return new SuccessResponse($"Search results for '{query}'.",
                 new { provider = Provider, results = ParseOrRaw(results) });
         }
 
-        private static object Preview(ToolParams p)
+        private static async Task<object> Preview(ToolParams p)
         {
             string uid = p.Get("uid");
             if (string.IsNullOrWhiteSpace(uid)) return new ErrorResponse("'uid' is required for preview.");
@@ -78,7 +82,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 return KeyError();
 
             IMarketplaceProviderAdapter adapter = AssetGenProviders.Marketplace(Provider);
-            string preview = adapter.PreviewAsync(uid, key, Transport(), CancellationToken.None).GetAwaiter().GetResult();
+            string preview = await adapter.PreviewAsync(uid, key, Transport(), CancellationToken.None);
             return new SuccessResponse($"Preview for '{uid}'.",
                 new { provider = Provider, uid, preview = ParseOrRaw(preview) });
         }
