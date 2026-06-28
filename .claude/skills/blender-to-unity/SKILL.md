@@ -12,7 +12,7 @@ directly.
 ## Preconditions
 - Both `mcp__blender__*` tools and MCP for Unity tools are connected.
 - A model exists in the Blender scene (confirm with `mcp__blender__get_scene_info` /
-  `get_object_info`). If empty, stop and tell the user — this skill does not generate models.
+  `mcp__blender__get_object_info`). If empty, stop and tell the user — this skill does not generate models.
 
 ## Steps
 1. **Resolve the Unity project path.** Read `mcpforunity://editor/state` for the project
@@ -43,3 +43,4 @@ directly.
   "GLB import requires glTFast", re-export as FBX (or install glTFast from the Dependencies tab).
 - Keep one model per handoff; for batches, repeat the loop with distinct names.
 - This skill never sends API keys or file bytes over the MCP bridge — Unity reads the file from disk.
+- `import_model_file` copies only the single source file; for multi-file exports (a text `.gltf` with an external `.bin`, or an `.obj` with a sibling `.mtl`/textures), zip them first and pass the `.zip` — a bare `.gltf`/`.obj` will lose its sidecars.

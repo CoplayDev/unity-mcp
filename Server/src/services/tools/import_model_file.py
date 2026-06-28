@@ -24,7 +24,9 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "under Assets/ and run through Unity's model-import pipeline (scale-normalize, material "
         "settings; glTF requires glTFast). Carries no API keys and no file bytes over the bridge.\n\n"
         "Params: source_path (absolute or Assets-relative path to a .fbx/.obj/.glb/.gltf/.zip), "
-        "name, output_folder (under Assets/), target_size. Returns { asset_path, asset_guid }."
+        "name, output_folder (under Assets/), target_size. Returns { asset_path, asset_guid }.\n\n"
+        "For multi-file exports (a text .gltf with an external .bin, or an .obj with a sibling "
+        ".mtl/textures), zip them and pass the .zip — a bare .gltf/.obj is copied without its sidecars."
     ),
     annotations=ToolAnnotations(
         title="Import Model File",
