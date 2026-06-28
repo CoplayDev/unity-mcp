@@ -61,6 +61,36 @@ Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
 ---
 
+## AI Asset Generation
+
+Bring-your-own-key generation of **3D models** (text→3D and image→3D), **2D images**, and **Sketchfab** model import — straight into your project. Generated assets land under `Assets/Generated/`.
+
+**Providers**
+
+- **3D generation:** Tripo (default), Meshy, Hunyuan
+- **3D import:** Sketchfab
+- **2D image:** fal.ai (default), OpenRouter
+
+**Setup**
+
+1. Open **Window → MCP for Unity → Asset Gen** tab and enter your provider API key(s). Keys are stored in your **OS secure store** (macOS Keychain / Windows Credential Manager / Linux libsecret) — never in the project or `EditorPrefs`.
+2. Enable the tools with `manage_tools` — the `asset_gen` group is off by default.
+3. For GLB output/import, install **glTFast** from the **Dependencies** tab (FBX needs no extra package).
+
+**Usage**
+
+Generation runs through the MCP tools (or the `asset-gen` CLI), never from the GUI. Long-running jobs are async: the tool returns a `job_id`, then you call `action="status"` with that `job_id` until it completes.
+
+```text
+generate_model  action=generate provider=tripo mode=text prompt="a low-poly oak tree" format=fbx   → then action=status with job_id
+generate_image  action=generate provider=fal prompt="a pixel-art coin" transparent=true
+import_model    action=search query="wooden chair"   → action=import uid=<from search>
+```
+
+Your API keys never leave the Editor and never cross the MCP bridge.
+
+---
+
 ## Community
 
 - [Discord](https://discord.gg/y4p8KfzrN4) — chat with maintainers and other contributors

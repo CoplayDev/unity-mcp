@@ -8,5 +8,5 @@ def test_asset_gen_group_registered():
 
 
 def test_asset_gen_group_disabled_by_default():
-    # Parity with vfx/animation: non-core groups start hidden, toggled via manage_tools.
+    # Parity with vfx/animation: non-core groups start hidden until enabled at runtime.
     assert "asset_gen" not in DEFAULT_ENABLED_GROUPS

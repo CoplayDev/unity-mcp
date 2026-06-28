@@ -825,13 +825,13 @@ namespace MCPForUnity.Editor.Windows
             bulkRow.style.flexDirection = FlexDirection.Row;
             bulkRow.style.marginBottom = 8;
 
-            var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph" };
+            var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph", "com.unity.cloud.gltfast" };
 
             Button installAllButton = null;
             installAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Install All Dependencies",
-                    "This will install Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
+                    "This will install Roslyn DLLs, ProBuilder, Cinemachine, VFX Graph, and glTFast. Continue?",
                     "Install All", "Cancel")) return;
                 installAllButton.SetEnabled(false);
                 installAllButton.text = "Installing...";
@@ -851,7 +851,7 @@ namespace MCPForUnity.Editor.Windows
             uninstallAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Uninstall All Dependencies",
-                    "This will remove Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
+                    "This will remove Roslyn DLLs, ProBuilder, Cinemachine, VFX Graph, and glTFast. Continue?",
                     "Uninstall All", "Cancel")) return;
                 uninstallAllButton.SetEnabled(false);
                 uninstallAllButton.text = "Removing...";
@@ -918,6 +918,17 @@ namespace MCPForUnity.Editor.Windows
                 "Not installed \u2014 VFX tool falls back to ParticleSystem/LineRenderer",
                 done => InstallUpmPackage("com.unity.visualeffectgraph", done),
                 done => RemoveUpmPackage("com.unity.visualeffectgraph", done));
+
+            // glTFast — uses an assembly type, but also check via UPM package list
+            bool hasGltfast = IsUpmPackageInstalled("com.unity.cloud.gltfast") || Type.GetType("GLTFast.GltfImport, glTFast") != null;
+            AddDependencyRow(content,
+                "glTFast (glTF/GLB import)",
+                "Enables .glb/.gltf model import for the AI Asset Generation tools (asset_gen group).",
+                hasGltfast,
+                "Installed — GLB generation/import works",
+                "Not installed — GLB import is unavailable; FBX still works, or install to enable GLB",
+                done => InstallUpmPackage("com.unity.cloud.gltfast", done),
+                done => RemoveUpmPackage("com.unity.cloud.gltfast", done));
 
             section.Add(content);
             container.Add(section);
