@@ -1,4 +1,4 @@
-<img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
+<img width="820" alt="MCP for Unity" src="docs/images/logo.png" />
 
 | [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
 |----------------------|---------------------------------|
