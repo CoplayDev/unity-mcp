@@ -36,12 +36,13 @@ namespace MCPForUnity.Editor.Services.AssetGen
     }
 
     /// <summary>
-    /// Drives asset-generation jobs on the Unity main thread via EditorApplication.update.
-    /// Each job runs a submit → poll → download → import state machine using a provider
-    /// adapter and an injectable HTTP transport. Because UnityWebRequest completes on the
-    /// main thread, polling Task.IsCompleted from the update loop is main-thread-safe and we
-    /// never block or use threadpool waits. The provider key is read once at submit time and
-    /// held only in memory — never persisted, never logged, never put on the job record.
+    /// Drives asset-generation jobs on the Unity main thread via EditorApplication.update. Each
+    /// job runs a generic submit → poll → (download | inline) → import state machine; the model
+    /// and image paths supply their own submit/poll/import delegates. Because UnityWebRequest
+    /// completes on the main thread, polling Task.IsCompleted from the update loop is
+    /// main-thread-safe — we never block or use threadpool waits. The provider key is read once at
+    /// submit time, captured only inside the submit/poll closures — never stored on the job,
+    /// persisted, or logged.
     /// </summary>
     [InitializeOnLoad]
     public static class AssetGenJobManager
@@ -61,8 +62,6 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
         static AssetGenJobManager()
         {
-            // Restore job records after a domain reload so `status` keeps working. In-flight
-            // runners cannot resume (their Tasks are gone), so mark non-terminal jobs as failed.
             try
             {
                 string index = SessionState.GetString(JobIndexKey, string.Empty);
@@ -73,7 +72,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                     if (string.IsNullOrEmpty(json)) continue;
                     var job = JsonConvert.DeserializeObject<AssetGenJob>(json);
                     if (job == null) continue;
-                    if (job.State != AssetGenJobState.Done && job.State != AssetGenJobState.Failed && job.State != AssetGenJobState.Canceled)
+                    if (!IsTerminal(job.State))
                     {
                         job.State = AssetGenJobState.Failed;
                         job.Error = "Interrupted by an editor reload; please retry.";
@@ -89,47 +88,76 @@ namespace MCPForUnity.Editor.Services.AssetGen
         {
             if (req == null) throw new ArgumentNullException(nameof(req));
             string provider = string.IsNullOrEmpty(req.Provider) ? "tripo" : req.Provider;
-            IModelProviderAdapter adapter = AssetGenProviders.Model(provider); // throws NotSupportedException for unimplemented
+            IModelProviderAdapter adapter = AssetGenProviders.Model(provider); // throws NotSupportedException if unimplemented
 
             var job = NewJob("model", provider, "generate");
             job.Format = string.IsNullOrEmpty(req.Format) ? "glb" : req.Format;
             job.TargetSize = req.TargetSize <= 0 ? 1f : req.TargetSize;
 
-            if (!SecureKeyStore.Current.TryGet(provider, out string apiKey) || string.IsNullOrEmpty(apiKey))
-            {
-                job.State = AssetGenJobState.Failed;
-                job.Error = $"No API key configured for '{provider}'. Add it in the MCP for Unity → Asset Generation tab.";
-                Jobs[job.JobId] = job;
-                Persist(job);
-                return job;
-            }
+            if (!TryResolveKey(provider, job, out string apiKey)) return job;
 
+            IHttpTransport transport = TransportOverrideForTests ?? new UnityWebRequestTransport();
             var runner = new Runner
             {
                 Job = job,
-                Request = req,
-                ApiKey = apiKey,
-                Adapter = adapter,
-                Transport = TransportOverrideForTests ?? new UnityWebRequestTransport(),
-                Cts = new CancellationTokenSource(),
-                Phase = RunnerPhase.Submit,
-                StartedAt = Now(),
+                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
+                ImportFn = ImportOverrideForTests ?? ModelImportPipeline.ImportInto,
+                Transport = transport,
+                OutputFolder = req.OutputFolder,
+                Ext = (job.Format ?? "glb").TrimStart('.'),
+                Name = NameFrom(req.Name, req.Prompt, job.JobId),
+                Subfolder = "Models",
             };
-            Jobs[job.JobId] = job;
-            Runners[job.JobId] = runner;
-            Persist(job);
-            EnsureTicking();
+            Register(job, runner);
             return job;
         }
 
         public static AssetGenJob StartImageGeneration(ImageGenRequest req)
-            => throw new NotSupportedException("Image generation arrives in a later phase.");
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            string provider = string.IsNullOrEmpty(req.Provider) ? "fal" : req.Provider;
+            IImageProviderAdapter adapter = AssetGenProviders.Image(provider); // throws NotSupportedException if unimplemented
+
+            var job = NewJob("image", provider, "generate");
+            job.Format = "png";
+
+            if (!TryResolveKey(provider, job, out string apiKey)) return job;
+
+            IHttpTransport transport = TransportOverrideForTests ?? new UnityWebRequestTransport();
+            bool asSprite = req.AsSprite;
+            bool transparent = req.Transparent;
+            var runner = new Runner
+            {
+                Job = job,
+                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
+                ImportFn = ImportOverrideForTests ?? ((j, path) => ImageImportPipeline.ImportInto(j, path, asSprite, transparent, isColor: true)),
+                Transport = transport,
+                OutputFolder = req.OutputFolder,
+                Ext = "png",
+                Name = NameFrom(req.Name, req.Prompt, job.JobId),
+                Subfolder = "Images",
+            };
+            Register(job, runner);
+            return job;
+        }
 
         public static AssetGenJob StartMarketplaceImport(string uid, float targetSize, string name, string outputFolder)
             => throw new NotSupportedException("Marketplace import arrives in a later phase.");
 
         public static AssetGenJob GetJob(string jobId)
             => string.IsNullOrEmpty(jobId) ? null : (Jobs.TryGetValue(jobId, out var j) ? j : null);
+
+        /// <summary>Most-recent-first snapshot of known jobs (for the GUI readout). Never contains keys.</summary>
+        public static IReadOnlyList<AssetGenJob> RecentJobs(int max = 20)
+        {
+            var all = new List<AssetGenJob>(Jobs.Values);
+            int start = Math.Max(0, all.Count - max);
+            var slice = all.GetRange(start, all.Count - start);
+            slice.Reverse();
+            return slice;
+        }
 
         public static bool Cancel(string jobId)
         {
@@ -156,21 +184,49 @@ namespace MCPForUnity.Editor.Services.AssetGen
         private sealed class Runner
         {
             public AssetGenJob Job;
-            public ModelGenRequest Request;
-            public string ApiKey;
-            public IModelProviderAdapter Adapter;
+            public Func<CancellationToken, Task<string>> SubmitFn;
+            public Func<string, CancellationToken, Task<ProviderPollResult>> PollFn;
+            public Func<AssetGenJob, string, AssetGenJob> ImportFn;
             public IHttpTransport Transport;
-            public CancellationTokenSource Cts;
-            public RunnerPhase Phase;
+            public string OutputFolder;
+            public string Ext;
+            public string Name;
+            public string Subfolder;
+
+            public CancellationTokenSource Cts = new();
+            public RunnerPhase Phase = RunnerPhase.Submit;
             public double StartedAt;
             public double NextPollAt;
             public string ProviderJobId;
             public string DownloadUrl;
+            public byte[] InlineData;
             public string LocalPath;
             public Task<string> SubmitTask;
             public Task<ProviderPollResult> PollTask;
             public Task<HttpResult> DownloadTask;
             public bool Canceled;
+        }
+
+        private static bool TryResolveKey(string provider, AssetGenJob job, out string apiKey)
+        {
+            if (!SecureKeyStore.Current.TryGet(provider, out apiKey) || string.IsNullOrEmpty(apiKey))
+            {
+                job.State = AssetGenJobState.Failed;
+                job.Error = $"No API key configured for '{provider}'. Add it in the MCP for Unity → Asset Generation tab.";
+                Jobs[job.JobId] = job;
+                Persist(job);
+                return false;
+            }
+            return true;
+        }
+
+        private static void Register(AssetGenJob job, Runner runner)
+        {
+            runner.StartedAt = Now();
+            Jobs[job.JobId] = job;
+            Runners[job.JobId] = runner;
+            Persist(job);
+            EnsureTicking();
         }
 
         private static void EnsureTicking()
@@ -188,9 +244,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 _ticking = false;
                 return;
             }
-            // Snapshot keys to allow mutation during iteration.
-            var ids = new List<string>(Runners.Keys);
-            foreach (string id in ids)
+            foreach (string id in new List<string>(Runners.Keys))
             {
                 if (Runners.TryGetValue(id, out var r)) Advance(r);
             }
@@ -220,7 +274,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                     case RunnerPhase.Submit:
                         r.Job.State = AssetGenJobState.Running;
                         Persist(r.Job);
-                        r.SubmitTask = r.Adapter.SubmitAsync(r.Request, r.ApiKey, r.Transport, r.Cts.Token);
+                        r.SubmitTask = r.SubmitFn(r.Cts.Token);
                         r.Phase = RunnerPhase.AwaitSubmit;
                         break;
 
@@ -235,7 +289,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
                     case RunnerPhase.Poll:
                         if (Now() < r.NextPollAt) break;
-                        r.PollTask = r.Adapter.PollAsync(r.ProviderJobId, r.ApiKey, r.Transport, r.Cts.Token);
+                        r.PollTask = r.PollFn(r.ProviderJobId, r.Cts.Token);
                         r.Phase = RunnerPhase.AwaitPoll;
                         break;
 
@@ -247,9 +301,22 @@ namespace MCPForUnity.Editor.Services.AssetGen
                         Persist(r.Job);
                         if (pr.State == ProviderPollState.Succeeded)
                         {
-                            if (string.IsNullOrEmpty(pr.DownloadUrl)) { Fail(r, "Provider succeeded but returned no download url."); break; }
-                            r.DownloadUrl = pr.DownloadUrl;
-                            r.Phase = RunnerPhase.Download;
+                            if (pr.InlineData != null && pr.InlineData.Length > 0)
+                            {
+                                r.LocalPath = WriteFile(r, pr.InlineData);
+                                r.Job.State = AssetGenJobState.Importing;
+                                Persist(r.Job);
+                                r.Phase = RunnerPhase.Import;
+                            }
+                            else if (!string.IsNullOrEmpty(pr.DownloadUrl))
+                            {
+                                r.DownloadUrl = pr.DownloadUrl;
+                                r.Phase = RunnerPhase.Download;
+                            }
+                            else
+                            {
+                                Fail(r, "Provider succeeded but returned no result data.");
+                            }
                         }
                         else if (pr.State == ProviderPollState.Failed)
                         {
@@ -277,15 +344,14 @@ namespace MCPForUnity.Editor.Services.AssetGen
                             Fail(r, $"Download failed (HTTP {res?.Status}).");
                             break;
                         }
-                        r.LocalPath = WriteModelFile(r, res.Body);
+                        r.LocalPath = WriteFile(r, res.Body);
                         r.Job.State = AssetGenJobState.Importing;
                         Persist(r.Job);
                         r.Phase = RunnerPhase.Import;
                         break;
 
                     case RunnerPhase.Import:
-                        Func<AssetGenJob, string, AssetGenJob> import = ImportOverrideForTests ?? ModelImportPipeline.ImportInto;
-                        AssetGenJob imported = import(r.Job, r.LocalPath);
+                        AssetGenJob imported = r.ImportFn(r.Job, r.LocalPath);
                         if (imported != null) r.Job = imported;
                         if (r.Job.State != AssetGenJobState.Failed)
                         {
@@ -303,16 +369,15 @@ namespace MCPForUnity.Editor.Services.AssetGen
             }
         }
 
-        private static string WriteModelFile(Runner r, byte[] bytes)
+        private static string WriteFile(Runner r, byte[] bytes)
         {
-            string ext = string.IsNullOrEmpty(r.Job.Format) ? "glb" : r.Job.Format.TrimStart('.').ToLowerInvariant();
-            string root = !string.IsNullOrEmpty(r.Request.OutputFolder) ? r.Request.OutputFolder
-                                                                        : (AssetGenPrefs.OutputRoot + "/Models");
-            if (!root.Replace('\\', '/').StartsWith("Assets")) root = AssetGenPrefs.OutputRoot + "/Models";
+            string ext = string.IsNullOrEmpty(r.Ext) ? "bin" : r.Ext.TrimStart('.').ToLowerInvariant();
+            string root = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
+                                                                : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
+            if (!root.Replace('\\', '/').StartsWith("Assets")) root = AssetGenPrefs.OutputRoot + "/" + r.Subfolder;
             string absRoot = ToAbsolute(root);
             Directory.CreateDirectory(absRoot);
-            string baseName = SanitizeName(!string.IsNullOrEmpty(r.Request.Name) ? r.Request.Name
-                              : (!string.IsNullOrEmpty(r.Request.Prompt) ? r.Request.Prompt : "model_" + r.Job.JobId.Substring(0, 8)));
+            string baseName = SanitizeName(r.Name);
             string fileName = baseName + "." + ext;
             string abs = Path.Combine(absRoot, fileName);
             int n = 1;
@@ -321,16 +386,23 @@ namespace MCPForUnity.Editor.Services.AssetGen
             return (root.TrimEnd('/') + "/" + fileName).Replace('\\', '/');
         }
 
+        private static string NameFrom(string explicitName, string prompt, string jobId)
+        {
+            if (!string.IsNullOrWhiteSpace(explicitName)) return explicitName;
+            if (!string.IsNullOrWhiteSpace(prompt)) return prompt;
+            return "asset_" + jobId.Substring(0, 8);
+        }
+
         private static string ToAbsolute(string projectRelative)
         {
-            string dataPath = Application.dataPath; // ".../Assets"
+            string dataPath = Application.dataPath;
             string projectRoot = dataPath.Substring(0, dataPath.Length - "Assets".Length);
             return Path.Combine(projectRoot, projectRelative);
         }
 
         private static string SanitizeName(string raw)
         {
-            if (string.IsNullOrWhiteSpace(raw)) return "model";
+            if (string.IsNullOrWhiteSpace(raw)) return "asset";
             var sb = new System.Text.StringBuilder();
             foreach (char c in raw.Trim())
             {
@@ -339,7 +411,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 if (sb.Length >= 48) break;
             }
             string s = sb.ToString().Trim('_', '-');
-            return string.IsNullOrEmpty(s) ? "model" : s;
+            return string.IsNullOrEmpty(s) ? "asset" : s;
         }
 
         private static void Fail(Runner r, string message)

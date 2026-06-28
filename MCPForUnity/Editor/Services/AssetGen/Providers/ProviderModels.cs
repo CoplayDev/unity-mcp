@@ -20,6 +20,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         public ProviderPollState State;
         public float Progress;
         public string DownloadUrl;
+        /// <summary>Inline result bytes for synchronous providers that return base64 (e.g. OpenRouter),
+        /// so the job manager skips the download step. Takes precedence over <see cref="DownloadUrl"/>.</summary>
+        public byte[] InlineData;
         public string Error;
     }
 
@@ -49,6 +52,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         public string ImageUrl;
         public string Model;
         public bool Transparent;
+        public bool AsSprite = true; // import as Sprite (2D/UI) vs Default texture
         public int Width;
         public int Height;
         public string Name;

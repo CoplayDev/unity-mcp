@@ -27,7 +27,17 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         }
 
         public static IImageProviderAdapter Image(string id)
-            => throw new NotSupportedException($"Image provider '{id}' is not implemented yet (Phase 7).");
+        {
+            switch ((id ?? string.Empty).ToLowerInvariant())
+            {
+                case "fal":
+                    return new FalAdapter();
+                case "openrouter":
+                    return new OpenRouterAdapter();
+                default:
+                    throw new NotSupportedException($"Unknown image provider '{id}'.");
+            }
+        }
 
         public static IMarketplaceProviderAdapter Marketplace(string id)
             => throw new NotSupportedException($"Marketplace provider '{id}' is not implemented yet (Phase 6).");
