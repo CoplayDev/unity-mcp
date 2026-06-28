@@ -12,7 +12,6 @@ const ROOT = path.resolve(HERE, '..', '..');
 const IMG = path.join(ROOT, 'website', 'static', 'img');
 
 const full = path.join(IMG, 'logo-mark.svg');
-const mini = path.join(IMG, 'logo-mark-mini.svg');
 
 async function rasterize(src, size, out) {
   const svg = await readFile(src);
@@ -24,8 +23,8 @@ async function rasterize(src, size, out) {
 }
 
 await mkdir(IMG, { recursive: true });
-await rasterize(mini, 48, path.join(IMG, 'favicon.png'));
-await rasterize(mini, 32, path.join(IMG, 'favicon-32.png'));
+await rasterize(full, 48, path.join(IMG, 'favicon.png'));
+await rasterize(full, 32, path.join(IMG, 'favicon-32.png'));
 await rasterize(full, 180, path.join(IMG, 'apple-touch-icon.png'));
 await rasterize(full, 192, path.join(IMG, 'android-chrome-192.png'));
 await rasterize(full, 512, path.join(IMG, 'android-chrome-512.png'));

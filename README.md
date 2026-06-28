@@ -7,12 +7,12 @@
 
 <div align="center">
 
-[English](README.md) &nbsp;·&nbsp; [简体中文](docs/i18n/README-zh.md)
+[English](README.md) <img src="docs/images/connector.svg" alt="↔" height="14"> [简体中文](docs/i18n/README-zh.md)
 
 #### Proudly sponsored and maintained by [Aura](https://www.tryaura.dev/) — the AI assistant for Unreal & Unity.
 ##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source project from the makers of MCP for Unity.
 
-### [Discord](https://discord.gg/y4p8KfzrN4) &nbsp;·&nbsp; [Wiki](https://coplaydev.github.io/unity-mcp/)
+### [Discord](https://discord.gg/y4p8KfzrN4) <img src="docs/images/connector.svg" alt="↔" height="20"> [Wiki](https://coplaydev.github.io/unity-mcp/)
 
 </div>
 
@@ -26,7 +26,7 @@
 
 <!-- recent-updates:start -->
 <details>
-<summary><strong>Recent Updates</strong></summary>
+<summary><h3>Recent Updates</h3></summary>
 
 * **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
 * **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
