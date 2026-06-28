@@ -28,32 +28,116 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                     return Fail(job, "Generated file is not under the Assets folder.");
 
                 string ext = Path.GetExtension(rel).ToLowerInvariant();
-                bool isGltf = ext == ".glb" || ext == ".gltf";
+                if (ext == ".zip")
+                    return ImportArchive(job, rel);
 
-                if (isGltf && !IsGltfastAvailable())
-                {
-                    return Fail(job,
-                        "GLB import requires glTFast. Install it from the MCP for Unity → Dependencies tab, or choose FBX output.");
-                }
-
-                AssetDatabase.ImportAsset(rel, ImportAssetOptions.ForceUpdate);
-
-                if (!isGltf)
-                    ApplyModelImporterSettings(rel, job);
-
-                job.AssetPath = rel;
-                job.AssetGuid = AssetDatabase.AssetPathToGUID(rel);
-                if (string.IsNullOrEmpty(job.AssetGuid))
-                    return Fail(job, "Imported the file but Unity did not register it as an asset.");
-
-                if (job.State != AssetGenJobState.Failed)
-                    job.State = AssetGenJobState.Done;
-                return job;
+                return ImportModelFile(job, rel, ext);
             }
             catch (Exception e)
             {
                 return Fail(job, SecretRedactor.Scrub(e.Message));
             }
+        }
+
+        private static AssetGenJob ImportModelFile(AssetGenJob job, string rel, string ext)
+        {
+            bool isGltf = ext == ".glb" || ext == ".gltf";
+
+            if (isGltf && !IsGltfastAvailable())
+            {
+                return Fail(job,
+                    "GLB import requires glTFast. Install it from the MCP for Unity → Dependencies tab, or choose FBX output.");
+            }
+
+            AssetDatabase.ImportAsset(rel, ImportAssetOptions.ForceUpdate);
+
+            if (!isGltf)
+                ApplyModelImporterSettings(rel, job);
+
+            job.AssetPath = rel;
+            job.AssetGuid = AssetDatabase.AssetPathToGUID(rel);
+            if (string.IsNullOrEmpty(job.AssetGuid))
+                return Fail(job, "Imported the file but Unity did not register it as an asset.");
+
+            if (job.State != AssetGenJobState.Failed)
+                job.State = AssetGenJobState.Done;
+            return job;
+        }
+
+        /// <summary>
+        /// Unpack a downloaded archive (Sketchfab/Hunyuan ship .zip) into a sibling folder named
+        /// after the archive, import it, then locate the first model file inside and import that.
+        /// FBX/OBJ are preferred over glTF; a glTF-only archive still requires glTFast.
+        /// </summary>
+        private static AssetGenJob ImportArchive(AssetGenJob job, string zipRel)
+        {
+            string zipAbs = ToAbsolute(zipRel);
+            if (!File.Exists(zipAbs))
+                return Fail(job, "Downloaded archive was not found on disk.");
+
+            string folderRel = zipRel.Substring(0, zipRel.Length - ".zip".Length);
+            string folderAbs = ToAbsolute(folderRel);
+
+            Directory.CreateDirectory(folderAbs);
+            SafeZipExtractor.ExtractTo(zipAbs, folderAbs);
+
+            AssetDatabase.Refresh();
+            AssetDatabase.ImportAsset(folderRel, ImportAssetOptions.ImportRecursive | ImportAssetOptions.ForceUpdate);
+
+            string modelRel = FindFirstModel(folderAbs);
+            if (string.IsNullOrEmpty(modelRel))
+                return Fail(job, "Archive extracted but no model file (.fbx/.obj/.glb/.gltf) was found inside.");
+
+            string ext = Path.GetExtension(modelRel).ToLowerInvariant();
+            bool isGltf = ext == ".glb" || ext == ".gltf";
+            if (isGltf && !IsGltfastAvailable())
+            {
+                return Fail(job,
+                    "This model is glTF (.glb/.gltf), which requires glTFast. Install it from the MCP for Unity → Dependencies tab.");
+            }
+
+            AssetDatabase.ImportAsset(modelRel, ImportAssetOptions.ForceUpdate);
+
+            if (!isGltf)
+                ApplyModelImporterSettings(modelRel, job);
+
+            job.AssetPath = modelRel;
+            job.AssetGuid = AssetDatabase.AssetPathToGUID(modelRel);
+            if (string.IsNullOrEmpty(job.AssetGuid))
+                return Fail(job, "Imported the extracted model but Unity did not register it as an asset.");
+
+            if (job.State != AssetGenJobState.Failed)
+                job.State = AssetGenJobState.Done;
+            return job;
+        }
+
+        /// <summary>
+        /// Walk the extracted directory for a model file, preferring FBX/OBJ (built-in importer)
+        /// over glTF (needs glTFast). Returns a project-relative path or null when none found.
+        /// </summary>
+        private static string FindFirstModel(string folderAbs)
+        {
+            string[] all;
+            try { all = Directory.GetFiles(folderAbs, "*", SearchOption.AllDirectories); }
+            catch { return null; }
+
+            string firstGltf = null;
+            foreach (string abs in all)
+            {
+                string e = Path.GetExtension(abs).ToLowerInvariant();
+                if (e == ".fbx" || e == ".obj")
+                    return ToProjectRelative(abs);
+                if (firstGltf == null && (e == ".glb" || e == ".gltf"))
+                    firstGltf = abs;
+            }
+            return firstGltf == null ? null : ToProjectRelative(firstGltf);
+        }
+
+        private static string ToAbsolute(string projectRelative)
+        {
+            string dataPath = Application.dataPath.Replace('\\', '/');
+            string projectRoot = dataPath.Substring(0, dataPath.Length - "Assets".Length);
+            return Path.Combine(projectRoot, projectRelative).Replace('\\', '/');
         }
 
         private static void ApplyModelImporterSettings(string rel, AssetGenJob job)

@@ -144,7 +144,28 @@ namespace MCPForUnity.Editor.Services.AssetGen
         }
 
         public static AssetGenJob StartMarketplaceImport(string uid, float targetSize, string name, string outputFolder)
-            => throw new NotSupportedException("Marketplace import arrives in a later phase.");
+        {
+            if (string.IsNullOrEmpty(uid)) throw new ArgumentException("uid required");
+            var adapter = AssetGenProviders.Marketplace("sketchfab"); // throws NotSupported if unimplemented
+            var job = NewJob("marketplace", "sketchfab", "import");
+            job.TargetSize = targetSize <= 0 ? 1f : targetSize;
+            if (!TryResolveKey("sketchfab", job, out string apiKey)) return job;
+            var transport = TransportOverrideForTests ?? new UnityWebRequestTransport();
+            var runner = new Runner
+            {
+                Job = job,
+                SubmitFn = ct => adapter.ResolveDownloadUrlAsync(uid, apiKey, transport, ct),   // returns the zip/gltf URL as providerJobId
+                PollFn = (pid, ct) => Task.FromResult(new ProviderPollResult { State = ProviderPollState.Succeeded, Progress = 1f, DownloadUrl = pid, ResultExt = "zip" }),
+                ImportFn = ImportOverrideForTests ?? ModelImportPipeline.ImportInto,
+                Transport = transport,
+                OutputFolder = outputFolder,
+                Ext = "zip",
+                Name = NameFrom(name, uid, job.JobId),
+                Subfolder = "Sketchfab",
+            };
+            Register(job, runner);
+            return job;
+        }
 
         public static AssetGenJob GetJob(string jobId)
             => string.IsNullOrEmpty(jobId) ? null : (Jobs.TryGetValue(jobId, out var j) ? j : null);
@@ -190,6 +211,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             public IHttpTransport Transport;
             public string OutputFolder;
             public string Ext;
+            public string OverrideExt;
             public string Name;
             public string Subfolder;
 
@@ -301,6 +323,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                         Persist(r.Job);
                         if (pr.State == ProviderPollState.Succeeded)
                         {
+                            r.OverrideExt = pr.ResultExt;
                             if (pr.InlineData != null && pr.InlineData.Length > 0)
                             {
                                 r.LocalPath = WriteFile(r, pr.InlineData);
@@ -371,7 +394,8 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
         private static string WriteFile(Runner r, byte[] bytes)
         {
-            string ext = string.IsNullOrEmpty(r.Ext) ? "bin" : r.Ext.TrimStart('.').ToLowerInvariant();
+            string chosen = !string.IsNullOrEmpty(r.OverrideExt) ? r.OverrideExt : r.Ext;
+            string ext = string.IsNullOrEmpty(chosen) ? "bin" : chosen.TrimStart('.').ToLowerInvariant();
             string root = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
                                                                 : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
             if (!root.Replace('\\', '/').StartsWith("Assets")) root = AssetGenPrefs.OutputRoot + "/" + r.Subfolder;

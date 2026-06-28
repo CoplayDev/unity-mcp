@@ -19,8 +19,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 case "tripo":
                     return new TripoAdapter();
                 case "meshy":
+                    return new MeshyAdapter();
                 case "hunyuan":
-                    throw new NotSupportedException($"Model provider '{id}' is not implemented yet.");
+                    return new HunyuanAdapter();
                 default:
                     throw new NotSupportedException($"Unknown model provider '{id}'.");
             }
@@ -40,7 +41,15 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         }
 
         public static IMarketplaceProviderAdapter Marketplace(string id)
-            => throw new NotSupportedException($"Marketplace provider '{id}' is not implemented yet (Phase 6).");
+        {
+            switch ((id ?? string.Empty).ToLowerInvariant())
+            {
+                case "sketchfab":
+                    return new SketchfabAdapter();
+                default:
+                    throw new NotSupportedException($"Unknown marketplace provider '{id}'.");
+            }
+        }
 
         public static IReadOnlyList<ProviderInfo> List()
         {
