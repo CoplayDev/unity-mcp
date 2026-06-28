@@ -7,12 +7,10 @@
 
 <div align="center">
 
-[English](README.md) <img src="docs/images/connector.svg" alt="↔" height="14"> [简体中文](docs/i18n/README-zh.md)
+[English](README.md) <img src="docs/images/connector.svg" alt="↔" height="14"> [简体中文](docs/i18n/README-zh.md) &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; [Discord](https://discord.gg/y4p8KfzrN4) <img src="docs/images/connector.svg" alt="↔" height="14"> [Wiki](https://coplaydev.github.io/unity-mcp/)
 
 #### Proudly sponsored and maintained by [Aura](https://www.tryaura.dev/) — the AI assistant for Unreal & Unity.
 ##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source project from the makers of MCP for Unity.
-
-### [Discord](https://discord.gg/y4p8KfzrN4) <img src="docs/images/connector.svg" alt="↔" height="20"> [Wiki](https://coplaydev.github.io/unity-mcp/)
 
 </div>
 
@@ -26,7 +24,7 @@
 
 <!-- recent-updates:start -->
 <details>
-<summary><h3>Recent Updates</h3></summary>
+<summary><strong>Recent Updates</strong></summary>
 
 * **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
 * **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
@@ -49,29 +47,14 @@ Control the Unity Editor in natural language from any MCP client — create scen
 
 ---
 
-## Supported clients & versions
+## Quickstart
 
-Works with **any MCP client** — including Claude Desktop & Claude Code, Cursor, VS Code (Copilot), Windsurf, Cline, Gemini CLI, Qwen Code, Copilot CLI, OpenClaw, and Antigravity. One step sets them all up: **Window → MCP for Unity → Configure All Detected Clients**.
+**Requirements:** Unity **2021.3 LTS → 6.x** · Python **3.10+** (via [`uv`](https://docs.astral.sh/uv/)). Works with **any MCP client** — Claude Desktop & Code, Cursor, VS Code, Windsurf, Cline, Gemini CLI, and more.
 
-**Requirements:** Unity **2021.3 LTS → 6.x** · Python **3.10+** (managed via [`uv`](https://docs.astral.sh/uv/)).
-
----
-
-## 60-second quickstart
-
-**Prerequisites:** Unity 2021.3 LTS+, an MCP client, and [uv](https://docs.astral.sh/uv/) (auto-installed if missing).
-
-1. **Install the package** (Unity → Package Manager → Add from git URL):
-   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta`
-2. **Configure your client:** `Window → MCP for Unity → Configure All Detected Clients`.
-3. **Prompt it:** *"Create a cube at the origin and add a Rigidbody."*
-   You should see the cube appear in the scene within a couple of seconds.
-
-<details>
-<summary>Alternative install (OpenUPM)</summary>
-
-- **OpenUPM:** `openupm add com.coplaydev.unity-mcp`
-</details>
+1. **Install** — Unity → Package Manager → Add from git URL:
+   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta` &nbsp;_(or `openupm add com.coplaydev.unity-mcp`)_
+2. **Configure** — `Window → MCP for Unity → Configure All Detected Clients`.
+3. **Prompt** — *"Create a cube at the origin and add a Rigidbody."* The cube appears in seconds.
 
 ---
 
