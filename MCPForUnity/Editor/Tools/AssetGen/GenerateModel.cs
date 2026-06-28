@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
     /// <summary>
-    /// 3D model generation (Tripo/Meshy/Hunyuan). Generation is triggered here (never from
+    /// 3D model generation (Tripo/Meshy). Generation is triggered here (never from
     /// the GUI); the C# side reads the provider key from the secure store and runs the job.
     /// Long-running: returns a job_id immediately and the client polls the `status` action.
     /// </summary>

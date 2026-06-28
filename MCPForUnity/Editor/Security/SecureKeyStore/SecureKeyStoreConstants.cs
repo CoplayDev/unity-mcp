@@ -9,7 +9,7 @@ namespace MCPForUnity.Editor.Security
         /// <summary>Known asset-generation provider ids (lowercase).</summary>
         internal static readonly string[] ProviderIds =
         {
-            "tripo", "meshy", "hunyuan", "sketchfab", "fal", "openrouter"
+            "tripo", "meshy", "sketchfab", "fal", "openrouter"
         };
     }
 }

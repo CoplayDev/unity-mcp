@@ -25,7 +25,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             ("tripo", "Tripo"),
             ("meshy", "Meshy"),
-            ("hunyuan", "Hunyuan"),
             ("sketchfab", "Sketchfab"),
         };
 

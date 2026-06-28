@@ -20,7 +20,7 @@ def asset_gen():
 
 
 @asset_gen.command("generate-model")
-@click.option("--provider", default=None, help="Provider id (tripo, meshy, hunyuan).")
+@click.option("--provider", default=None, help="Provider id (tripo, meshy).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")
 @click.option("--prompt", default=None, help="Text prompt for text->3D.")
 @click.option("--image-path", default=None, help="Source image path for image->3D.")

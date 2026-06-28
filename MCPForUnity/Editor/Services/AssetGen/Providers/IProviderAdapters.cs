@@ -5,7 +5,7 @@ using MCPForUnity.Editor.Services.AssetGen.Http;
 namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
-    /// A generative 3D model provider (Tripo, Meshy, Hunyuan, ...). Submit mints a provider-side
+    /// A generative 3D model provider (Tripo, Meshy, ...). Submit mints a provider-side
     /// job id; poll reports progress and, on success, the download URL. The api key is passed in
     /// at call time and never cached on the adapter.
     /// </summary>

@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public sealed class OpenRouterAdapter : IImageProviderAdapter
     {
         private const string Endpoint = "https://openrouter.ai/api/v1/chat/completions";
-        private const string DefaultModel = "google/gemini-2.5-flash-image-preview";
+        private const string DefaultModel = "google/gemini-2.5-flash-image";
 
         public string Id => "openrouter";
 

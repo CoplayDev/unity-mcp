@@ -42,7 +42,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (image)
             {
                 url = ImageEndpoint;
-                body = new JObject { ["image_url"] = req.ImageUrl };
+                body = new JObject { ["image_url"] = req.ImageUrl, ["ai_model"] = "meshy-6" };
             }
             else
             {
@@ -51,7 +51,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 {
                     ["mode"] = "preview",
                     ["prompt"] = req.Prompt ?? string.Empty,
-                    ["art_style"] = "realistic"
+                    ["ai_model"] = "meshy-6"
                 };
             }
 

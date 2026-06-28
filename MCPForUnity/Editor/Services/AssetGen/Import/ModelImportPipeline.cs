@@ -65,7 +65,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
         }
 
         /// <summary>
-        /// Unpack a downloaded archive (Sketchfab/Hunyuan ship .zip) into a sibling folder named
+        /// Unpack a downloaded archive (Sketchfab ships .zip) into a sibling folder named
         /// after the archive, import it, then locate the first model file inside and import that.
         /// FBX/OBJ are preferred over glTF; a glTF-only archive still requires glTFast.
         /// </summary>

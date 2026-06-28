@@ -67,7 +67,7 @@ Bring-your-own-key generation of **3D models** (text→3D and image→3D), **2D 
 
 **Providers**
 
-- **3D generation:** Tripo (default), Meshy, Hunyuan
+- **3D generation:** Tripo (default), Meshy
 - **3D import:** Sketchfab
 - **2D image:** fal.ai (default), OpenRouter
 

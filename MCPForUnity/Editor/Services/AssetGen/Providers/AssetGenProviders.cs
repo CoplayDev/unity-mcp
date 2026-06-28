@@ -5,10 +5,10 @@ using MCPForUnity.Editor.Security;
 namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
-    /// Factory + registry for asset-gen provider adapters. Only Tripo is implemented in this
-    /// phase; the rest throw <see cref="NotSupportedException"/> until their phases land, while
-    /// still appearing in <see cref="List"/> so the GUI/CLI can advertise them. <see cref="List"/>
-    /// reports <c>Configured</c> existence only and never exposes a key value.
+    /// Factory + registry for asset-gen provider adapters. Resolves a provider id to its adapter
+    /// (model: tripo/meshy; image: fal/openrouter; marketplace: sketchfab); unknown ids throw
+    /// <see cref="NotSupportedException"/>. <see cref="List"/> advertises providers and reports
+    /// <c>Configured</c> existence only — never a key value.
     /// </summary>
     public static class AssetGenProviders
     {
@@ -20,8 +20,6 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     return new TripoAdapter();
                 case "meshy":
                     return new MeshyAdapter();
-                case "hunyuan":
-                    return new HunyuanAdapter();
                 default:
                     throw new NotSupportedException($"Unknown model provider '{id}'.");
             }
@@ -57,7 +55,6 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 new ProviderInfo { Id = "tripo", Kind = "model", Configured = IsConfigured("tripo"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "meshy", Kind = "model", Configured = IsConfigured("meshy"), Capabilities = new[] { "text", "image" } },
-                new ProviderInfo { Id = "hunyuan", Kind = "model", Configured = IsConfigured("hunyuan"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "sketchfab", Kind = "marketplace", Configured = IsConfigured("sketchfab"), Capabilities = new[] { "search", "import" } },
                 new ProviderInfo { Id = "fal", Kind = "image", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },

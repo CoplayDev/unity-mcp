@@ -7,7 +7,7 @@ namespace MCPForUnityTests.Editor.AssetGen
 {
     public class FalAdapterTests
     {
-        private const string Resp = "https://queue.fal.run/fal-ai/flux/dev/requests/r1";
+        private const string Resp = "https://queue.fal.run/fal-ai/flux-2/requests/r1";
 
         private static HttpResult Json(string body) => new HttpResult { Status = 200, IsSuccess = true, Text = body };
 
@@ -27,7 +27,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(Resp, pid);
             HttpRequestSpec sent = fake.RecordedRequests[0];
             Assert.AreEqual("POST", sent.Method);
-            StringAssert.Contains("fal-ai/flux/dev", sent.Url);
+            StringAssert.Contains("fal-ai/flux-2", sent.Url);
             Assert.IsTrue(sent.Headers.ContainsKey("Authorization"));
             StringAssert.StartsWith("Key ", sent.Headers["Authorization"]);
         }

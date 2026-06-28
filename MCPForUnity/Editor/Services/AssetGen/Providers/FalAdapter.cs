@@ -17,7 +17,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public sealed class FalAdapter : IImageProviderAdapter
     {
         private const string QueueBase = "https://queue.fal.run/";
-        private const string DefaultModel = "fal-ai/flux/dev";
+        // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
+        // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
+        private const string DefaultModel = "fal-ai/flux-2";
 
         public string Id => "fal";
 

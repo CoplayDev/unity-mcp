@@ -67,8 +67,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void MultiSecret_JsonBlob_RoundTrips()
         {
             string blob = "{\"secretId\":\"AKID123\",\"secretKey\":\"SK456\"}";
-            _store.Set("hunyuan", blob);
-            Assert.IsTrue(_store.TryGet("hunyuan", out string v));
+            _store.Set("tripo", blob);
+            Assert.IsTrue(_store.TryGet("tripo", out string v));
             Assert.AreEqual(blob, v);
         }
 

@@ -24,7 +24,7 @@ namespace MCPForUnityTests.Editor.AssetGen
         [Test]
         public void Model_Unimplemented_Throws()
         {
-            Assert.Throws<NotSupportedException>(() => AssetGenProviders.Model("meshy"));
+            Assert.Throws<NotSupportedException>(() => AssetGenProviders.Model("hunyuan"));
         }
 
         [Test]

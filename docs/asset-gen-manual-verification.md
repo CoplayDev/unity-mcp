@@ -52,15 +52,6 @@ genuine provider keys and an interactive Editor before shipping.
 - [ ] `generate_model(provider=meshy, mode=text, prompt="...")`, poll status.
 - [ ] Confirm the model imports.
 
-## Hunyuan (3D — KNOWN RISK)
-
-- [ ] Enter the Tencent `SecretId` + `SecretKey`.
-- [ ] `generate_model(provider=hunyuan, ...)`, poll status.
-- [ ] **If it fails with a signature error:** the TC3 signer currently signs two headers
-      (`content-type;host`), but Tencent's current docs show three
-      (`content-type;host;x-tc-action`). The signer likely needs `x-tc-action` added to
-      both `SignedHeaders` and the canonical headers block.
-
 ## Multi-agent / security spot-check
 
 - [ ] Confirm no key value ever appears in MCP tool output.

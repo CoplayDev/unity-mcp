@@ -18,7 +18,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public sealed class TripoAdapter : IModelProviderAdapter
     {
         private const string TaskEndpoint = "https://api.tripo3d.ai/v2/openapi/task";
-        private const string ModelVersion = "v2.5-20250123";
+        // Current recommended Tripo model (v3.1). Premium alternative: P1-20260311.
+        private const string ModelVersion = "v3.1-20260211";
 
         public string Id => "tripo";
 

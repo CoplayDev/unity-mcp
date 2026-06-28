@@ -63,8 +63,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         [Test]
         public void Generate_UnimplementedProvider_ReturnsError()
         {
-            _store.Set("meshy", "k");
-            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "text", ["prompt"] = "a tree" });
+            _store.Set("hunyuan", "k");
+            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "hunyuan", ["mode"] = "text", ["prompt"] = "a tree" });
             Assert.AreEqual(false, (bool)resp["success"]);
         }
 
