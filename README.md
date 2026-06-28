@@ -89,6 +89,10 @@ import_model    action=search query="wooden chair"   → action=import uid=<from
 
 Your API keys never leave the Editor and never cross the MCP bridge.
 
+**Blender handoff:** With BlenderMCP connected, use the `blender-to-unity` skill to export
+the current Blender model and import it via `import_model_file` (defaults to FBX). BlenderMCP
+handles modeling/generation; MCP for Unity handles import + scene placement.
+
 ---
 
 ## Community
