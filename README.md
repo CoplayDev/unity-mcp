@@ -5,11 +5,12 @@
   </picture>
 </p>
 
-| [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
-|----------------------|---------------------------------|
+<div align="center">
+
+[English](README.md) &nbsp;·&nbsp; [简体中文](docs/i18n/README-zh.md)
 
 #### Proudly sponsored and maintained by [Aura](https://www.tryaura.dev/) — the AI assistant for Unreal & Unity.
-##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source MCP/AI project from the makers of MCP for Unity.
+##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source project from the makers of MCP for Unity.
 
 [![Docs](https://img.shields.io/badge/Docs-unity--mcp-4f46e5)](https://coplaydev.github.io/unity-mcp/)
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
@@ -23,9 +24,13 @@
 [![OpenUPM](https://img.shields.io/npm/v/com.coplaydev.unity-mcp?label=OpenUPM&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.coplaydev.unity-mcp/)
 [![Stars](https://img.shields.io/github/stars/CoplayDev/unity-mcp?style=flat)](https://github.com/CoplayDev/unity-mcp/stargazers)
 
-**Create your Unity apps with LLMs.** MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate workflows.
+</div>
 
-<img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
+<p align="center"><b>Create your Unity apps with LLMs.</b> MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via the <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a>. Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate workflows.</p>
+
+<p align="center">
+  <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
+</p>
 
 ---
 
@@ -55,18 +60,9 @@ editor control, console, menus), **scripting_ext**, **vfx** (shaders, textures),
 
 ## Supported clients & versions
 
-| MCP client | Auto-configure | Notes |
-|---|---|---|
-| Claude Desktop / Claude Code | ✅ | stdio |
-| Cursor | ✅ | stdio |
-| VS Code (Copilot) | ✅ | stdio |
-| Windsurf | ✅ | stdio |
-| Cline | ✅ | stdio |
-| Gemini CLI / Qwen Code | ✅ | stdio |
-| Copilot CLI / OpenClaw / Antigravity | ✅ | stdio |
+Works with **any MCP client** — including Claude Desktop & Claude Code, Cursor, VS Code (Copilot), Windsurf, Cline, Gemini CLI, Qwen Code, Copilot CLI, OpenClaw, and Antigravity. One step sets them all up: **Window → MCP for Unity → Configure All Detected Clients**.
 
-**Requirements:** Unity **2021.3 LTS → Unity 6.x**, Python **3.10+** (managed via `uv`).
-Use **Window → MCP for Unity → Configure All Detected Clients** to set up every detected client at once.
+**Requirements:** Unity **2021.3 LTS → 6.x** · Python **3.10+** (managed via [`uv`](https://docs.astral.sh/uv/)).
 
 ---
 
@@ -91,20 +87,9 @@ Use **Window → MCP for Unity → Configure All Detected Clients** to set up ev
 
 ## How it works
 
-```mermaid
-flowchart LR
-  A[AI assistant<br/>Claude · Cursor · …] -- MCP (stdio/HTTP) --> B[Python server]
-  B -- WebSocket + HTTP --> C[Unity Editor plugin]
-  C -- Editor API --> D[Scene · Assets · Scripts]
-```
+Your prompt → **MCP client** (Claude, Cursor, …) → **MCP for Unity server** → **Unity Editor plugin** → your **scenes, assets & scripts**.
 
----
-
-## How it compares
-
-- **MCP for Unity** — free, MIT, MCP-native Editor control from any client.
-- **[Aura for Unity](https://www.tryaura.dev/)** — premium in-Editor AI assistant (sponsor).
-- **Hand-rolled Editor scripting** — full control, but you build and maintain everything.
+See the [architecture overview](https://coplaydev.github.io/unity-mcp/architecture/transports) for transports, multi-instance routing, and internals.
 
 ---
 

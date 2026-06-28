@@ -5,8 +5,9 @@
   </picture>
 </p>
 
-| [English](../../README.md) | [简体中文](README-zh.md) |
-|----------------------|---------------------------------|
+<div align="center">
+
+[English](../../README.md) &nbsp;·&nbsp; [简体中文](README-zh.md)
 
 #### 由 [Aura](https://www.tryaura.dev/) 荣誉赞助并维护 —— 面向 Unreal 与 Unity 的 AI 助手。
 ##### 别错过 [Godot AI](https://github.com/hi-godot/godot-ai) 🤖，MCP for Unity 团队推出的全新开源 MCP/AI 项目！
@@ -23,9 +24,13 @@
 [![OpenUPM](https://img.shields.io/npm/v/com.coplaydev.unity-mcp?label=OpenUPM&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.coplaydev.unity-mcp/)
 [![Stars](https://img.shields.io/github/stars/CoplayDev/unity-mcp?style=flat)](https://github.com/CoplayDev/unity-mcp/stargazers)
 
-**用大语言模型创建你的 Unity 应用！** MCP for Unity 通过 [Model Context Protocol](https://modelcontextprotocol.io/introduction) 将 AI 助手（Claude、Cursor、VS Code 等）与你的 Unity Editor 连接起来。为你的大语言模型提供管理资源、控制场景、编辑脚本和自动化任务的工具。
+</div>
 
-<img alt="MCP for Unity building a scene" src="../images/building_scene.gif">
+<p align="center"><b>用大语言模型创建你的 Unity 应用！</b> MCP for Unity 通过 <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a> 将 AI 助手（Claude、Cursor、VS Code 等）与你的 Unity Editor 连接起来。为你的大语言模型提供管理资源、控制场景、编辑脚本和自动化任务的工具。</p>
+
+<p align="center">
+  <img alt="MCP for Unity building a scene" src="../images/building_scene.gif">
+</p>
 
 ---
 
@@ -60,18 +65,9 @@
 
 ## 支持的客户端和版本
 
-| MCP 客户端 | 自动配置 | 备注 |
-|---|---|---|
-| Claude Desktop / Claude Code | ✅ | stdio |
-| Cursor | ✅ | stdio |
-| VS Code (Copilot) | ✅ | stdio |
-| Windsurf | ✅ | stdio |
-| Cline | ✅ | stdio |
-| Gemini CLI / Qwen Code | ✅ | stdio |
-| Copilot CLI / OpenClaw / Antigravity | ✅ | stdio |
+支持**任意 MCP 客户端** —— 包括 Claude Desktop 与 Claude Code、Cursor、VS Code（Copilot）、Windsurf、Cline、Gemini CLI、Qwen Code、Copilot CLI、OpenClaw 和 Antigravity。一步即可全部配置：**Window → MCP for Unity → Configure All Detected Clients**。
 
-**环境要求：** Unity **2021.3 LTS → Unity 6.x**，Python **3.10+**（通过 `uv` 管理）。
-使用 **Window → MCP for Unity → Configure All Detected Clients** 一键配置所有已检测到的客户端。
+**环境要求：** Unity **2021.3 LTS → 6.x** · Python **3.10+**（通过 [`uv`](https://docs.astral.sh/uv/) 管理）。
 
 ---
 
@@ -159,20 +155,9 @@ openupm add com.coplaydev.unity-mcp
 
 ## 工作原理
 
-```mermaid
-flowchart LR
-  A[AI 助手<br/>Claude · Cursor · …] -- MCP (stdio/HTTP) --> B[Python 服务器]
-  B -- WebSocket + HTTP --> C[Unity Editor 插件]
-  C -- Editor API --> D[场景 · 资源 · 脚本]
-```
+你的提示 → **MCP 客户端**（Claude、Cursor 等）→ **MCP for Unity 服务器** → **Unity Editor 插件** → 你的**场景、资源与脚本**。
 
----
-
-## 如何比较
-
-- **MCP for Unity** — 免费、MIT、支持任意客户端的 MCP 原生 Editor 控制。
-- **[Aura for Unity](https://www.tryaura.dev/)** — 高级 Editor 内 AI 助手（赞助商）。
-- **自定义 Editor 脚本** — 完全控制，但需要自己构建和维护。
+详见[架构概览](https://coplaydev.github.io/unity-mcp/architecture/transports)，了解传输方式、多实例路由与内部机制。
 
 ---
 
