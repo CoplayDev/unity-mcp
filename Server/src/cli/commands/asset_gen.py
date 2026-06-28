@@ -115,6 +115,27 @@ def import_model(
             print_info(f"Import started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
 
 
+@asset_gen.command("import-model-file")
+@click.option("--source-path", "source_path", required=True,
+              help="Path to a local model file (.fbx/.obj/.glb/.gltf/.zip).")
+@click.option("--name", default=None, help="Base name for the imported asset.")
+@click.option("--output-folder", default=None, help="Destination folder under Assets/.")
+@click.option("--target-size", default=None, type=float, help="Normalize largest dimension (meters).")
+@handle_unity_errors
+def import_model_file(source_path, name, output_folder, target_size):
+    """Import a local 3D model file (e.g. a Blender export) into the Unity project."""
+    config = get_config()
+    params = {
+        "sourcePath": source_path,
+        "name": name,
+        "outputFolder": output_folder,
+        "targetSize": target_size,
+    }
+    params = {k: v for k, v in params.items() if v is not None}
+    result = run_command("import_model_file", params, config)
+    click.echo(format_output(result, config.format))
+
+
 @asset_gen.command("generate-image")
 @click.option("--provider", default=None, help="Provider id (fal, openrouter).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")
