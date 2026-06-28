@@ -12,21 +12,11 @@
 #### Proudly sponsored and maintained by [Aura](https://www.tryaura.dev/) — the AI assistant for Unreal & Unity.
 ##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source project from the makers of MCP for Unity.
 
-[![Docs](https://img.shields.io/badge/Docs-unity--mcp-4f46e5)](https://coplaydev.github.io/unity-mcp/)
-[![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
-[![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
-[![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
-[![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
-[![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
-[![Downloads](https://static.pepy.tech/badge/mcpforunityserver)](https://pepy.tech/project/mcpforunityserver)
-[![Release](https://img.shields.io/github/v/release/CoplayDev/unity-mcp)](https://github.com/CoplayDev/unity-mcp/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/CoplayDev/unity-mcp/python-tests.yml?branch=beta&label=tests)](https://github.com/CoplayDev/unity-mcp/actions/workflows/python-tests.yml)
-[![OpenUPM](https://img.shields.io/npm/v/com.coplaydev.unity-mcp?label=OpenUPM&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.coplaydev.unity-mcp/)
-[![Stars](https://img.shields.io/github/stars/CoplayDev/unity-mcp?style=flat)](https://github.com/CoplayDev/unity-mcp/stargazers)
+### [Discord](https://discord.gg/y4p8KfzrN4) &nbsp;·&nbsp; [Wiki](https://coplaydev.github.io/unity-mcp/)
 
 </div>
 
-<p align="center"><b>Create your Unity apps with LLMs.</b> MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via the <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a>. Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate workflows.</p>
+<p align="center"><b>Create your Unity apps with LLMs.</b> MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a>. Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate your game dev workflows.</p>
 
 <p align="center">
   <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
@@ -34,27 +24,28 @@
 
 ---
 
+<!-- recent-updates:start -->
+<details>
+<summary><strong>Recent Updates</strong></summary>
+
+* **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
+* **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
+* **[v9.6.6](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.6)** (2026-04-07)
+* **[v9.6.5](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.5)** (2026-04-03)
+* **[v9.6.4](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.4)** (2026-03-31)
+
+Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
+
+</details>
+<!-- recent-updates:end -->
+
+---
+
 ## What it does
 
-Control the Unity Editor in natural language from any MCP client. Describe what
-you want — "add a player with a rigidbody", "write a save system", "run the
-tests" — and the assistant drives the Editor through 40+ focused tools.
+Control the Unity Editor in natural language from any MCP client — create scenes & GameObjects, edit C# scripts, manage assets, run tests, profile, and build. 40+ focused tools, any client, free & MIT.
 
-- **Scenes & GameObjects** — create, query, modify hierarchies, components, prefabs
-- **Scripts** — create/edit C# with Roslyn validation
-- **Assets & rendering** — materials, shaders, textures, VFX
-- **Build, test & profile** — run EditMode/PlayMode tests, the profiler, builds
-- **Any MCP client** — Claude, Cursor, VS Code, Windsurf, Gemini CLI, and more
-- **Free & MIT**, multi-instance ready
-
-<details>
-<summary><b>Full tool catalog (40+ tools across 9 groups)</b></summary>
-
-See the [tool reference](https://coplaydev.github.io/unity-mcp/reference/tools/) for
-every tool: **core** (scenes, GameObjects, scripts, assets, prefabs, components,
-editor control, console, menus), **scripting_ext**, **vfx** (shaders, textures),
-**ui**, **animation**, **testing**, **probuilder**, **profiling**, **docs**.
-</details>
+**[Browse the full tool catalog →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
 
 ---
 
@@ -77,36 +68,10 @@ Works with **any MCP client** — including Claude Desktop & Claude Code, Cursor
    You should see the cube appear in the scene within a couple of seconds.
 
 <details>
-<summary>Alternative installs (Asset Store, OpenUPM)</summary>
+<summary>Alternative install (OpenUPM)</summary>
 
 - **OpenUPM:** `openupm add com.coplaydev.unity-mcp`
-- **Asset Store:** [MCP for Unity](https://assetstore.unity.com/packages/slug/329908)
 </details>
-
----
-
-## How it works
-
-Your prompt → **MCP client** (Claude, Cursor, …) → **MCP for Unity server** → **Unity Editor plugin** → your **scenes, assets & scripts**.
-
-See the [architecture overview](https://coplaydev.github.io/unity-mcp/architecture/transports) for transports, multi-instance routing, and internals.
-
----
-
-<!-- recent-updates:start -->
-<details>
-<summary><strong>Recent Updates</strong></summary>
-
-* **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
-* **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
-* **[v9.6.6](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.6)** (2026-04-07)
-* **[v9.6.5](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.5)** (2026-04-03)
-* **[v9.6.4](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.4)** (2026-03-31)
-
-Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
-
-</details>
-<!-- recent-updates:end -->
 
 ---
 
