@@ -46,9 +46,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 url = QueueBase + model;
             }
-            // Forward explicit output dimensions; fal's image_size accepts a {width,height} object.
-            // (FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
-            if (req.Width > 0 && req.Height > 0)
+            // Forward explicit output dimensions for text→image only; fal's image_size accepts a
+            // {width,height} object. (/edit derives size from the source image and may reject it.
+            // FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
+            if (!image && req.Width > 0 && req.Height > 0)
                 body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
 
             var spec = new HttpRequestSpec
@@ -70,7 +71,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 string requestId = json["request_id"]?.ToString();
                 if (string.IsNullOrEmpty(requestId))
                     throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
-                responseUrl = url + "/requests/" + requestId;
+                // Queue request URLs are namespaced by owner/app without the action sub-path,
+                // so build from the base model id (not `url`, which may end in /edit).
+                responseUrl = QueueBase + model + "/requests/" + requestId;
             }
             return responseUrl;
         }

@@ -22,7 +22,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
         private static readonly HashSet<string> ArchiveAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
             ".gltf", ".glb", ".bin", ".fbx", ".obj", ".mtl",
-            ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".tif", ".tiff", ".webp", ".exr", ".hdr", ".ktx2", ".basis",
+            ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".tif", ".tiff", ".webp", ".exr", ".hdr",
+            ".ktx", ".ktx2", ".basis", ".dds",
         };
 
         public static AssetGenJob ImportInto(AssetGenJob job, string localFilePath)

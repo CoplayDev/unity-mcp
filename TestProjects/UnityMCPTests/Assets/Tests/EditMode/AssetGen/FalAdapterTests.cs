@@ -86,6 +86,32 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_ImageMode_OmitsImageSize_EvenWithDimensions()
+        {
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAdapter();
+            var req = new ImageGenRequest { Provider = "fal", Mode = "image", Prompt = "edit", ImageUrl = "https://ex.com/in.png", Width = 512, Height = 512 };
+
+            adapter.SubmitAsync(req, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = System.Text.Encoding.UTF8.GetString(fake.RecordedRequests[0].Body);
+            StringAssert.DoesNotContain("image_size", body); // /edit derives size from the source image
+        }
+
+        [Test]
+        public void Submit_ImageMode_FallbackResponseUrl_UsesBaseModelPath()
+        {
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"request_id\":\"r1\"}") }; // no response_url
+            var adapter = new FalAdapter();
+            var req = new ImageGenRequest { Provider = "fal", Mode = "image", Prompt = "edit", ImageUrl = "https://ex.com/in.png" };
+
+            string pid = adapter.SubmitAsync(req, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            StringAssert.Contains("/fal-ai/flux-2/requests/r1", pid);
+            StringAssert.DoesNotContain("/edit/requests", pid);
+        }
+
+        [Test]
         public void Poll_InProgress_ReturnsRunning()
         {
             var fake = new FakeHttpTransport { Handler = spec => Json("{\"status\":\"IN_PROGRESS\"}") };

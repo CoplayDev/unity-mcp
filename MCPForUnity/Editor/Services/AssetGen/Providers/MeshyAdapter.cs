@@ -68,10 +68,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 };
             }
 
-            string taskId = await PostTask(url, body, apiKey, http, ct, "submit");
-            if (string.IsNullOrEmpty(taskId))
-                throw new Exception(SecretRedactor.Scrub("Meshy submit returned no task id.", apiKey));
-            return taskId;
+            return await PostTask(url, body, apiKey, http, ct, "submit");
         }
 
         public async Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
@@ -113,12 +110,6 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                         ["ai_model"] = "meshy-6"
                     };
                     _refineTaskId = await PostTask(TextEndpoint, refineBody, apiKey, http, ct, "refine");
-                    if (string.IsNullOrEmpty(_refineTaskId))
-                    {
-                        result.State = ProviderPollState.Failed;
-                        result.Error = "Meshy refine task could not be started.";
-                        return result;
-                    }
                     _refineSubmitted = true;
                     result.State = ProviderPollState.Running;
                     result.Progress = 0.5f;
@@ -158,7 +149,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
             HttpResult res = await http.SendAsync(spec, ct);
             JObject json = ParseOk(res, apiKey, phase);
-            return json["result"]?.ToString();
+            string id = json["result"]?.ToString();
+            if (string.IsNullOrEmpty(id))
+                throw new Exception(SecretRedactor.Scrub(
+                    $"Meshy {phase} returned no task id: " + ProviderHttp.Truncate(ProviderHttp.BodyText(res)), apiKey));
+            return id;
         }
 
         private string ExtractModelUrl(JObject urls)

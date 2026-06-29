@@ -71,8 +71,10 @@ namespace MCPForUnityTests.Editor.AssetGen
         [Test]
         public void Generate_ImageMode_MissingFile_ReturnsError()
         {
-            _store.Set("tripo", "k");
-            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "tripo", ["mode"] = "image", ["imagePath"] = "Assets/does_not_exist_zzz.png" });
+            // Use a provider that supports local images (Meshy) so we exercise the file-existence
+            // check; Tripo short-circuits on any local path (covered separately).
+            _store.Set("meshy", "k");
+            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "image", ["imagePath"] = "Assets/does_not_exist_zzz.png" });
             Assert.AreEqual(false, (bool)resp["success"]);
             StringAssert.Contains("not found", ((string)resp["error"]).ToLowerInvariant());
         }
@@ -87,6 +89,21 @@ namespace MCPForUnityTests.Editor.AssetGen
             {
                 JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "image", ["imagePath"] = tmp });
                 Assert.AreEqual("pending", (string)gen["_mcp_status"]);
+            }
+            finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
+        public void Generate_ImageMode_Tripo_LocalPath_ReturnsErrorSynchronously()
+        {
+            _store.Set("tripo", "k");
+            string tmp = Path.Combine(Path.GetTempPath(), "mcp_tripoimg_" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            try
+            {
+                JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "tripo", ["mode"] = "image", ["imagePath"] = tmp });
+                Assert.AreEqual(false, (bool)resp["success"]);                 // synchronous error, not a fake 'pending'
+                StringAssert.Contains("Tripo", (string)resp["error"]);
             }
             finally { try { File.Delete(tmp); } catch { } }
         }

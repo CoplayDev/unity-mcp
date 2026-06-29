@@ -54,7 +54,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         internal static IHttpTransport TransportOverrideForTests;
         internal static Func<AssetGenJob, string, AssetGenJob> ImportOverrideForTests;
         internal static double PollIntervalSeconds = 3.0;
-        internal static double TimeoutSeconds = 300.0;
+        internal static double TimeoutSeconds = 600.0;
 
         private static readonly Dictionary<string, AssetGenJob> Jobs = new();
         private static readonly Dictionary<string, Runner> Runners = new();
@@ -525,7 +525,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             TransportOverrideForTests = null;
             ImportOverrideForTests = null;
             PollIntervalSeconds = 3.0;
-            TimeoutSeconds = 300.0;
+            TimeoutSeconds = 600.0;
         }
     }
 }

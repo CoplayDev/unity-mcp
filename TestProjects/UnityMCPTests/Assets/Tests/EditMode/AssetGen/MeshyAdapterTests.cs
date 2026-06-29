@@ -69,6 +69,18 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_NoTaskIdInResponse_ErrorIncludesBody()
+        {
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"message\":\"quota exceeded\"}") };
+            var adapter = new MeshyAdapter();
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x", Texture = false };
+
+            var ex = Assert.Throws<System.Exception>(() =>
+                adapter.SubmitAsync(req, "k", fake, CancellationToken.None).GetAwaiter().GetResult());
+            StringAssert.Contains("quota exceeded", ex.Message);
+        }
+
+        [Test]
         public void Poll_InProgress_ReturnsRunning_WithProgress()
         {
             var http = new FakeHttpTransport { Handler = _ => Json("{\"status\":\"IN_PROGRESS\",\"progress\":37}") };

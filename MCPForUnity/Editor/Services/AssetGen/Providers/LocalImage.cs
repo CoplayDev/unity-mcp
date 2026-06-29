@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Helpers;
 
@@ -11,7 +12,15 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     /// </summary>
     internal static class LocalImage
     {
-        /// <summary>Resolve an "Assets/..."-relative or absolute path to an existing absolute file.</summary>
+        // Extensions that can be inlined as a data URI for provider image input.
+        private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".webp", ".gif" };
+
+        /// <summary>
+        /// Resolve an "Assets/..."-relative or absolute path to an existing absolute file of a
+        /// supported image type. Returns false with a user-facing <paramref name="error"/> for a
+        /// missing file or an unsupported extension, so the handler can fail fast (synchronously).
+        /// </summary>
         public static bool ResolveExisting(string path, out string absPath, out string error)
         {
             absPath = null;
@@ -20,6 +29,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             string p = path.Replace('\\', '/');
             string abs = (p == "Assets" || p.StartsWith("Assets/")) ? AssetGenPaths.ToAbsolute(p) : p;
             if (!File.Exists(abs)) { error = $"Source image not found: {path}"; return false; }
+            if (!SupportedExtensions.Contains(Path.GetExtension(abs)))
+            {
+                error = $"Unsupported image type '{Path.GetExtension(abs)}'. Use .png, .jpg, .jpeg, .webp, or .gif.";
+                return false;
+            }
             absPath = abs;
             return true;
         }

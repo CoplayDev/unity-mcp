@@ -90,6 +90,21 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Generate_ImageMode_UnsupportedExtension_ReturnsError()
+        {
+            _store.Set("fal", "falkey");
+            string tmp = Path.Combine(Path.GetTempPath(), "mcp_badimg_" + Guid.NewGuid().ToString("N") + ".tga");
+            File.WriteAllBytes(tmp, new byte[] { 0, 0, 2 });
+            try
+            {
+                JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = tmp, ["prompt"] = "x" });
+                Assert.AreEqual(false, (bool)resp["success"]);
+                StringAssert.Contains("Unsupported", (string)resp["error"]);
+            }
+            finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
         public void ListProviders_ImageOnly()
         {
             JObject resp = Call(new JObject { ["action"] = "list_providers" });
