@@ -19,7 +19,7 @@ Manage which tool groups are visible in this session. Actions: list_groups (show
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `action` | `Literal['list_groups', 'activate', 'deactivate', 'sync', 'reset']` | yes | Action to perform. |
-| `group` | `str \| None` | — | Group name (required for activate / deactivate). Valid groups: animation, core, docs, probuilder, profiling, scripting_ext, testing, ui, vfx |
+| `group` | `str \| None` | — | Group name (required for activate / deactivate). Valid groups: animation, asset_gen, core, docs, probuilder, profiling, scripting_ext, testing, ui, vfx |
 
 ## Returns
 
