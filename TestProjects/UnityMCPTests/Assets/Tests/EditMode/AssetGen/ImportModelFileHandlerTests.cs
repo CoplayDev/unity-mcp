@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -78,6 +79,32 @@ namespace MCPForUnityTests.Editor.AssetGen
             StringAssert.StartsWith(TestFolder, assetPath);
             Assert.IsFalse(string.IsNullOrEmpty((string)resp["data"]["asset_guid"]));
             Assert.IsTrue(File.Exists(assetPath), "imported file should exist under Assets");
+        }
+
+        [Test]
+        public void OutputFolderTraversal_ReturnsError_AndDoesNotStageOutsideAssets()
+        {
+            string obj = WriteCubeObj();
+            string escapeFolder = "Library/__import_model_file_escape_" + Guid.NewGuid().ToString("N");
+            string escapedAbs = Path.Combine(Path.GetDirectoryName(Application.dataPath), escapeFolder, "Escaped.obj");
+            try
+            {
+                JObject resp = Call(new JObject
+                {
+                    ["sourcePath"] = obj,
+                    ["name"] = "Escaped",
+                    ["outputFolder"] = "Assets/../" + escapeFolder,
+                });
+
+                Assert.AreEqual(false, (bool)resp["success"]);
+                StringAssert.Contains("output_folder", ((string)resp["error"]).ToLowerInvariant());
+                Assert.IsFalse(File.Exists(escapedAbs), "handler must not stage files outside Assets");
+            }
+            finally
+            {
+                string dir = Path.GetDirectoryName(escapedAbs);
+                try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+            }
         }
     }
 }

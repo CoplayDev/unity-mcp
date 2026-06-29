@@ -5,6 +5,7 @@ using System.Threading;
 using MCPForUnity.Editor.Services.AssetGen.Http;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -15,6 +16,20 @@ namespace MCPForUnityTests.Editor.AssetGen
     /// </summary>
     public class MeshyAdapterTests
     {
+        private static string ProjectRoot()
+        {
+            string dp = Application.dataPath.Replace('\\', '/');
+            return dp.Substring(0, dp.Length - "Assets".Length);
+        }
+
+        private static string WriteProjectFile(string rel, byte[] bytes)
+        {
+            string abs = Path.Combine(ProjectRoot(), rel).Replace('\\', '/');
+            Directory.CreateDirectory(Path.GetDirectoryName(abs));
+            File.WriteAllBytes(abs, bytes);
+            return rel;
+        }
+
         private static HttpResult Json(string json, int status = 200)
             => new HttpResult
             {
@@ -123,13 +138,12 @@ namespace MCPForUnityTests.Editor.AssetGen
         [Test]
         public void Submit_ImageMode_LocalPath_SendsDataUri()
         {
-            string tmp = Path.Combine(Path.GetTempPath(), "mcp_meshyimg_" + Guid.NewGuid().ToString("N") + ".png");
-            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            string rel = WriteProjectFile("Assets/Generated/__assetgen_meshy_adapter/ref.png", new byte[] { 137, 80, 78, 71 });
             try
             {
                 var fake = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"id1\"}") };
                 var adapter = new MeshyAdapter();
-                var req = new ModelGenRequest { Provider = "meshy", Mode = "image", ImagePath = tmp, Format = "glb" };
+                var req = new ModelGenRequest { Provider = "meshy", Mode = "image", ImagePath = rel, Format = "glb" };
 
                 adapter.SubmitAsync(req, "k", fake, CancellationToken.None).GetAwaiter().GetResult();
 
@@ -137,7 +151,7 @@ namespace MCPForUnityTests.Editor.AssetGen
                 StringAssert.Contains("/openapi/v1/image-to-3d", rec.Url);
                 StringAssert.Contains("data:image/png;base64,", Encoding.UTF8.GetString(rec.Body));
             }
-            finally { try { File.Delete(tmp); } catch { } }
+            finally { try { Directory.Delete(Path.Combine(ProjectRoot(), "Assets/Generated/__assetgen_meshy_adapter"), true); } catch { } }
         }
 
         [Test]

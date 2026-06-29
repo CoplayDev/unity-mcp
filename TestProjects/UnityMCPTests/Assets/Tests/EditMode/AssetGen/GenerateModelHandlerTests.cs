@@ -7,6 +7,7 @@ using MCPForUnity.Editor.Tools.AssetGen;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -32,10 +33,25 @@ namespace MCPForUnityTests.Editor.AssetGen
             AssetGenJobManager.ResetForTests();
             SecureKeyStore.ResetForTests();
             try { if (Directory.Exists(_dir)) Directory.Delete(_dir, true); } catch { }
+            try { Directory.Delete(Path.Combine(ProjectRoot(), "Assets/Generated/__assetgen_model_handler"), true); } catch { }
         }
 
         private static JObject Call(JObject p)
             => JObject.Parse(JsonConvert.SerializeObject(GenerateModel.HandleCommand(p)));
+
+        private static string ProjectRoot()
+        {
+            string dp = Application.dataPath.Replace('\\', '/');
+            return dp.Substring(0, dp.Length - "Assets".Length);
+        }
+
+        private static string WriteProjectFile(string rel, byte[] bytes)
+        {
+            string abs = Path.Combine(ProjectRoot(), rel).Replace('\\', '/');
+            Directory.CreateDirectory(Path.GetDirectoryName(abs));
+            File.WriteAllBytes(abs, bytes);
+            return rel;
+        }
 
         [Test]
         public void Generate_WithKey_ReturnsPendingJobId_AndStatusReportsState()
@@ -80,17 +96,29 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
-        public void Generate_ImageMode_LocalPath_Accepted_ReturnsPending()
+        public void Generate_ImageMode_PathOutsideAssets_ReturnsError()
         {
             _store.Set("meshy", "k");
             string tmp = Path.Combine(Path.GetTempPath(), "mcp_imgin_" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
             try
             {
-                JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "image", ["imagePath"] = tmp });
-                Assert.AreEqual("pending", (string)gen["_mcp_status"]);
+                JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "image", ["imagePath"] = tmp });
+                Assert.AreEqual(false, (bool)resp["success"]);
+                StringAssert.Contains("Assets", (string)resp["error"]);
             }
             finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
+        public void Generate_ImageMode_ProjectLocalPath_Accepted_ReturnsPending()
+        {
+            _store.Set("meshy", "k");
+            string rel = WriteProjectFile("Assets/Generated/__assetgen_model_handler/ref.png", new byte[] { 137, 80, 78, 71 });
+
+            JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "meshy", ["mode"] = "image", ["imagePath"] = rel });
+
+            Assert.AreEqual("pending", (string)gen["_mcp_status"]);
         }
 
         [Test]

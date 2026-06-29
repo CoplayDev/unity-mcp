@@ -66,6 +66,8 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 Name = p.Get("name"),
                 OutputFolder = p.Get("outputFolder"),
             };
+            if (!NormalizeOutputFolder(req.OutputFolder, out req.OutputFolder, out string outputErr))
+                return new ErrorResponse(outputErr);
 
             if (req.Mode == "text" && string.IsNullOrWhiteSpace(req.Prompt))
                 return new ErrorResponse("'prompt' is required for text mode.");
@@ -88,6 +90,16 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 $"3D generation started with '{provider}'. Poll the status action with this job_id.",
                 pollIntervalSeconds: 3.0,
                 data: new { job_id = job.JobId, provider, status = "pending" });
+        }
+
+        private static bool NormalizeOutputFolder(string outputFolder, out string normalized, out string error)
+        {
+            normalized = outputFolder;
+            error = null;
+            if (string.IsNullOrWhiteSpace(outputFolder)) return true;
+            if (AssetGenPaths.TryGetAssetsFolder(outputFolder, out normalized)) return true;
+            error = "'output_folder' must resolve under the project's Assets folder.";
+            return false;
         }
 
         private static object Status(ToolParams p)

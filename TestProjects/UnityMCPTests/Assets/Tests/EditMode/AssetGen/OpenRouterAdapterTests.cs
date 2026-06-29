@@ -4,11 +4,26 @@ using System.Threading;
 using MCPForUnity.Editor.Services.AssetGen.Http;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
     public class OpenRouterAdapterTests
     {
+        private static string ProjectRoot()
+        {
+            string dp = Application.dataPath.Replace('\\', '/');
+            return dp.Substring(0, dp.Length - "Assets".Length);
+        }
+
+        private static string WriteProjectFile(string rel, byte[] bytes)
+        {
+            string abs = Path.Combine(ProjectRoot(), rel).Replace('\\', '/');
+            Directory.CreateDirectory(Path.GetDirectoryName(abs));
+            File.WriteAllBytes(abs, bytes);
+            return rel;
+        }
+
         private static HttpResult Json(string body) => new HttpResult { Status = 200, IsSuccess = true, Text = body };
 
         [Test]
@@ -57,8 +72,7 @@ namespace MCPForUnityTests.Editor.AssetGen
         [Test]
         public void Submit_ImageMode_LocalPath_SendsDataUri()
         {
-            string tmp = Path.Combine(Path.GetTempPath(), "mcp_orimg_" + Guid.NewGuid().ToString("N") + ".png");
-            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            string rel = WriteProjectFile("Assets/Generated/__assetgen_openrouter_adapter/ref.png", new byte[] { 137, 80, 78, 71 });
             try
             {
                 var fake = new FakeHttpTransport
@@ -66,7 +80,7 @@ namespace MCPForUnityTests.Editor.AssetGen
                     Handler = spec => Json("{\"choices\":[{\"message\":{\"images\":[{\"image_url\":{\"url\":\"data:image/png;base64,AAAA\"}}]}}]}")
                 };
                 var adapter = new OpenRouterAdapter();
-                var req = new ImageGenRequest { Provider = "openrouter", Mode = "image", Prompt = "watercolor", ImagePath = tmp };
+                var req = new ImageGenRequest { Provider = "openrouter", Mode = "image", Prompt = "watercolor", ImagePath = rel };
 
                 adapter.SubmitAsync(req, "orkey", fake, CancellationToken.None).GetAwaiter().GetResult();
 
@@ -74,7 +88,7 @@ namespace MCPForUnityTests.Editor.AssetGen
                 StringAssert.Contains("image_url", sent);
                 StringAssert.Contains("data:image/png;base64,", sent);
             }
-            finally { try { File.Delete(tmp); } catch { } }
+            finally { try { Directory.Delete(Path.Combine(ProjectRoot(), "Assets/Generated/__assetgen_openrouter_adapter"), true); } catch { } }
         }
 
         [Test]

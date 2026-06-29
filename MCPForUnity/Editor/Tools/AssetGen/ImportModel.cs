@@ -98,6 +98,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             float targetSize = p.GetFloat("targetSize", 1f) ?? 1f;
             string name = p.Get("name");
             string outputFolder = p.Get("outputFolder");
+            if (!string.IsNullOrWhiteSpace(outputFolder)
+                && !AssetGenPaths.TryGetAssetsFolder(outputFolder, out outputFolder))
+            {
+                return new ErrorResponse("'output_folder' must resolve under the project's Assets folder.");
+            }
 
             AssetGenJob job = AssetGenJobManager.StartMarketplaceImport(uid, targetSize, name, outputFolder);
             if (job.State == AssetGenJobState.Failed)

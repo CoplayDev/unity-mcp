@@ -34,8 +34,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                 if (string.IsNullOrEmpty(localFilePath))
                     return Fail(job, "No file to import.");
 
-                string rel = AssetGenPaths.ToProjectRelative(localFilePath);
-                if (string.IsNullOrEmpty(rel) || !rel.Replace('\\', '/').StartsWith("Assets"))
+                if (!AssetGenPaths.TryGetAssetsRelativePath(localFilePath, out string rel))
                     return Fail(job, "Generated file is not under the Assets folder.");
 
                 string ext = Path.GetExtension(rel).ToLowerInvariant();

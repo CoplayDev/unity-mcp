@@ -412,9 +412,10 @@ namespace MCPForUnity.Editor.Services.AssetGen
         {
             string chosen = !string.IsNullOrEmpty(r.OverrideExt) ? r.OverrideExt : r.Ext;
             string ext = string.IsNullOrEmpty(chosen) ? "bin" : chosen.TrimStart('.').ToLowerInvariant();
-            string root = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
-                                                                : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
-            if (!root.Replace('\\', '/').StartsWith("Assets")) root = AssetGenPrefs.OutputRoot + "/" + r.Subfolder;
+            string requestedRoot = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
+                                                                         : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
+            if (!AssetGenPaths.TryGetAssetsFolder(requestedRoot, out string root))
+                root = AssetGenPrefs.DefaultOutputRoot + "/" + r.Subfolder;
             string absRoot = AssetGenPaths.ToAbsolute(root);
             Directory.CreateDirectory(absRoot);
             string baseName = SanitizeName(r.Name);

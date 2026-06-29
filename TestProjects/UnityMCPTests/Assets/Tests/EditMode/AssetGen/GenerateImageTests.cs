@@ -49,6 +49,20 @@ namespace MCPForUnityTests.Editor.AssetGen
         private static JObject Call(JObject p)
             => JObject.Parse(JsonConvert.SerializeObject(GenerateImage.HandleCommand(p)));
 
+        private static string ProjectRoot()
+        {
+            string dp = Application.dataPath.Replace('\\', '/');
+            return dp.Substring(0, dp.Length - "Assets".Length);
+        }
+
+        private static string WriteProjectFile(string rel, byte[] bytes)
+        {
+            string abs = Path.Combine(ProjectRoot(), rel).Replace('\\', '/');
+            Directory.CreateDirectory(Path.GetDirectoryName(abs));
+            File.WriteAllBytes(abs, bytes);
+            return rel;
+        }
+
         [Test]
         public void Generate_WithKey_ReturnsPendingJobId()
         {
@@ -76,32 +90,41 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
-        public void Generate_ImageMode_LocalPath_Accepted_ReturnsPending()
+        public void Generate_ImageMode_PathOutsideAssets_ReturnsError()
         {
             _store.Set("fal", "falkey");
             string tmp = Path.Combine(Path.GetTempPath(), "mcp_imgin_" + Guid.NewGuid().ToString("N") + ".png");
             File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
             try
             {
-                JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = tmp, ["prompt"] = "edit it" });
-                Assert.AreEqual("pending", (string)gen["_mcp_status"]);
+                JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = tmp, ["prompt"] = "edit it" });
+                Assert.AreEqual(false, (bool)resp["success"]);
+                StringAssert.Contains("Assets", (string)resp["error"]);
             }
             finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
+        public void Generate_ImageMode_ProjectLocalPath_Accepted_ReturnsPending()
+        {
+            _store.Set("fal", "falkey");
+            string rel = WriteProjectFile(TestFolder + "/ref.png", new byte[] { 137, 80, 78, 71 });
+
+            JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = rel, ["prompt"] = "edit it" });
+
+            Assert.AreEqual("pending", (string)gen["_mcp_status"]);
         }
 
         [Test]
         public void Generate_ImageMode_UnsupportedExtension_ReturnsError()
         {
             _store.Set("fal", "falkey");
-            string tmp = Path.Combine(Path.GetTempPath(), "mcp_badimg_" + Guid.NewGuid().ToString("N") + ".tga");
-            File.WriteAllBytes(tmp, new byte[] { 0, 0, 2 });
-            try
-            {
-                JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = tmp, ["prompt"] = "x" });
-                Assert.AreEqual(false, (bool)resp["success"]);
-                StringAssert.Contains("Unsupported", (string)resp["error"]);
-            }
-            finally { try { File.Delete(tmp); } catch { } }
+            string rel = WriteProjectFile(TestFolder + "/bad.tga", new byte[] { 0, 0, 2 });
+
+            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = rel, ["prompt"] = "x" });
+
+            Assert.AreEqual(false, (bool)resp["success"]);
+            StringAssert.Contains("Unsupported", (string)resp["error"]);
         }
 
         [Test]

@@ -2,6 +2,7 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -62,6 +63,21 @@ namespace MCPForUnityTests.Editor.AssetGen
             AssetGenPrefs.OutputRoot = "Assets/Foo";
             AssetGenPrefs.OutputRoot = "";
             Assert.AreEqual("Assets/Generated", AssetGenPrefs.OutputRoot);
+        }
+
+        [Test]
+        public void AssetPathNormalization_RejectsTraversalOutsideAssets()
+        {
+            Assert.IsFalse(AssetGenPaths.TryGetAssetsRelativePath("Assets/../ProjectSettings", out _));
+        }
+
+        [Test]
+        public void AssetPathNormalization_AcceptsAbsolutePathInsideAssets()
+        {
+            string abs = System.IO.Path.Combine(Application.dataPath, "Refs/ref.png");
+
+            Assert.IsTrue(AssetGenPaths.TryGetAssetsRelativePath(abs, out string rel));
+            Assert.AreEqual("Assets/Refs/ref.png", rel);
         }
     }
 }
