@@ -32,6 +32,22 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (http == null) throw new ArgumentNullException(nameof(http));
 
             string model = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
+
+            // image->image: attach the reference image as an image_url content part alongside the
+            // text prompt (OpenRouter content-array form). image_url.url takes an http(s) URL or a
+            // base64 data URI. Plain text->image uses a string content.
+            bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
+                         && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
+            // image_url.url accepts a hosted URL or an inline base64 data URI (for a local image_path).
+            string imageRef = image
+                ? (!string.IsNullOrEmpty(req.ImageUrl) ? req.ImageUrl : LocalImage.ToDataUri(req.ImagePath))
+                : null;
+            JToken content = image
+                ? new JArray(
+                    new JObject { ["type"] = "text", ["text"] = req.Prompt ?? string.Empty },
+                    new JObject { ["type"] = "image_url", ["image_url"] = new JObject { ["url"] = imageRef } })
+                : (JToken)(req.Prompt ?? string.Empty);
+
             var body = new JObject
             {
                 ["model"] = model,
@@ -39,7 +55,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 ["messages"] = new JArray(new JObject
                 {
                     ["role"] = "user",
-                    ["content"] = req.Prompt ?? string.Empty
+                    ["content"] = content
                 })
             };
 
@@ -118,8 +134,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
         private static JObject ParseOk(HttpResult res, string apiKey)
         {
-            string text = res?.Text;
-            if (string.IsNullOrEmpty(text) && res?.Body != null) text = Encoding.UTF8.GetString(res.Body);
+            string text = ProviderHttp.BodyText(res);
 
             JObject json = null;
             if (!string.IsNullOrEmpty(text))
@@ -127,11 +142,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 try { json = JObject.Parse(text); } catch { /* non-JSON */ }
             }
 
-            bool ok = res != null && (res.IsSuccess || (res.Status >= 200 && res.Status < 300));
+            bool ok = res?.Ok == true;
             if (!ok)
             {
                 string detail = json?["error"]?["message"]?.ToString() ?? json?["error"]?.ToString()
-                                ?? (string.IsNullOrEmpty(text) ? string.Empty : (text.Length <= 500 ? text : text.Substring(0, 500)));
+                                ?? ProviderHttp.Truncate(text);
                 throw new Exception(SecretRedactor.Scrub($"OpenRouter request failed (status={res?.Status}): {detail}", apiKey));
             }
             return json ?? new JObject();

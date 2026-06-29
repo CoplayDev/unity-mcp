@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Security;
@@ -21,13 +20,18 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
         public string Id => "sketchfab";
 
-        public async Task<string> SearchAsync(string query, string apiKey, IHttpTransport http, CancellationToken ct)
+        public async Task<string> SearchAsync(string query, string categories, bool downloadable, int? count, string cursor, string apiKey, IHttpTransport http, CancellationToken ct)
         {
             if (http == null) throw new ArgumentNullException(nameof(http));
-            string url = SearchEndpoint + "?type=models&downloadable=true&q=" + Uri.EscapeDataString(query ?? string.Empty);
+            string url = SearchEndpoint + "?type=models&downloadable=" + (downloadable ? "true" : "false")
+                         + "&q=" + Uri.EscapeDataString(query ?? string.Empty);
+            if (!string.IsNullOrEmpty(categories)) url += "&categories=" + Uri.EscapeDataString(categories);
+            if (count.HasValue) url += "&count=" + count.Value;
+            if (!string.IsNullOrEmpty(cursor)) url += "&cursor=" + Uri.EscapeDataString(cursor);
             var spec = new HttpRequestSpec { Method = "GET", Url = url };
             spec.Headers["Authorization"] = "Token " + apiKey;
             HttpResult res = await http.SendAsync(spec, ct);
+            // The raw response carries pagination (`cursors.next` / `next`) for the caller to page.
             return RawOk(res, apiKey, "search");
         }
 
@@ -55,26 +59,24 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (string.IsNullOrEmpty(url))
             {
                 throw new Exception(SecretRedactor.Scrub(
-                    $"Sketchfab download returned no gltf url for '{uid}': {Truncate(res?.Text)}", apiKey));
+                    $"Sketchfab download returned no gltf url for '{uid}': {ProviderHttp.Truncate(res?.Text)}", apiKey));
             }
             return url;
         }
 
         private static string RawOk(HttpResult res, string apiKey, string phase)
         {
-            string text = res?.Text;
-            if (string.IsNullOrEmpty(text) && res?.Body != null) text = Encoding.UTF8.GetString(res.Body);
+            string text = ProviderHttp.BodyText(res);
 
-            bool ok = res != null && (res.IsSuccess || (res.Status >= 200 && res.Status < 300));
+            bool ok = res?.Ok == true;
             if (!ok)
-                throw new Exception(SecretRedactor.Scrub($"Sketchfab {phase} failed (status={res?.Status}): {Truncate(text)}", apiKey));
+                throw new Exception(SecretRedactor.Scrub($"Sketchfab {phase} failed (status={res?.Status}): {ProviderHttp.Truncate(text)}", apiKey));
             return text ?? string.Empty;
         }
 
         private static JObject ParseOk(HttpResult res, string apiKey, string phase)
         {
-            string text = res?.Text;
-            if (string.IsNullOrEmpty(text) && res?.Body != null) text = Encoding.UTF8.GetString(res.Body);
+            string text = ProviderHttp.BodyText(res);
 
             JObject json = null;
             if (!string.IsNullOrEmpty(text))
@@ -82,19 +84,13 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 try { json = JObject.Parse(text); } catch { /* non-JSON */ }
             }
 
-            bool ok = res != null && (res.IsSuccess || (res.Status >= 200 && res.Status < 300));
+            bool ok = res?.Ok == true;
             if (!ok)
             {
-                string detail = json?["detail"]?.ToString() ?? json?["error"]?.ToString() ?? Truncate(text);
+                string detail = json?["detail"]?.ToString() ?? json?["error"]?.ToString() ?? ProviderHttp.Truncate(text);
                 throw new Exception(SecretRedactor.Scrub($"Sketchfab {phase} failed (status={res?.Status}): {detail}", apiKey));
             }
             return json ?? new JObject();
-        }
-
-        private static string Truncate(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            return s.Length <= 500 ? s : s.Substring(0, 500) + "…";
         }
     }
 }

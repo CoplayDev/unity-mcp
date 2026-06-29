@@ -50,11 +50,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             AssetGenProviders.Model(provider); // throws NotSupportedException for unimplemented providers
 
             if (!SecureKeyStore.Current.Has(provider))
-            {
-                return new ErrorResponse(
-                    $"No API key configured for '{provider}'. Add it in the MCP for Unity → Asset Generation tab " +
-                    $"(or set MCPFORUNITY_{provider.ToUpperInvariant()}_API_KEY).");
-            }
+                return new ErrorResponse(AssetGenProviders.MissingKeyMessage(provider));
 
             var req = new ModelGenRequest
             {
@@ -73,8 +69,14 @@ namespace MCPForUnity.Editor.Tools.AssetGen
 
             if (req.Mode == "text" && string.IsNullOrWhiteSpace(req.Prompt))
                 return new ErrorResponse("'prompt' is required for text mode.");
-            if (req.Mode == "image" && string.IsNullOrWhiteSpace(req.ImageUrl) && string.IsNullOrWhiteSpace(req.ImagePath))
-                return new ErrorResponse("'imageUrl' or 'imagePath' is required for image mode.");
+            if (req.Mode == "image" && string.IsNullOrWhiteSpace(req.ImageUrl))
+            {
+                if (string.IsNullOrWhiteSpace(req.ImagePath))
+                    return new ErrorResponse("image mode requires 'image_url' or 'image_path'.");
+                if (!LocalImage.ResolveExisting(req.ImagePath, out string absImg, out string imgErr))
+                    return new ErrorResponse(imgErr);
+                req.ImagePath = absImg;
+            }
 
             AssetGenJob job = AssetGenJobManager.StartModelGeneration(req);
             if (job.State == AssetGenJobState.Failed)

@@ -1,8 +1,8 @@
 using System;
 using System.IO;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using UnityEditor;
-using UnityEngine;
 
 namespace MCPForUnity.Editor.Services.AssetGen.Import
 {
@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                 if (string.IsNullOrEmpty(localFilePath))
                     return Fail(job, "No file to import.");
 
-                string rel = ToProjectRelative(localFilePath);
+                string rel = AssetGenPaths.ToProjectRelative(localFilePath);
                 if (string.IsNullOrEmpty(rel) || !rel.Replace('\\', '/').StartsWith("Assets"))
                     return Fail(job, "Generated file is not under the Assets folder.");
 
@@ -52,15 +52,6 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
             {
                 return Fail(job, SecretRedactor.Scrub(e.Message));
             }
-        }
-
-        private static string ToProjectRelative(string path)
-        {
-            string p = path.Replace('\\', '/');
-            if (p.StartsWith("Assets")) return p;
-            string dataPath = Application.dataPath.Replace('\\', '/');
-            if (p.StartsWith(dataPath)) return "Assets" + p.Substring(dataPath.Length);
-            return p;
         }
 
         private static AssetGenJob Fail(AssetGenJob job, string message)

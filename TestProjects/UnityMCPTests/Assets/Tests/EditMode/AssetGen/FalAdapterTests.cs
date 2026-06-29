@@ -33,6 +33,40 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_WithDimensions_IncludesImageSize()
+        {
+            var fake = new FakeHttpTransport
+            {
+                Handler = spec => Json("{\"request_id\":\"r1\",\"response_url\":\"" + Resp + "\"}")
+            };
+            var adapter = new FalAdapter();
+            var req = new ImageGenRequest { Provider = "fal", Mode = "text", Prompt = "a cat", Width = 512, Height = 768 };
+
+            adapter.SubmitAsync(req, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            string sent = System.Text.Encoding.UTF8.GetString(fake.RecordedRequests[0].Body);
+            StringAssert.Contains("image_size", sent);
+            StringAssert.Contains("512", sent);
+            StringAssert.Contains("768", sent);
+        }
+
+        [Test]
+        public void Submit_ImageMode_UsesEditEndpoint_WithImageUrlsArray()
+        {
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAdapter();
+            var req = new ImageGenRequest { Provider = "fal", Mode = "image", Prompt = "make it night", ImageUrl = "https://ex.com/in.png" };
+
+            adapter.SubmitAsync(req, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            HttpRequestSpec rec = fake.RecordedRequests[0];
+            StringAssert.Contains("/edit", rec.Url);
+            string body = System.Text.Encoding.UTF8.GetString(rec.Body);
+            StringAssert.Contains("image_urls", body);
+            StringAssert.Contains("https://ex.com/in.png", body);
+        }
+
+        [Test]
         public void Poll_Completed_FetchesResult_ReturnsImageUrl()
         {
             var fake = new FakeHttpTransport

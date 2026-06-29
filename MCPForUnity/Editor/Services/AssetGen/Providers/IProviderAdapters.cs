@@ -28,7 +28,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public interface IMarketplaceProviderAdapter
     {
         string Id { get; }
-        Task<string> SearchAsync(string query, string apiKey, IHttpTransport http, CancellationToken ct);
+        Task<string> SearchAsync(string query, string categories, bool downloadable, int? count, string cursor, string apiKey, IHttpTransport http, CancellationToken ct);
         Task<string> PreviewAsync(string uid, string apiKey, IHttpTransport http, CancellationToken ct);
         Task<string> ResolveDownloadUrlAsync(string uid, string apiKey, IHttpTransport http, CancellationToken ct);
     }

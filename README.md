@@ -79,13 +79,19 @@ Bring-your-own-key generation of **3D models** (text→3D and image→3D), **2D 
 
 **Usage**
 
-Generation runs through the MCP tools (or the `asset-gen` CLI), never from the GUI. Long-running jobs are async: the tool returns a `job_id`, then you call `action="status"` with that `job_id` until it completes.
+Generation runs through the MCP tools (or the `asset-gen` CLI), never from the GUI. Long-running jobs are async: the tool returns a `job_id`, then you call `action="status"` with that `job_id` until it completes. Both 3D and 2D accept **text** or **image** input — pass `image_url` (a hosted URL) or `image_path` (a local file, e.g. under `Assets/`).
 
 ```text
-generate_model  action=generate provider=tripo mode=text prompt="a low-poly oak tree" format=fbx   → then action=status with job_id
-generate_image  action=generate provider=fal prompt="a pixel-art coin" transparent=true
+generate_model  action=generate provider=tripo mode=text  prompt="a low-poly oak tree" format=fbx     → then action=status with job_id
+generate_model  action=generate provider=meshy mode=image image_path=Assets/refs/chair.png           → image→3D from a local image
+generate_image  action=generate provider=fal   mode=text  prompt="a pixel-art coin"
 import_model    action=search query="wooden chair"   → action=import uid=<from search>
 ```
+
+**Notes**
+
+- **Local images** (`image_path`) are supported by Meshy (image→3D) and fal / OpenRouter (image→image); they're sent inline as base64. Tripo image→3D currently needs a hosted `image_url`.
+- **Transparency / size:** `transparent` only sets the Unity texture import flag — fal/FLUX has no transparent-background *generation*. `width`/`height` are forwarded to fal only (OpenRouter's chat API has no size control).
 
 Your API keys never leave the Editor and never cross the MCP bridge.
 

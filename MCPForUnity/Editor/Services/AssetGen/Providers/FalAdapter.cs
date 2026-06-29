@@ -29,14 +29,32 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (http == null) throw new ArgumentNullException(nameof(http));
 
             string model = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
+            bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
+                         && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
+
             var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty, ["num_images"] = 1 };
-            if (string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(req.ImageUrl))
-                body["image_url"] = req.ImageUrl;
+            string url;
+            if (image)
+            {
+                // image→image / editing lives on the model's /edit endpoint and takes an image_urls
+                // array; each entry accepts a hosted URL or an inline base64 data URI (local image_path).
+                url = QueueBase + model + "/edit";
+                string imageRef = !string.IsNullOrEmpty(req.ImageUrl) ? req.ImageUrl : LocalImage.ToDataUri(req.ImagePath);
+                body["image_urls"] = new JArray(imageRef);
+            }
+            else
+            {
+                url = QueueBase + model;
+            }
+            // Forward explicit output dimensions; fal's image_size accepts a {width,height} object.
+            // (FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
+            if (req.Width > 0 && req.Height > 0)
+                body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
 
             var spec = new HttpRequestSpec
             {
                 Method = "POST",
-                Url = QueueBase + model,
+                Url = url,
                 ContentType = "application/json",
                 Body = Encoding.UTF8.GetBytes(body.ToString(Formatting.None))
             };
@@ -51,8 +69,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 string requestId = json["request_id"]?.ToString();
                 if (string.IsNullOrEmpty(requestId))
-                    throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + Truncate(res?.Text), apiKey));
-                responseUrl = QueueBase + model + "/requests/" + requestId;
+                    throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
+                responseUrl = url + "/requests/" + requestId;
             }
             return responseUrl;
         }
@@ -121,8 +139,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
         private static JObject ParseOk(HttpResult res, string apiKey, string phase)
         {
-            string text = res?.Text;
-            if (string.IsNullOrEmpty(text) && res?.Body != null) text = Encoding.UTF8.GetString(res.Body);
+            string text = ProviderHttp.BodyText(res);
 
             JObject json = null;
             if (!string.IsNullOrEmpty(text))
@@ -130,19 +147,13 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 try { json = JObject.Parse(text); } catch { /* non-JSON */ }
             }
 
-            bool ok = res != null && (res.IsSuccess || (res.Status >= 200 && res.Status < 300));
+            bool ok = res?.Ok == true;
             if (!ok)
             {
-                string detail = json?["detail"]?.ToString() ?? json?["error"]?.ToString() ?? Truncate(text);
+                string detail = json?["detail"]?.ToString() ?? json?["error"]?.ToString() ?? ProviderHttp.Truncate(text);
                 throw new Exception(SecretRedactor.Scrub($"fal {phase} failed (status={res?.Status}): {detail}", apiKey));
             }
             return json ?? new JObject();
-        }
-
-        private static string Truncate(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            return s.Length <= 500 ? s : s.Substring(0, 500) + "…";
         }
     }
 }

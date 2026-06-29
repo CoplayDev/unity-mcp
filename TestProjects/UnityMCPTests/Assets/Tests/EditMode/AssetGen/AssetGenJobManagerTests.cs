@@ -117,6 +117,24 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void FileSchemeDownloadUrl_Rejected_FailsJob()
+        {
+            _fake.Handler = spec =>
+            {
+                if (spec.Method == "POST" && spec.Url.EndsWith("/openapi/task"))
+                    return Json("{\"code\":0,\"data\":{\"task_id\":\"task_abc\"}}");
+                // Poll succeeds but hands back a malicious local-file URL as the model.
+                return Json("{\"code\":0,\"data\":{\"status\":\"success\",\"progress\":100,\"output\":{\"pbr_model\":\"file:///etc/passwd\"}}}");
+            };
+
+            AssetGenJob job = AssetGenJobManager.StartModelGeneration(Req());
+            Pump(job.JobId);
+
+            Assert.AreEqual(AssetGenJobState.Failed, job.State);
+            StringAssert.Contains("http", job.Error.ToLowerInvariant());
+        }
+
+        [Test]
         public void Cancel_BeforeRun_MarksCanceled()
         {
             AssetGenJob job = AssetGenJobManager.StartModelGeneration(Req());

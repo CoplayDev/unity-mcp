@@ -47,6 +47,45 @@ namespace MCPForUnityTests.Editor.AssetGen
             return zipPath;
         }
 
+        private string MakeMultiZip(params (string name, string content)[] entries)
+        {
+            string zipPath = Path.Combine(_work, "in_" + Guid.NewGuid().ToString("N") + ".zip");
+            using (var ms = new MemoryStream())
+            {
+                using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    foreach (var (name, content) in entries)
+                    {
+                        ZipArchiveEntry entry = archive.CreateEntry(name);
+                        using (Stream s = entry.Open())
+                        {
+                            byte[] bytes = Encoding.UTF8.GetBytes(content);
+                            s.Write(bytes, 0, bytes.Length);
+                        }
+                    }
+                }
+                File.WriteAllBytes(zipPath, ms.ToArray());
+            }
+            return zipPath;
+        }
+
+        [Test]
+        public void Allowlist_SkipsDisallowedEntries()
+        {
+            // A hostile marketplace archive: a valid model plus an editor script + a managed dll.
+            string zip = MakeMultiZip(
+                ("teapot.obj", "o teapot"),
+                ("Editor/Hack.cs", "// [InitializeOnLoad] arbitrary code"),
+                ("plugins/Evil.dll", "MZ..."));
+            string dest = Path.Combine(_work, "out");
+
+            SafeZipExtractor.ExtractTo(zip, dest, new System.Collections.Generic.HashSet<string> { ".obj" });
+
+            Assert.IsTrue(File.Exists(Path.Combine(dest, "teapot.obj")), "allowed model must be written");
+            Assert.IsFalse(File.Exists(Path.Combine(dest, "Editor", "Hack.cs")), "disallowed .cs must be skipped");
+            Assert.IsFalse(File.Exists(Path.Combine(dest, "plugins", "Evil.dll")), "disallowed .dll must be skipped");
+        }
+
         [Test]
         public void NormalEntry_Extracts()
         {

@@ -58,6 +58,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
         private static readonly Dictionary<string, AssetGenJob> Jobs = new();
         private static readonly Dictionary<string, Runner> Runners = new();
+        private static readonly List<string> _tickIds = new();
         private static bool _ticking;
 
         static AssetGenJobManager()
@@ -221,7 +222,6 @@ namespace MCPForUnity.Editor.Services.AssetGen
             public double NextPollAt;
             public string ProviderJobId;
             public string DownloadUrl;
-            public byte[] InlineData;
             public string LocalPath;
             public Task<string> SubmitTask;
             public Task<ProviderPollResult> PollTask;
@@ -234,7 +234,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             if (!SecureKeyStore.Current.TryGet(provider, out apiKey) || string.IsNullOrEmpty(apiKey))
             {
                 job.State = AssetGenJobState.Failed;
-                job.Error = $"No API key configured for '{provider}'. Add it in the MCP for Unity → Asset Generation tab.";
+                job.Error = AssetGenProviders.MissingKeyMessage(provider);
                 Jobs[job.JobId] = job;
                 Persist(job);
                 return false;
@@ -266,7 +266,11 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 _ticking = false;
                 return;
             }
-            foreach (string id in new List<string>(Runners.Keys))
+            // Snapshot keys into a reused buffer so Advance can mutate Runners mid-iteration
+            // without churning the GC on every editor-update frame.
+            _tickIds.Clear();
+            _tickIds.AddRange(Runners.Keys);
+            foreach (string id in _tickIds)
             {
                 if (Runners.TryGetValue(id, out var r)) Advance(r);
             }
@@ -353,6 +357,14 @@ namespace MCPForUnity.Editor.Services.AssetGen
                         break;
 
                     case RunnerPhase.Download:
+                        // The download URL comes from an untrusted provider response. Only fetch
+                        // http(s) — refuse file://, ftp://, etc. so a malicious response can't read
+                        // a local file into the project or hit an internal host.
+                        if (!IsAllowedDownloadUrl(r.DownloadUrl))
+                        {
+                            Fail(r, "Refusing to fetch a non-http(s) download URL returned by the provider.");
+                            break;
+                        }
                         r.DownloadTask = r.Transport.SendAsync(
                             new HttpRequestSpec { Method = "GET", Url = r.DownloadUrl }, r.Cts.Token);
                         r.Phase = RunnerPhase.AwaitDownload;
@@ -374,6 +386,10 @@ namespace MCPForUnity.Editor.Services.AssetGen
                         break;
 
                     case RunnerPhase.Import:
+                        // The result file was just written via File.WriteAllBytes (outside the
+                        // AssetDatabase). Refresh so Unity registers it before we import it,
+                        // mirroring ImportModelFile. Skipped under the test import seam.
+                        if (ImportOverrideForTests == null) AssetDatabase.Refresh();
                         AssetGenJob imported = r.ImportFn(r.Job, r.LocalPath);
                         if (imported != null) r.Job = imported;
                         if (r.Job.State != AssetGenJobState.Failed)
@@ -399,7 +415,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             string root = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
                                                                 : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
             if (!root.Replace('\\', '/').StartsWith("Assets")) root = AssetGenPrefs.OutputRoot + "/" + r.Subfolder;
-            string absRoot = ToAbsolute(root);
+            string absRoot = AssetGenPaths.ToAbsolute(root);
             Directory.CreateDirectory(absRoot);
             string baseName = SanitizeName(r.Name);
             string fileName = baseName + "." + ext;
@@ -415,13 +431,6 @@ namespace MCPForUnity.Editor.Services.AssetGen
             if (!string.IsNullOrWhiteSpace(explicitName)) return explicitName;
             if (!string.IsNullOrWhiteSpace(prompt)) return prompt;
             return "asset_" + jobId.Substring(0, 8);
-        }
-
-        private static string ToAbsolute(string projectRelative)
-        {
-            string dataPath = Application.dataPath;
-            string projectRoot = dataPath.Substring(0, dataPath.Length - "Assets".Length);
-            return Path.Combine(projectRoot, projectRelative);
         }
 
         private static string SanitizeName(string raw)
@@ -493,6 +502,11 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
         private static bool IsTerminal(AssetGenJobState s)
             => s == AssetGenJobState.Done || s == AssetGenJobState.Failed || s == AssetGenJobState.Canceled;
+
+        /// <summary>Only http(s) download URLs are allowed; provider responses are untrusted.</summary>
+        private static bool IsAllowedDownloadUrl(string url)
+            => Uri.TryCreate(url, UriKind.Absolute, out Uri u)
+               && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp);
 
         private static double Now() => EditorApplication.timeSinceStartup;
 

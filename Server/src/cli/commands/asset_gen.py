@@ -19,6 +19,15 @@ def asset_gen():
     pass
 
 
+def _emit(result, config, verb):
+    """Echo the command result, then (on success with a job_id) print the status-poll hint."""
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        job_id = (result.get("data") or {}).get("job_id")
+        if job_id:
+            print_info(f"{verb} started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
+
+
 @asset_gen.command("generate-model")
 @click.option("--provider", default=None, help="Provider id (tripo, meshy).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")
@@ -71,11 +80,7 @@ def generate_model(
     params.update({k: v for k, v in optional.items() if v is not None})
 
     result = run_command("generate_model", params, config)
-    click.echo(format_output(result, config.format))
-    if result.get("success"):
-        job_id = (result.get("data") or {}).get("job_id")
-        if job_id:
-            print_info(f"Generation started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
+    _emit(result, config, "Generation")
 
 
 @asset_gen.command("import-model")
@@ -108,11 +113,7 @@ def import_model(
     params.update({k: v for k, v in optional.items() if v is not None})
 
     result = run_command("import_model", params, config)
-    click.echo(format_output(result, config.format))
-    if result.get("success"):
-        job_id = (result.get("data") or {}).get("job_id")
-        if job_id:
-            print_info(f"Import started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
+    _emit(result, config, "Import")
 
 
 @asset_gen.command("import-model-file")
@@ -188,11 +189,7 @@ def generate_image(
     params.update({k: v for k, v in optional.items() if v is not None})
 
     result = run_command("generate_image", params, config)
-    click.echo(format_output(result, config.format))
-    if result.get("success"):
-        job_id = (result.get("data") or {}).get("job_id")
-        if job_id:
-            print_info(f"Generation started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
+    _emit(result, config, "Generation")
 
 
 @asset_gen.command("status")

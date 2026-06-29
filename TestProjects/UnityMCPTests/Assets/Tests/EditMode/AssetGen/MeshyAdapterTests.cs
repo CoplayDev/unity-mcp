@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Text;
 using System.Threading;
 using MCPForUnity.Editor.Services.AssetGen.Http;
@@ -54,7 +56,8 @@ namespace MCPForUnityTests.Editor.AssetGen
                     "\"model_urls\":{\"glb\":\"https://assets.meshy.ai/model.glb\",\"fbx\":\"https://assets.meshy.ai/model.fbx\"}}")
             };
             var adapter = new MeshyAdapter();
-            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x", Format = "glb" };
+            // Texture=false -> single-phase (no refine), so a SUCCEEDED preview surfaces directly.
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x", Format = "glb", Texture = false };
             adapter.SubmitAsync(req, "k", new FakeHttpTransport { Handler = _ => Json("{\"result\":\"id1\"}") }, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
@@ -70,11 +73,97 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             var http = new FakeHttpTransport { Handler = _ => Json("{\"status\":\"IN_PROGRESS\",\"progress\":37}") };
             var adapter = new MeshyAdapter();
+            // Submit single-phase (Texture=false) so progress is reported raw (not split across refine).
+            adapter.SubmitAsync(
+                new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x", Texture = false },
+                "k", new FakeHttpTransport { Handler = _ => Json("{\"result\":\"id1\"}") }, CancellationToken.None)
+                .GetAwaiter().GetResult();
 
             ProviderPollResult res = adapter.PollAsync("id1", "k", http, CancellationToken.None).GetAwaiter().GetResult();
 
             Assert.AreEqual(ProviderPollState.Running, res.State);
             Assert.AreEqual(0.37f, res.Progress, 0.001f);
+        }
+
+        [Test]
+        public void Submit_ImageMode_PollsV1ImageEndpoint()
+        {
+            var submitFake = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"img1\"}") };
+            var pollFake = new FakeHttpTransport
+            {
+                Handler = _ => Json("{\"status\":\"SUCCEEDED\",\"progress\":100,\"model_urls\":{\"glb\":\"https://m/i.glb\"}}")
+            };
+            var adapter = new MeshyAdapter();
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "image", ImageUrl = "https://ex.com/ref.png", Format = "glb" };
+
+            string id = adapter.SubmitAsync(req, "k", submitFake, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("img1", id);
+            StringAssert.Contains("/openapi/v1/image-to-3d", submitFake.RecordedRequests[0].Url);
+
+            ProviderPollResult res = adapter.PollAsync(id, "k", pollFake, CancellationToken.None).GetAwaiter().GetResult();
+
+            // Image tasks must be polled at the v1 image endpoint, not the v2 text endpoint.
+            StringAssert.Contains("/openapi/v1/image-to-3d/img1", pollFake.RecordedRequests[0].Url);
+            Assert.AreEqual(ProviderPollState.Succeeded, res.State);
+            Assert.AreEqual("https://m/i.glb", res.DownloadUrl);
+        }
+
+        [Test]
+        public void Submit_ImageMode_LocalPath_SendsDataUri()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "mcp_meshyimg_" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            try
+            {
+                var fake = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"id1\"}") };
+                var adapter = new MeshyAdapter();
+                var req = new ModelGenRequest { Provider = "meshy", Mode = "image", ImagePath = tmp, Format = "glb" };
+
+                adapter.SubmitAsync(req, "k", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+                HttpRequestSpec rec = fake.RecordedRequests[0];
+                StringAssert.Contains("/openapi/v1/image-to-3d", rec.Url);
+                StringAssert.Contains("data:image/png;base64,", Encoding.UTF8.GetString(rec.Body));
+            }
+            finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
+        public void TextWithTexture_PreviewSucceeded_SubmitsRefine_ThenReturnsTexturedModel()
+        {
+            var submitFake = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"prev1\"}") };
+            var pollFake = new FakeHttpTransport
+            {
+                Handler = spec => spec.Method == "POST"
+                    ? Json("{\"result\":\"refine1\"}")                                   // refine submit
+                    : Json("{\"status\":\"SUCCEEDED\",\"progress\":100,\"model_urls\":{\"glb\":\"https://m/refined.glb\"}}")
+            };
+            var adapter = new MeshyAdapter();
+            // Texture defaults to true -> two-phase preview+refine.
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "a chair", Format = "glb" };
+
+            string previewId = adapter.SubmitAsync(req, "k", submitFake, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("prev1", previewId);
+
+            // Poll #1: preview SUCCEEDED -> adapter submits a refine task and reports Running.
+            ProviderPollResult p1 = adapter.PollAsync(previewId, "k", pollFake, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual(ProviderPollState.Running, p1.State);
+
+            bool refinePosted = false;
+            foreach (HttpRequestSpec r in pollFake.RecordedRequests)
+            {
+                if (r.Method == "POST" && r.Body != null)
+                {
+                    string b = Encoding.UTF8.GetString(r.Body);
+                    if (b.Contains("refine") && b.Contains("prev1")) refinePosted = true;
+                }
+            }
+            Assert.IsTrue(refinePosted, "expected a refine POST carrying the preview_task_id");
+
+            // Poll #2: the refine task SUCCEEDED -> textured model url surfaced.
+            ProviderPollResult p2 = adapter.PollAsync(previewId, "k", pollFake, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual(ProviderPollState.Succeeded, p2.State);
+            Assert.AreEqual("https://m/refined.glb", p2.DownloadUrl);
         }
 
         [Test]

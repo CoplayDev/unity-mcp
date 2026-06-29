@@ -120,5 +120,17 @@ namespace MCPForUnityTests.Editor.AssetGen
             StringAssert.Contains("image_to_model", body);
             StringAssert.Contains("https://example.com/in.png", body);
         }
+
+        [Test]
+        public void Submit_ImageMode_LocalPathOnly_Throws()
+        {
+            // Tripo can't take a local image inline (no data-URI support, upload not wired) — it must
+            // fail clearly rather than silently falling back to text mode.
+            var adapter = new TripoAdapter();
+            var req = new ModelGenRequest { Provider = "tripo", Mode = "image", ImagePath = "/tmp/whatever.png" };
+
+            Assert.Throws<System.Exception>(() =>
+                adapter.SubmitAsync(req, "k", new FakeHttpTransport(), CancellationToken.None).GetAwaiter().GetResult());
+        }
     }
 }

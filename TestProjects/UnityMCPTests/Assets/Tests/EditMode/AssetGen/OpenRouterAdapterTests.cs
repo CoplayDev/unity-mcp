@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using MCPForUnity.Editor.Services.AssetGen.Http;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
@@ -34,6 +35,46 @@ namespace MCPForUnityTests.Editor.AssetGen
             ProviderPollResult pr = adapter.PollAsync(pid, "orkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
             Assert.AreEqual(ProviderPollState.Succeeded, pr.State);
             CollectionAssert.AreEqual(expected, pr.InlineData);
+        }
+
+        [Test]
+        public void Submit_ImageMode_IncludesReferenceImageInBody()
+        {
+            var fake = new FakeHttpTransport
+            {
+                Handler = spec => Json("{\"choices\":[{\"message\":{\"images\":[{\"image_url\":{\"url\":\"data:image/png;base64,AAAA\"}}]}}]}")
+            };
+            var adapter = new OpenRouterAdapter();
+            var req = new ImageGenRequest { Provider = "openrouter", Mode = "image", Prompt = "make it watercolor", ImageUrl = "https://ex.com/in.png" };
+
+            adapter.SubmitAsync(req, "orkey", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            string sent = System.Text.Encoding.UTF8.GetString(fake.RecordedRequests[0].Body);
+            StringAssert.Contains("image_url", sent);
+            StringAssert.Contains("https://ex.com/in.png", sent);
+        }
+
+        [Test]
+        public void Submit_ImageMode_LocalPath_SendsDataUri()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "mcp_orimg_" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            try
+            {
+                var fake = new FakeHttpTransport
+                {
+                    Handler = spec => Json("{\"choices\":[{\"message\":{\"images\":[{\"image_url\":{\"url\":\"data:image/png;base64,AAAA\"}}]}}]}")
+                };
+                var adapter = new OpenRouterAdapter();
+                var req = new ImageGenRequest { Provider = "openrouter", Mode = "image", Prompt = "watercolor", ImagePath = tmp };
+
+                adapter.SubmitAsync(req, "orkey", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+                string sent = System.Text.Encoding.UTF8.GetString(fake.RecordedRequests[0].Body);
+                StringAssert.Contains("image_url", sent);
+                StringAssert.Contains("data:image/png;base64,", sent);
+            }
+            finally { try { File.Delete(tmp); } catch { } }
         }
 
         [Test]

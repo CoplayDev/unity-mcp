@@ -1,0 +1,53 @@
+using System;
+using System.IO;
+using MCPForUnity.Editor.Helpers;
+
+namespace MCPForUnity.Editor.Services.AssetGen.Providers
+{
+    /// <summary>
+    /// Helpers for feeding a LOCAL on-disk image to a provider: resolve+verify the path, and encode
+    /// it as a base64 <c>data:</c> URI — the inline form fal, Meshy, and OpenRouter accept for image
+    /// input (no hosting/upload needed). Tripo does NOT accept data URIs and is handled separately.
+    /// </summary>
+    internal static class LocalImage
+    {
+        /// <summary>Resolve an "Assets/..."-relative or absolute path to an existing absolute file.</summary>
+        public static bool ResolveExisting(string path, out string absPath, out string error)
+        {
+            absPath = null;
+            error = null;
+            if (string.IsNullOrWhiteSpace(path)) { error = "image_path is empty."; return false; }
+            string p = path.Replace('\\', '/');
+            string abs = (p == "Assets" || p.StartsWith("Assets/")) ? AssetGenPaths.ToAbsolute(p) : p;
+            if (!File.Exists(abs)) { error = $"Source image not found: {path}"; return false; }
+            absPath = abs;
+            return true;
+        }
+
+        /// <summary>
+        /// Read a local image and return a "data:image/&lt;mime&gt;;base64,..." URI. Throws
+        /// <see cref="NotSupportedException"/> for an unsupported extension.
+        /// </summary>
+        public static string ToDataUri(string absPath)
+        {
+            string mime = MimeFromExtension(Path.GetExtension(absPath));
+            byte[] bytes = File.ReadAllBytes(absPath);
+            return "data:" + mime + ";base64," + Convert.ToBase64String(bytes);
+        }
+
+        private static string MimeFromExtension(string ext)
+        {
+            switch ((ext ?? string.Empty).ToLowerInvariant())
+            {
+                case ".png": return "image/png";
+                case ".jpg":
+                case ".jpeg": return "image/jpeg";
+                case ".webp": return "image/webp";
+                case ".gif": return "image/gif";
+                default:
+                    throw new NotSupportedException(
+                        $"Unsupported image type '{ext}' for image input. Use .png, .jpg, .jpeg, .webp, or .gif.");
+            }
+        }
+    }
+}

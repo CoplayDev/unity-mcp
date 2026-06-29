@@ -69,7 +69,9 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 return KeyError();
 
             IMarketplaceProviderAdapter adapter = AssetGenProviders.Marketplace(Provider);
-            string results = await adapter.SearchAsync(query, key, Transport(), CancellationToken.None);
+            string results = await adapter.SearchAsync(
+                query, p.Get("categories"), p.GetBool("downloadable", true), p.GetInt("count"), p.Get("cursor"),
+                key, Transport(), CancellationToken.None);
             return new SuccessResponse($"Search results for '{query}'.",
                 new { provider = Provider, results = ParseOrRaw(results) });
         }
@@ -153,9 +155,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
         }
 
         private static object KeyError()
-            => new ErrorResponse(
-                $"No API key configured for '{Provider}'. Add it in the MCP for Unity → Asset Generation tab " +
-                $"(or set MCPFORUNITY_{Provider.ToUpperInvariant()}_API_KEY).");
+            => new ErrorResponse(AssetGenProviders.MissingKeyMessage(Provider));
 
         private static object ParseOrRaw(string json)
         {

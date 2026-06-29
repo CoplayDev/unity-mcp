@@ -67,6 +67,29 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Generate_ImageMode_MissingFile_ReturnsError()
+        {
+            _store.Set("fal", "falkey");
+            JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = "Assets/does_not_exist_zzz.png" });
+            Assert.AreEqual(false, (bool)resp["success"]);
+            StringAssert.Contains("not found", ((string)resp["error"]).ToLowerInvariant());
+        }
+
+        [Test]
+        public void Generate_ImageMode_LocalPath_Accepted_ReturnsPending()
+        {
+            _store.Set("fal", "falkey");
+            string tmp = Path.Combine(Path.GetTempPath(), "mcp_imgin_" + Guid.NewGuid().ToString("N") + ".png");
+            File.WriteAllBytes(tmp, new byte[] { 137, 80, 78, 71 });
+            try
+            {
+                JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "image", ["imagePath"] = tmp, ["prompt"] = "edit it" });
+                Assert.AreEqual("pending", (string)gen["_mcp_status"]);
+            }
+            finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        [Test]
         public void ListProviders_ImageOnly()
         {
             JObject resp = Call(new JObject { ["action"] = "list_providers" });

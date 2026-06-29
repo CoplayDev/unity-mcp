@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
@@ -15,6 +16,15 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
     /// </summary>
     public static class ModelImportPipeline
     {
+        // Inert asset types permitted out of an UNTRUSTED provider archive (Sketchfab et al.).
+        // Anything else — scripts, assemblies, asmdefs — is skipped on extraction so it can never
+        // compile or load inside the Editor. See SafeZipExtractor for the enforcement.
+        private static readonly HashSet<string> ArchiveAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".gltf", ".glb", ".bin", ".fbx", ".obj", ".mtl",
+            ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".tif", ".tiff", ".webp", ".exr", ".hdr", ".ktx2", ".basis",
+        };
+
         public static AssetGenJob ImportInto(AssetGenJob job, string localFilePath)
         {
             if (job == null) return null;
@@ -23,7 +33,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                 if (string.IsNullOrEmpty(localFilePath))
                     return Fail(job, "No file to import.");
 
-                string rel = ToProjectRelative(localFilePath);
+                string rel = AssetGenPaths.ToProjectRelative(localFilePath);
                 if (string.IsNullOrEmpty(rel) || !rel.Replace('\\', '/').StartsWith("Assets"))
                     return Fail(job, "Generated file is not under the Assets folder.");
 
@@ -71,15 +81,17 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
         /// </summary>
         private static AssetGenJob ImportArchive(AssetGenJob job, string zipRel)
         {
-            string zipAbs = ToAbsolute(zipRel);
+            string zipAbs = AssetGenPaths.ToAbsolute(zipRel);
             if (!File.Exists(zipAbs))
                 return Fail(job, "Downloaded archive was not found on disk.");
 
             string folderRel = zipRel.Substring(0, zipRel.Length - ".zip".Length);
-            string folderAbs = ToAbsolute(folderRel);
+            string folderAbs = AssetGenPaths.ToAbsolute(folderRel);
 
             Directory.CreateDirectory(folderAbs);
-            SafeZipExtractor.ExtractTo(zipAbs, folderAbs);
+            // Provider archives are untrusted: only inert model/texture files are written under
+            // Assets/ — scripts/assemblies are skipped so they can't be compiled on import.
+            SafeZipExtractor.ExtractTo(zipAbs, folderAbs, ArchiveAllowedExtensions);
 
             AssetDatabase.Refresh();
             AssetDatabase.ImportAsset(folderRel, ImportAssetOptions.ImportRecursive | ImportAssetOptions.ForceUpdate);
@@ -126,18 +138,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
             {
                 string e = Path.GetExtension(abs).ToLowerInvariant();
                 if (e == ".fbx" || e == ".obj")
-                    return ToProjectRelative(abs);
+                    return AssetGenPaths.ToProjectRelative(abs);
                 if (firstGltf == null && (e == ".glb" || e == ".gltf"))
                     firstGltf = abs;
             }
-            return firstGltf == null ? null : ToProjectRelative(firstGltf);
-        }
-
-        private static string ToAbsolute(string projectRelative)
-        {
-            string dataPath = Application.dataPath.Replace('\\', '/');
-            string projectRoot = dataPath.Substring(0, dataPath.Length - "Assets".Length);
-            return Path.Combine(projectRoot, projectRelative).Replace('\\', '/');
+            return firstGltf == null ? null : AssetGenPaths.ToProjectRelative(firstGltf);
         }
 
         private static void ApplyModelImporterSettings(string rel, AssetGenJob job)
@@ -191,24 +196,27 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
             catch { return 0f; }
         }
 
-        private static bool IsGltfastAvailable()
-        {
-            if (Type.GetType("GLTFast.GltfImport, glTFast") != null) return true;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try { if (asm.GetType("GLTFast.GltfImport") != null) return true; }
-                catch { /* dynamic/!resolvable assembly */ }
-            }
-            return false;
-        }
+        private static bool? _gltfastAvailable;
 
-        private static string ToProjectRelative(string path)
+        /// <summary>
+        /// True when the glTFast package is present. Cached after the first probe — the result only
+        /// changes on a package install/uninstall, which triggers a domain reload that resets this
+        /// static. Shared with the Asset Gen settings tab so the reflection scan runs at most once.
+        /// </summary>
+        internal static bool IsGltfastAvailable()
         {
-            string p = path.Replace('\\', '/');
-            if (p.StartsWith("Assets")) return p;
-            string dataPath = Application.dataPath.Replace('\\', '/');
-            if (p.StartsWith(dataPath)) return "Assets" + p.Substring(dataPath.Length);
-            return p;
+            if (_gltfastAvailable.HasValue) return _gltfastAvailable.Value;
+            bool found = Type.GetType("GLTFast.GltfImport, glTFast") != null;
+            if (!found)
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    try { if (asm.GetType("GLTFast.GltfImport") != null) { found = true; break; } }
+                    catch { /* dynamic/!resolvable assembly */ }
+                }
+            }
+            _gltfastAvailable = found;
+            return found;
         }
 
         private static AssetGenJob Fail(AssetGenJob job, string message)

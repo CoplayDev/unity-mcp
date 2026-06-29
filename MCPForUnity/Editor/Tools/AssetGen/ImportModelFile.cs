@@ -6,7 +6,6 @@ using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Import;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
-using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
@@ -66,7 +65,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
         private static string ResolveSource(string source)
         {
             string s = source.Replace('\\', '/');
-            if (s == "Assets" || s.StartsWith("Assets/")) return ToAbsolute(s);
+            if (s == "Assets" || s.StartsWith("Assets/")) return AssetGenPaths.ToAbsolute(s);
             return s; // absolute path on disk
         }
 
@@ -78,7 +77,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             if (!root.Replace('\\', '/').StartsWith("Assets"))
                 root = AssetGenPrefs.OutputRoot + "/Imported";
 
-            string absRoot = ToAbsolute(root);
+            string absRoot = AssetGenPaths.ToAbsolute(root);
             Directory.CreateDirectory(absRoot);
 
             string safe = SanitizeName(baseName);
@@ -89,13 +88,6 @@ namespace MCPForUnity.Editor.Tools.AssetGen
 
             File.Copy(srcAbs, abs);
             return (root.TrimEnd('/') + "/" + fileName).Replace('\\', '/');
-        }
-
-        private static string ToAbsolute(string projectRelative)
-        {
-            string dataPath = Application.dataPath.Replace('\\', '/');
-            string projectRoot = dataPath.Substring(0, dataPath.Length - "Assets".Length);
-            return Path.Combine(projectRoot, projectRelative).Replace('\\', '/');
         }
 
         private static string SanitizeName(string raw)

@@ -28,7 +28,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             var http = new FakeHttpTransport { Handler = _ => Json("{\"results\":[{\"uid\":\"abc\"}]}") };
             var adapter = new SketchfabAdapter();
 
-            string raw = adapter.SearchAsync("castle", "sfk_secret", http, CancellationToken.None).GetAwaiter().GetResult();
+            string raw = adapter.SearchAsync("castle", null, true, null, null, "sfk_secret", http, CancellationToken.None).GetAwaiter().GetResult();
 
             StringAssert.Contains("\"uid\":\"abc\"", raw);
             HttpRequestSpec rec = http.RecordedRequests[0];
@@ -38,6 +38,22 @@ namespace MCPForUnityTests.Editor.AssetGen
             StringAssert.Contains("q=castle", rec.Url);
             Assert.IsTrue(rec.Headers.ContainsKey("Authorization"));
             StringAssert.StartsWith("Token ", rec.Headers["Authorization"]);
+        }
+
+        [Test]
+        public void Search_ForwardsCategoriesCountCursorAndDownloadableFlag()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"results\":[],\"cursors\":{\"next\":\"2\"}}") };
+            var adapter = new SketchfabAdapter();
+
+            adapter.SearchAsync("castle", "architecture", false, 12, "2", "sfk_secret", http, CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            string url = http.RecordedRequests[0].Url;
+            StringAssert.Contains("categories=architecture", url);
+            StringAssert.Contains("count=12", url);
+            StringAssert.Contains("cursor=2", url);
+            StringAssert.Contains("downloadable=false", url);
         }
 
         [Test]

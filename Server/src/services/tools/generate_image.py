@@ -48,7 +48,9 @@ async def generate_image(
     image_path: Annotated[str, "Path to a source image for image->image / remove_background."] | None = None,
     image_url: Annotated[str, "URL of a source image for image->image."] | None = None,
     model: Annotated[str, "Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image)."] | None = None,
-    transparent: Annotated[bool, "Request a transparent background."] | None = None,
+    transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "
+                           "and OpenRouter have no generation-time transparency, so this only sets the "
+                           "Unity import flag — it does not make the model render a transparent background."] | None = None,
     width: Annotated[int, "Output width in pixels."] | None = None,
     height: Annotated[int, "Output height in pixels."] | None = None,
     name: Annotated[str, "Base name for the imported asset."] | None = None,

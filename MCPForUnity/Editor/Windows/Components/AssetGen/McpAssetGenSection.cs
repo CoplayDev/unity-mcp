@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
+using MCPForUnity.Editor.Services.AssetGen.Import;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -66,29 +67,25 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
         private void InitializeUI()
         {
-            BuildProviderRows();
-
+            // One-time choices + tooltips; the field values are populated by SyncFromPrefs.
             if (formatDropdown != null)
             {
                 formatDropdown.choices = new List<string> { "glb", "fbx", "obj" };
-                formatDropdown.SetValueWithoutNotify(NormalizeFormat(AssetGenPrefs.DefaultFormat));
                 formatDropdown.tooltip = "Default container format for generated 3D models.";
             }
 
             if (outputRootField != null)
             {
-                outputRootField.SetValueWithoutNotify(AssetGenPrefs.OutputRoot);
                 outputRootField.tooltip =
                     $"Project-relative folder where generated assets are written. Empty = {AssetGenPrefs.DefaultOutputRoot}.";
             }
 
             if (autoNormalizeToggle != null)
             {
-                autoNormalizeToggle.SetValueWithoutNotify(AssetGenPrefs.AutoNormalize);
                 autoNormalizeToggle.tooltip = "Uniformly scale imported models to the target size on import.";
             }
 
-            UpdateGltfastNotice();
+            SyncFromPrefs();
         }
 
         private void RegisterCallbacks()
@@ -124,23 +121,15 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         /// Re-reads secure-store presence and prefs and rebuilds the rows. Called when the
         /// tab becomes visible so keys set elsewhere (e.g. via CLI) are reflected.
         /// </summary>
-        public void Refresh()
+        public void Refresh() => SyncFromPrefs();
+
+        /// <summary>Rebuild the provider rows and reflect current prefs into the fields.</summary>
+        private void SyncFromPrefs()
         {
             BuildProviderRows();
-
-            if (formatDropdown != null)
-            {
-                formatDropdown.SetValueWithoutNotify(NormalizeFormat(AssetGenPrefs.DefaultFormat));
-            }
-            if (outputRootField != null)
-            {
-                outputRootField.SetValueWithoutNotify(AssetGenPrefs.OutputRoot);
-            }
-            if (autoNormalizeToggle != null)
-            {
-                autoNormalizeToggle.SetValueWithoutNotify(AssetGenPrefs.AutoNormalize);
-            }
-
+            formatDropdown?.SetValueWithoutNotify(NormalizeFormat(AssetGenPrefs.DefaultFormat));
+            outputRootField?.SetValueWithoutNotify(AssetGenPrefs.OutputRoot);
+            autoNormalizeToggle?.SetValueWithoutNotify(AssetGenPrefs.AutoNormalize);
             UpdateGltfastNotice();
         }
 
@@ -349,33 +338,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                 }
             }
 
-            bool show = anyGlbProviderEnabled && !IsGltfastPresent();
+            bool show = anyGlbProviderEnabled && !ModelImportPipeline.IsGltfastAvailable();
             gltfastNotice.EnableInClassList("visible", show);
-        }
-
-        private static bool IsGltfastPresent()
-        {
-            if (Type.GetType("GLTFast.GltfImport, glTFast") != null)
-            {
-                return true;
-            }
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    if (assembly.GetType("GLTFast.GltfImport") != null)
-                    {
-                        return true;
-                    }
-                }
-                catch
-                {
-                    // Some dynamic/reflection-only assemblies throw on GetType; ignore them.
-                }
-            }
-
-            return false;
         }
     }
 }

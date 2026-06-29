@@ -28,9 +28,14 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (req == null) throw new ArgumentNullException(nameof(req));
             if (http == null) throw new ArgumentNullException(nameof(http));
 
+            // Tripo rejects base64 data URIs and needs a multipart upload→token flow for local files,
+            // which isn't wired yet — fail clearly rather than silently falling back to text mode.
+            bool imageMode = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase);
+            if (imageMode && string.IsNullOrEmpty(req.ImageUrl))
+                throw new Exception("Tripo image input requires a hosted 'image_url'; local 'image_path' upload is not yet supported for Tripo (use Meshy for local-image→3D, or host the image).");
+
             JObject body;
-            bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
-                         && !string.IsNullOrEmpty(req.ImageUrl);
+            bool image = imageMode && !string.IsNullOrEmpty(req.ImageUrl);
             if (image)
             {
                 body = new JObject
@@ -69,7 +74,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (string.IsNullOrEmpty(taskId))
             {
                 throw new Exception(SecretRedactor.Scrub(
-                    "Tripo submit returned no task_id: " + Truncate(res?.Text), apiKey));
+                    "Tripo submit returned no task_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
             }
             return taskId;
         }
@@ -184,11 +189,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         /// </summary>
         private static JObject ParseAndValidate(HttpResult res, string apiKey, string phase)
         {
-            string text = res?.Text;
-            if (string.IsNullOrEmpty(text) && res?.Body != null)
-            {
-                text = Encoding.UTF8.GetString(res.Body);
-            }
+            string text = ProviderHttp.BodyText(res);
 
             JObject json = null;
             if (!string.IsNullOrEmpty(text))
@@ -197,7 +198,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 catch { /* non-JSON body; handled below */ }
             }
 
-            bool httpOk = res != null && (res.IsSuccess || (res.Status >= 200 && res.Status < 300));
+            bool httpOk = res?.Ok == true;
 
             int code = 0;
             JToken codeTok = json?["code"];
@@ -210,18 +211,12 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 string detail = json?["message"]?.ToString()
                                 ?? json?["error"]?.ToString()
-                                ?? Truncate(text);
+                                ?? ProviderHttp.Truncate(text);
                 throw new Exception(SecretRedactor.Scrub(
                     $"Tripo {phase} failed (status={res?.Status}, code={code}): {detail}", apiKey));
             }
 
             return json ?? new JObject();
-        }
-
-        private static string Truncate(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            return s.Length <= 500 ? s : s.Substring(0, 500) + "…";
         }
     }
 }
