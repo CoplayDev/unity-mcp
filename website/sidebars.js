@@ -97,6 +97,7 @@ const sidebars = {
         'migrations/v5',
         'migrations/v6',
         'migrations/v8',
+        'migrations/v10',
       ],
     },
     'releases',
