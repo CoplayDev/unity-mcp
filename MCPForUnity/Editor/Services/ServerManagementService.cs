@@ -271,7 +271,7 @@ namespace MCPForUnity.Editor.Services
                                 "Port In Use",
                                 $"Cannot start the local HTTP server because port {uri.Port} is already in use by PID(s): " +
                                 $"{string.Join(", ", remaining)}\n\n" +
-                                "MCP For Unity will not terminate unrelated processes. Stop the owning process manually or change the HTTP URL.",
+                                $"{ProductInfo.ProductName} will not terminate unrelated processes. Stop the owning process manually or change the HTTP URL.",
                                 "OK");
                         }
                         return false;

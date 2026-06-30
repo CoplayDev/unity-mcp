@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Advanced;
+using MCPForUnity.Editor.Windows.Components.AssetGen;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Resources;
@@ -27,6 +28,7 @@ namespace MCPForUnity.Editor.Windows
         private McpAdvancedSection advancedSection;
         private McpToolsSection toolsSection;
         private McpResourcesSection resourcesSection;
+        private McpAssetGenSection assetGenSection;
 
         // UI Elements
         private Label versionLabel;
@@ -38,11 +40,13 @@ namespace MCPForUnity.Editor.Windows
         private ToolbarToggle advancedTabToggle;
         private ToolbarToggle toolsTabToggle;
         private ToolbarToggle resourcesTabToggle;
+        private ToolbarToggle assetGenTabToggle;
         private VisualElement clientsPanel;
         private VisualElement depsPanel;
         private VisualElement advancedPanel;
         private VisualElement toolsPanel;
         private VisualElement resourcesPanel;
+        private VisualElement assetGenPanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
@@ -59,7 +63,8 @@ namespace MCPForUnity.Editor.Windows
             Deps,
             Advanced,
             Tools,
-            Resources
+            Resources,
+            AssetGen
         }
 
         internal static void CloseAllWindows()
@@ -95,10 +100,10 @@ namespace MCPForUnity.Editor.Windows
             }
             else
             {
-                window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+                window = GetWindow<MCPForUnityEditorWindow>(ProductInfo.ProductName);
             }
 
-            window.titleContent = new GUIContent("MCP For Unity");
+            window.titleContent = new GUIContent(ProductInfo.ProductName);
             window.minSize = new Vector2(500, 340);
 
             if (window.position.width < 100 || window.position.height < 100)
@@ -190,13 +195,15 @@ namespace MCPForUnity.Editor.Windows
             advancedPanel = rootVisualElement.Q<VisualElement>("advanced-panel");
             toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
             resourcesPanel = rootVisualElement.Q<VisualElement>("resources-panel");
+            assetGenPanel = rootVisualElement.Q<VisualElement>("assetgen-panel");
             var clientsContainer = rootVisualElement.Q<VisualElement>("clients-container");
             var depsContainer = rootVisualElement.Q<VisualElement>("deps-container");
             var advancedContainer = rootVisualElement.Q<VisualElement>("advanced-container");
             var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
             var resourcesContainer = rootVisualElement.Q<VisualElement>("resources-container");
+            var assetGenContainer = rootVisualElement.Q<VisualElement>("assetgen-container");
 
-            if (clientsPanel == null || depsPanel == null || advancedPanel == null || toolsPanel == null || resourcesPanel == null)
+            if (clientsPanel == null || depsPanel == null || advancedPanel == null || toolsPanel == null || resourcesPanel == null || assetGenPanel == null)
             {
                 McpLog.Error("Failed to find tab panels in UXML");
                 return;
@@ -229,6 +236,12 @@ namespace MCPForUnity.Editor.Windows
             if (resourcesContainer == null)
             {
                 McpLog.Error("Failed to find resources-container in UXML");
+                return;
+            }
+
+            if (assetGenContainer == null)
+            {
+                McpLog.Error("Failed to find assetgen-container in UXML");
                 return;
             }
 
@@ -360,6 +373,21 @@ namespace MCPForUnity.Editor.Windows
                 McpLog.Warn("Failed to load resources section UXML. Resource configuration will be unavailable.");
             }
 
+            // Load and initialize Asset Generation section
+            var assetGenTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/AssetGen/McpAssetGenSection.uxml"
+            );
+            if (assetGenTree != null)
+            {
+                var assetGenRoot = assetGenTree.Instantiate();
+                assetGenContainer.Add(assetGenRoot);
+                assetGenSection = new McpAssetGenSection(assetGenRoot);
+            }
+            else
+            {
+                McpLog.Warn("Failed to load asset generation section UXML. Asset generation configuration will be unavailable.");
+            }
+
             // Apply .section-last class to last section in each stack
             // (Unity UI Toolkit doesn't support :last-child pseudo-class)
             ApplySectionLastClasses();
@@ -381,8 +409,8 @@ namespace MCPForUnity.Editor.Windows
             string version = AssetPathUtility.GetPackageVersion();
             versionLabel.text = $"v{version}";
             versionLabel.tooltip = AssetPathUtility.IsPreReleaseVersion()
-                ? $"MCP For Unity v{version} (pre-release package, using prerelease server channel)"
-                : $"MCP For Unity v{version}";
+                ? $"{ProductInfo.ProductName} v{version} (pre-release package, using prerelease server channel)"
+                : $"{ProductInfo.ProductName} v{version}";
         }
 
         private void QueueUpdateCheck()
@@ -605,12 +633,14 @@ namespace MCPForUnity.Editor.Windows
             advancedTabToggle = rootVisualElement.Q<ToolbarToggle>("advanced-tab");
             toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
             resourcesTabToggle = rootVisualElement.Q<ToolbarToggle>("resources-tab");
+            assetGenTabToggle = rootVisualElement.Q<ToolbarToggle>("assetgen-tab");
 
             clientsPanel?.RemoveFromClassList("hidden");
             depsPanel?.RemoveFromClassList("hidden");
             advancedPanel?.RemoveFromClassList("hidden");
             toolsPanel?.RemoveFromClassList("hidden");
             resourcesPanel?.RemoveFromClassList("hidden");
+            assetGenPanel?.RemoveFromClassList("hidden");
 
             if (clientsTabToggle != null)
             {
@@ -649,6 +679,14 @@ namespace MCPForUnity.Editor.Windows
                 resourcesTabToggle.RegisterValueChangedCallback(evt =>
                 {
                     if (evt.newValue) SwitchPanel(ActivePanel.Resources);
+                });
+            }
+
+            if (assetGenTabToggle != null)
+            {
+                assetGenTabToggle.RegisterValueChangedCallback(evt =>
+                {
+                    if (evt.newValue) SwitchPanel(ActivePanel.AssetGen);
                 });
             }
 
@@ -691,6 +729,11 @@ namespace MCPForUnity.Editor.Windows
                 resourcesPanel.style.display = DisplayStyle.None;
             }
 
+            if (assetGenPanel != null)
+            {
+                assetGenPanel.style.display = DisplayStyle.None;
+            }
+
             // Show selected panel
             switch (panel)
             {
@@ -713,6 +756,10 @@ namespace MCPForUnity.Editor.Windows
                     if (resourcesPanel != null) resourcesPanel.style.display = DisplayStyle.Flex;
                     EnsureResourcesLoaded();
                     break;
+                case ActivePanel.AssetGen:
+                    if (assetGenPanel != null) assetGenPanel.style.display = DisplayStyle.Flex;
+                    assetGenSection?.Refresh();
+                    break;
             }
 
             // Update toggle states
@@ -721,6 +768,7 @@ namespace MCPForUnity.Editor.Windows
             advancedTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Advanced);
             toolsTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Tools);
             resourcesTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Resources);
+            assetGenTabToggle?.SetValueWithoutNotify(panel == ActivePanel.AssetGen);
 
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }
@@ -777,13 +825,13 @@ namespace MCPForUnity.Editor.Windows
             bulkRow.style.flexDirection = FlexDirection.Row;
             bulkRow.style.marginBottom = 8;
 
-            var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph" };
+            var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph", "com.unity.cloud.gltfast" };
 
             Button installAllButton = null;
             installAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Install All Dependencies",
-                    "This will install Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
+                    "This will install Roslyn DLLs, ProBuilder, Cinemachine, VFX Graph, and glTFast. Continue?",
                     "Install All", "Cancel")) return;
                 installAllButton.SetEnabled(false);
                 installAllButton.text = "Installing...";
@@ -803,7 +851,7 @@ namespace MCPForUnity.Editor.Windows
             uninstallAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Uninstall All Dependencies",
-                    "This will remove Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
+                    "This will remove Roslyn DLLs, ProBuilder, Cinemachine, VFX Graph, and glTFast. Continue?",
                     "Uninstall All", "Cancel")) return;
                 uninstallAllButton.SetEnabled(false);
                 uninstallAllButton.text = "Removing...";
@@ -870,6 +918,17 @@ namespace MCPForUnity.Editor.Windows
                 "Not installed \u2014 VFX tool falls back to ParticleSystem/LineRenderer",
                 done => InstallUpmPackage("com.unity.visualeffectgraph", done),
                 done => RemoveUpmPackage("com.unity.visualeffectgraph", done));
+
+            // glTFast — uses an assembly type, but also check via UPM package list
+            bool hasGltfast = IsUpmPackageInstalled("com.unity.cloud.gltfast") || Type.GetType("GLTFast.GltfImport, glTFast") != null;
+            AddDependencyRow(content,
+                "glTFast (glTF/GLB import)",
+                "Enables .glb/.gltf model import for the AI Asset Generation tools (asset_gen group).",
+                hasGltfast,
+                "Installed — GLB generation/import works",
+                "Not installed — GLB import is unavailable; FBX still works, or install to enable GLB",
+                done => InstallUpmPackage("com.unity.cloud.gltfast", done),
+                done => RemoveUpmPackage("com.unity.cloud.gltfast", done));
 
             section.Add(content);
             container.Add(section);
