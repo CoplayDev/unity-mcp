@@ -26,11 +26,11 @@
 <details>
 <summary><strong>Recent Updates</strong></summary>
 
+* **[v10.0.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.0)** (2026-06-30)
+* **[v9.7.3](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.3)** (2026-06-15)
+* **[v9.7.1](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.1)** (2026-05-24)
 * **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
 * **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
-* **[v9.6.6](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.6)** (2026-04-07)
-* **[v9.6.5](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.5)** (2026-04-03)
-* **[v9.6.4](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.4)** (2026-03-31)
 
 Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
@@ -41,7 +41,7 @@ Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
 ## What it does
 
-Control the Unity Editor in natural language from any MCP client — create scenes & GameObjects, edit C# scripts, manage assets, run tests, profile, and build. 40+ focused tools, any client, free & MIT.
+Control the Unity Editor in natural language from any MCP client — create scenes & GameObjects, edit C# scripts, manage assets, run tests, profile, and build. 47 focused MCP tool entrypoints, any client, free & MIT.
 
 **[Browse the full tool catalog →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
 
@@ -52,7 +52,7 @@ Control the Unity Editor in natural language from any MCP client — create scen
 **Requirements:** Unity **2021.3 LTS → 6.x** · Python **3.10+** (via [`uv`](https://docs.astral.sh/uv/)). Works with **any MCP client** — Claude Desktop & Code, Cursor, VS Code, Windsurf, Cline, Gemini CLI, and more.
 
 1. **Install** — Unity → Package Manager → Add from git URL:
-   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta` &nbsp;_(or `openupm add com.coplaydev.unity-mcp`)_
+   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main` &nbsp;_(pin `#v10.0.0` for this release, or `openupm add com.coplaydev.unity-mcp`)_
 2. **Configure** — `Window → MCP for Unity → Configure All Detected Clients`.
 3. **Prompt** — *"Create a cube at the origin and add a Rigidbody."* The cube appears in seconds.
 
@@ -73,6 +73,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Branch off `beta`, not `main`. The full 
 
 - **Multiple Unity instances** — [Multi-Instance Routing](https://coplaydev.github.io/unity-mcp/guides/multi-instance)
 - **Tool groups (vfx / animation / ui / testing / etc.)** — [Tool Groups](https://coplaydev.github.io/unity-mcp/guides/tool-groups)
+- **v10 asset generation and upgrade notes** — [v10 Migration](https://coplaydev.github.io/unity-mcp/migrations/v10)
 - **Roslyn script validation** — [Roslyn Validation](https://coplaydev.github.io/unity-mcp/guides/roslyn)
 - **Remote-hosted server with auth** — [Remote Server Auth](https://coplaydev.github.io/unity-mcp/guides/remote-server-auth)
 
