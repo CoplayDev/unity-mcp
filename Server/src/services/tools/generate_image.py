@@ -23,11 +23,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "textures/sprites into the Unity project. Bring-your-own-key: provider keys live "
         "in the editor's secure store and never cross the bridge.\n\n"
         "ACTIONS:\n"
-        "- generate: Submit an image job (text->image or image->image). Returns { job_id } "
-        "(sync providers resolve immediately); poll with the status action. Params: "
+        "- generate: Submit an image job (text->image or image->image). Returns { job_id }; "
+        "poll with the status action. Params: "
         "provider, mode (text|image), prompt, image_path|image_url, model, transparent, "
         "width, height, name, output_folder.\n"
-        "- remove_background: Remove the background of image_path -> { job_id }.\n"
+        "- remove_background: Unsupported in this version; returns an error instead of a job_id.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured image providers and capabilities (no key values)."
@@ -45,7 +45,7 @@ async def generate_image(
     provider: Annotated[str, "Provider id (fal, openrouter)."] | None = None,
     mode: Annotated[str, "Generation mode: text or image."] | None = None,
     prompt: Annotated[str, "Text prompt for text->image."] | None = None,
-    image_path: Annotated[str, "Path to a source image for image->image / remove_background."] | None = None,
+    image_path: Annotated[str, "Path to a source image for image->image mode."] | None = None,
     image_url: Annotated[str, "URL of a source image for image->image."] | None = None,
     model: Annotated[str, "Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image)."] | None = None,
     transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "

@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 {
                     case "generate": return Generate(p);
                     case "remove_background":
-                        return new ErrorResponse("remove_background is not implemented in this version. Generate with transparency-capable models instead.");
+                        return new ErrorResponse("remove_background is not implemented in this version.");
                     case "status": return Status(p);
                     case "cancel": return Cancel(p);
                     case "list_providers": return ListProviders();
