@@ -14,7 +14,7 @@
 
 </div>
 
-<p align="center"><b></b> MCP for Unity 通过 <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a> 把 Claude、Cursor、VS Code、本地大模型等 AI 助手接入 Unity 编辑器，让它们直接帮你管理资源、搭场景、写脚本、跑测试，把开发流程里的重复活儿都包了。</p>
+<p align="center">MCP for Unity 通过 <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a> 把 Claude、Cursor、VS Code、本地大模型等 AI 助手接入 Unity 编辑器，让它们直接帮你管理资源、搭场景、写脚本、跑测试，把开发流程里的重复活儿都包了。</p>
 
 <p align="center">
   <img alt="MCP for Unity building a scene" src="../images/building_scene.gif">

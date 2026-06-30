@@ -13,6 +13,13 @@ test('normalizePypiRecent handles missing data', () => {
   assert.deepEqual(normalizePypiRecent({}), { lastDay: 0, lastWeek: 0, lastMonth: 0 });
 });
 
+test('normalizePypiRecent marks failed requests as unavailable', () => {
+  assert.deepEqual(
+    normalizePypiRecent(null),
+    { lastDay: null, lastWeek: null, lastMonth: null, unavailable: true },
+  );
+});
+
 test('buildStats maps github + pypi + web', () => {
   const stats = buildStats({
     recent: { data: { last_day: 1, last_week: 2, last_month: 3 } },
@@ -53,4 +60,12 @@ test('renderSummary leads with real-user signals and labels PyPI as inflated', (
 test('renderSummary notes when the traffic token is missing', () => {
   const stats = buildStats({ recent: { data: {} }, repo: { stargazers_count: 1, forks_count: 0 }, generatedAt: 't' });
   assert.match(renderSummary(stats), /Administration: read/);
+});
+
+test('renderSummary distinguishes unavailable PyPI stats from zero downloads', () => {
+  const stats = buildStats({ recent: null, repo: { stargazers_count: 1, forks_count: 0 }, generatedAt: 't' });
+  const md = renderSummary(stats);
+  assert.match(md, /Last day \| —/);
+  assert.match(md, /PyPI stats are unavailable/);
+  assert.match(md, /Do not treat these dashes as zero downloads/);
 });

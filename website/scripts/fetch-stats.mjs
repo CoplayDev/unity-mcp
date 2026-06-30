@@ -3,6 +3,9 @@ const REPO = 'CoplayDev/unity-mcp';
 const GH = 'https://api.github.com';
 
 export function normalizePypiRecent(recent) {
+  if (recent == null) {
+    return { lastDay: null, lastWeek: null, lastMonth: null, unavailable: true };
+  }
   const d = (recent && recent.data) || {};
   return { lastDay: d.last_day ?? 0, lastWeek: d.last_week ?? 0, lastMonth: d.last_month ?? 0 };
 }
@@ -54,6 +57,9 @@ export function renderSummary(stats) {
     `| Last week | ${n(p.lastWeek)} |`,
     `| Last month | ${n(p.lastMonth)} |`,
     '',
+    ...(p.unavailable
+      ? ['> PyPI stats are unavailable: the pypistats.org request failed. Do not treat these dashes as zero downloads.', '']
+      : []),
     '> PyPI counts are install events — CI, mirrors, `uvx` re-fetches, and Docker rebuilds inflate them heavily. Treat as a trend line, not people.',
     '',
     '### Docs traffic',
@@ -73,7 +79,7 @@ async function main() {
     ...(ghToken ? { Authorization: `Bearer ${ghToken}` } : {}),
   };
 
-  const recent = (await get(`https://pypistats.org/api/packages/${PKG}/recent`, { Accept: 'application/json' })) || { data: {} };
+  const recent = await get(`https://pypistats.org/api/packages/${PKG}/recent`, { Accept: 'application/json' });
   const repo = await get(`${GH}/repos/${REPO}`, ghHeaders);
   const clones = await get(`${GH}/repos/${REPO}/traffic/clones`, ghHeaders);
   const views = await get(`${GH}/repos/${REPO}/traffic/views`, ghHeaders);
