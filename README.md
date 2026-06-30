@@ -61,6 +61,48 @@ Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
 ---
 
+## AI Asset Generation
+
+Bring-your-own-key generation of **3D models** (text→3D and image→3D), **2D images**, and **Sketchfab** model import — straight into your project. Generated assets land under `Assets/Generated/`.
+
+**Providers**
+
+- **3D generation:** Tripo (default), Meshy
+- **3D import:** Sketchfab
+- **2D image:** fal.ai (default), OpenRouter
+
+**Setup**
+
+1. Open **Window → MCP for Unity → Asset Gen** tab and enter your provider API key(s). Keys are stored in your **OS secure store** (macOS Keychain / Windows Credential Manager / Linux libsecret) — never in the project or `EditorPrefs`.
+2. Enable the tools with `manage_tools` — the `asset_gen` group is off by default.
+3. For GLB output/import, install **glTFast** from the **Dependencies** tab (FBX needs no extra package).
+
+**Usage**
+
+Generation runs through the MCP tools (or the `asset-gen` CLI), never from the GUI. Long-running jobs are async: the tool returns a `job_id`, then you call `action="status"` with that `job_id` until it completes. Both 3D and 2D accept **text** or **image** input — pass `image_url` (a hosted URL) or `image_path` (a local file, e.g. under `Assets/`).
+
+```text
+generate_model  action=generate provider=tripo mode=text  prompt="a low-poly oak tree" format=fbx     → then action=status with job_id
+generate_model  action=generate provider=meshy mode=image image_path=Assets/refs/chair.png           → image→3D from a local image
+generate_image  action=generate provider=fal   mode=text  prompt="a pixel-art coin"
+import_model    action=search query="wooden chair"   → action=import uid=<from search>
+```
+
+**Notes**
+
+- **Local images** (`image_path`) are supported by Meshy (image→3D) and fal / OpenRouter (image→image); they're sent inline as base64. Tripo image→3D currently needs a hosted `image_url`.
+- **Transparency / size:** `transparent` only sets the Unity texture import flag — fal/FLUX has no transparent-background *generation*. `width`/`height` are forwarded to fal only (OpenRouter's chat API has no size control).
+
+Your API keys never leave the Editor and never cross the MCP bridge.
+
+**Blender handoff:** With BlenderMCP connected, use the `blender-to-unity` skill to export
+the current Blender model and import it via `import_model_file` (defaults to FBX). BlenderMCP
+handles modeling/generation; MCP for Unity handles import + scene placement. The **Asset Gen**
+tab shows a best-effort "Blender app detected" status (BlenderMCP itself is configured in your
+AI client and isn't detectable from Unity).
+
+---
+
 ## Community
 
 - [Discord](https://discord.gg/y4p8KfzrN4) — chat with maintainers and other contributors
