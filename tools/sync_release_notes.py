@@ -170,6 +170,7 @@ def _minor_key(tag: str) -> str:
 def _normalize_body(body: str | None) -> str:
     if not body:
         return "_No release notes._"
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
     # Trim trailing whitespace; collapse 3+ blank lines.
     body = body.strip()
     body = re.sub(r"\n{3,}", "\n\n", body)
@@ -233,7 +234,8 @@ def render_releases_md(releases: list[dict]) -> str:
     )
     out.append("- [v5 — UnityMcpBridge → MCPForUnity](/migrations/v5)")
     out.append("- [v6 — New Editor Window (UI Toolkit + service architecture)](/migrations/v6)")
-    out.append("- [v8 — HTTP and Stdio support](/migrations/v8)\n")
+    out.append("- [v8 — HTTP and Stdio support](/migrations/v8)")
+    out.append("- [v10 — Asset Generation and Docs Refresh](/migrations/v10)\n")
     return "\n".join(out)
 
 

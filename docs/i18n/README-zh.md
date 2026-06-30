@@ -25,11 +25,11 @@
 <details>
 <summary><strong>最近更新</strong></summary>
 
+* **[v10.0.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.0)**（2026-06-30）
+* **[v9.7.3](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.3)**（2026-06-15）
+* **[v9.7.1](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.1)**（2026-05-24）
 * **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)**（2026-05-22）
 * **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)**（2026-04-27）
-* **[v9.6.6](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.6)**（2026-04-07）
-* **[v9.6.5](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.5)**（2026-04-03）
-* **[v9.6.4](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.4)**（2026-03-31）
 
 完整更新历史见 [发布说明](https://coplaydev.github.io/unity-mcp/releases)。
 
@@ -39,7 +39,7 @@
 
 ## 它能做什么
 
-用自然语言从任意 MCP 客户端操作 Unity 编辑器：搭场景、建 GameObject、写改 C# 脚本、调材质和着色器、跑测试、看性能、出包。40+ 个工具，任意客户端可用，免费、MIT 开源。
+用自然语言从任意 MCP 客户端操作 Unity 编辑器：搭场景、建 GameObject、写改 C# 脚本、调材质和着色器、跑测试、看性能、出包。47 个 MCP 工具入口，任意客户端可用，免费、MIT 开源。
 
 **[查看完整工具目录 →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
 
@@ -50,7 +50,7 @@
 **环境要求：** Unity **2021.3 LTS → 6.x** · Python **3.10+**（用 [`uv`](https://docs.astral.sh/uv/) 管理）。兼容**任意 MCP 客户端**——Claude Desktop 与 Claude Code、Cursor、VS Code、Windsurf、Cline、Gemini CLI 等等。
 
 1. **安装** —— 在 Unity 里打开 Package Manager，从 git URL 添加：
-   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta` &nbsp;_(也可以用 `openupm add com.coplaydev.unity-mcp`)_
+   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main` &nbsp;_（如需固定本次发布，可用 `#v10.0.0`；也可以用 `openupm add com.coplaydev.unity-mcp`）_
 2. **配置客户端** —— `Window → MCP for Unity → Configure All Detected Clients`，一键搞定所有检测到的客户端。
 3. **发个提示试试** —— *"在原点放一个立方体，加个 Rigidbody。"* 立方体几秒就出现在场景里了。
 
