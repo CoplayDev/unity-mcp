@@ -9,7 +9,7 @@ const UPM_BETA = 'https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#b
 
 export default function HomeHero() {
   const { siteConfig } = useDocusaurusContext();
-  const version = siteConfig.customFields?.latestVersion ?? 'v9.7.0';
+  const version = siteConfig.customFields?.latestVersion ?? 'v10.0.0';
 
   return (
     <header className={styles.hero}>
