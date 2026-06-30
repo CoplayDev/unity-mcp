@@ -100,10 +100,10 @@ namespace MCPForUnity.Editor.Windows
             }
             else
             {
-                window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+                window = GetWindow<MCPForUnityEditorWindow>(ProductInfo.ProductName);
             }
 
-            window.titleContent = new GUIContent("MCP For Unity");
+            window.titleContent = new GUIContent(ProductInfo.ProductName);
             window.minSize = new Vector2(500, 340);
 
             if (window.position.width < 100 || window.position.height < 100)
@@ -409,8 +409,8 @@ namespace MCPForUnity.Editor.Windows
             string version = AssetPathUtility.GetPackageVersion();
             versionLabel.text = $"v{version}";
             versionLabel.tooltip = AssetPathUtility.IsPreReleaseVersion()
-                ? $"MCP For Unity v{version} (pre-release package, using prerelease server channel)"
-                : $"MCP For Unity v{version}";
+                ? $"{ProductInfo.ProductName} v{version} (pre-release package, using prerelease server channel)"
+                : $"{ProductInfo.ProductName} v{version}";
         }
 
         private void QueueUpdateCheck()

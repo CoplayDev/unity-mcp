@@ -1,6 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 16" fill="none" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 30 140 140" fill="none" role="img" aria-label="MCP for Unity">
   <title>MCP for Unity</title>
-  <rect x="1" y="1" width="14" height="14" fill="#0a0a0b" />
-  <line x1="15" y1="8" x2="25" y2="8" stroke="#0a0a0b" stroke-width="2.4" />
-  <rect x="25" y="1" width="14" height="14" stroke="#0a0a0b" stroke-width="2.4" />
+  <path d="M94,40 L42,70 L94,100 Z" fill="#2563EB" fill-opacity="0.22"/>
+  <path d="M42,70 L42,130 L94,160 L94,100 Z" fill="#2563EB" fill-opacity="0.12"/>
+  <g fill="none" stroke="#60A5FA" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M94,40 L42,70 L42,130 L94,160 Z" stroke-width="3"/>
+    <path d="M42,70 L94,100" stroke-width="1.8" stroke-opacity="0.65"/>
+  </g>
+  <path d="M106,40 L158,70 L106,100 Z" fill="#0D9488" fill-opacity="0.22"/>
+  <path d="M158,70 L158,130 L106,160 L106,100 Z" fill="#0D9488" fill-opacity="0.12"/>
+  <g fill="none" stroke="#2DD4BF" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M106,40 L158,70 L158,130 L106,160 Z" stroke-width="3"/>
+    <path d="M158,70 L106,100" stroke-width="1.8" stroke-opacity="0.65"/>
+  </g>
+  <g stroke="#22D3EE" stroke-width="3" stroke-linecap="round">
+    <path d="M94,70 L106,70"/><path d="M94,100 L106,100"/><path d="M94,130 L106,130"/>
+  </g>
+  <g fill="#22D3EE">
+    <circle cx="94" cy="70" r="2.2"/><circle cx="106" cy="70" r="2.2"/>
+    <circle cx="94" cy="100" r="2.2"/><circle cx="106" cy="100" r="2.2"/>
+    <circle cx="94" cy="130" r="2.2"/><circle cx="106" cy="130" r="2.2"/>
+  </g>
 </svg>

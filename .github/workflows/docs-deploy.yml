@@ -70,6 +70,11 @@ jobs:
 
       - name: Build
         working-directory: website
+        env:
+          # Inject the cookieless GoatCounter beacon when provisioned. The site
+          # gates on process.env.GOATCOUNTER_CODE, which Actions does NOT
+          # auto-expose — the Actions variable must be mapped in explicitly.
+          GOATCOUNTER_CODE: ${{ vars.GOATCOUNTER_CODE }}
         run: npm run build
 
       - name: Upload Pages artifact

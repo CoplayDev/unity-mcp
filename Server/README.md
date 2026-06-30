@@ -4,6 +4,8 @@
 [![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![License](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
+[![PyPI version](https://img.shields.io/pypi/v/mcpforunityserver?label=PyPI)](https://pypi.org/project/mcpforunityserver/)
+[![Downloads](https://static.pepy.tech/badge/mcpforunityserver)](https://pepy.tech/project/mcpforunityserver)
 
 Model Context Protocol server for Unity Editor integration. Control Unity through natural language using AI assistants like Claude, Cursor, and more.
 
@@ -271,7 +273,7 @@ Once connected, try these commands in your AI assistant:
 
 For complete documentation, troubleshooting, and advanced usage:
 
-📖 **[Full Documentation](https://github.com/CoplayDev/unity-mcp#readme)**
+📖 **[Full Documentation](https://coplaydev.github.io/unity-mcp/)**
 
 ---
 
