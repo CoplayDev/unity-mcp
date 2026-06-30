@@ -4,7 +4,7 @@
 // or "unity-mcp" into sidebar slugs, file paths, or docs URLs.
 
 import { themes as prismThemes } from 'prism-react-renderer';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +19,40 @@ function countConfigurators() {
   return readdirSync(dir).filter((f) => f.endsWith('Configurator.cs')).length;
 }
 const supportedClientCount = countConfigurators();
+
+function listMarkdownFiles(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((entry) => {
+    const path = resolve(dir, entry);
+    if (statSync(path).isDirectory()) return listMarkdownFiles(path);
+    return entry.endsWith('.md') ? [path] : [];
+  });
+}
+
+function countReferenceTools() {
+  const dir = resolve(__dirname, 'docs', 'reference', 'tools');
+  return listMarkdownFiles(dir).filter((path) => !path.endsWith('/index.md')).length;
+}
+
+function countToolGroups() {
+  const dir = resolve(__dirname, 'docs', 'reference', 'tools');
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((entry) => {
+    const path = resolve(dir, entry);
+    return statSync(path).isDirectory();
+  }).length;
+}
+
+function countReferenceResources() {
+  const path = resolve(__dirname, 'docs', 'reference', 'resources', 'index.md');
+  if (!existsSync(path)) return 0;
+  return (readFileSync(path, 'utf8').match(/\n## `/g) ?? []).length;
+}
+
+const latestVersion = 'v10.0.0';
+const toolCount = countReferenceTools();
+const toolGroupCount = countToolGroups();
+const resourceCount = countReferenceResources();
 
 const baseUrl = '/unity-mcp/';
 
@@ -41,6 +75,10 @@ const config = {
   // Build-time data the homepage components read via siteConfig.customFields.
   // Keeps stats accurate without a hand-maintained constant.
   customFields: {
+    latestVersion,
+    toolCount,
+    toolGroupCount,
+    resourceCount,
     supportedClientCount,
   },
 
