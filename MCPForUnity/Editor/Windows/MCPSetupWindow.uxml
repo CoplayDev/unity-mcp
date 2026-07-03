@@ -57,7 +57,7 @@
             <!-- Action Buttons -->
             <ui:VisualElement class="button-container">
                 <ui:Button name="refresh-button" text="Refresh" class="setup-button secondary-button" />
-                <ui:Button name="done-button" text="Done" class="setup-button action-button" />
+                <ui:Button name="done-button" text="Next" class="setup-button action-button" />
             </ui:VisualElement>
         </ui:VisualElement>
 

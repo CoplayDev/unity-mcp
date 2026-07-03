@@ -180,7 +180,7 @@ namespace MCPForUnity.Editor.Windows
         private void OnConfigureSelectedClicked()
         {
             int success = 0, failure = 0;
-            var messages = new List<string>();
+            var failures = new List<string>();
             foreach (var (c, toggle) in clientToggles)
             {
                 if (!toggle.value) continue;
@@ -188,12 +188,11 @@ namespace MCPForUnity.Editor.Windows
                 {
                     MCPServiceLocator.Client.ConfigureClient(c);
                     success++;
-                    messages.Add($"✓ {c.DisplayName}");
                 }
                 catch (System.Exception ex)
                 {
                     failure++;
-                    messages.Add($"⚠ {c.DisplayName}: {ex.Message}");
+                    failures.Add($"⚠ {c.DisplayName}: {ex.Message}");
                 }
             }
             if (success == 0 && failure == 0)
@@ -204,12 +203,15 @@ namespace MCPForUnity.Editor.Windows
                     "OK");
                 return;
             }
+            // Keep the summary short: a count, only the failures (if any), and the next step —
+            // no need to enumerate every successfully-configured client.
+            string failureList = failures.Count > 0 ? "\n\n" + string.Join("\n", failures) : "";
             string nextStep = (failure == 0 && success > 0)
                 ? "\n\nYou're all set. Ask your AI assistant to create a GameObject in the open scene to confirm the connection."
                 : "";
             EditorUtility.DisplayDialog(
                 "Client Configuration",
-                $"{success} configured, {failure} failed.\n\n{string.Join("\n", messages)}{nextStep}",
+                $"{success} configured, {failure} failed.{failureList}{nextStep}",
                 "OK");
             Setup.SetupWindowService.MarkSetupCompleted();
             Close();
