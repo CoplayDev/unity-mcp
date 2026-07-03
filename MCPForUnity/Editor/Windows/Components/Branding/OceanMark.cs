@@ -133,8 +133,9 @@ namespace MCPForUnity.Editor.Windows.Components.Branding
                 string root = MCPForUnity.Editor.Helpers.AssetPathUtility.GetMcpPackageRootPath();
                 return UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>($"{root}/package-icon.png");
             }
-            catch
+            catch (System.Exception ex)
             {
+                MCPForUnity.Editor.Helpers.McpLog.Warn($"OceanMark: failed to load brand icon fallback: {ex.Message}");
                 return null;
             }
         }

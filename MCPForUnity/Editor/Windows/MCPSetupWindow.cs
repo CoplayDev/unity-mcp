@@ -121,6 +121,13 @@ namespace MCPForUnity.Editor.Windows
             {
                 _dependencyResult = DependencyManager.CheckAllDependencies();
             }
+            // Resume polling if a uv install was still in flight when the window was last disabled,
+            // so its completion is still processed (button reset, dependencies re-checked).
+            if (_uvInstallTask != null)
+            {
+                EditorApplication.update -= PollUvInstall;
+                EditorApplication.update += PollUvInstall;
+            }
         }
 
         private void OnRefreshClicked()
@@ -253,6 +260,13 @@ namespace MCPForUnity.Editor.Windows
 
         private void PollUvInstall()
         {
+            // The window/UI may have been torn down while the task ran — stop polling and drop it
+            // (guards against dereferencing UI fields after teardown).
+            if (installUvButton == null || installUvButton.panel == null)
+            {
+                EditorApplication.update -= PollUvInstall;
+                return;
+            }
             if (_uvInstallTask == null || !_uvInstallTask.IsCompleted) return;
 
             EditorApplication.update -= PollUvInstall;
