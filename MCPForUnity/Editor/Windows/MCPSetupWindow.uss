@@ -6,6 +6,20 @@
     flex-grow: 1;
 }
 
+/* Header row (logo + title) */
+.setup-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.setup-logo {
+    width: 34px;
+    height: 34px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
 /* Dependency list */
 #dependency-list {
     margin-top: 8px;

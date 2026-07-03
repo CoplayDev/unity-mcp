@@ -21,6 +21,18 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
+.header-left {
+    flex-direction: row;
+    align-items: center;
+}
+
+.header-logo {
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
 .header-title {
     font-size: 16px;
     -unity-font-style: bold;

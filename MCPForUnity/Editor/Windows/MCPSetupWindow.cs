@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Windows.Components.Branding;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -28,8 +30,12 @@ namespace MCPForUnity.Editor.Windows
         private Label installationInstructions;
         private Button openPythonLinkButton;
         private Button openUvLinkButton;
+        private Button installUvButton;
         private Button refreshButton;
         private Button doneButton;
+
+        // Tracks an in-flight uv install so completion is handled on the main thread.
+        private Task<UvInstaller.UvInstallResult> _uvInstallTask;
 
         // Step 2 (Configure Clients) UI elements
         private VisualElement stepDeps;
@@ -66,6 +72,15 @@ namespace MCPForUnity.Editor.Windows
 
             visualTree.CloneTree(rootVisualElement);
 
+            // Embed the Ocean brand mark beside the title
+            var setupHeader = rootVisualElement.Q<VisualElement>("setup-header");
+            if (setupHeader != null && setupHeader.Q<OceanMark>() == null)
+            {
+                var logo = new OceanMark { name = "setup-logo" };
+                logo.AddToClassList("setup-logo");
+                setupHeader.Insert(0, logo);
+            }
+
             // Cache UI elements
             pythonIndicator = rootVisualElement.Q<VisualElement>("python-indicator");
             pythonVersion = rootVisualElement.Q<Label>("python-version");
@@ -78,6 +93,7 @@ namespace MCPForUnity.Editor.Windows
             installationInstructions = rootVisualElement.Q<Label>("installation-instructions");
             openPythonLinkButton = rootVisualElement.Q<Button>("open-python-link-button");
             openUvLinkButton = rootVisualElement.Q<Button>("open-uv-link-button");
+            installUvButton = rootVisualElement.Q<Button>("install-uv-button");
             refreshButton = rootVisualElement.Q<Button>("refresh-button");
             doneButton = rootVisualElement.Q<Button>("done-button");
             stepDeps = rootVisualElement.Q<VisualElement>("step-deps");
@@ -91,6 +107,7 @@ namespace MCPForUnity.Editor.Windows
             doneButton.clicked += OnDoneClicked;
             openPythonLinkButton.clicked += OnOpenPythonInstallClicked;
             openUvLinkButton.clicked += OnOpenUvInstallClicked;
+            if (installUvButton != null) installUvButton.clicked += OnInstallUvClicked;
             skipClientsButton.clicked += OnSkipClientsClicked;
             configureSelectedButton.clicked += OnConfigureSelectedClicked;
 
@@ -187,9 +204,12 @@ namespace MCPForUnity.Editor.Windows
                     "OK");
                 return;
             }
+            string nextStep = (failure == 0 && success > 0)
+                ? "\n\nYou're all set. Ask your AI assistant to create a GameObject in the open scene to confirm the connection."
+                : "";
             EditorUtility.DisplayDialog(
                 "Client Configuration",
-                $"{success} configured, {failure} failed.\n\n{string.Join("\n", messages)}",
+                $"{success} configured, {failure} failed.\n\n{string.Join("\n", messages)}{nextStep}",
                 "OK");
             Setup.SetupWindowService.MarkSetupCompleted();
             Close();
@@ -205,6 +225,72 @@ namespace MCPForUnity.Editor.Windows
         {
             var (_, uvUrl) = DependencyManager.GetInstallationUrls();
             Application.OpenURL(uvUrl);
+        }
+
+        private void OnInstallUvClicked()
+        {
+            if (_uvInstallTask != null) return; // already running
+
+            bool proceed = EditorUtility.DisplayDialog(
+                "Install UV",
+                "This will download and run the official uv installer:\n\n" +
+                UvInstaller.DescribeCommand() +
+                "\n\nContinue?",
+                "Install",
+                "Cancel");
+            if (!proceed) return;
+
+            installUvButton.SetEnabled(false);
+            installUvButton.text = "Installing UV…";
+            statusMessage.text = "Installing uv… this can take a moment.";
+            statusMessage.style.color = new StyleColor(new Color(1f, 0.6f, 0f));
+
+            _uvInstallTask = Task.Run(() => UvInstaller.Run());
+            EditorApplication.update += PollUvInstall;
+        }
+
+        private void PollUvInstall()
+        {
+            if (_uvInstallTask == null || !_uvInstallTask.IsCompleted) return;
+
+            EditorApplication.update -= PollUvInstall;
+            var task = _uvInstallTask;
+            _uvInstallTask = null;
+
+            installUvButton.SetEnabled(true);
+            installUvButton.text = "Install UV Automatically";
+
+            // UvInstaller.Run catches its own exceptions, so the task always completes with a result.
+            UvInstaller.UvInstallResult result = task.Result;
+
+            if (result.Success)
+            {
+                _dependencyResult = DependencyManager.CheckAllDependencies();
+                UpdateUI();
+                if (!_dependencyResult.IsSystemReady)
+                {
+                    EditorUtility.DisplayDialog(
+                        "Install UV",
+                        "uv installed, but it isn't visible on PATH yet. Restart Unity (or your terminal) so it picks up the new PATH, then click Refresh.\n\n" +
+                        result.Output,
+                        "OK");
+                }
+            }
+            else
+            {
+                // Reset the status label off the "Installing…" state before reporting the failure.
+                UpdateUI();
+                EditorUtility.DisplayDialog(
+                    "Install UV Failed",
+                    "The installer did not complete successfully. You can install uv manually via \"Open UV Install Page\".\n\n" +
+                    result.Output,
+                    "OK");
+            }
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.update -= PollUvInstall;
         }
 
         private void UpdateUI()
@@ -224,6 +310,14 @@ namespace MCPForUnity.Editor.Windows
             if (uvDep != null)
             {
                 UpdateDependencyStatus(uvIndicator, uvVersion, uvDetails, uvDep);
+            }
+
+            // Offer the one-click uv installer only when uv is actually missing
+            bool uvMissing = uvDep != null && !uvDep.IsAvailable;
+            if (installUvButton != null)
+            {
+                bool showInstall = uvMissing && UvInstaller.IsSupported && _uvInstallTask == null;
+                installUvButton.style.display = showInstall ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
             // Update overall status
