@@ -34,6 +34,7 @@ namespace MCPForUnity.Editor.Helpers
                     "/opt/homebrew/bin/claude",
                     "/usr/local/bin/claude",
                     Path.Combine(home, ".local", "bin", "claude"),
+                    Path.Combine(home, ".claude", "local", "claude"), // `claude migrate-installer` location
                 };
                 foreach (string c in candidates) { if (File.Exists(c)) return c; }
                 // Try NVM-installed claude under ~/.nvm/versions/node/*/bin/claude
@@ -59,6 +60,7 @@ namespace MCPForUnity.Editor.Helpers
                     Path.Combine(localAppData, "Programs", "claude", "claude.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
                     Path.Combine(home, ".local", "bin", "claude.exe"),
+                    Path.Combine(home, ".claude", "local", "claude.exe"), // `claude migrate-installer` location
                     // npm global locations (.cmd preferred for non-interactive processes)
                     Path.Combine(appData, "npm", "claude.cmd"),
                     Path.Combine(localAppData, "npm", "claude.cmd"),
@@ -81,6 +83,7 @@ namespace MCPForUnity.Editor.Helpers
                     "/usr/local/bin/claude",
                     "/usr/bin/claude",
                     Path.Combine(home, ".local", "bin", "claude"),
+                    Path.Combine(home, ".claude", "local", "claude"), // `claude migrate-installer` location
                 };
                 foreach (string c in candidates) { if (File.Exists(c)) return c; }
                 // Try NVM-installed claude under ~/.nvm/versions/node/*/bin/claude
