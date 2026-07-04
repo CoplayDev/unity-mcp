@@ -189,7 +189,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
                 // Clear any stale resume flags when user manually changes transport
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
-                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
+                HttpBridgeReloadHandler.CancelPendingResume();
+                HttpAutoStartHandler.CancelPendingReconnect();
 
                 if (useHttp)
                 {
@@ -799,7 +800,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     // getting stuck in "Resuming..." state (the flag may have been set by a
                     // domain reload that started just before the user clicked End Session)
                     try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
-                    try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
+                    HttpBridgeReloadHandler.CancelPendingResume();
+                    HttpAutoStartHandler.CancelPendingReconnect();
 
                     await bridgeService.StopAsync();
                     if (httpRemoteForLog)
@@ -833,6 +835,12 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     {
                         McpLog.Info($"Connecting to {HttpEndpointUtility.GetRemoteBaseUrl()}…");
                     }
+
+                    // The user is taking over bridge lifecycle: drop any pending reload-resume
+                    // or interrupted auto-start reconnect so neither can bounce the session
+                    // we are about to establish.
+                    HttpBridgeReloadHandler.CancelPendingResume();
+                    HttpAutoStartHandler.CancelPendingReconnect();
 
                     bool started = await bridgeService.StartAsync();
                     if (started)
@@ -888,7 +896,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
                 // Clear resume flags to prevent getting stuck in "Resuming..." state
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
-                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
+                HttpBridgeReloadHandler.CancelPendingResume();
+                HttpAutoStartHandler.CancelPendingReconnect();
 
                 await MCPServiceLocator.Bridge.StopAsync();
             }

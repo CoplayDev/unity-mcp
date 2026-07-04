@@ -529,12 +529,32 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
+        // CompilationPipeline.isCompiling is not available on the 2021.3 package floor, hence
+        // reflection; bound once as a delegate so per-frame callers avoid the reflection invoke.
+        private static readonly Func<bool> PipelineIsCompiling = CreatePipelineIsCompilingDelegate();
+
+        private static Func<bool> CreatePipelineIsCompilingDelegate()
+        {
+            try
+            {
+                var prop = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor")
+                    ?.GetProperty("isCompiling", BindingFlags.Public | BindingFlags.Static);
+                return prop?.GetMethod != null
+                    ? (Func<bool>)prop.GetMethod.CreateDelegate(typeof(Func<bool>))
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         /// <summary>
         /// Returns the actual compilation state, working around a known Unity quirk where
         /// EditorApplication.isCompiling can return false positives in Play mode.
         /// See: https://github.com/CoplayDev/unity-mcp/issues/549
         /// </summary>
-        private static bool GetActualIsCompiling()
+        internal static bool GetActualIsCompiling()
         {
             // If EditorApplication.isCompiling is false, Unity is definitely not compiling
             if (!EditorApplication.isCompiling)
@@ -543,18 +563,10 @@ namespace MCPForUnity.Editor.Services
             }
 
             // In Play mode, EditorApplication.isCompiling can have false positives.
-            // Double-check with CompilationPipeline.isCompiling via reflection.
-            if (EditorApplication.isPlaying)
+            // Double-check with CompilationPipeline.isCompiling.
+            if (EditorApplication.isPlaying && PipelineIsCompiling != null)
             {
-                try
-                {
-                    Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                    var prop = pipeline?.GetProperty("isCompiling", BindingFlags.Public | BindingFlags.Static);
-                    if (prop != null)
-                    {
-                        return (bool)prop.GetValue(null);
-                    }
-                }
+                try { return PipelineIsCompiling(); }
                 catch
                 {
                     // If reflection fails, fall back to EditorApplication.isCompiling
