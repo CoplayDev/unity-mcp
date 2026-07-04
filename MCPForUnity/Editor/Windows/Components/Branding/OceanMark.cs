@@ -17,10 +17,6 @@ namespace MCPForUnity.Editor.Windows.Components.Branding
     /// </summary>
     public sealed class OceanMark : VisualElement
     {
-        // The source SVG viewBox spans 30..170 on both axes (a 140-unit square).
-        private const float SvgOrigin = 30f;
-        private const float SvgSize = 140f;
-
         public OceanMark()
         {
 #if UNITY_2022_1_OR_NEWER
@@ -33,6 +29,10 @@ namespace MCPForUnity.Editor.Windows.Components.Branding
         }
 
 #if UNITY_2022_1_OR_NEWER
+        // The source SVG viewBox spans 30..170 on both axes (a 140-unit square).
+        private const float SvgOrigin = 30f;
+        private const float SvgSize = 140f;
+
         // Brand palette (hex values lifted directly from logo-mark.svg).
         private static readonly Color LeftFill = FromHex(0x2563EB);   // blue cube faces
         private static readonly Color LeftStroke = FromHex(0x60A5FA); // blue cube outline
@@ -116,6 +116,25 @@ namespace MCPForUnity.Editor.Windows.Components.Branding
             c.a = a;
             return c;
         }
+
+        /// <summary>Map a point from SVG viewBox space into the element's content rect (square, centered).</summary>
+        private static Vector2 MapSvgPoint(float svgX, float svgY, Rect content)
+        {
+            float box = Mathf.Min(content.width, content.height);
+            float scale = box / SvgSize;
+            float offsetX = (content.width - box) * 0.5f;
+            float offsetY = (content.height - box) * 0.5f;
+            return new Vector2(
+                offsetX + (svgX - SvgOrigin) * scale,
+                offsetY + (svgY - SvgOrigin) * scale);
+        }
+
+        /// <summary>Convert a 0xRRGGBB literal into an opaque Color.</summary>
+        private static Color FromHex(int rgb) => new Color(
+            ((rgb >> 16) & 0xFF) / 255f,
+            ((rgb >> 8) & 0xFF) / 255f,
+            (rgb & 0xFF) / 255f,
+            1f);
 #else
         // Painter2D is unavailable before Unity 2022.1 — show the raster brand icon instead.
         private void ApplyRasterFallback()
@@ -140,24 +159,5 @@ namespace MCPForUnity.Editor.Windows.Components.Branding
             }
         }
 #endif
-
-        /// <summary>Map a point from SVG viewBox space into the element's content rect (square, centered).</summary>
-        internal static Vector2 MapSvgPoint(float svgX, float svgY, Rect content)
-        {
-            float box = Mathf.Min(content.width, content.height);
-            float scale = box / SvgSize;
-            float offsetX = (content.width - box) * 0.5f;
-            float offsetY = (content.height - box) * 0.5f;
-            return new Vector2(
-                offsetX + (svgX - SvgOrigin) * scale,
-                offsetY + (svgY - SvgOrigin) * scale);
-        }
-
-        /// <summary>Convert a 0xRRGGBB literal into an opaque Color.</summary>
-        internal static Color FromHex(int rgb) => new Color(
-            ((rgb >> 16) & 0xFF) / 255f,
-            ((rgb >> 8) & 0xFF) / 255f,
-            (rgb & 0xFF) / 255f,
-            1f);
     }
 }
