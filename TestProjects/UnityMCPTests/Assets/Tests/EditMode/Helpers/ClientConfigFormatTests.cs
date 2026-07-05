@@ -152,5 +152,73 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("http", (string)unity["type"],
                 "Clients without HttpTypeValue should keep the generic type:http");
         }
+
+        [Test]
+        public void DroidConfigurator_DeclaresStandardMcpServersFormat()
+        {
+            // Droid stores MCP config in ~/.factory/mcp.json using the standard mcpServers
+            // container, so it must not override ServerContainerKey/HttpTypeValue/StdioTypeValue
+            // (those overrides are for clients with non-standard schemas like Kilo Code).
+            var client = new DroidConfigurator().Client;
+
+            Assert.IsTrue(string.IsNullOrEmpty(client.ServerContainerKey),
+                "Droid must use the default mcpServers container, not a client-specific one");
+            Assert.IsTrue(string.IsNullOrEmpty(client.HttpTypeValue),
+                "Droid must use the generic type:http for HTTP transport");
+            Assert.IsTrue(string.IsNullOrEmpty(client.StdioTypeValue),
+                "Droid must use the generic type:stdio for stdio transport");
+            Assert.IsFalse(client.IsVsCodeLayout,
+                "Droid must not use the VS Code servers/mcp.servers layout");
+            Assert.IsTrue(client.SupportsHttpTransport,
+                "Droid supports both stdio and HTTP transports");
+        }
+
+        [Test]
+        public void BuildManualConfigJson_ForDroid_UsesMcpServersContainerAndPlainHttp()
+        {
+            var client = new DroidConfigurator().Client;
+
+            var root = JObject.Parse(ConfigJsonBuilder.BuildManualConfigJson(uvPath: null, client));
+
+            Assert.IsNull(root["$schema"], "Droid must not write a $schema");
+            Assert.IsNull(root["mcp"], "Droid must not use a client-specific container");
+
+            var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
+            Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
+            Assert.AreEqual("http", (string)unity["type"],
+                "Droid HTTP config must use the generic type:http, not streamableHttp/remote");
+            Assert.IsNotNull(unity["url"], "HTTP transport should set a url");
+            Assert.IsNull(unity["command"], "HTTP transport should not include a command");
+        }
+
+        [Test]
+        public void DroidConfigurator_TargetsFactoryMcpJson_OnAllPlatforms()
+        {
+            var client = new DroidConfigurator().Client;
+            const string expectedFileName = "mcp.json";
+            const string expectedParentDirName = ".factory";
+
+            foreach (var path in new[] { client.windowsConfigPath, client.macConfigPath, client.linuxConfigPath })
+            {
+                Assert.AreEqual(expectedFileName, System.IO.Path.GetFileName(path),
+                    "Droid config must target mcp.json");
+                Assert.AreEqual(expectedParentDirName, System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path)),
+                    "Droid config must live inside ~/.factory/");
+            }
+        }
+
+        [Test]
+        public void DroidConfigurator_SupportsSkills_AndInstallsUnderFactorySkills()
+        {
+            var droid = new DroidConfigurator();
+
+            Assert.IsTrue(droid.SupportsSkills, "Droid should support skill installation");
+            string skillPath = droid.GetSkillInstallPath();
+            Assert.IsNotNull(skillPath, "Skill install path must not be null when SupportsSkills is true");
+            StringAssert.Contains(".factory", skillPath,
+                "Droid skills should install under ~/.factory/skills/");
+            StringAssert.EndsWith("unity-mcp-skill", skillPath,
+                "Droid skill install path should end with the unity-mcp-skill subdirectory");
+        }
     }
 }

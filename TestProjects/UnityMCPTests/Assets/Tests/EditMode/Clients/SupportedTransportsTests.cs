@@ -32,5 +32,14 @@ namespace MCPForUnityTests.Editor.Clients
             CollectionAssert.Contains(list, ConfiguredTransport.Stdio);
             CollectionAssert.Contains(list, ConfiguredTransport.Http);
         }
+
+        [Test]
+        public void Droid_SupportsBothTransports()
+        {
+            var droid = new DroidConfigurator();
+            var list = droid.SupportedTransports.ToList();
+            CollectionAssert.Contains(list, ConfiguredTransport.Stdio);
+            CollectionAssert.Contains(list, ConfiguredTransport.Http);
+        }
     }
 }

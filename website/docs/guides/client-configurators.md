@@ -89,6 +89,7 @@ At a high level:
 Most MCP clients use a JSON config file that defines one or more MCP servers. Examples:
 
 - **Cursor** – `JsonFileMcpConfigurator` (global `~/.cursor/mcp.json`).
+- **Droid** – `JsonFileMcpConfigurator` (global `~/.factory/mcp.json`, standard `mcpServers` layout; skills install to `~/.factory/skills/unity-mcp-skill`).
 - **VSCode GitHub Copilot** – `JsonFileMcpConfigurator` with `IsVsCodeLayout = true`.
 - **VSCode Insiders GitHub Copilot** – `JsonFileMcpConfigurator` with `IsVsCodeLayout = true` and Insider-specific `Code - Insiders/User/mcp.json` paths.
 - **GitHub Copilot CLI** – `JsonFileMcpConfigurator` with standard HTTP transport.
