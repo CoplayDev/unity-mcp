@@ -34,7 +34,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
         {
             "Install Factory Droid (https://factory.ai)",
             "Click Configure to add UnityMCP to ~/.factory/mcp.json\nOR open the config file at the path above",
-            "Paste the configuration JSON into the mcpServers object",
+            "Merge the manual snippet so it results in mcpServers.unityMCP (do not nest mcpServers twice)",
             "Save and restart Droid"
         };
     }
