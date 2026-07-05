@@ -62,6 +62,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private double lastLocalServerRunningPollTime;
         private bool lastLocalServerRunning;
         private int consecutiveServerDownPolls;
+        private bool sessionWasRunning;
 
         // Reference to Advanced section for health status updates
         private Action<bool, string> onHealthStatusUpdate;
@@ -353,6 +354,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // (e.g., orphaned server after a domain reload).
             // NOTE: This also updates lastLocalServerRunning which is used below for session toggle visibility.
             UpdateStartHttpButtonState();
+
+            // A down-poll streak accumulated before/while no session was running must not
+            // carry into a freshly started session — it would satisfy orphan detection
+            // before the first post-start probe refreshes (the poll cadence is 0.75s).
+            if (isRunning && !sessionWasRunning)
+            {
+                consecutiveServerDownPolls = 0;
+            }
+            sessionWasRunning = isRunning;
 
             // Detect orphaned session: if HTTP Local session thinks it's running but the server is gone,
             // automatically end the session to keep UI in sync with reality.
