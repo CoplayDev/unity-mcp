@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from transport.unity_instance_middleware import UnityInstanceMiddleware, get_unity_instance_middleware, set_unity_instance_middleware
 from transport.plugin_registry import PluginRegistry, PluginSession
 from transport.plugin_hub import PluginHub, NoUnitySessionError, InstanceSelectionRequiredError, PluginDisconnectedError
+from transport.legacy.unity_connection import UnityConnectionPool
 from transport.models import (
     RegisterMessage,
     RegisterToolsMessage,
@@ -313,7 +314,7 @@ class TestUnityInstanceMiddlewareInjection:
         async def call_next(_ctx):
             return available_tools
 
-        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+        with patch.object(middleware, "_inject_user_id", new=AsyncMock(return_value="user-123")):
             with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
                 with patch("transport.unity_instance_middleware.get_registered_tools", return_value=_tool_registry_for_visibility_tests()):
                     with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get_sessions:
@@ -367,7 +368,7 @@ class TestUnityInstanceMiddlewareInjection:
         async def call_next(_ctx):
             return original_tools
 
-        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+        with patch.object(middleware, "_inject_user_id", new=AsyncMock(return_value="user-123")):
             with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
                 with patch("transport.unity_instance_middleware.get_registered_tools", return_value=_tool_registry_for_visibility_tests()):
                     with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get_sessions:
@@ -424,7 +425,7 @@ class TestUnityInstanceMiddlewareInjection:
         disabled_tool = SimpleNamespace(name="_marker_tool_indicates_registration_sent")
         registered_tools = [disabled_tool]
 
-        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+        with patch.object(middleware, "_inject_user_id", new=AsyncMock(return_value="user-123")):
             with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
                 with patch("transport.unity_instance_middleware.get_registered_tools", return_value=_tool_registry_for_visibility_tests()):
                     with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get_sessions:
@@ -474,7 +475,7 @@ class TestUnityInstanceMiddlewareInjection:
         async def call_next(_ctx):
             return original_tools
 
-        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+        with patch.object(middleware, "_inject_user_id", new=AsyncMock(return_value="user-123")):
             with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
                 with patch("transport.unity_instance_middleware.get_registered_tools", return_value=_tool_registry_for_visibility_tests()):
                     with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get_sessions:
@@ -513,7 +514,7 @@ class TestUnityInstanceMiddlewareInjection:
         async def call_next(_ctx):
             return [SimpleNamespace(name="manage_scene")]
 
-        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+        with patch.object(middleware, "_inject_user_id", new=AsyncMock(return_value="user-123")):
             with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
                 with patch("transport.unity_instance_middleware.get_registered_tools", return_value=_tool_registry_for_visibility_tests()):
                     with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get_sessions:
@@ -537,6 +538,10 @@ class TestUnityInstanceMiddlewareInjection:
 
     @pytest.mark.asyncio
     async def test_list_tools_skips_filter_when_active_instance_hash_is_stale(self, mock_context, monkeypatch):
+        """
+        Current behavior: tools/list ignores the legacy session-selected instance
+        and instead filters against the actual visible HTTP sessions.
+        """
         middleware = UnityInstanceMiddleware()
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
@@ -568,11 +573,14 @@ class TestUnityInstanceMiddlewareInjection:
                                     )
                                 }
                             )
+                            mock_get_tools.return_value = [
+                                SimpleNamespace(name="manage_scene"),
+                            ]
 
                             filtered = await middleware.on_list_tools(middleware_ctx, call_next)
 
-        assert [tool.name for tool in filtered] == [tool.name for tool in original_tools]
-        mock_get_tools.assert_not_called()
+        assert [tool.name for tool in filtered] == ["manage_scene", "set_active_instance"]
+        mock_get_tools.assert_awaited_once_with("abc123", user_id=None)
 
     @pytest.mark.asyncio
     async def test_list_tools_hides_alias_when_target_tool_is_disabled(self, mock_context, monkeypatch):
@@ -801,6 +809,21 @@ class TestAutoSelectInstance:
 
         # Should return None since both PluginHub failed
         assert instance is None
+
+
+class TestLegacyUnityConnectionPoolSelection:
+    """Test stdio instance resolution when no explicit target is provided."""
+
+    def test_resolve_instance_id_requires_selection_when_multiple_instances_exist(self):
+        pool = UnityConnectionPool()
+        pool._default_instance_id = None
+        instances = [
+            SimpleNamespace(id="ProjectA@aaa111", name="ProjectA", hash="aaa111", path="/tmp/a", port=6401),
+            SimpleNamespace(id="ProjectB@bbb222", name="ProjectB", hash="bbb222", path="/tmp/b", port=6402),
+        ]
+
+        with pytest.raises(ConnectionError, match="Multiple Unity Editor instances are running"):
+            pool._resolve_instance_id(None, instances)
 
 
 # ============================================================================

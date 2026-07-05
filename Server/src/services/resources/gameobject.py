@@ -42,6 +42,7 @@ def _validate_instance_id(instance_id: str) -> tuple[int | None, MCPResponse | N
 @mcp_for_unity_resource(
     uri="mcpforunity://scene/gameobject-api",
     name="gameobject_api",
+    unity_target=False,
     description="Documentation for GameObject resources. Use find_gameobjects tool to get instance IDs, then access resources below.\n\nURI: mcpforunity://scene/gameobject-api"
 )
 async def get_gameobject_api_docs(_ctx: Context) -> MCPResponse:

@@ -3,6 +3,11 @@ Resource registry for auto-discovery of MCP resources.
 """
 from typing import Callable, Any
 
+from .unity_targeting import (
+    add_optional_unity_instance_parameter,
+    append_unity_instance_query_template,
+)
+
 # Global registry to collect decorated resources
 _resource_registry: list[dict[str, Any]] = []
 
@@ -11,6 +16,7 @@ def mcp_for_unity_resource(
     uri: str,
     name: str | None = None,
     description: str | None = None,
+    unity_target: bool = True,
     **kwargs
 ) -> Callable:
     """
@@ -30,15 +36,21 @@ def mcp_for_unity_resource(
     """
     def decorator(func: Callable) -> Callable:
         resource_name = name if name is not None else func.__name__
+        registered_func = func
+        registered_uri = uri
+        if unity_target:
+            registered_func = add_optional_unity_instance_parameter(func)
+            registered_uri = append_unity_instance_query_template(uri)
         _resource_registry.append({
-            'func': func,
-            'uri': uri,
+            'func': registered_func,
+            'uri': registered_uri,
             'name': resource_name,
             'description': description,
+            'unity_target': unity_target,
             'kwargs': kwargs
         })
 
-        return func
+        return registered_func
 
     return decorator
 

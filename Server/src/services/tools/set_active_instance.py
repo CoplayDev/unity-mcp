@@ -23,6 +23,17 @@ async def set_active_instance(
         ctx: Context,
         instance: Annotated[str, "Target instance (Name@hash, hash prefix, or port number in stdio mode)"]
 ) -> dict[str, Any]:
+    get_state = getattr(ctx, "get_state", None)
+    bound_instance = await get_state("bound_unity_instance") if callable(get_state) else None
+    if bound_instance:
+        return {
+            "success": False,
+            "error": (
+                "set_active_instance is not available on an instance-bound MCP endpoint. "
+                "Use the bound endpoint target or switch back to the unbound /mcp endpoint."
+            ),
+        }
+
     transport = (config.transport_mode or "stdio").lower()
 
     # Port number shorthand (stdio only) — resolve to Name@hash via pool discovery

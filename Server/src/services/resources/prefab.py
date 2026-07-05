@@ -43,6 +43,7 @@ def _decode_prefab_path(encoded_path: str) -> str:
 @mcp_for_unity_resource(
     uri="mcpforunity://prefab-api",
     name="prefab_api",
+    unity_target=False,
     description="Documentation for Prefab resources. Use manage_asset action=search filterType=Prefab to find prefabs, then access resources below.\n\nURI: mcpforunity://prefab-api"
 )
 async def get_prefab_api_docs(_ctx: Context) -> MCPResponse:

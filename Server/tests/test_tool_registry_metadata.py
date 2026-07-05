@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 
 from services.registry import get_registered_tools, mcp_for_unity_tool
@@ -23,6 +25,20 @@ def test_tool_registry_defaults_unity_target_to_tool_name():
     assert tool_info["unity_target"] == "_default_target_tool"
 
 
+@pytest.mark.asyncio
+async def test_tool_registry_exposes_explicit_unity_instance_parameter():
+    @mcp_for_unity_tool()
+    async def _unity_targeted_tool(ctx, action: str):
+        return {"ctx": ctx, "action": action}
+
+    signature = inspect.signature(_unity_targeted_tool)
+    assert "unity_instance" in signature.parameters
+    assert signature.parameters["unity_instance"].default is None
+
+    result = await _unity_targeted_tool("ctx", "play", unity_instance="Project@abc123")
+    assert result == {"ctx": "ctx", "action": "play"}
+
+
 def test_tool_registry_supports_server_only_and_alias_targets():
     @mcp_for_unity_tool(unity_target=None)
     def _server_only_tool():
@@ -38,6 +54,7 @@ def test_tool_registry_supports_server_only_and_alias_targets():
 
     assert server_only["unity_target"] is None
     assert alias_tool["unity_target"] == "manage_script"
+    assert "unity_instance" not in inspect.signature(_server_only_tool).parameters
 
 
 def test_tool_registry_does_not_leak_unity_target_into_tool_kwargs():

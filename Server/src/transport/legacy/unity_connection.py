@@ -551,16 +551,27 @@ class UnityConnectionPool:
                 instance_identifier = self._default_instance_id
                 logger.debug(f"Using default instance: {instance_identifier}")
             else:
-                # Use the most recently active instance
-                # Instances with no heartbeat (None) should be sorted last (use 0 as sentinel)
-                sorted_instances = sorted(
-                    instances,
-                    key=lambda inst: inst.last_heartbeat.timestamp() if inst.last_heartbeat else 0.0,
-                    reverse=True,
+                if len(instances) == 1:
+                    logger.info(
+                        "No instance specified, auto-selecting sole instance: %s",
+                        instances[0].id,
+                    )
+                    return instances[0]
+
+                suggestions = [
+                    {
+                        "id": inst.id,
+                        "path": inst.path,
+                        "port": inst.port,
+                        "suggest": f"Use unity_instance='{inst.id}'",
+                    }
+                    for inst in instances
+                ]
+                raise ConnectionError(
+                    "Multiple Unity Editor instances are running. "
+                    "Pass unity_instance explicitly or call set_active_instance first. "
+                    f"Available instances: {suggestions}"
                 )
-                logger.info(
-                    f"No instance specified, using most recent: {sorted_instances[0].id}")
-                return sorted_instances[0]
 
         identifier = instance_identifier.strip()
 
