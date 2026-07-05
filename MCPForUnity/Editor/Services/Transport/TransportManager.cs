@@ -50,7 +50,12 @@ namespace MCPForUnity.Editor.Services.Transport
             // same mode: manual Connect, reload-resume, and auto-start can otherwise race, and
             // WebSocketTransportClient.StartAsync tears down a live connection first — two
             // interleaved starts bounce each other's session.
-            Task<bool> inFlight = mode == TransportMode.Http ? _httpStartTask : _stdioStartTask;
+            Task<bool> inFlight = mode switch
+            {
+                TransportMode.Http => _httpStartTask,
+                TransportMode.Stdio => _stdioStartTask,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
+            };
             if (inFlight != null && !inFlight.IsCompleted)
             {
                 return inFlight;

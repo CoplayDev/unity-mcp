@@ -164,23 +164,27 @@ namespace MCPForUnity.Editor.Services
                 // The flag doubles as the cancel signal (see CancelPendingResume).
                 if (!IsResumePending) return;
 
-                // Abort retries if the user switched transports while we were waiting.
-                if (!EditorConfigurationCache.Instance.UseHttpTransport)
-                {
-                    SessionState.EraseBool(ResumeSessionKey);
-                    return;
-                }
-
-                // Never bounce a session someone else established while we were waiting
-                // (WebSocketTransportClient.StartAsync tears down a live connection first).
-                if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http))
-                {
-                    SessionState.EraseBool(ResumeSessionKey);
-                    return;
-                }
-
                 try
                 {
+                    // Inside the attempt try: a service read racing the reload boundary must
+                    // burn a retry, not kill this fire-and-forget task with the flag still set
+                    // (which would leave nothing scheduled to consume it until the next reload).
+
+                    // Abort retries if the user switched transports while we were waiting.
+                    if (!EditorConfigurationCache.Instance.UseHttpTransport)
+                    {
+                        SessionState.EraseBool(ResumeSessionKey);
+                        return;
+                    }
+
+                    // Never bounce a session someone else established while we were waiting
+                    // (WebSocketTransportClient.StartAsync tears down a live connection first).
+                    if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http))
+                    {
+                        SessionState.EraseBool(ResumeSessionKey);
+                        return;
+                    }
+
                     bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
                     if (started)
                     {
