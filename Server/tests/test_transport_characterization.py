@@ -1211,6 +1211,71 @@ class TestSessionResolution:
         PluginHub._loop = None
 
     @pytest.mark.asyncio
+    async def test_resolve_session_id_ambiguity_lists_available_instances(self, plugin_registry):
+        """The refusal carries the instance ids (parity with the stdio guard) so
+        agents can select without a second lookup."""
+        loop = asyncio.get_event_loop()
+        PluginHub.configure(plugin_registry, loop)
+
+        await plugin_registry.register(
+            session_id="sess-1",
+            project_name="Project1",
+            project_hash="hash-1",
+            unity_version="2022.3"
+        )
+        await plugin_registry.register(
+            session_id="sess-2",
+            project_name="Project2",
+            project_hash="hash-2",
+            unity_version="2023.2"
+        )
+
+        with pytest.raises(InstanceSelectionRequiredError) as excinfo:
+            await PluginHub._resolve_session_id(None)
+
+        assert excinfo.value.available_instances == [
+            "Project1@hash-1", "Project2@hash-2"]
+        assert "Project1@hash-1" in str(excinfo.value)
+        assert "Project2@hash-2" in str(excinfo.value)
+
+        # Cleanup
+        PluginHub._registry = None
+        PluginHub._lock = None
+        PluginHub._loop = None
+
+    @pytest.mark.asyncio
+    async def test_http_selection_error_hints_selection_not_retry(self, monkeypatch):
+        """A blind retry fails identically, so the HTTP wrapper must hint at
+        selection and surface the ids structurally instead of the blanket
+        retry hint."""
+        from transport import unity_transport
+
+        async def _no_user():
+            return None
+
+        async def _raise_selection(*_args, **_kwargs):
+            raise InstanceSelectionRequiredError(
+                InstanceSelectionRequiredError._MULTIPLE_INSTANCES,
+                available_instances=["A@hash-a", "B@hash-b"])
+
+        monkeypatch.setattr(unity_transport, "_is_http_transport", lambda: True)
+        monkeypatch.setattr(
+            unity_transport, "_resolve_user_id_from_request", _no_user)
+        monkeypatch.setattr(
+            unity_transport.PluginHub, "send_command_for_instance", _raise_selection)
+
+        async def _send_fn(*_a, **_k):
+            raise AssertionError("stdio path should not be used on HTTP transport")
+
+        resp = await unity_transport.send_with_unity_instance(
+            _send_fn, None, "manage_scene", {})
+
+        assert resp["success"] is False
+        assert resp["hint"] == "select_instance"
+        assert resp["data"]["reason"] == "instance_selection_required"
+        assert resp["data"]["available_instances"] == ["A@hash-a", "B@hash-b"]
+
+    @pytest.mark.asyncio
     async def test_resolve_session_id_parses_instance_format(self, plugin_registry):
         """
         Current behavior: Accepts both "ProjectName@hash" and bare "hash"
