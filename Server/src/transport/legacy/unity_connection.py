@@ -550,17 +550,21 @@ class UnityConnectionPool:
             if self._default_instance_id:
                 instance_identifier = self._default_instance_id
                 logger.debug(f"Using default instance: {instance_identifier}")
+            elif len(instances) == 1:
+                # Sole instance: unambiguous, select it without requiring a hint.
+                return instances[0]
             else:
-                # Use the most recently active instance
-                # Instances with no heartbeat (None) should be sorted last (use 0 as sentinel)
-                sorted_instances = sorted(
-                    instances,
-                    key=lambda inst: inst.last_heartbeat.timestamp() if inst.last_heartbeat else 0.0,
-                    reverse=True,
+                # 2+ instances connected and nothing pinned. Refuse to guess —
+                # silently routing to the most-recently-heartbeated editor lets
+                # an unbound session retarget another project's Unity (#1023).
+                # Mirror the HTTP "multiple connected, no active set" guard.
+                available_ids = [inst.id for inst in instances]
+                raise ConnectionError(
+                    "Multiple Unity instances are connected and none is selected. "
+                    "Pass unity_instance on the call or use set_active_instance "
+                    f"with one of: {available_ids}. "
+                    "Read mcpforunity://instances for current sessions."
                 )
-                logger.info(
-                    f"No instance specified, using most recent: {sorted_instances[0].id}")
-                return sorted_instances[0]
 
         identifier = instance_identifier.strip()
 
