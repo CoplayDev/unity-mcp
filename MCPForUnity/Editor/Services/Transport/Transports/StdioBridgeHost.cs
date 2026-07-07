@@ -735,6 +735,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     throw new IOException("Read timed out");
                 }
+                catch (ObjectDisposedException)
+                {
+                    throw new IOException("Connection closed before reading expected bytes");
+                }
             }
 
             return buffer;
@@ -758,13 +762,20 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             byte[] header = new byte[8];
             WriteUInt64BigEndian(header, (ulong)payload.LongLength);
+            try
+            {
 #if NETSTANDARD2_1 || NET6_0_OR_GREATER
-            await stream.WriteAsync(header.AsMemory(0, header.Length), cancel).ConfigureAwait(false);
-            await stream.WriteAsync(payload.AsMemory(0, payload.Length), cancel).ConfigureAwait(false);
+                await stream.WriteAsync(header.AsMemory(0, header.Length), cancel).ConfigureAwait(false);
+                await stream.WriteAsync(payload.AsMemory(0, payload.Length), cancel).ConfigureAwait(false);
 #else
-            await stream.WriteAsync(header, 0, header.Length, cancel).ConfigureAwait(false);
-            await stream.WriteAsync(payload, 0, payload.Length, cancel).ConfigureAwait(false);
+                await stream.WriteAsync(header, 0, header.Length, cancel).ConfigureAwait(false);
+                await stream.WriteAsync(payload, 0, payload.Length, cancel).ConfigureAwait(false);
 #endif
+            }
+            catch (ObjectDisposedException)
+            {
+                throw new IOException("Connection closed before writing frame");
+            }
         }
 
         private static async Task<string> ReadFrameAsUtf8Async(NetworkStream stream, int timeoutMs, CancellationToken cancel)
