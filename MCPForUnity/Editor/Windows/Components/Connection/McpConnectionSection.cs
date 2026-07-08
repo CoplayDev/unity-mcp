@@ -14,7 +14,7 @@ using UnityEngine.UIElements;
 namespace MCPForUnity.Editor.Windows.Components.Connection
 {
     /// <summary>
-    /// Controller for the Connection section of the MCP For Unity editor window.
+    /// Controller for the Connection section of the MCP for Unity editor window.
     /// Handles transport protocol, HTTP/stdio configuration, connection status, and health checks.
     /// </summary>
     public class McpConnectionSection
@@ -59,6 +59,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private bool httpServerToggleInProgress;
         private Task verificationTask;
         private string lastHealthStatus;
+        private int consecutiveVerifyFailures;
         private double lastLocalServerRunningPollTime;
         private bool lastLocalServerRunning;
 
@@ -318,6 +319,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             RefreshHttpUi();
         }
 
+        // Consecutive failed bridge verifications required before the health indicator is
+        // shown as Unhealthy ("broken"). A stdio domain reload briefly rebinds the listener
+        // — the port can even hop (e.g. 6402 -> 6403) — during which a single VerifyAsync()
+        // ping transiently fails with "Bridge not running" even though the bridge recovers on
+        // its own. Flashing broken on that lone miss is misleading, so debounce: require
+        // repeated failures before surfacing it.
+        internal const int UnhealthyVerificationThreshold = 2;
+
+        internal static bool ShouldReportUnhealthy(int consecutiveVerifyFailures)
+            => consecutiveVerifyFailures >= UnhealthyVerificationThreshold;
+
         public void UpdateConnectionStatus()
         {
             var bridgeService = MCPServiceLocator.Bridge;
@@ -364,7 +376,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 connectionStatusLabel.text = $"Session Active ({instanceName})";
                 statusIndicator.RemoveFromClassList("disconnected");
                 statusIndicator.AddToClassList("connected");
-                connectionToggleButton.text = "End Session";
+                connectionToggleButton.text = stdioSelected ? "End Session" : "Disconnect";
                 connectionToggleButton.SetEnabled(true); // Re-enable in case it was disabled during resumption
 
                 // Force the UI to reflect the actual port being used
@@ -384,7 +396,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     // Keep the indicator in a neutral/transitional state
                     statusIndicator.RemoveFromClassList("connected");
                     statusIndicator.RemoveFromClassList("disconnected");
-                    connectionToggleButton.text = "Start Session";
+                    connectionToggleButton.text = stdioSelected ? "Start Session" : "Connect";
                     connectionToggleButton.SetEnabled(false);
                 }
                 else
@@ -392,7 +404,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     connectionStatusLabel.text = "No Session";
                     statusIndicator.RemoveFromClassList("connected");
                     statusIndicator.AddToClassList("disconnected");
-                    connectionToggleButton.text = "Start Session";
+                    connectionToggleButton.text = stdioSelected ? "Start Session" : "Connect";
 
                     bool httpRemoteSelected = transportDropdown != null
                         && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTPRemote;
@@ -595,7 +607,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // Server button only controls server lifecycle (Start/Stop Server).
             // Session lifecycle is handled by the separate connectionToggleButton.
             bool shouldShowStop = localServerRunning;
-            startHttpServerButton.text = shouldShowStop ? "Stop Server" : "Start Server";
+            // While we are launching+connecting and the server isn't up yet, show a transient "Starting…" label.
+            if (httpServerToggleInProgress && !localServerRunning)
+            {
+                startHttpServerButton.text = "Starting…";
+            }
+            else
+            {
+                startHttpServerButton.text = shouldShowStop ? "Stop Server" : "Start Server";
+            }
             // Note: Server logs may contain transient HTTP 400s on /mcp during startup probing and
             // CancelledError stack traces on shutdown when streaming requests are cancelled; this is expected.
             startHttpServerButton.EnableInClassList("server-running", localServerRunning);
@@ -638,7 +658,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                         await bridgeService.StopAsync();
                     }
                     bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
-                    if (!stopped)
+                    if (stopped)
+                    {
+                        McpLog.Info("Server stopped");
+                    }
+                    else
                     {
                         McpLog.Warn("Failed to stop HTTP server or no server was running");
                     }
@@ -655,6 +679,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                         McpLog.Warn($"Start server blocked by local URL security policy: {errorMsg}");
                         return;
                     }
+
+                    // Reflect the transient "Starting…" state on the button before the (possibly long) launch.
+                    UpdateStartHttpButtonState();
 
                     bool serverStarted = MCPServiceLocator.Server.StartLocalHttpServer();
                     if (serverStarted)
@@ -682,56 +709,53 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private async Task TryAutoStartSessionAsync()
         {
-            // Wait briefly for the HTTP server to become ready, then start the session.
+            // Wait for the HTTP server to become ready, then start the session.
             // This is called when THIS instance starts the server (not when detecting an external server).
+            // Patience: keep polling reachability while the launched process is alive; declare failure only
+            // when the process exits without the port coming up, or a generous hard cap is reached.
+            var server = MCPServiceLocator.Server;
             var bridgeService = MCPServiceLocator.Bridge;
-            // Windows/dev mode may take much longer due to uv package resolution, fresh downloads, antivirus scans, etc.
-            const int maxAttempts = 30;
-            // Use shorter delays initially, then longer delays to allow server startup
-            var shortDelay = TimeSpan.FromMilliseconds(500);
-            var longDelay = TimeSpan.FromSeconds(3);
+            string url = HttpEndpointUtility.GetLocalBaseUrl();
 
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            var pollDelay = TimeSpan.FromMilliseconds(500);
+            var hardCap = TimeSpan.FromMinutes(5);
+            double startTime = EditorApplication.timeSinceStartup;
+
+            while (true)
             {
-                var delay = attempt < 6 ? shortDelay : longDelay;
-
-                // Check if server is actually accepting connections
-                bool serverDetected = MCPServiceLocator.Server.IsLocalHttpServerReachable();
-
-                if (serverDetected)
+                if (server.IsLocalHttpServerReachable())
                 {
-                    // Server detected - try to connect
+                    McpLog.Info($"Server ready on {url}");
                     bool started = await bridgeService.StartAsync();
                     if (started)
                     {
-                        await VerifyBridgeConnectionAsync();
-                        UpdateConnectionStatus();
-                        return;
-                    }
-                }
-                else if (attempt >= 20)
-                {
-                    // After many attempts without detection, try connecting anyway as a last resort.
-                    // This handles cases where process detection fails but the server is actually running.
-                    // Only try once every 3 attempts to avoid spamming connection errors (at attempts 20, 23, 26, 29).
-                    if ((attempt - 20) % 3 != 0) continue;
-
-                    bool started = await bridgeService.StartAsync();
-                    if (started)
-                    {
+                        McpLog.Info("Session connected");
                         await VerifyBridgeConnectionAsync();
                         UpdateConnectionStatus();
                         return;
                     }
                 }
 
-                if (attempt < maxAttempts - 1)
+                bool processAlive = server.IsManagedServerLaunchProcessAlive();
+                double elapsed = EditorApplication.timeSinceStartup - startTime;
+
+                if ((!processAlive && elapsed > 1.0) || elapsed > hardCap.TotalSeconds)
                 {
-                    await Task.Delay(delay);
+                    // Last-resort connect attempt in case reachability detection missed a live server.
+                    if (await bridgeService.StartAsync())
+                    {
+                        McpLog.Info("Session connected");
+                        await VerifyBridgeConnectionAsync();
+                        UpdateConnectionStatus();
+                        return;
+                    }
+
+                    server.LogLocalHttpServerLaunchFailure();
+                    return;
                 }
+
+                await Task.Delay(pollDelay);
             }
-
-            McpLog.Warn("Failed to auto-start session after launching the HTTP server.");
         }
 
         private void PersistUnityPortFromField()
@@ -778,6 +802,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             try
             {
+                bool httpRemoteForLog = transportDropdown != null
+                    && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTPRemote;
+
                 if (bridgeService.IsRunning)
                 {
                     // Clear any resume flags when user manually ends the session to prevent
@@ -787,11 +814,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
 
                     await bridgeService.StopAsync();
+                    if (httpRemoteForLog)
+                    {
+                        McpLog.Info("Disconnected");
+                    }
                 }
                 else
                 {
-                    bool httpRemoteSelected = transportDropdown != null
-                        && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTPRemote;
+                    bool httpRemoteSelected = httpRemoteForLog;
                     if (httpRemoteSelected
                         && !HttpEndpointUtility.IsCurrentRemoteUrlAllowed(out string remotePolicyError))
                     {
@@ -811,9 +841,18 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                         return;
                     }
 
+                    if (httpRemoteSelected)
+                    {
+                        McpLog.Info($"Connecting to {HttpEndpointUtility.GetRemoteBaseUrl()}…");
+                    }
+
                     bool started = await bridgeService.StartAsync();
                     if (started)
                     {
+                        if (httpRemoteSelected)
+                        {
+                            McpLog.Info("Connected");
+                        }
                         await VerifyBridgeConnectionAsync();
                     }
                     else
@@ -824,7 +863,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                         string errorMsg = state?.Error
                             ?? "Failed to start the MCP session. Check the server URL and that the server is running.";
                         EditorUtility.DisplayDialog("Connection Failed", errorMsg, "OK");
-                        McpLog.Warn($"Failed to start MCP bridge: {errorMsg}");
+                        if (httpRemoteSelected)
+                        {
+                            McpLog.Error($"Connection failed: {errorMsg}");
+                        }
+                        else
+                        {
+                            McpLog.Warn($"Failed to start MCP bridge: {errorMsg}");
+                        }
                     }
                 }
             }
@@ -1010,6 +1056,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 newStatus = HealthStatus.Healthy;
                 isHealthy = true;
+                consecutiveVerifyFailures = 0;
 
                 // Only log if state changed
                 if (lastHealthStatus != newStatus)
@@ -1020,8 +1067,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else if (result.HandshakeValid)
             {
+                // Handshake succeeded, so the socket is reachable — not the transient
+                // rebind case. Ping failing is a genuine warning; reset the miss counter.
                 newStatus = HealthStatus.PingFailed;
                 isHealthy = false;
+                consecutiveVerifyFailures = 0;
 
                 // Log once per distinct warning state
                 if (lastHealthStatus != newStatus)
@@ -1032,6 +1082,19 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else
             {
+                // Could not reach the bridge at all. A stdio reload rebinds the listener
+                // (the port can hop), so one miss does not mean it is down. Debounce: only
+                // surface "broken" after repeated failures (mirrors #1207). Until then leave
+                // the indicator in its current state; the next verification resolves it.
+                consecutiveVerifyFailures++;
+                if (!ShouldReportUnhealthy(consecutiveVerifyFailures))
+                {
+                    McpLog.Debug(
+                        $"Connection verification miss {consecutiveVerifyFailures}/{UnhealthyVerificationThreshold} " +
+                        $"(transient, not surfacing): {result.Message}");
+                    return;
+                }
+
                 newStatus = HealthStatus.Unhealthy;
                 isHealthy = false;
 

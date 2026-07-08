@@ -42,6 +42,28 @@ To run locally, open `TestProjects/UnityMCPTests` in Unity, then **Window → Ge
 
 CI runs both modes across a multi-Unity matrix via `.github/workflows/unity-tests.yml`.
 
+### Local headless test harness
+
+One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge, then tears down:
+
+```bash
+python tools/local_harness.py
+```
+
+This is the same entrypoint CI uses — `.github/workflows/e2e-bridge.yml` collapses its boot/wait/discover/run-smoke shell into this invocation.
+
+Key flags:
+
+- `--legs smoke,editmode,playmode` — subset of legs to run.
+- `--project-path TestProjects/UnityMCPTests` — Unity project to boot (repo-relative or absolute).
+- `--reuse` — attach to an already-resident bridge instead of booting one.
+- `--keep-alive` — leave the Editor running after the legs (no teardown).
+- `--no-warmup` — skip the warm-up import phase.
+
+Exit-code contract: `0` all blocking legs passed, `1` a blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found.
+
+It needs a Hub-activated Editor locally (no ULF/serial); none of the CI license staging applies.
+
 ### Adding a Unity test
 
 Mirror the C# tool you're adding. For `ManageNavigation.cs` in `MCPForUnity/Editor/Tools/`, create `TestProjects/UnityMCPTests/Assets/Tests/EditMode/Editor/ManageNavigationTests.cs`. Use the existing assembly definition (`MCPForUnityTests.Editor.asmdef`) so the suite picks it up automatically.

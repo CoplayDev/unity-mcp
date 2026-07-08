@@ -18,7 +18,7 @@ using UnityEngine.UIElements;
 namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 {
     /// <summary>
-    /// Controller for the Client Configuration section of the MCP For Unity editor window.
+    /// Controller for the Client Configuration section of the MCP for Unity editor window.
     /// Handles client selection, configuration, status display, and manual configuration details.
     /// </summary>
     public class McpClientConfigSection

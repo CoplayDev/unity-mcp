@@ -319,16 +319,7 @@ namespace MCPForUnity.Editor.Tools
                         continue;
                     }
 
-                    // --- Formatting ---
-                    string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
-                    // Always get first line for the message, use full message only if no stack trace exists
-                    string[] messageLines = message.Split(
-                        new[] { '\n', '\r' },
-                        StringSplitOptions.RemoveEmptyEntries
-                    );
-                    string messageOnly = messageLines.Length > 0 ? messageLines[0] : message;
-
-                    // If not including stacktrace, ensure we only show the first line
+                    var (messageOnly, stackTrace) = SplitMessageAndStackTrace(message);
                     if (!includeStacktrace)
                     {
                         stackTrace = null;
@@ -498,30 +489,35 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
-        /// Attempts to extract the stack trace part from a log message.
-        /// Unity log messages often have the stack trace appended after the main message,
-        /// starting on a new line and typically indented or beginning with "at ".
+        /// Splits a Unity log message into its body and appended stack trace.
+        /// Unity concatenates both, separated by newlines, so the body may span
+        /// several lines before the stack trace begins.
         /// </summary>
-        /// <param name="fullMessage">The complete log message including potential stack trace.</param>
-        /// <returns>The extracted stack trace string, or null if none is found.</returns>
-        private static string ExtractStackTrace(string fullMessage)
+        /// <param name="fullMessage">The complete log message including any appended stack trace.</param>
+        /// <returns>The message body (line endings normalized to "\n", internal blank lines preserved) and the stack trace, or null when none is found.</returns>
+        private static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
-                return null;
+                return (fullMessage, null);
 
-            // Split into lines, removing empty ones to handle different line endings gracefully.
-            // Using StringSplitOptions.None might be better if empty lines matter within stack trace, but RemoveEmptyEntries is usually safer here.
-            string[] lines = fullMessage.Split(
-                new[] { '\r', '\n' },
-                StringSplitOptions.RemoveEmptyEntries
-            );
+            string[] lines = fullMessage.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
 
             // If there's only one line or less, there's no separate stack trace.
             if (lines.Length <= 1)
-                return null;
+                return (fullMessage, null);
 
-            int stackStartIndex = -1;
+            int stackStartIndex = FindStackStartIndex(lines);
+            if (stackStartIndex <= 0)
+                return (string.Join("\n", lines), null);
 
+            return (
+                string.Join("\n", lines.Take(stackStartIndex)),
+                string.Join("\n", lines.Skip(stackStartIndex))
+            );
+        }
+
+        private static int FindStackStartIndex(string[] lines)
+        {
             // Start checking from the second line onwards.
             for (int i = 1; i < lines.Length; ++i)
             {
@@ -543,21 +539,11 @@ namespace MCPForUnity.Editor.Tools
                     )
                 )
                 {
-                    stackStartIndex = i;
-                    break; // Found the likely start of the stack trace
+                    return i; // Found the likely start of the stack trace
                 }
             }
 
-            // If a potential start index was found...
-            if (stackStartIndex > 0)
-            {
-                // Join the lines from the stack start index onwards using standard newline characters.
-                // This reconstructs the stack trace part of the message.
-                return string.Join("\n", lines.Skip(stackStartIndex));
-            }
-
-            // No clear stack trace found based on the patterns.
-            return null;
+            return -1;
         }
 
         /* LogEntry.mode bits exploration (based on Unity decompilation/observation):
