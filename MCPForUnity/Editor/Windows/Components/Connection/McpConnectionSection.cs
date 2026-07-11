@@ -62,6 +62,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private int consecutiveVerifyFailures;
         private double lastLocalServerRunningPollTime;
         private bool lastLocalServerRunning;
+        private int consecutiveServerDownPolls;
+        private bool sessionWasRunning;
 
         // Reference to Advanced section for health status updates
         private Action<bool, string> onHealthStatusUpdate;
@@ -319,6 +321,26 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             RefreshHttpUi();
         }
 
+        // Consecutive failed reachability polls (0.75s cadence) required before an active
+        // session is declared orphaned. A single stale reading used to be enough, and one
+        // missed probe on a machine busy with test runs or reloads tore down healthy
+        // sessions into reconnect churn (#1207).
+        internal const int OrphanedSessionDownPollThreshold = 3;
+
+        internal static bool ShouldEndOrphanedSession(
+            bool httpLocalSelected,
+            bool sessionRunning,
+            bool toggleInProgress,
+            bool editorBusy,
+            int consecutiveDownPolls)
+        {
+            return httpLocalSelected
+                && sessionRunning
+                && !toggleInProgress
+                && !editorBusy
+                && consecutiveDownPolls >= OrphanedSessionDownPollThreshold;
+        }
+
         // Consecutive failed bridge verifications required before the health indicator is
         // shown as Unhealthy ("broken"). A stdio domain reload briefly rebinds the listener
         // — the port can even hop (e.g. 6402 -> 6403) — during which a single VerifyAsync()
@@ -345,9 +367,20 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // NOTE: This also updates lastLocalServerRunning which is used below for session toggle visibility.
             UpdateStartHttpButtonState();
 
+            // A down-poll streak accumulated before/while no session was running must not
+            // carry into a freshly started session — it would satisfy orphan detection
+            // before the first post-start probe refreshes (the poll cadence is 0.75s).
+            if (isRunning && !sessionWasRunning)
+            {
+                consecutiveServerDownPolls = 0;
+            }
+            sessionWasRunning = isRunning;
+
             // Detect orphaned session: if HTTP Local session thinks it's running but the server is gone,
             // automatically end the session to keep UI in sync with reality.
-            if (showLocalServerControls && isRunning && !lastLocalServerRunning && !connectionToggleInProgress)
+            bool editorBusy = EditorApplication.isCompiling || EditorApplication.isUpdating;
+            if (ShouldEndOrphanedSession(showLocalServerControls, isRunning, connectionToggleInProgress,
+                    editorBusy, consecutiveServerDownPolls))
             {
                 McpLog.Info("Server no longer running; ending orphaned session.");
                 _ = EndOrphanedSessionAsync();
@@ -600,6 +633,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 {
                     lastLocalServerRunningPollTime = now;
                     lastLocalServerRunning = MCPServiceLocator.Server.IsLocalHttpServerReachable();
+
+                    // Probe results taken while the editor is busy are unreliable (main-thread
+                    // stalls starve the connect wait), so they don't count toward teardown.
+                    if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+                    {
+                        consecutiveServerDownPolls = 0;
+                    }
+                    else
+                    {
+                        consecutiveServerDownPolls = lastLocalServerRunning ? 0 : consecutiveServerDownPolls + 1;
+                    }
                 }
                 localServerRunning = lastLocalServerRunning;
             }
