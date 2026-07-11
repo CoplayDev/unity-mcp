@@ -1015,6 +1015,8 @@ namespace MCPForUnity.Editor.Services
             return Path.Combine(dir, $"server-launch-{port}.log");
         }
 
+        public bool HasManagedServerLaunchHandle => _lastLaunchedProcess != null;
+
         public bool IsManagedServerLaunchProcessAlive()
         {
             try
