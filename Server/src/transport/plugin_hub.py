@@ -101,8 +101,16 @@ class InstanceSelectionRequiredError(RuntimeError):
         "Call set_active_instance with Name@hash from mcpforunity://instances."
     )
 
-    def __init__(self, message: str | None = None):
-        super().__init__(message or self._SELECTION_REQUIRED)
+    def __init__(self, message: str | None = None,
+                 available_instances: list[str] | None = None):
+        # Carried structurally so the transport layer can surface the ids without
+        # parsing the message; also appended to the text for parity with the stdio
+        # guard, which lists the ids inline.
+        self.available_instances = available_instances or []
+        text = message or self._SELECTION_REQUIRED
+        if self.available_instances:
+            text = f"{text} Available instances: {self.available_instances}."
+        super().__init__(text)
 
 
 class PluginHub(WebSocketEndpoint):
@@ -917,9 +925,19 @@ class PluginHub(WebSocketEndpoint):
             # Multiple sessions but no explicit target is ambiguous
             return None, count, explicit_required
 
+        async def _available_instance_ids() -> list[str]:
+            # Error path only; one extra registry read keeps the refusal actionable.
+            try:
+                sessions = await cls._registry.list_sessions(user_id=user_id)
+                return sorted(
+                    f"{s.project_name}@{s.project_hash}" for s in sessions.values())
+            except Exception:
+                return []
+
         session_id, session_count, explicit_required = await _try_once()
         if session_id is None and explicit_required and not target_hash and session_count > 0:
-            raise InstanceSelectionRequiredError()
+            raise InstanceSelectionRequiredError(
+                available_instances=await _available_instance_ids())
         deadline = time.monotonic() + max_wait_s
         wait_started = None
 
@@ -928,9 +946,11 @@ class PluginHub(WebSocketEndpoint):
         while session_id is None and time.monotonic() < deadline:
             if not target_hash and session_count > 1:
                 raise InstanceSelectionRequiredError(
-                    InstanceSelectionRequiredError._MULTIPLE_INSTANCES)
+                    InstanceSelectionRequiredError._MULTIPLE_INSTANCES,
+                    available_instances=await _available_instance_ids())
             if session_id is None and explicit_required and not target_hash and session_count > 0:
-                raise InstanceSelectionRequiredError()
+                raise InstanceSelectionRequiredError(
+                    available_instances=await _available_instance_ids())
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(

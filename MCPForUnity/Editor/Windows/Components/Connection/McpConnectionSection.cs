@@ -59,6 +59,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private bool httpServerToggleInProgress;
         private Task verificationTask;
         private string lastHealthStatus;
+        private int consecutiveVerifyFailures;
         private double lastLocalServerRunningPollTime;
         private bool lastLocalServerRunning;
         private int consecutiveServerDownPolls;
@@ -339,6 +340,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 && !editorBusy
                 && consecutiveDownPolls >= OrphanedSessionDownPollThreshold;
         }
+
+        // Consecutive failed bridge verifications required before the health indicator is
+        // shown as Unhealthy ("broken"). A stdio domain reload briefly rebinds the listener
+        // — the port can even hop (e.g. 6402 -> 6403) — during which a single VerifyAsync()
+        // ping transiently fails with "Bridge not running" even though the bridge recovers on
+        // its own. Flashing broken on that lone miss is misleading, so debounce: require
+        // repeated failures before surfacing it.
+        internal const int UnhealthyVerificationThreshold = 2;
+
+        internal static bool ShouldReportUnhealthy(int consecutiveVerifyFailures)
+            => consecutiveVerifyFailures >= UnhealthyVerificationThreshold;
 
         public void UpdateConnectionStatus()
         {
@@ -1088,6 +1100,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 newStatus = HealthStatus.Healthy;
                 isHealthy = true;
+                consecutiveVerifyFailures = 0;
 
                 // Only log if state changed
                 if (lastHealthStatus != newStatus)
@@ -1098,8 +1111,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else if (result.HandshakeValid)
             {
+                // Handshake succeeded, so the socket is reachable — not the transient
+                // rebind case. Ping failing is a genuine warning; reset the miss counter.
                 newStatus = HealthStatus.PingFailed;
                 isHealthy = false;
+                consecutiveVerifyFailures = 0;
 
                 // Log once per distinct warning state
                 if (lastHealthStatus != newStatus)
@@ -1110,6 +1126,19 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else
             {
+                // Could not reach the bridge at all. A stdio reload rebinds the listener
+                // (the port can hop), so one miss does not mean it is down. Debounce: only
+                // surface "broken" after repeated failures (mirrors #1207). Until then leave
+                // the indicator in its current state; the next verification resolves it.
+                consecutiveVerifyFailures++;
+                if (!ShouldReportUnhealthy(consecutiveVerifyFailures))
+                {
+                    McpLog.Debug(
+                        $"Connection verification miss {consecutiveVerifyFailures}/{UnhealthyVerificationThreshold} " +
+                        $"(transient, not surfacing): {result.Message}");
+                    return;
+                }
+
                 newStatus = HealthStatus.Unhealthy;
                 isHealthy = false;
 
