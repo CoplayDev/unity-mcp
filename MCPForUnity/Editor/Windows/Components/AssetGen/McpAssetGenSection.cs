@@ -366,11 +366,23 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
             ModelEntry selected = AssetGenModelCatalog.Find(selectedId) ?? models[0];
 
-            var dropdown = new DropdownField("Model", choices, 0);
+            // Lay the dropdown out like the Format row: a horizontal .setting-row (align-items:center,
+            // min-height:24px) with a .setting-label + a label-less DropdownField. Adding the dropdown
+            // straight into the column row instead makes flex-grow expand it vertically into a huge box.
+            var dropdownRow = new VisualElement();
+            dropdownRow.AddToClassList("setting-row");
+
+            var modelLabel = new Label("Model");
+            modelLabel.AddToClassList("setting-label");
+            dropdownRow.Add(modelLabel);
+
+            var dropdown = new DropdownField(choices, 0);
             dropdown.AddToClassList("setting-dropdown-inline");
             dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
             dropdown.SetValueWithoutNotify(selected.Label);
-            parent.Add(dropdown);
+            dropdownRow.Add(dropdown);
+
+            parent.Add(dropdownRow);
 
             var meta = new Label();
             meta.AddToClassList("help-text");
