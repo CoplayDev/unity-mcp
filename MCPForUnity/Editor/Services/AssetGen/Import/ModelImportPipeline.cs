@@ -171,7 +171,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
         /// <summary>
         /// Map the caller's rig mode to a <see cref="ModelImporterAnimationType"/>. Defaults to
         /// <c>None</c> (no rig) when unset — pass "generic"/"humanoid" to surface a rigged FBX/OBJ's
-        /// AnimationClips, which the None default otherwise hides.
+        /// AnimationClips, which the None default otherwise hides. "legacy" selects Unity's
+        /// legacy Animation system — rarely needed.
         /// </summary>
         internal static ModelImporterAnimationType ParseAnimationType(string value)
         {

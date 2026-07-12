@@ -23,8 +23,9 @@ directly.
 1. **Resolve the Unity project path.** Read `mcpforunity://editor/state` for the project
    root (the editor dataPath's parent). Decide the export format:
    - **GLB (glTFast) when the model has a rig, animation, PBR (metallic/roughness), emission,
-     transparency, or multi-material zones** — glTFast carries all of these automatically, no
-     post-processing (see [references/bridge-fidelity.md](references/bridge-fidelity.md)).
+     or transparency** — glTFast carries all of these automatically, no post-processing
+     (see [references/bridge-fidelity.md](references/bridge-fidelity.md)). Multi-material zones
+     survive either format, so they alone don't force GLB.
    - **FBX otherwise** — when glTFast isn't installed, the model is plain geometry, or you
      specifically need the built-in importer's humanoid-avatar pipeline. FBX drops emission/metallic
      (Step 5 restores emission) and surfaces animation only with `animation_type` set (Step 3).
@@ -37,13 +38,15 @@ directly.
                             apply_unit_scale=True, bake_space_transform=True)
    print(out)
    ```
-   (glTF branch: `bpy.ops.export_scene.gltf(filepath=out_glb, export_format='GLB', use_active_scene=True)`
+   (glTF branch: `out_glb = os.path.join(tempfile.gettempdir(), "blender_to_unity.glb")`, then
+   `bpy.ops.export_scene.gltf(filepath=out_glb, export_format='GLB', use_active_scene=True)`
    — its default `use_active_scene=False` can silently export a *different* open scene.)
 3. **Import into Unity** with `import_model_file`:
    `import_model_file(source_path=<temp path>, name=<asset name>, target_size=<final size in meters>)`.
-   For a **rigged/animated FBX**, also pass `animation_type="generic"` (or `"humanoid"`) — the
-   importer defaults to `None`, which imports the mesh with **zero animation clips**. GLB ignores
-   this (glTFast imports animation itself), so it's an FBX-only knob.
+   For a **rigged/animated FBX**, also pass `animation_type="generic"` (or `"humanoid"`; `"legacy"`
+   targets the old Animation-component system) — the importer defaults to `"none"`, which
+   deliberately imports the mesh with **zero animation clips**. GLB ignores this (glTFast imports
+   animation itself), so it's an FBX-only knob.
    It returns `{ asset_path, asset_guid }`. Pass `target_size` as the intended final size, but treat
    it only as a hint: it rescales at import solely when the project's **Auto-normalize** pref is on,
    and even then is unreliable for Blender FBX (see the **Scale** note). Step 4 does the reliable
@@ -74,8 +77,9 @@ directly.
           if not (m.use_nodes and m.node_tree): continue
           col, s = (0, 0, 0), 0.0
           p = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
-          if p and 'Emission Color' in p.inputs:
-              col = tuple(p.inputs['Emission Color'].default_value)[:3]
+          es = next((k for k in ('Emission Color', 'Emission') if p and k in p.inputs), None)  # 4.x / 3.x name
+          if es:
+              col = tuple(p.inputs[es].default_value)[:3]
               s = float(p.inputs['Emission Strength'].default_value)
           e = next((n for n in m.node_tree.nodes if n.type == 'EMISSION'), None)
           if e and s == 0:
@@ -102,12 +106,13 @@ directly.
   The robust fix is the Step 4 measure-bounds-then-set-`localScale` routine, which hits the target
   size deterministically regardless of the import scale or the Auto-normalize pref.
 - **Materials & emission.** FBX carries base/diffuse color and transforms fine, but **drops
-  emission and any node-based or vertex color** — so Blender neon / "Tron" scenes (color stored in
+  emission and any node-based color** — so Blender neon / "Tron" scenes (color stored in
   emission) import as dark bodies with black accents. Two fixes: **(a) prefer glTF/GLB when glTFast
   is installed** — glTF's PBR model carries `emissiveFactor` + `KHR_materials_emissive_strength`
-  natively, so emission survives with no post-step (`bpy.ops.export_scene.gltf(filepath=out, export_format='GLB')`);
+  natively, so emission survives with no post-step (`bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', use_active_scene=True)`);
   **(b) with FBX, run Step 5** to dump Blender's emission and reapply it. Also check the mesh for a
-  `color_attributes` (vertex color) layer — that needs a vertex-color-reading shader, not `_EmissionColor`.
+  `color_attributes` (vertex color) layer — the *data* survives FBX, but URP Lit won't *display* it;
+  that needs a vertex-color-reading shader, not `_EmissionColor`.
 - FBX is the default because glTFast is optional in MCP for Unity. If the import errors with
   "GLB import requires glTFast", re-export as FBX (or install glTFast from the Dependencies tab).
 - **Format fidelity.** [references/bridge-fidelity.md](references/bridge-fidelity.md) is a tested

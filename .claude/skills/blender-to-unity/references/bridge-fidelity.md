@@ -87,8 +87,11 @@ Recipe (Cycles bake):
 
 ## Capture more in one export (GLB flags)
 
-Enable the extra channels you want in `export_scene.gltf(..., export_format='GLB', use_active_scene=True, export_apply=True, ...)`:
-- `export_animations=True` — all actions → clips
+Enable the extra channels you want in `export_scene.gltf(..., export_format='GLB', use_active_scene=True, ...)`:
+- `export_apply=True` — bakes modifiers (Subsurf etc.) — **static geometry only**; skinned / shape-key
+  meshes need `export_apply=False` or the armature deform and morph targets bake away (gotcha 6)
+- `export_animations=True` — **active or NLA-stashed** actions → clips; unassociated actions are
+  dropped (Stash / Push Down them onto the object they animate first)
 - `export_morph=True` — **shape keys → Unity blend shapes**
 - `export_skins=True` — **armature / skinning**
 - `export_tangents=True` — normal-map-ready meshes

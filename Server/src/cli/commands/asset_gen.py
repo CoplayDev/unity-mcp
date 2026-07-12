@@ -124,7 +124,8 @@ def import_model(
 @click.option("--target-size", default=None, type=float, help="Normalize largest dimension (meters).")
 @click.option("--animation-type", "animation_type", default=None,
               type=click.Choice(["none", "generic", "humanoid", "legacy"]),
-              help="FBX/OBJ rig mode: generic/humanoid surface animation clips (glTF ignores this).")
+              help="FBX/OBJ rig mode: generic/humanoid surface animation clips; "
+                   "legacy selects Unity's legacy Animation system (glTF ignores this).")
 @handle_unity_errors
 def import_model_file(source_path, name, output_folder, target_size, animation_type):
     """Import a local 3D model file (e.g. a Blender export) into the Unity project."""
