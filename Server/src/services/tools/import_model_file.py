@@ -27,7 +27,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "name, output_folder (under Assets/), target_size, animation_type. "
         "Returns { asset_path, asset_guid }.\n\n"
         "animation_type (FBX/OBJ only): pass 'generic' or 'humanoid' for a rigged/animated mesh so "
-        "Unity surfaces its AnimationClips; the default 'none' imports no rig (this is the usual "
+        "Unity surfaces its AnimationClips; omitted or 'none' imports no rig (this is the usual "
         "cause of a rigged FBX importing with zero clips); 'legacy' selects Unity's legacy Animation "
         "system (rarely needed). glTF/GLB ignore it — glTFast imports animation itself.\n\n"
         "For multi-file exports (a text .gltf with an external .bin, or an .obj with a sibling "
@@ -48,7 +48,7 @@ async def import_model_file(
         Literal["none", "generic", "humanoid", "legacy"],
         "FBX/OBJ only: rig/animation import mode. 'generic' or 'humanoid' surface the model's "
         "AnimationClips; 'legacy' selects Unity's legacy Animation system (rarely needed); "
-        "'none' (default) imports no rig. Ignored for glTF/GLB.",
+        "omitted or 'none' imports no rig. Ignored for glTF/GLB.",
     ] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
