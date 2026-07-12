@@ -168,23 +168,50 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             providersContainer.Clear();
             modelEnableToggles.Clear();
 
-            AddGroupLabel("3D Model Providers");
+            var modelPanel = AddCategoryPanel("3D Models");
             foreach (var provider in ModelProviders)
             {
-                var toggle = AddProviderRow(provider.Id, provider.Label, "model");
+                var toggle = AddProviderRow(modelPanel, provider.Id, provider.Label, "model");
                 modelEnableToggles.Add((provider.Id, toggle));
             }
 
-            AddGroupLabel("Image Providers");
+            var imagePanel = AddCategoryPanel("2D Images");
             foreach (var provider in ImageProviders)
             {
-                AddProviderRow(provider.Id, provider.Label, "image");
+                AddProviderRow(imagePanel, provider.Id, provider.Label, "image");
             }
 
-            AddGroupLabel("Audio (fal.ai)");
-            AddAudioRow();
+            var audioPanel = AddCategoryPanel("Sound (fal.ai)");
+            AddAudioRow(audioPanel);
 
             AddBlenderHandoffRow();
+        }
+
+        /// <summary>
+        /// Creates a darker rounded panel with a title (added to the providers container). Each of the
+        /// three categories (3D / 2D / sound) gets its own panel so they read as distinct blocks.
+        /// </summary>
+        private VisualElement AddCategoryPanel(string title)
+        {
+            var panel = new VisualElement();
+            panel.style.backgroundColor = new Color(0f, 0f, 0f, 0.20f);
+            panel.style.paddingTop = 8;
+            panel.style.paddingBottom = 8;
+            panel.style.paddingLeft = 8;
+            panel.style.paddingRight = 8;
+            panel.style.marginBottom = 10;
+            panel.style.borderTopLeftRadius = 4;
+            panel.style.borderTopRightRadius = 4;
+            panel.style.borderBottomLeftRadius = 4;
+            panel.style.borderBottomRightRadius = 4;
+
+            var label = new Label(title);
+            label.AddToClassList("config-label");
+            label.style.marginTop = 0;
+            panel.Add(label);
+
+            providersContainer.Add(panel);
+            return panel;
         }
 
         private void AddGroupLabel(string text)
@@ -223,7 +250,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             providersContainer.Add(row);
         }
 
-        private Toggle AddProviderRow(string id, string displayName, string kind)
+        private Toggle AddProviderRow(VisualElement parent, string id, string displayName, string kind)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -231,7 +258,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             row.style.borderBottomWidth = 1;
             row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
 
-            // Header: bold provider name + enable toggle.
+            var statusLabel = new Label();
+            statusLabel.AddToClassList("help-text");
+
+            // Header: bold provider name, key status inline to its right, enable toggle far right.
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
@@ -239,8 +269,12 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             var nameLabel = new Label(displayName);
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.flexGrow = 1;
+            nameLabel.style.flexShrink = 0;
             header.Add(nameLabel);
+
+            statusLabel.style.flexGrow = 1;
+            statusLabel.style.marginLeft = 8;
+            header.Add(statusLabel);
 
             var enableToggle = new Toggle("Enabled");
             enableToggle.SetValueWithoutNotify(AssetGenPrefs.IsProviderEnabled(id));
@@ -248,9 +282,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             header.Add(enableToggle);
 
             row.Add(header);
-
-            var statusLabel = new Label();
-            statusLabel.AddToClassList("help-text");
 
             // Masked key field + Save / Clear / Test buttons.
             var fieldRow = new VisualElement();
@@ -281,7 +312,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             fieldRow.Add(testButton);
 
             row.Add(fieldRow);
-            row.Add(statusLabel);
 
             // Persist the typed key, then clear the field so the secret is never displayed.
             void SaveKeyFromField()
@@ -345,7 +375,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             // models, e.g. the Sketchfab marketplace).
             AddModelDropdown(row, kind, id);
 
-            providersContainer.Add(row);
+            parent.Add(row);
             return enableToggle;
         }
 
@@ -411,7 +441,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         /// Audio row: no enable toggle and no key field — audio reuses the single fal key owned by
         /// the Image "fal" row. Surfaces that key's presence and a fal-audio model dropdown.
         /// </summary>
-        private void AddAudioRow()
+        private void AddAudioRow(VisualElement parent)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -419,21 +449,31 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             row.style.borderBottomWidth = 1;
             row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
 
+            // Header: name + shared-key status inline to its right. No key field — audio reuses the
+            // fal key owned by the 2D fal row.
+            var header = new VisualElement();
+            header.style.flexDirection = FlexDirection.Row;
+            header.style.alignItems = Align.Center;
+            header.style.marginBottom = 2;
+
             var nameLabel = new Label("fal (audio)");
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            row.Add(nameLabel);
+            nameLabel.style.flexShrink = 0;
+            header.Add(nameLabel);
 
             bool hasFal = HasKey("fal");
-            var status = new Label(hasFal
-                ? "fal key present ✓ (shared with the Image fal provider)"
-                : "no fal key set — add it in the Image Providers section above");
+            var status = new Label(hasFal ? "key present ✓ (shared with 2D fal)" : "no fal key — set it in 2D Images");
             status.AddToClassList("help-text");
             status.style.color = hasFal ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
-            row.Add(status);
+            status.style.flexGrow = 1;
+            status.style.marginLeft = 8;
+            header.Add(status);
+
+            row.Add(header);
 
             AddModelDropdown(row, "audio", "fal");
 
-            providersContainer.Add(row);
+            parent.Add(row);
         }
 
         private static ModelEntry FindByLabel(IReadOnlyList<ModelEntry> models, string label)
