@@ -9,12 +9,13 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
     /// <summary>
-    /// 2D image generation via an aggregator (fal.ai / OpenRouter). Triggered here (never from the
-    /// GUI); the C# side reads the provider key from the secure store and runs the job. Returns a
-    /// job_id immediately; the client polls the `status` action.
+    /// Audio generation (SFX / music) via fal.ai. Triggered here (never from the GUI); the C# side
+    /// reads the fal key from the secure store and runs the job. Returns a job_id immediately; the
+    /// client polls the `status` action. When `model` is omitted it falls back to the model selected
+    /// in the Asset Generation tab, then the catalog default.
     /// </summary>
-    [McpForUnityTool("generate_image", AutoRegister = false, Group = "asset_gen", RequiresPolling = true, PollAction = "status", MaxPollSeconds = 300)]
-    public static class GenerateImage
+    [McpForUnityTool("generate_audio", AutoRegister = false, Group = "asset_gen", RequiresPolling = true, PollAction = "status", MaxPollSeconds = 600)]
+    public static class GenerateAudio
     {
         public static object HandleCommand(JObject @params)
         {
@@ -26,14 +27,12 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 switch (action)
                 {
                     case "generate": return Generate(p);
-                    case "remove_background":
-                        return new ErrorResponse("remove_background is not implemented in this version.");
                     case "status": return Status(p);
                     case "cancel": return Cancel(p);
                     case "list_providers": return ListProviders();
                     case "": return new ErrorResponse("'action' parameter is required.");
                     default:
-                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, remove_background, status, cancel, list_providers.");
+                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, status, cancel, list_providers.");
                 }
             }
             catch (NotSupportedException nse)
@@ -49,53 +48,41 @@ namespace MCPForUnity.Editor.Tools.AssetGen
         private static object Generate(ToolParams p)
         {
             string provider = (p.Get("provider", "fal") ?? "fal").ToLowerInvariant();
-            AssetGenProviders.Image(provider); // throws NotSupportedException for unknown providers
+            AssetGenProviders.Audio(provider); // throws NotSupportedException for unknown providers
 
             if (!SecureKeyStore.Current.Has(provider))
                 return new ErrorResponse(AssetGenProviders.MissingKeyMessage(provider));
 
-            // Empty -> GUI-selected model -> catalog default. Null still reaches the adapter's own
-            // default (no regression when nothing is selected anywhere).
-            string model = p.Get("model");
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("image", provider);
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "image");
+            string prompt = p.Get("prompt");
+            if (string.IsNullOrWhiteSpace(prompt))
+                return new ErrorResponse("'prompt' is required for audio generation.");
 
-            var req = new ImageGenRequest
+            // Empty -> GUI-selected model -> catalog default. A null model reaches the adapter's own
+            // default; a resolved id is passed through verbatim (the catalog default equals the
+            // adapter constant, so an omitted model is a no-op either way).
+            string model = p.Get("model");
+            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("audio", provider);
+            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "audio");
+
+            var req = new AudioGenRequest
             {
                 Provider = provider,
-                Mode = (p.Get("mode", "text") ?? "text").ToLowerInvariant(),
-                Prompt = p.Get("prompt"),
-                ImagePath = p.Get("imagePath"),
-                ImageUrl = p.Get("imageUrl"),
                 Model = string.IsNullOrWhiteSpace(model) ? null : model,
-                Transparent = p.GetBool("transparent", false),
-                AsSprite = p.GetBool("asSprite", true),
-                Width = p.GetInt("width", 0) ?? 0,
-                Height = p.GetInt("height", 0) ?? 0,
+                Prompt = prompt,
+                Duration = p.GetFloat("duration", 0f) ?? 0f,
                 Name = p.Get("name"),
                 OutputFolder = p.Get("outputFolder"),
             };
             if (!NormalizeOutputFolder(req.OutputFolder, out req.OutputFolder, out string outputErr))
                 return new ErrorResponse(outputErr);
 
-            if (req.Mode == "text" && string.IsNullOrWhiteSpace(req.Prompt))
-                return new ErrorResponse("'prompt' is required for text mode.");
-            if (req.Mode == "image" && string.IsNullOrWhiteSpace(req.ImageUrl))
-            {
-                if (string.IsNullOrWhiteSpace(req.ImagePath))
-                    return new ErrorResponse("image mode requires 'image_url' or 'image_path'.");
-                if (!LocalImage.ResolveExisting(req.ImagePath, out string absImg, out string imgErr))
-                    return new ErrorResponse(imgErr);
-                req.ImagePath = absImg;
-            }
-
-            AssetGenJob job = AssetGenJobManager.StartImageGeneration(req);
+            AssetGenJob job = AssetGenJobManager.StartAudioGeneration(req);
             if (job.State == AssetGenJobState.Failed)
                 return new ErrorResponse(job.Error ?? "Failed to start generation.");
 
             return new PendingResponse(
-                $"Image generation started with '{provider}'. Poll the status action with this job_id.",
-                pollIntervalSeconds: 2.0,
+                $"Audio generation started with '{provider}'. Poll the status action with this job_id.",
+                pollIntervalSeconds: 3.0,
                 data: new { job_id = job.JobId, provider, status = "pending" });
         }
 
@@ -120,7 +107,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             {
                 case AssetGenJobState.Done:
                     return new SuccessResponse(
-                        $"Image generated: {job.AssetPath}",
+                        $"Audio generated: {job.AssetPath}",
                         new { state = "done", asset_path = job.AssetPath, asset_guid = job.AssetGuid, progress = 1f });
                 case AssetGenJobState.Failed:
                     return new ErrorResponse(job.Error ?? "Generation failed.", new { state = "failed" });
@@ -128,8 +115,8 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                     return new SuccessResponse("Generation canceled.", new { state = "canceled" });
                 default:
                     return new PendingResponse(
-                        $"Image {job.State.ToString().ToLowerInvariant()} ({job.Progress:P0}).",
-                        pollIntervalSeconds: 2.0,
+                        $"Audio {job.State.ToString().ToLowerInvariant()} ({job.Progress:P0}).",
+                        pollIntervalSeconds: 3.0,
                         data: new { job_id = job.JobId, state = job.State.ToString().ToLowerInvariant(), progress = job.Progress });
             }
         }
@@ -148,10 +135,10 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             var list = new List<object>();
             foreach (ProviderInfo info in AssetGenProviders.List())
             {
-                if (info.Kind != "image") continue;
+                if (info.Kind != "audio") continue;
                 list.Add(new { id = info.Id, kind = info.Kind, configured = info.Configured, capabilities = info.Capabilities });
             }
-            return new SuccessResponse($"{list.Count} image provider(s).", new { providers = list });
+            return new SuccessResponse($"{list.Count} audio provider(s).", new { providers = list });
         }
     }
 }

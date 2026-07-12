@@ -16,6 +16,11 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             EditorPrefKeys.AssetGenSelectedModelProvider,
             EditorPrefKeys.AssetGenSelectedImageProvider,
+            EditorPrefKeys.AssetGenSelectedAudioProvider,
+            EditorPrefKeys.AssetGenSelectedModelPrefix + "image.fal",
+            EditorPrefKeys.AssetGenSelectedModelPrefix + "model.tripo",
+            EditorPrefKeys.AssetGenSelectedModelPrefix + "model.meshy",
+            EditorPrefKeys.AssetGenSelectedModelPrefix + "audio.fal",
             EditorPrefKeys.AssetGenDefaultFormat,
             EditorPrefKeys.AssetGenOutputRoot,
             EditorPrefKeys.AssetGenAutoNormalize,
@@ -55,6 +60,32 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual("Assets/Foo", AssetGenPrefs.OutputRoot);
             Assert.IsFalse(AssetGenPrefs.AutoNormalize);
             Assert.IsTrue(AssetGenPrefs.IsProviderEnabled("tripo"));
+        }
+
+        [Test]
+        public void Defaults_ModelSelectionsEmpty_WhenUnset()
+        {
+            Assert.AreEqual(string.Empty, AssetGenPrefs.GetSelectedModel("image", "fal"));
+            Assert.AreEqual(string.Empty, AssetGenPrefs.GetSelectedModel("model", "tripo"));
+            Assert.AreEqual(string.Empty, AssetGenPrefs.GetSelectedModel("audio", "fal"));
+            Assert.AreEqual("fal", AssetGenPrefs.AudioProvider);
+        }
+
+        [Test]
+        public void SelectedModels_RoundTrip_PerProvider_AndClearOnEmpty()
+        {
+            AssetGenPrefs.SetSelectedModel("model", "tripo", "P1-20260311");
+            AssetGenPrefs.SetSelectedModel("model", "meshy", "meshy-6");
+            AssetGenPrefs.SetSelectedModel("audio", "fal", "cassetteai/sound-effects-generator");
+
+            // Per-provider: Tripo and Meshy selections are independent, no clobbering.
+            Assert.AreEqual("P1-20260311", AssetGenPrefs.GetSelectedModel("model", "tripo"));
+            Assert.AreEqual("meshy-6", AssetGenPrefs.GetSelectedModel("model", "meshy"));
+            Assert.AreEqual("cassetteai/sound-effects-generator", AssetGenPrefs.GetSelectedModel("audio", "fal"));
+
+            // Setting empty deletes the key (SetOrDelete) -> back to the empty default.
+            AssetGenPrefs.SetSelectedModel("audio", "fal", "");
+            Assert.AreEqual(string.Empty, AssetGenPrefs.GetSelectedModel("audio", "fal"));
         }
 
         [Test]

@@ -21,7 +21,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     {
         private const string QueueBase = "https://queue.fal.run/";
         // Stable Audio 2.5: music + SFX in one model, up to ~190s. The catalog default.
-        private const string DefaultModel = "fal-ai/stable-audio-25/text-to-audio";
+        // internal so the model catalog references it directly (single source of truth, drift-guarded).
+        internal const string DefaultModel = "fal-ai/stable-audio-25/text-to-audio";
 
         public string Id => "fal";
 

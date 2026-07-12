@@ -52,6 +52,12 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             if (!SecureKeyStore.Current.Has(provider))
                 return new ErrorResponse(AssetGenProviders.MissingKeyMessage(provider));
 
+            // Empty -> GUI-selected model -> catalog default. Null still reaches the adapter's own
+            // default (Tripo ModelVersion / Meshy meshy-6).
+            string model = p.Get("model");
+            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("model", provider);
+            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "model");
+
             var req = new ModelGenRequest
             {
                 Provider = provider,
@@ -63,6 +69,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 TargetSize = p.GetFloat("targetSize", 1f) ?? 1f,
                 Texture = p.GetBool("texture", true),
                 Tier = p.Get("tier"),
+                Model = string.IsNullOrWhiteSpace(model) ? null : model,
                 Name = p.Get("name"),
                 OutputFolder = p.Get("outputFolder"),
             };
@@ -140,8 +147,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
         {
             var list = new List<object>();
             foreach (ProviderInfo info in AssetGenProviders.List())
+            {
+                if (info.Kind != "model") continue; // keep image/audio rows out of the 3D provider list
                 list.Add(new { id = info.Id, kind = info.Kind, configured = info.Configured, capabilities = info.Capabilities });
-            return new SuccessResponse($"{list.Count} provider(s).", new { providers = list });
+            }
+            return new SuccessResponse($"{list.Count} model provider(s).", new { providers = list });
         }
     }
 }

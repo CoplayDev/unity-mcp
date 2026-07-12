@@ -100,6 +100,32 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_UsesRequestModel_WhenProvided()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"code\":0,\"data\":{\"task_id\":\"t\"}}") };
+            var adapter = new TripoAdapter();
+            var req = new ModelGenRequest { Provider = "tripo", Mode = "text", Prompt = "x", Model = "P1-20260311" };
+
+            adapter.SubmitAsync(req, "k", http, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = Encoding.UTF8.GetString(http.RecordedRequests[0].Body);
+            StringAssert.Contains("\"model_version\":\"P1-20260311\"", body);
+        }
+
+        [Test]
+        public void Submit_FallsBackToDefault_WhenModelEmpty()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"code\":0,\"data\":{\"task_id\":\"t\"}}") };
+            var adapter = new TripoAdapter();
+            var req = new ModelGenRequest { Provider = "tripo", Mode = "text", Prompt = "x" }; // Model null
+
+            adapter.SubmitAsync(req, "k", http, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = Encoding.UTF8.GetString(http.RecordedRequests[0].Body);
+            StringAssert.Contains("\"model_version\":\"" + TripoAdapter.ModelVersion + "\"", body);
+        }
+
+        [Test]
         public void Submit_ImageMode_UsesImageToModel()
         {
             var http = new FakeHttpTransport

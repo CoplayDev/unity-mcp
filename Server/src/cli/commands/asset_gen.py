@@ -38,6 +38,7 @@ def _emit(result, config, verb):
 @click.option("--target-size", default=None, type=float, help="Normalize largest dimension (meters).")
 @click.option("--texture/--no-texture", "texture", default=None, help="Generate textures.")
 @click.option("--tier", default=None, help="Provider quality/cost tier.")
+@click.option("--model", default=None, help="Provider model id/version (omit for the GUI-selected default).")
 @click.option("--name", default=None, help="Base name for the imported asset.")
 @click.option("--output-folder", default=None, help="Destination folder under Assets/.")
 @handle_unity_errors
@@ -51,6 +52,7 @@ def generate_model(
     target_size: Optional[float],
     texture: Optional[bool],
     tier: Optional[str],
+    model: Optional[str],
     name: Optional[str],
     output_folder: Optional[str],
 ):
@@ -74,6 +76,7 @@ def generate_model(
         "targetSize": target_size,
         "texture": texture,
         "tier": tier,
+        "model": model,
         "name": name,
         "outputFolder": output_folder,
     }
@@ -194,6 +197,46 @@ def generate_image(
     params.update({k: v for k, v in optional.items() if v is not None})
 
     result = run_command("generate_image", params, config)
+    _emit(result, config, "Generation")
+
+
+@asset_gen.command("generate-audio")
+@click.option("--provider", default=None, help="Provider id (fal).")
+@click.option("--prompt", default=None, help="Text prompt describing the sound or music.")
+@click.option("--model", default=None, help="fal model id (omit for the GUI-selected default).")
+@click.option("--duration", default=None, type=float, help="Requested length in seconds (soft-clamped per model).")
+@click.option("--name", default=None, help="Base name for the imported asset.")
+@click.option("--output-folder", default=None, help="Destination folder under Assets/.")
+@handle_unity_errors
+def generate_audio(
+    provider: Optional[str],
+    prompt: Optional[str],
+    model: Optional[str],
+    duration: Optional[float],
+    name: Optional[str],
+    output_folder: Optional[str],
+):
+    """Generate audio (SFX / music) with a fal.ai model.
+
+    \b
+    Examples:
+        unity-mcp asset-gen generate-audio --provider fal --prompt "8-bit coin pickup"
+        unity-mcp asset-gen generate-audio --prompt "calm ambient loop" --duration 30
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {"action": "generate"}
+    optional = {
+        "provider": provider,
+        "prompt": prompt,
+        "model": model,
+        "duration": duration,
+        "name": name,
+        "outputFolder": output_folder,
+    }
+    params.update({k: v for k, v in optional.items() if v is not None})
+
+    result = run_command("generate_audio", params, config)
     _emit(result, config, "Generation")
 
 

@@ -19,7 +19,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         private const string QueueBase = "https://queue.fal.run/";
         // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
         // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
-        private const string DefaultModel = "fal-ai/flux-2";
+        // internal so the model catalog references it directly (single source of truth, drift-guarded).
+        internal const string DefaultModel = "fal-ai/flux-2";
 
         public string Id => "fal";
 
