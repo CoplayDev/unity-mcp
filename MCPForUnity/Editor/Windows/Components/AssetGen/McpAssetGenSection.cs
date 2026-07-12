@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
+using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Import;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -41,6 +42,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private DropdownField formatDropdown;
         private TextField outputRootField;
         private Toggle autoNormalizeToggle;
+        private Button refreshButton;
+        private Label refreshStatusLabel;
 
         // Per-provider enable toggles for the GLB-capable (model) providers, used to
         // recompute the glTFast notice when a toggle changes.
@@ -63,6 +66,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             formatDropdown = Root.Q<DropdownField>("assetgen-format-dropdown");
             outputRootField = Root.Q<TextField>("assetgen-output-root");
             autoNormalizeToggle = Root.Q<Toggle>("assetgen-auto-normalize");
+            refreshButton = Root.Q<Button>("assetgen-refresh");
+            refreshStatusLabel = Root.Q<Label>("assetgen-refresh-status");
         }
 
         private void InitializeUI()
@@ -115,6 +120,26 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                     AssetGenPrefs.AutoNormalize = evt.newValue;
                 });
             }
+
+            if (refreshButton != null)
+            {
+                refreshButton.tooltip =
+                    "Re-check API-key presence and rebuild the provider/model rows. Picks up keys or " +
+                    "prefs set elsewhere (CLI, env override). The model list is curated in-package.";
+                refreshButton.clicked += OnRefreshClicked;
+            }
+        }
+
+        /// <summary>
+        /// Re-reads secure-store key presence and the curated catalog and rebuilds the rows — useful
+        /// to pick up keys/prefs set elsewhere (CLI, env override). fal has no public list-models API,
+        /// so the curated catalog is the source of truth; this never hits the network or blocks the tab.
+        /// </summary>
+        private void OnRefreshClicked()
+        {
+            SyncFromPrefs();
+            if (refreshStatusLabel != null)
+                SetStatus(refreshStatusLabel, "refreshed — using the built-in model catalog", true);
         }
 
         /// <summary>
@@ -146,15 +171,18 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             AddGroupLabel("3D Model Providers");
             foreach (var provider in ModelProviders)
             {
-                var toggle = AddProviderRow(provider.Id, provider.Label);
+                var toggle = AddProviderRow(provider.Id, provider.Label, "model");
                 modelEnableToggles.Add((provider.Id, toggle));
             }
 
             AddGroupLabel("Image Providers");
             foreach (var provider in ImageProviders)
             {
-                AddProviderRow(provider.Id, provider.Label);
+                AddProviderRow(provider.Id, provider.Label, "image");
             }
+
+            AddGroupLabel("Audio (fal.ai)");
+            AddAudioRow();
 
             AddBlenderHandoffRow();
         }
@@ -195,7 +223,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             providersContainer.Add(row);
         }
 
-        private Toggle AddProviderRow(string id, string displayName)
+        private Toggle AddProviderRow(string id, string displayName, string kind)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -313,8 +341,113 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             bool has = HasKey(id);
             SetStatus(statusLabel, has ? "saved ✓" : "not set", has);
 
+            // "Which model" selector for this provider (skipped for providers with no catalog
+            // models, e.g. the Sketchfab marketplace).
+            AddModelDropdown(row, kind, id);
+
             providersContainer.Add(row);
             return enableToggle;
+        }
+
+        /// <summary>
+        /// Adds a "Model" dropdown + metadata line for a (kind, provider) pair, if the catalog has
+        /// any models for it. The dropdown shows friendly labels; the pref stores the model id.
+        /// Selecting a model becomes the default that generate_* uses when no explicit model is passed.
+        /// </summary>
+        private void AddModelDropdown(VisualElement parent, string kind, string providerId)
+        {
+            IReadOnlyList<ModelEntry> models = AssetGenModelCatalog.ForProvider(providerId, kind);
+            if (models.Count == 0) return;
+
+            var choices = new List<string>();
+            foreach (ModelEntry m in models) choices.Add(m.Label);
+
+            string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
+            if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
+            ModelEntry selected = AssetGenModelCatalog.Find(selectedId) ?? models[0];
+
+            var dropdown = new DropdownField("Model", choices, 0);
+            dropdown.AddToClassList("setting-dropdown-inline");
+            dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
+            dropdown.SetValueWithoutNotify(selected.Label);
+            parent.Add(dropdown);
+
+            var meta = new Label();
+            meta.AddToClassList("help-text");
+            meta.style.whiteSpace = WhiteSpace.Normal;
+            parent.Add(meta);
+
+            var caveat = new Label();
+            caveat.AddToClassList("validation-description");
+            caveat.style.whiteSpace = WhiteSpace.Normal;
+            parent.Add(caveat);
+
+            UpdateModelMeta(meta, selected);
+            UpdateModelCaveat(caveat, selected);
+
+            dropdown.RegisterValueChangedCallback(evt =>
+            {
+                ModelEntry picked = FindByLabel(models, evt.newValue);
+                if (picked == null) return;
+                AssetGenPrefs.SetSelectedModel(kind, providerId, picked.Id);
+                UpdateModelMeta(meta, picked);
+                UpdateModelCaveat(caveat, picked);
+            });
+        }
+
+        /// <summary>
+        /// Audio row: no enable toggle and no key field — audio reuses the single fal key owned by
+        /// the Image "fal" row. Surfaces that key's presence and a fal-audio model dropdown.
+        /// </summary>
+        private void AddAudioRow()
+        {
+            var row = new VisualElement();
+            row.style.marginBottom = 8;
+            row.style.paddingBottom = 8;
+            row.style.borderBottomWidth = 1;
+            row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
+
+            var nameLabel = new Label("fal (audio)");
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            row.Add(nameLabel);
+
+            bool hasFal = HasKey("fal");
+            var status = new Label(hasFal
+                ? "fal key present ✓ (shared with the Image fal provider)"
+                : "no fal key set — add it in the Image Providers section above");
+            status.AddToClassList("help-text");
+            status.style.color = hasFal ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
+            row.Add(status);
+
+            AddModelDropdown(row, "audio", "fal");
+
+            providersContainer.Add(row);
+        }
+
+        private static ModelEntry FindByLabel(IReadOnlyList<ModelEntry> models, string label)
+        {
+            foreach (ModelEntry m in models)
+                if (m.Label == label) return m;
+            return null;
+        }
+
+        private static void UpdateModelMeta(Label label, ModelEntry m)
+        {
+            if (label == null || m == null) return;
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(m.UseCase)) parts.Add(m.UseCase);
+            if (!string.IsNullOrEmpty(m.PriceLabel)) parts.Add(m.PriceLabel);
+            if (m.MaxDurationSeconds > 0f) parts.Add($"≤{m.MaxDurationSeconds:0}s");
+            if (m.Loopable) parts.Add("loopable");
+            label.text = string.Join(" · ", parts);
+        }
+
+        private static void UpdateModelCaveat(Label label, ModelEntry m)
+        {
+            if (label == null) return;
+            bool show = m != null && !string.IsNullOrEmpty(m.CommercialNote);
+            label.text = show ? m.CommercialNote : string.Empty;
+            label.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private static void SetStatus(Label label, string text, bool ok)
