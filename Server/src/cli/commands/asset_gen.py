@@ -122,8 +122,11 @@ def import_model(
 @click.option("--name", default=None, help="Base name for the imported asset.")
 @click.option("--output-folder", default=None, help="Destination folder under Assets/.")
 @click.option("--target-size", default=None, type=float, help="Normalize largest dimension (meters).")
+@click.option("--animation-type", "animation_type", default=None,
+              type=click.Choice(["none", "generic", "humanoid", "legacy"]),
+              help="FBX/OBJ rig mode: generic/humanoid surface animation clips (glTF ignores this).")
 @handle_unity_errors
-def import_model_file(source_path, name, output_folder, target_size):
+def import_model_file(source_path, name, output_folder, target_size, animation_type):
     """Import a local 3D model file (e.g. a Blender export) into the Unity project."""
     config = get_config()
     params = {
@@ -131,6 +134,7 @@ def import_model_file(source_path, name, output_folder, target_size):
         "name": name,
         "outputFolder": output_folder,
         "targetSize": target_size,
+        "animationType": animation_type,
     }
     params = {k: v for k, v in params.items() if v is not None}
     result = run_command("import_model_file", params, config)

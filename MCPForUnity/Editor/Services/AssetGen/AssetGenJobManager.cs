@@ -30,6 +30,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         public float Progress;
         public string Format;
         public float TargetSize = 1f;
+        public string AnimationType;   // FBX/OBJ rig mode: null/none | generic | humanoid | legacy
         public string AssetPath;
         public string AssetGuid;
         public string Error;
