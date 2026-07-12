@@ -23,7 +23,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
     public sealed class AssetGenJob
     {
         public string JobId;
-        public string Kind;       // model | image | marketplace
+        public string Kind;       // model | image | audio | marketplace
         public string Provider;
         public string Action;
         public AssetGenJobState State;
@@ -140,6 +140,34 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 Ext = "png",
                 Name = NameFrom(req.Name, req.Prompt, job.JobId),
                 Subfolder = "Images",
+            };
+            Register(job, runner);
+            return job;
+        }
+
+        public static AssetGenJob StartAudioGeneration(AudioGenRequest req)
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            string provider = string.IsNullOrEmpty(req.Provider) ? "fal" : req.Provider;
+            IAudioProviderAdapter adapter = AssetGenProviders.Audio(provider); // throws NotSupportedException if unimplemented
+
+            var job = NewJob("audio", provider, "generate");
+            job.Format = "wav";
+
+            if (!TryResolveKey(provider, job, out string apiKey)) return job;
+
+            IHttpTransport transport = TransportOverrideForTests ?? new UnityWebRequestTransport();
+            var runner = new Runner
+            {
+                Job = job,
+                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
+                ImportFn = ImportOverrideForTests ?? AudioImportPipeline.ImportInto,
+                Transport = transport,
+                OutputFolder = req.OutputFolder,
+                Ext = "wav", // default; the poll's ResultExt (wav/mp3) overrides at write time
+                Name = NameFrom(req.Name, req.Prompt, job.JobId),
+                Subfolder = "Audio",
             };
             Register(job, runner);
             return job;

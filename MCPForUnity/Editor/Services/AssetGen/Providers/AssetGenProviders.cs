@@ -6,8 +6,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
     /// Factory + registry for asset-gen provider adapters. Resolves a provider id to its adapter
-    /// (model: tripo/meshy; image: fal/openrouter; marketplace: sketchfab); unknown ids throw
-    /// <see cref="NotSupportedException"/>. <see cref="List"/> advertises providers and reports
+    /// (model: tripo/meshy; image: fal/openrouter; audio: fal; marketplace: sketchfab); unknown ids
+    /// throw <see cref="NotSupportedException"/>. <see cref="List"/> advertises providers and reports
     /// <c>Configured</c> existence only — never a key value.
     /// </summary>
     public static class AssetGenProviders
@@ -38,6 +38,17 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             }
         }
 
+        public static IAudioProviderAdapter Audio(string id)
+        {
+            switch ((id ?? string.Empty).ToLowerInvariant())
+            {
+                case "fal":
+                    return new FalAudioAdapter();
+                default:
+                    throw new NotSupportedException($"Unknown audio provider '{id}'.");
+            }
+        }
+
         public static IMarketplaceProviderAdapter Marketplace(string id)
         {
             switch ((id ?? string.Empty).ToLowerInvariant())
@@ -58,6 +69,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 new ProviderInfo { Id = "sketchfab", Kind = "marketplace", Configured = IsConfigured("sketchfab"), Capabilities = new[] { "search", "import" } },
                 new ProviderInfo { Id = "fal", Kind = "image", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },
+                // fal appears twice by design — once per kind (image + audio) — sharing the single "fal" key.
+                new ProviderInfo { Id = "fal", Kind = "audio", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "music", "sfx" } },
             };
         }
 

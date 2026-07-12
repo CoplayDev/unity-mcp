@@ -1,0 +1,38 @@
+using MCPForUnity.Editor.Services.AssetGen;
+using MCPForUnity.Editor.Services.AssetGen.Import;
+using NUnit.Framework;
+
+namespace MCPForUnityTests.Editor.AssetGen
+{
+    /// <summary>
+    /// Validates the audio import pipeline's guard paths without fabricating audio bytes. Real
+    /// AudioClip import + AudioImporter settings are left to the licensed editor (manual checklist /
+    /// live smoke test), matching ModelImportPipelineTests' guard-only philosophy.
+    /// </summary>
+    public class AudioImportPipelineTests
+    {
+        private static AssetGenJob Job() => new AssetGenJob
+        {
+            JobId = "test",
+            Kind = "audio",
+            Provider = "fal",
+            State = AssetGenJobState.Importing,
+            Format = "wav",
+        };
+
+        [Test]
+        public void ImportInto_NullPath_Fails()
+        {
+            AssetGenJob result = AudioImportPipeline.ImportInto(Job(), null);
+            Assert.AreEqual(AssetGenJobState.Failed, result.State);
+        }
+
+        [Test]
+        public void ImportInto_PathOutsideAssets_Fails()
+        {
+            AssetGenJob result = AudioImportPipeline.ImportInto(Job(), "/tmp/somewhere/sound.wav");
+            Assert.AreEqual(AssetGenJobState.Failed, result.State);
+            StringAssert.Contains("Assets", result.Error);
+        }
+    }
+}

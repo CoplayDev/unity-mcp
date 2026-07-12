@@ -19,6 +19,9 @@ namespace MCPForUnityTests.Editor.AssetGen
     {
         private const string EnvVar = "MCPFORUNITY_TRIPO_API_KEY";
         private const string Secret = "tsk_e2e_secret_value";
+        private const string FalEnvVar = "MCPFORUNITY_FAL_API_KEY";
+        private const string FalSecret = "fal_e2e_secret_value";
+        private const string AudioResp = "https://queue.fal.run/fal-ai/stable-audio-25/text-to-audio/requests/r1";
         private const string TestFolder = "Assets/Generated/__assetgen_jobtest";
 
         private FakeHttpTransport _fake;
@@ -28,6 +31,7 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             AssetGenJobManager.ResetForTests();
             Environment.SetEnvironmentVariable(EnvVar, Secret);
+            Environment.SetEnvironmentVariable(FalEnvVar, FalSecret);
             _fake = new FakeHttpTransport();
             AssetGenJobManager.TransportOverrideForTests = _fake;
             AssetGenJobManager.PollIntervalSeconds = 0;
@@ -40,6 +44,7 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             AssetGenJobManager.ResetForTests();
             Environment.SetEnvironmentVariable(EnvVar, null);
+            Environment.SetEnvironmentVariable(FalEnvVar, null);
             try
             {
                 string abs = Path.Combine(ProjectRoot(), TestFolder);
@@ -65,6 +70,14 @@ namespace MCPForUnityTests.Editor.AssetGen
             Format = "glb",
             TargetSize = 1f,
             Name = "jobtest",
+            OutputFolder = TestFolder,
+        };
+
+        private static AudioGenRequest AudioReq() => new AudioGenRequest
+        {
+            Provider = "fal",
+            Prompt = "gentle rain",
+            Name = "audiotest",
             OutputFolder = TestFolder,
         };
 
@@ -94,6 +107,68 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.IsNotNull(job.AssetPath);
             StringAssert.EndsWith("jobtest.glb", job.AssetPath);
             Assert.AreEqual(1f, job.Progress);
+        }
+
+        [Test]
+        public void Audio_EndToEnd_ReachesDone_WithWavAssetPath_AndLeaksNoKey()
+        {
+            _fake.Handler = spec =>
+            {
+                if (spec.Method == "POST") return Json("{\"response_url\":\"" + AudioResp + "\"}");
+                if (spec.Url.EndsWith("/status")) return Json("{\"status\":\"COMPLETED\"}");
+                if (spec.Url.Contains("cdn.example.com"))
+                    return new HttpResult { Status = 200, IsSuccess = true, Body = new byte[] { 1, 2, 3, 4 } };
+                return Json("{\"audio_file\":{\"url\":\"https://cdn.example.com/a.wav\"}}"); // result payload
+            };
+
+            AssetGenJob job = AssetGenJobManager.StartAudioGeneration(AudioReq());
+            Pump(job.JobId);
+
+            Assert.AreEqual(AssetGenJobState.Done, job.State);
+            Assert.IsNotNull(job.AssetPath);
+            StringAssert.EndsWith("audiotest.wav", job.AssetPath);
+            Assert.AreEqual(1f, job.Progress);
+
+            string serialized = JsonConvert.SerializeObject(job);
+            StringAssert.DoesNotContain(FalSecret, serialized);
+        }
+
+        [Test]
+        public void Audio_Mp3Result_DownloadsWithMp3Ext()
+        {
+            _fake.Handler = spec =>
+            {
+                if (spec.Method == "POST") return Json("{\"response_url\":\"" + AudioResp + "\"}");
+                if (spec.Url.EndsWith("/status")) return Json("{\"status\":\"COMPLETED\"}");
+                if (spec.Url.Contains("cdn.example.com"))
+                    return new HttpResult { Status = 200, IsSuccess = true, Body = new byte[] { 1, 2, 3, 4 } };
+                return Json("{\"audio_file\":{\"url\":\"https://cdn.example.com/track.mp3\"}}");
+            };
+
+            AssetGenJob job = AssetGenJobManager.StartAudioGeneration(AudioReq());
+            Pump(job.JobId);
+
+            Assert.AreEqual(AssetGenJobState.Done, job.State);
+            StringAssert.EndsWith("audiotest.mp3", job.AssetPath);
+        }
+
+        [Test]
+        public void Audio_NoKey_FailsImmediately()
+        {
+            Environment.SetEnvironmentVariable(FalEnvVar, null); // remove the env key
+            string dir = Path.Combine(Path.GetTempPath(), "mcp_jobmgr_audio_nokey_" + Guid.NewGuid().ToString("N"));
+            MCPForUnity.Editor.Security.SecureKeyStore.OverrideForTests(new MCPForUnity.Editor.Security.EncryptedFileKeyStore(dir));
+            try
+            {
+                AssetGenJob job = AssetGenJobManager.StartAudioGeneration(AudioReq());
+                Assert.AreEqual(AssetGenJobState.Failed, job.State);
+                StringAssert.Contains("No API key", job.Error);
+            }
+            finally
+            {
+                MCPForUnity.Editor.Security.SecureKeyStore.ResetForTests();
+                try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+            }
         }
 
         [Test]
