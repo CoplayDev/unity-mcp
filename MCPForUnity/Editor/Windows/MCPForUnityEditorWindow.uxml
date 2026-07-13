@@ -1,7 +1,10 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <ui:VisualElement name="root-container" class="root-layout">
         <ui:VisualElement name="header-bar" class="header-bar">
-            <ui:Label text="MCP for Unity" name="title" class="header-title" />
+            <ui:VisualElement name="header-left" class="header-left">
+                <!-- OceanMark logo is injected here at index 0 in CreateGUI -->
+                <ui:Label text="MCP for Unity" name="title" class="header-title" />
+            </ui:VisualElement>
             <ui:Label text="v9.1.0" name="version-label" class="header-version" />
         </ui:VisualElement>
         <ui:VisualElement name="update-notification" class="update-notification">

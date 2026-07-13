@@ -150,7 +150,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
             if (!(AssetImporter.GetAtPath(rel) is ModelImporter importer)) return;
             importer.useFileScale = true;
             importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
-            importer.animationType = ModelImporterAnimationType.None;
+            importer.animationType = ParseAnimationType(job?.AnimationType);
 
             if (AssetGenPrefs.AutoNormalize && job.TargetSize > 0f)
             {
@@ -166,6 +166,24 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                 }
             }
             importer.SaveAndReimport();
+        }
+
+        /// <summary>
+        /// Map the caller's rig mode to a <see cref="ModelImporterAnimationType"/>. Defaults to
+        /// <c>None</c> (no rig) when unset — pass "generic"/"humanoid" to surface a rigged FBX/OBJ's
+        /// AnimationClips, which the None default otherwise hides. "legacy" selects Unity's
+        /// legacy Animation system — rarely needed.
+        /// </summary>
+        internal static ModelImporterAnimationType ParseAnimationType(string value)
+        {
+            switch ((value ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "generic": return ModelImporterAnimationType.Generic;
+                case "humanoid":
+                case "human": return ModelImporterAnimationType.Human;
+                case "legacy": return ModelImporterAnimationType.Legacy;
+                default: return ModelImporterAnimationType.None;
+            }
         }
 
         private static float ComputeMaxDimension(string rel)

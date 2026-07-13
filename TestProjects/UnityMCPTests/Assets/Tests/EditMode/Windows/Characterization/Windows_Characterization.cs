@@ -245,7 +245,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
                 "1. Get previous and new transport values",
                 "2. Persist UseHttpTransport to EditorPrefs",
                 "3. Persist HttpTransportScope if HTTP",
-                "4. Clear resume flags (ResumeStdioAfterReload, ResumeHttpAfterReload)",
+                "4. Clear resume flags (ResumeStdioAfterReload in EditorPrefs, HTTP resume key in SessionState)",
                 "5. Update UI visibility",
                 "6. Invoke OnManualConfigUpdateRequested event",
                 "7. Invoke OnTransportChanged event",
