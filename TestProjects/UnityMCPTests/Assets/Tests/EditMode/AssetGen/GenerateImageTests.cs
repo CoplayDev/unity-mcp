@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Http;
@@ -144,6 +145,54 @@ namespace MCPForUnityTests.Editor.AssetGen
             _store.Set("bogus", "k");
             JObject resp = Call(new JObject { ["action"] = "generate", ["provider"] = "bogus", ["mode"] = "text", ["prompt"] = "a cat" });
             Assert.AreEqual(false, (bool)resp["success"]);
+        }
+
+        private static HttpResult FalStatus(HttpRequestSpec spec) =>
+            spec.Url.EndsWith("/status")
+                ? new HttpResult { Status = 200, IsSuccess = true, Text = "{\"status\":\"IN_PROGRESS\"}" }
+                : new HttpResult { Status = 200, IsSuccess = true, Text = "{\"response_url\":\"https://queue.fal.run/x/requests/r1\"}" };
+
+        [Test]
+        public void Generate_NoModelParam_UsesSelectedImageModelPref()
+        {
+            _store.Set("fal", "falkey");
+            AssetGenPrefs.SetSelectedModel("image", "fal", "fal-ai/flux-2-pro");
+            var fake = new FakeHttpTransport { Handler = FalStatus };
+            AssetGenJobManager.TransportOverrideForTests = fake;
+            AssetGenJobManager.PollIntervalSeconds = 0;
+            try
+            {
+                JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "text", ["prompt"] = "a cat" });
+                string jobId = (string)gen["data"]["job_id"];
+                for (int i = 0; i < 6; i++) AssetGenJobManager.TryAdvanceForTests(jobId);
+
+                HttpRequestSpec post = fake.RecordedRequests.Find(r => r.Method == "POST");
+                Assert.IsNotNull(post, "expected a submit POST");
+                StringAssert.Contains("flux-2-pro", post.Url); // pref drove the model when none was passed
+            }
+            finally { AssetGenPrefs.SetSelectedModel("image", "fal", ""); }
+        }
+
+        [Test]
+        public void Generate_ExplicitModel_OverridesPref()
+        {
+            _store.Set("fal", "falkey");
+            AssetGenPrefs.SetSelectedModel("image", "fal", "fal-ai/flux-2-pro");
+            var fake = new FakeHttpTransport { Handler = FalStatus };
+            AssetGenJobManager.TransportOverrideForTests = fake;
+            AssetGenJobManager.PollIntervalSeconds = 0;
+            try
+            {
+                JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "text", ["prompt"] = "a cat", ["model"] = "fal-ai/flux-2/flash" });
+                string jobId = (string)gen["data"]["job_id"];
+                for (int i = 0; i < 6; i++) AssetGenJobManager.TryAdvanceForTests(jobId);
+
+                HttpRequestSpec post = fake.RecordedRequests.Find(r => r.Method == "POST");
+                Assert.IsNotNull(post);
+                StringAssert.Contains("flux-2/flash", post.Url);
+                StringAssert.DoesNotContain("flux-2-pro", post.Url);
+            }
+            finally { AssetGenPrefs.SetSelectedModel("image", "fal", ""); }
         }
 
         [Test]

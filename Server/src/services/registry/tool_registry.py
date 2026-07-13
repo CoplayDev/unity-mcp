@@ -25,7 +25,7 @@ TOOL_GROUPS: dict[str, str] = {
     "testing": "Test runner & async test jobs",
     "probuilder": "ProBuilder 3D modeling – requires com.unity.probuilder package",
     "profiling": "Unity Profiler session control, counters, memory snapshots & Frame Debugger",
-    "asset_gen": "AI asset generation – 3D model gen/import & 2D image gen (bring-your-own-key)",
+    "asset_gen": "AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-your-own-key)",
 }
 
 DEFAULT_ENABLED_GROUPS: set[str] = {"core"}

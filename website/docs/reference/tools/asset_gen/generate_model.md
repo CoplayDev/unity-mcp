@@ -15,7 +15,7 @@ description: "Generate 3D models with AI providers (Tripo, Meshy) and import the
 Generate 3D models with AI providers (Tripo, Meshy) and import them into the Unity project. Bring-your-own-key: provider keys live in the editor's secure store and never cross the bridge.
 
 ACTIONS:
-- generate: Submit a generation job (text->3D or image->3D). Returns { job_id } immediately; poll with the status action. Params: provider, mode (text|image), prompt, image_path|image_url, format (glb|fbx|obj|usdz), target_size, texture, tier, name, output_folder.
+- generate: Submit a generation job (text->3D or image->3D). Returns { job_id } immediately; poll with the status action. Params: provider, mode (text|image), prompt, image_path|image_url, format (glb|fbx|obj|usdz), target_size, texture, tier, model, name, output_folder.
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured 3D providers and capabilities (no key values).
@@ -34,6 +34,7 @@ ACTIONS:
 | `target_size` | `float \| None` | — | Normalize the largest dimension to this size (meters). |
 | `texture` | `bool \| None` | — | Whether to generate textures for the model. |
 | `tier` | `str \| None` | — | Provider quality/cost tier. |
+| `model` | `str \| None` | — | Provider model id/version (e.g. Tripo v3.1, Meshy meshy-6). Omit for the GUI-selected default. |
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `job_id` | `str \| None` | — | Job id for status/cancel. |

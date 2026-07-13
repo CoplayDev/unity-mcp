@@ -16,8 +16,9 @@ Every tool MCP for Unity exposes, generated directly from the Python `@mcp_for_u
 Animator control & AnimationClip creation
 - **[`manage_animation`](./animation/manage_animation.md)** — Manage Unity animation: Animator control and AnimationClip creation.
 
-## `asset_gen` &nbsp; (4 tools)
-AI asset generation – 3D model gen/import & 2D image gen (bring-your-own-key)
+## `asset_gen` &nbsp; (5 tools)
+AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-your-own-key)
+- **[`generate_audio`](./asset_gen/generate_audio.md)** — Generate audio (sound effects and background music) with fal.ai models and import them as AudioClips into the Unity project.
 - **[`generate_image`](./asset_gen/generate_image.md)** — Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as textures/sprites into the Unity project.
 - **[`generate_model`](./asset_gen/generate_model.md)** — Generate 3D models with AI providers (Tripo, Meshy) and import them into the Unity project.
 - **[`import_model`](./asset_gen/import_model.md)** — Import 3D models from the Sketchfab marketplace into the Unity project.

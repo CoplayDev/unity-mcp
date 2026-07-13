@@ -19,7 +19,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     {
         private const string TaskEndpoint = "https://api.tripo3d.ai/v2/openapi/task";
         // Current recommended Tripo model (v3.1). Premium alternative: P1-20260311.
-        private const string ModelVersion = "v3.1-20260211";
+        // internal so the model catalog references it directly (single source of truth, drift-guarded).
+        internal const string ModelVersion = "v3.1-20260211";
 
         public string Id => "tripo";
 
@@ -41,6 +42,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 body = new JObject
                 {
                     ["type"] = "image_to_model",
+                    ["model_version"] = string.IsNullOrEmpty(req.Model) ? ModelVersion : req.Model,
                     ["file"] = new JObject
                     {
                         ["type"] = "url",
@@ -54,7 +56,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 {
                     ["type"] = "text_to_model",
                     ["prompt"] = req.Prompt ?? string.Empty,
-                    ["model_version"] = ModelVersion
+                    ["model_version"] = string.IsNullOrEmpty(req.Model) ? ModelVersion : req.Model
                 };
             }
 
