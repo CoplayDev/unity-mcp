@@ -437,10 +437,47 @@ namespace MCPForUnity.Editor.Services.AssetGen
             }
         }
 
+        // Per-kind allowlist of result file extensions. The write extension can come from a
+        // provider-controlled result URL (OverrideExt), so a rogue provider could otherwise land a
+        // .cs/.asmdef/.meta/.asset under Assets/ and get it compiled/imported on Refresh — Editor
+        // RCE. Anything outside these sets is rejected. Mirrors ModelImportPipeline's allowlist style.
+        private static readonly HashSet<string> AudioAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "wav", "mp3", "ogg", "aiff", "aif", "flac",
+        };
+        private static readonly HashSet<string> ImageAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "png", "jpg", "jpeg", "exr", "tga", "psd", "tiff", "webp", "gif", "bmp",
+        };
+        private static readonly HashSet<string> ModelAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "glb", "gltf", "fbx", "obj", "usd", "usdz", "dae", "ply", "stl", "zip",
+        };
+
+        /// <summary>
+        /// Whether <paramref name="ext"/> (no leading dot) is an allowed result extension for the
+        /// job <paramref name="kind"/> (audio | image | model | marketplace). Internal so the
+        /// allowlist can be unit-tested directly.
+        /// </summary>
+        internal static bool IsAllowedResultExtension(string kind, string ext)
+            => AllowedExtensionsFor(kind).Contains((ext ?? string.Empty).TrimStart('.'));
+
+        private static HashSet<string> AllowedExtensionsFor(string kind)
+        {
+            switch ((kind ?? string.Empty).ToLowerInvariant())
+            {
+                case "audio": return AudioAllowedExtensions;
+                case "image": return ImageAllowedExtensions;
+                default: return ModelAllowedExtensions; // model + marketplace
+            }
+        }
+
         private static string WriteFile(Runner r, byte[] bytes)
         {
             string chosen = !string.IsNullOrEmpty(r.OverrideExt) ? r.OverrideExt : r.Ext;
             string ext = string.IsNullOrEmpty(chosen) ? "bin" : chosen.TrimStart('.').ToLowerInvariant();
+            if (!IsAllowedResultExtension(r.Job.Kind, ext))
+                throw new Exception($"provider returned a disallowed file type '.{ext}'");
             string requestedRoot = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
                                                                          : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
             if (!AssetGenPaths.TryGetAssetsFolder(requestedRoot, out string root))

@@ -192,6 +192,57 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void IsAllowedResultExtension_AllowsSafeTypes_RejectsCodeTypes()
+        {
+            // H2/P8: a provider-controlled result extension must be gated per kind so a rogue provider
+            // can't land a .cs/.asmdef/.meta/.asset under Assets/ and get it compiled/imported.
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("audio", "wav"));
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("audio", ".mp3"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("audio", "cs"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("audio", "asmdef"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("audio", "meta"));
+
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("image", "png"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("image", "cs"));
+
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("model", "glb"));
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("model", "zip"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("model", "cs"));
+            // marketplace shares the model allowlist.
+            Assert.IsTrue(AssetGenJobManager.IsAllowedResultExtension("marketplace", "zip"));
+            Assert.IsFalse(AssetGenJobManager.IsAllowedResultExtension("marketplace", "dll"));
+        }
+
+        [Test]
+        public void Audio_DisallowedResultExt_FailsJob_WritesNoAsset()
+        {
+            // H2/P8: a poll returning a .cs result extension must fail the job before any file is
+            // written under Assets/ — never a compilable/importable payload.
+            _fake.Handler = spec =>
+            {
+                if (spec.Method == "POST") return Json("{\"response_url\":\"" + AudioResp + "\"}");
+                if (spec.Url.EndsWith("/status")) return Json("{\"status\":\"COMPLETED\"}");
+                if (spec.Url.Contains("cdn.example.com"))
+                    return new HttpResult { Status = 200, IsSuccess = true, Body = new byte[] { 1, 2, 3, 4 } };
+                // Provider hands back a payload whose URL implies a .cs extension.
+                return Json("{\"audio_file\":{\"url\":\"https://cdn.example.com/payload.cs\"}}");
+            };
+
+            AssetGenJob job = AssetGenJobManager.StartAudioGeneration(AudioReq());
+            Pump(job.JobId);
+
+            Assert.AreEqual(AssetGenJobState.Failed, job.State);
+            StringAssert.Contains("disallowed", job.Error.ToLowerInvariant());
+            Assert.IsTrue(string.IsNullOrEmpty(job.AssetPath), "no asset path should be recorded for a rejected type");
+
+            // Nothing named payload.cs may have been written under the test output folder.
+            string abs = Path.Combine(ProjectRoot(), TestFolder);
+            if (Directory.Exists(abs))
+                foreach (string f in Directory.GetFiles(abs))
+                    StringAssert.DoesNotEndWith(".cs", f);
+        }
+
+        [Test]
         public void FileSchemeDownloadUrl_Rejected_FailsJob()
         {
             _fake.Handler = spec =>

@@ -88,20 +88,60 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
-        public void Submit_Lyria_And_CassetteMusic_PromptOnly()
+        public void Submit_CassetteMusic_WithDuration_IncludesDuration_ClampsTo180()
         {
-            foreach (string model in new[] { "fal-ai/lyria2", "cassetteai/music-generator" })
-            {
-                var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
-                var adapter = new FalAudioAdapter();
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAudioAdapter();
 
-                adapter.SubmitAsync(Req(model, 30f), "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+            adapter.SubmitAsync(Req("cassetteai/music-generator", 300f), "falkey123", fake, CancellationToken.None)
+                   .GetAwaiter().GetResult();
 
-                string body = SubmittedBody(fake);
-                StringAssert.DoesNotContain("seconds_total", body);
-                StringAssert.DoesNotContain("duration", body);
-                StringAssert.Contains("prompt", body);
-            }
+            JObject body = JObject.Parse(SubmittedBody(fake));
+            Assert.AreEqual(180, (int)body["duration"]);
+        }
+
+        [Test]
+        public void Submit_CassetteMusic_DefaultDuration_IncludesDuration_NotPromptOnly()
+        {
+            // C2: CassetteAI Music REQUIRES duration; a default (Duration=0) call must still send a
+            // valid duration >= 1, not a prompt-only body (which fal rejects with 422).
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAudioAdapter();
+
+            adapter.SubmitAsync(Req("cassetteai/music-generator"), "falkey123", fake, CancellationToken.None)
+                   .GetAwaiter().GetResult();
+
+            JObject body = JObject.Parse(SubmittedBody(fake));
+            Assert.IsNotNull(body["duration"], "duration must be present for a required-duration model");
+            Assert.GreaterOrEqual((int)body["duration"], 1);
+        }
+
+        [Test]
+        public void Submit_CassetteMusic_FractionalDuration_FloorsToAtLeastOne()
+        {
+            // C3: Duration=0.5 must not (int)-truncate to 0 (which fal rejects); it clamps to >= 1.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAudioAdapter();
+
+            adapter.SubmitAsync(Req("cassetteai/music-generator", 0.5f), "falkey123", fake, CancellationToken.None)
+                   .GetAwaiter().GetResult();
+
+            JObject body = JObject.Parse(SubmittedBody(fake));
+            Assert.GreaterOrEqual((int)body["duration"], 1);
+        }
+
+        [Test]
+        public void Submit_Lyria_PromptOnly()
+        {
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAudioAdapter();
+
+            adapter.SubmitAsync(Req("fal-ai/lyria2", 30f), "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = SubmittedBody(fake);
+            StringAssert.DoesNotContain("seconds_total", body);
+            StringAssert.DoesNotContain("duration", body);
+            StringAssert.Contains("prompt", body);
         }
 
         [Test]
@@ -241,6 +281,43 @@ namespace MCPForUnityTests.Editor.AssetGen
 
             Assert.AreEqual(ProviderPollState.Failed, pr.State);
             StringAssert.DoesNotContain("falkey123", pr.Error);
+        }
+
+        [Test]
+        public void Poll_UnknownStatus_FailsFast_NotRunning()
+        {
+            // C4: an unmapped terminal status must fail immediately, not poll until the job timeout.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"status\":\"WEIRD_UNKNOWN\"}") };
+            var adapter = new FalAudioAdapter();
+
+            ProviderPollResult pr = adapter.PollAsync(Resp, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            Assert.AreEqual(ProviderPollState.Failed, pr.State);
+            StringAssert.Contains("WEIRD_UNKNOWN", pr.Error);
+        }
+
+        [Test]
+        public void Poll_ForeignHost_Throws_AndSendsNothing()
+        {
+            // H3: the key must never be attached to a provider-controlled host.
+            var fake = new FakeHttpTransport();
+            var adapter = new FalAudioAdapter();
+
+            Assert.Throws<System.Exception>(() =>
+                adapter.PollAsync("https://attacker.example/harvest", "falkey123", fake, CancellationToken.None)
+                       .GetAwaiter().GetResult());
+            Assert.IsEmpty(fake.RecordedRequests, "no request (and no key) may be sent to a foreign host");
+        }
+
+        [Test]
+        public void Submit_ForeignResponseUrl_Throws()
+        {
+            // H3: a poisoned response_url from the provider must be rejected before it's used to poll.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"https://evil.example/x\"}") };
+            var adapter = new FalAudioAdapter();
+
+            Assert.Throws<System.Exception>(() =>
+                adapter.SubmitAsync(Req(), "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult());
         }
     }
 }

@@ -20,6 +20,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public sealed class FalAudioAdapter : IAudioProviderAdapter
     {
         private const string QueueBase = "https://queue.fal.run/";
+        private const string QueueHost = "queue.fal.run";
         // Stable Audio 2.5: music + SFX in one model, up to ~190s. The catalog default.
         // internal so the model catalog references it directly (single source of truth, drift-guarded).
         internal const string DefaultModel = "fal-ai/stable-audio-25/text-to-audio";
@@ -33,6 +34,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
             string model = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
             string url = QueueBase + model;
+            ProviderHttp.RequireHost(url, QueueHost, apiKey, "fal submit");
 
             var spec = new HttpRequestSpec
             {
@@ -54,20 +56,30 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
                 responseUrl = QueueBase + model + "/requests/" + requestId;
             }
+            // The response_url is provider-controlled; refuse to later attach the key to any host
+            // other than the fal queue.
+            ProviderHttp.RequireHost(responseUrl, QueueHost, apiKey, "fal submit response_url");
             return responseUrl;
         }
 
-        // Only Stable Audio and CassetteAI SFX have a confirmed duration knob. CassetteAI Music and
-        // Lyria 2 ship prompt-only until their body schemas are verified against a live response.
+        // Duration is catalog-driven: the model's ModelEntry names the request key (seconds_total /
+        // duration) and the clamp bounds. A duration-controllable endpoint (e.g. CassetteAI Music)
+        // always sends a duration >= 1 — a prompt-only body is rejected with fal 422
+        // "duration Field required" — while a non-duration model (Lyria) or an unknown model stays
+        // prompt-only.
         private static JObject BuildBody(string model, AudioGenRequest req)
         {
             var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty };
-            if (req.Duration > 0f)
+
+            ModelEntry entry = AssetGenModelCatalog.Find(model);
+            if (entry != null && !string.IsNullOrEmpty(entry.DurationField))
             {
-                if (model.IndexOf("stable-audio-25", StringComparison.OrdinalIgnoreCase) >= 0)
-                    body["seconds_total"] = (int)Math.Min(req.Duration, 190f);
-                else if (model.IndexOf("sound-effects", StringComparison.OrdinalIgnoreCase) >= 0)
-                    body["duration"] = (int)Math.Min(req.Duration, 30f);
+                float dur = req.Duration > 0f ? req.Duration : entry.DefaultDurationSeconds;
+                float floor = Math.Max(1f, entry.MinDurationSeconds);
+                dur = Math.Min(Math.Max(dur, floor), entry.MaxDurationSeconds);
+                int seconds = (int)Math.Round(dur);
+                if (seconds < 1) seconds = 1;
+                body[entry.DurationField] = seconds;
             }
             return body;
         }
@@ -76,6 +88,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         {
             if (string.IsNullOrEmpty(providerJobId)) throw new ArgumentNullException(nameof(providerJobId));
             string responseUrl = providerJobId;
+            // providerJobId is provider-supplied (the submit-time response_url). Re-validate before
+            // attaching the key so a poisoned URL can never exfiltrate it.
+            ProviderHttp.RequireHost(responseUrl, QueueHost, apiKey, "fal poll");
 
             var statusSpec = new HttpRequestSpec { Method = "GET", Url = responseUrl + "/status" };
             statusSpec.Headers["Authorization"] = "Key " + apiKey;
@@ -102,7 +117,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     result.Error = SecretRedactor.Scrub(statusJson["error"]?.ToString() ?? "fal task failed.", apiKey);
                     return result;
                 default:
-                    result.State = ProviderPollState.Running;
+                    // An unmapped terminal status would otherwise poll until the 600s job timeout —
+                    // fail fast instead.
+                    result.State = ProviderPollState.Failed;
+                    result.Error = SecretRedactor.Scrub($"fal returned an unexpected status '{status}'.", apiKey);
                     return result;
             }
 

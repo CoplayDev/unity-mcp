@@ -714,10 +714,10 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
             Assert.IsNotNull(type.GetMethod("AddAudioRow", BindingFlags.NonPublic | BindingFlags.Instance),
                 "expected a fal audio row builder");
 
-            // AddProviderRow now takes (id, displayName, kind) so each row knows its catalog kind.
+            // AddProviderRow takes (parent, id, displayName, kind) so each row knows its catalog kind.
             var addRow = type.GetMethod("AddProviderRow", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(addRow);
-            Assert.AreEqual(3, addRow.GetParameters().Length, "AddProviderRow should take (id, displayName, kind)");
+            Assert.AreEqual(4, addRow.GetParameters().Length, "AddProviderRow should take (parent, id, displayName, kind)");
 
             foreach (string phase in new[] { "CacheUIElements", "InitializeUI", "RegisterCallbacks" })
                 Assert.IsNotNull(type.GetMethod(phase, BindingFlags.NonPublic | BindingFlags.Instance),

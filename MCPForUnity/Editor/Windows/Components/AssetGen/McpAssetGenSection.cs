@@ -327,6 +327,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                     SecureKeyStore.Current.Set(id, text);
                     keyField.SetValueWithoutNotify(string.Empty);
                     SetStatus(statusLabel, "saved ✓", true);
+                    RebuildIfSharedKey(id);
                 }
                 catch (Exception ex)
                 {
@@ -351,6 +352,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
                 keyField.SetValueWithoutNotify(string.Empty);
                 SetStatus(statusLabel, "not set", false);
+                RebuildIfSharedKey(id);
             };
 
             // v1 surfaces presence only. Live endpoint validation (an actual auth ping to the
@@ -394,7 +396,16 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
             if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
-            ModelEntry selected = AssetGenModelCatalog.Find(selectedId) ?? models[0];
+            ModelEntry selected = AssetGenModelCatalog.Find(selectedId);
+            if (selected == null)
+            {
+                // The stored pref points at a model that's no longer in the catalog (stale/invalid).
+                // The dropdown falls back to the first model — clear the pref so generate_* resolves to
+                // the same shown model instead of sending the stale id.
+                selected = models[0];
+                if (!string.IsNullOrEmpty(AssetGenPrefs.GetSelectedModel(kind, providerId)))
+                    AssetGenPrefs.SetSelectedModel(kind, providerId, string.Empty);
+            }
 
             // Lay the dropdown out like the Format row: a horizontal .setting-row (align-items:center,
             // min-height:24px) with a .setting-label + a label-less DropdownField. Adding the dropdown
@@ -476,6 +487,18 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             parent.Add(row);
         }
 
+        /// <summary>
+        /// The fal key is shared with the audio row, whose "key present" status is snapshotted at
+        /// build time. When the 2D fal key is saved/cleared, schedule a full rebuild so the audio row
+        /// reflects it without a manual Refresh. Deferred so we don't destroy the element whose
+        /// callback is still running.
+        /// </summary>
+        private void RebuildIfSharedKey(string id)
+        {
+            if (!string.Equals(id, "fal", StringComparison.OrdinalIgnoreCase)) return;
+            Root?.schedule.Execute(SyncFromPrefs);
+        }
+
         private static ModelEntry FindByLabel(IReadOnlyList<ModelEntry> models, string label)
         {
             foreach (ModelEntry m in models)
@@ -489,7 +512,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             var parts = new List<string>();
             if (!string.IsNullOrEmpty(m.UseCase)) parts.Add(m.UseCase);
             if (!string.IsNullOrEmpty(m.PriceLabel)) parts.Add(m.PriceLabel);
-            if (m.MaxDurationSeconds > 0f) parts.Add($"≤{m.MaxDurationSeconds:0}s");
+            // Only surface the "≤Ns" hint for models with an actual duration control (DurationField);
+            // Lyria advertises a max but takes no duration input, so showing a hint would mislead.
+            if (m.MaxDurationSeconds > 0f && !string.IsNullOrEmpty(m.DurationField)) parts.Add($"≤{m.MaxDurationSeconds:0}s");
             if (m.Loopable) parts.Add("loopable");
             label.text = string.Join(" · ", parts);
         }

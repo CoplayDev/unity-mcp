@@ -42,6 +42,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 body = new JObject
                 {
                     ["type"] = "image_to_model",
+                    ["model_version"] = string.IsNullOrEmpty(req.Model) ? ModelVersion : req.Model,
                     ["file"] = new JObject
                     {
                         ["type"] = "url",

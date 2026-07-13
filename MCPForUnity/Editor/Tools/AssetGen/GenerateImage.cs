@@ -56,9 +56,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
 
             // Empty -> GUI-selected model -> catalog default. Null still reaches the adapter's own
             // default (no regression when nothing is selected anywhere).
-            string model = p.Get("model");
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("image", provider);
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "image");
+            string model = AssetGenModelCatalog.ResolveModel("image", provider, p.Get("model"));
 
             var req = new ImageGenRequest
             {
@@ -67,7 +65,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 Prompt = p.Get("prompt"),
                 ImagePath = p.Get("imagePath"),
                 ImageUrl = p.Get("imageUrl"),
-                Model = string.IsNullOrWhiteSpace(model) ? null : model,
+                Model = model,
                 Transparent = p.GetBool("transparent", false),
                 AsSprite = p.GetBool("asSprite", true),
                 Width = p.GetInt("width", 0) ?? 0,

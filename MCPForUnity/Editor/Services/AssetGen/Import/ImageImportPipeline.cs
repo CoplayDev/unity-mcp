@@ -23,6 +23,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
                 if (!AssetGenPaths.TryGetAssetsRelativePath(localFilePath, out string rel))
                     return Fail(job, "Generated file is not under the Assets folder.");
 
+                // Defense-in-depth: never import a non-image file even if one slipped past WriteFile.
+                if (!AssetGenJobManager.IsAllowedResultExtension("image", Path.GetExtension(rel)))
+                    return Fail(job, "Refusing to import a non-image file type.");
+
                 AssetDatabase.ImportAsset(rel, ImportAssetOptions.ForceUpdate);
 
                 if (AssetImporter.GetAtPath(rel) is TextureImporter importer)

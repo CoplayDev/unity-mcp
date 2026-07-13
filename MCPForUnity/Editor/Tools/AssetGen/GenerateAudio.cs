@@ -60,14 +60,12 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             // Empty -> GUI-selected model -> catalog default. A null model reaches the adapter's own
             // default; a resolved id is passed through verbatim (the catalog default equals the
             // adapter constant, so an omitted model is a no-op either way).
-            string model = p.Get("model");
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("audio", provider);
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "audio");
+            string model = AssetGenModelCatalog.ResolveModel("audio", provider, p.Get("model"));
 
             var req = new AudioGenRequest
             {
                 Provider = provider,
-                Model = string.IsNullOrWhiteSpace(model) ? null : model,
+                Model = model,
                 Prompt = prompt,
                 Duration = p.GetFloat("duration", 0f) ?? 0f,
                 Name = p.Get("name"),

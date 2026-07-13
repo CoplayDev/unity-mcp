@@ -34,5 +34,15 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(AssetGenJobState.Failed, result.State);
             StringAssert.Contains("Assets", result.Error);
         }
+
+        [Test]
+        public void ImportInto_NonAudioExtension_UnderAssets_Rejected()
+        {
+            // Defense-in-depth: even a path under Assets is refused if it isn't an audio type, so a
+            // .cs payload can never be handed to AssetDatabase.ImportAsset.
+            AssetGenJob result = AudioImportPipeline.ImportInto(Job(), "Assets/Generated/payload.cs");
+            Assert.AreEqual(AssetGenJobState.Failed, result.State);
+            StringAssert.Contains("non-audio", result.Error.ToLowerInvariant());
+        }
     }
 }

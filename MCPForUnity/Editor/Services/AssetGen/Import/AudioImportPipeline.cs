@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using UnityEditor;
@@ -24,6 +25,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
 
                 if (!AssetGenPaths.TryGetAssetsRelativePath(localFilePath, out string rel))
                     return Fail(job, "Generated file is not under the Assets folder.");
+
+                // Defense-in-depth: never import a non-audio file even if one slipped past WriteFile.
+                if (!AssetGenJobManager.IsAllowedResultExtension("audio", Path.GetExtension(rel)))
+                    return Fail(job, "Refusing to import a non-audio file type.");
 
                 AssetDatabase.ImportAsset(rel, ImportAssetOptions.ForceUpdate);
                 ApplyAudioImporterSettings(rel);

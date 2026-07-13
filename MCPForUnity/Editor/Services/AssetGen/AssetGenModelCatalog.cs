@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
 
 namespace MCPForUnity.Editor.Services.AssetGen
@@ -21,6 +22,13 @@ namespace MCPForUnity.Editor.Services.AssetGen
         public string UseCase;
         public string PriceLabel;
         public float MaxDurationSeconds; // 0 => not time-bounded (image / 3D)
+        // Audio duration knob. DurationField is the request key ("seconds_total" / "duration");
+        // null => the model has no duration control (prompt-only). DefaultDurationSeconds is used
+        // when the caller passes 0 to a model whose endpoint requires a duration. MinDurationSeconds
+        // is the clamp floor.
+        public string DurationField;
+        public float DefaultDurationSeconds;
+        public float MinDurationSeconds;
         public bool Loopable;
         public string CommercialNote;    // non-null => show a license caveat under the dropdown
         public bool FromRefresh;         // true => merged from a fal-catalog refresh (Phase 5)
@@ -50,11 +58,15 @@ namespace MCPForUnity.Editor.Services.AssetGen
             new ModelEntry { Id = "P1-20260311", Label = "Tripo P1 (premium)", Provider = "tripo", Kind = "model", UseCase = "Premium 3D" },
             new ModelEntry { Id = MeshyAdapter.DefaultModel, Label = "Meshy 6", Provider = "meshy", Kind = "model", UseCase = "Text / image -> 3D" },
 
-            // Audio — fal (order: stable-audio, cassette SFX, cassette music, lyria)
+            // Audio — fal (order: stable-audio, cassette SFX, cassette music, lyria). DurationField
+            // is the request key each endpoint expects; null (Lyria) => prompt-only, no duration knob.
             new ModelEntry { Id = FalAudioAdapter.DefaultModel, Label = "Stable Audio 2.5", Provider = "fal", Kind = "audio", UseCase = "Music + SFX", PriceLabel = "$0.20/gen", MaxDurationSeconds = 190f,
+                DurationField = "seconds_total", DefaultDurationSeconds = 30f,
                 CommercialNote = "Free under $1M annual revenue (Stability Community License); an Enterprise license is required at or above $1M." },
-            new ModelEntry { Id = "cassetteai/sound-effects-generator", Label = "CassetteAI SFX", Provider = "fal", Kind = "audio", UseCase = "Sound effects", PriceLabel = "$0.01/gen", MaxDurationSeconds = 30f },
-            new ModelEntry { Id = "cassetteai/music-generator", Label = "CassetteAI Music", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.02/min", MaxDurationSeconds = 180f },
+            new ModelEntry { Id = "cassetteai/sound-effects-generator", Label = "CassetteAI SFX", Provider = "fal", Kind = "audio", UseCase = "Sound effects", PriceLabel = "$0.01/gen", MaxDurationSeconds = 30f,
+                DurationField = "duration", DefaultDurationSeconds = 10f, MinDurationSeconds = 1f },
+            new ModelEntry { Id = "cassetteai/music-generator", Label = "CassetteAI Music", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.02/min", MaxDurationSeconds = 180f,
+                DurationField = "duration", DefaultDurationSeconds = 10f, MinDurationSeconds = 1f },
             new ModelEntry { Id = "fal-ai/lyria2", Label = "Google Lyria 2", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.10/30s", MaxDurationSeconds = 30f },
         };
 
@@ -78,7 +90,25 @@ namespace MCPForUnity.Editor.Services.AssetGen
 
         /// <summary>The default model id for a provider+kind (the first curated entry), or null.</summary>
         public static string DefaultModelId(string provider, string kind)
-            => ForProvider(provider, kind).FirstOrDefault()?.Id;
+        {
+            foreach (ModelEntry e in Curated)
+                if (Eq(e.Provider, provider) && Eq(e.Kind, kind)) return e.Id;
+            return null;
+        }
+
+        /// <summary>
+        /// The model id a generate_* tool should use: an explicit <paramref name="requested"/> wins,
+        /// else the GUI-selected model for this (kind, provider), else the curated default. Null when
+        /// nothing resolves (the adapter then falls back to its own constant). Single home for the
+        /// empty -> GUI-selected -> catalog-default precedence shared by all three generate tools.
+        /// </summary>
+        public static string ResolveModel(string kind, string provider, string requested)
+        {
+            string model = requested;
+            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel(kind, provider);
+            if (string.IsNullOrWhiteSpace(model)) model = DefaultModelId(provider, kind);
+            return string.IsNullOrWhiteSpace(model) ? null : model;
+        }
 
         /// <summary>Clears any test/refresh state. The refresh overlay is added in Phase 5; no-op today.</summary>
         internal static void ResetForTests() { }

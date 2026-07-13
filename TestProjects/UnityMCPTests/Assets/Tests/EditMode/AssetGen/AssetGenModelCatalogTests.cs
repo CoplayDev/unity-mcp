@@ -38,6 +38,29 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Audio_DurationFields_MatchEndpointSchemas()
+        {
+            IReadOnlyList<ModelEntry> audio = AssetGenModelCatalog.ForProvider("fal", "audio");
+
+            // stable-audio -> seconds_total; both cassette models -> duration; lyria -> no duration knob.
+            CollectionAssert.AreEqual(
+                new[] { "seconds_total", "duration", "duration", null },
+                audio.Select(e => e.DurationField).ToList());
+
+            // The two required-duration models carry a non-zero default so a Duration=0 call still
+            // sends a valid body (C2), and a floor >= 1 so fractional durations never send 0 (C3).
+            ModelEntry music = AssetGenModelCatalog.Find("cassetteai/music-generator");
+            Assert.Greater(music.DefaultDurationSeconds, 0f);
+            Assert.GreaterOrEqual(music.MinDurationSeconds, 1f);
+
+            ModelEntry sfx = AssetGenModelCatalog.Find("cassetteai/sound-effects-generator");
+            Assert.Greater(sfx.DefaultDurationSeconds, 0f);
+            Assert.GreaterOrEqual(sfx.MinDurationSeconds, 1f);
+
+            Assert.IsNull(AssetGenModelCatalog.Find("fal-ai/lyria2").DurationField, "Lyria has no duration control");
+        }
+
+        [Test]
         public void DefaultModelId_PerKindPerProvider()
         {
             Assert.AreEqual("fal-ai/flux-2", AssetGenModelCatalog.DefaultModelId("fal", "image"));

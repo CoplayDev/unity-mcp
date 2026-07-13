@@ -54,9 +54,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
 
             // Empty -> GUI-selected model -> catalog default. Null still reaches the adapter's own
             // default (Tripo ModelVersion / Meshy meshy-6).
-            string model = p.Get("model");
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel("model", provider);
-            if (string.IsNullOrWhiteSpace(model)) model = AssetGenModelCatalog.DefaultModelId(provider, "model");
+            string model = AssetGenModelCatalog.ResolveModel("model", provider, p.Get("model"));
 
             var req = new ModelGenRequest
             {
@@ -69,7 +67,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 TargetSize = p.GetFloat("targetSize", 1f) ?? 1f,
                 Texture = p.GetBool("texture", true),
                 Tier = p.Get("tier"),
-                Model = string.IsNullOrWhiteSpace(model) ? null : model,
+                Model = model,
                 Name = p.Get("name"),
                 OutputFolder = p.Get("outputFolder"),
             };
