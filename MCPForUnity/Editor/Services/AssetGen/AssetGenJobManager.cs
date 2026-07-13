@@ -453,6 +453,8 @@ namespace MCPForUnity.Editor.Services.AssetGen
         {
             "glb", "gltf", "fbx", "obj", "usd", "usdz", "dae", "ply", "stl", "zip",
         };
+        // Fail closed: an unexpected kind allows nothing, so the RCE boundary never opens by default.
+        private static readonly HashSet<string> NoAllowedExtensions = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Whether <paramref name="ext"/> (no leading dot) is an allowed result extension for the
@@ -468,7 +470,9 @@ namespace MCPForUnity.Editor.Services.AssetGen
             {
                 case "audio": return AudioAllowedExtensions;
                 case "image": return ImageAllowedExtensions;
-                default: return ModelAllowedExtensions; // model + marketplace
+                case "model":
+                case "marketplace": return ModelAllowedExtensions;
+                default: return NoAllowedExtensions; // fail closed for unexpected kinds
             }
         }
 

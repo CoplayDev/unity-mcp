@@ -131,6 +131,21 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_CassetteMusic_FractionalDuration_Floors_NotRounds()
+        {
+            // Duration must be floored (not rounded) so it never exceeds the requested value:
+            // 10.9 -> 10, not 11.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };
+            var adapter = new FalAudioAdapter();
+
+            adapter.SubmitAsync(Req("cassetteai/music-generator", 10.9f), "falkey123", fake, CancellationToken.None)
+                   .GetAwaiter().GetResult();
+
+            JObject body = JObject.Parse(SubmittedBody(fake));
+            Assert.AreEqual(10, (int)body["duration"]);
+        }
+
+        [Test]
         public void Submit_Lyria_PromptOnly()
         {
             var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"" + Resp + "\"}") };

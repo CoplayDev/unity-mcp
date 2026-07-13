@@ -77,8 +77,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 float dur = req.Duration > 0f ? req.Duration : entry.DefaultDurationSeconds;
                 float floor = Math.Max(1f, entry.MinDurationSeconds);
                 dur = Math.Min(Math.Max(dur, floor), entry.MaxDurationSeconds);
-                int seconds = (int)Math.Round(dur);
-                if (seconds < 1) seconds = 1;
+                // Floor (not round) so we never exceed the requested duration, then enforce >= 1.
+                int seconds = Math.Max(1, (int)Math.Floor(dur));
                 body[entry.DurationField] = seconds;
             }
             return body;
