@@ -1,4 +1,4 @@
-"""AI asset generation CLI commands (3D model gen/import, 2D image gen).
+"""AI asset generation CLI commands (3D model gen/import, 2D image gen, audio gen).
 
 Thin pass-through to Unity over HTTP: these commands carry NO API keys and NO
 file bytes. The C# side reads provider keys from the OS secure store, performs
