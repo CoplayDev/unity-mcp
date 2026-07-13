@@ -492,7 +492,10 @@ namespace MCPForUnity.Editor.Services
                     return false;
                 }
 
-                return TryConnectToLocalPort(uri.Host, uri.Port, timeoutMs: 50);
+                // 250ms, not 50ms: on a machine busy with test runs or domain reloads a 50ms
+                // connect wait produces false "server gone" readings that tore down healthy
+                // sessions via the orphaned-session detector (#1207).
+                return TryConnectToLocalPort(uri.Host, uri.Port, timeoutMs: 250);
             }
             catch
             {
@@ -504,14 +507,24 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
+                // timeoutMs is an overall budget shared across candidate hosts, so a
+                // filtered/dropped first candidate cannot multiply the worst-case wait
+                // (this can run on the editor UI tick).
+                var elapsed = System.Diagnostics.Stopwatch.StartNew();
                 foreach (string target in BuildLocalProbeHosts(host))
                 {
+                    int remainingMs = timeoutMs - (int)elapsed.ElapsedMilliseconds;
+                    if (remainingMs <= 0)
+                    {
+                        break;
+                    }
+
                     try
                     {
                         using (var client = new TcpClient())
                         {
                             var connectTask = client.ConnectAsync(target, port);
-                            if (connectTask.Wait(timeoutMs) && client.Connected)
+                            if (connectTask.Wait(remainingMs) && client.Connected)
                             {
                                 return true;
                             }
@@ -1001,6 +1014,8 @@ namespace MCPForUnity.Editor.Services
             string dir = Path.Combine(_terminalLauncher.GetProjectRootPath(), "Library", "MCPForUnity", "Logs");
             return Path.Combine(dir, $"server-launch-{port}.log");
         }
+
+        public bool HasManagedServerLaunchHandle => _lastLaunchedProcess != null;
 
         public bool IsManagedServerLaunchProcessAlive()
         {

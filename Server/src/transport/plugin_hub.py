@@ -36,6 +36,24 @@ from transport.models import (
 
 logger = logging.getLogger(__name__)
 
+
+def _read_bounded_wait_env(name: str, default_s: float, max_s: float) -> float:
+    """Read a wait-seconds env override, clamped to [0, max_s].
+
+    The ceiling exists to keep a typo from stalling every command, but it must sit
+    well above the default so explicit overrides actually take effect (#1207).
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return max(0.0, min(default_s, max_s))
+    try:
+        value = float(raw)
+    except ValueError as e:
+        logger.warning("Invalid %s=%r, using default %s: %s", name, raw, default_s, e)
+        value = default_s
+    return max(0.0, min(value, max_s))
+
+
 # ---------- MCP session tracking ----------
 # FastMCP doesn't expose active MCP client sessions.  We patch
 # ``MiddlewareServerSession.__aenter__`` once to register every new
@@ -83,8 +101,16 @@ class InstanceSelectionRequiredError(RuntimeError):
         "Call set_active_instance with Name@hash from mcpforunity://instances."
     )
 
-    def __init__(self, message: str | None = None):
-        super().__init__(message or self._SELECTION_REQUIRED)
+    def __init__(self, message: str | None = None,
+                 available_instances: list[str] | None = None):
+        # Carried structurally so the transport layer can surface the ids without
+        # parsing the message; also appended to the text for parity with the stdio
+        # guard, which lists the ids inline.
+        self.available_instances = available_instances or []
+        text = message or self._SELECTION_REQUIRED
+        if self.available_instances:
+            text = f"{text} Available instances: {self.available_instances}."
+        super().__init__(text)
 
 
 class PluginHub(WebSocketEndpoint):
@@ -854,19 +880,11 @@ class PluginHub(WebSocketEndpoint):
         # (e.g., via status file, heartbeat, or explicit "reloading" signal from Unity)
         # rather than blindly waiting up to 20s. See Issue #657.
         #
-        # Configurable via: UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S (default: 20.0, max: 20.0)
-        try:
-            max_wait_s = float(
-                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0"))
-        except ValueError as e:
-            raw_val = os.environ.get(
-                "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0")
-            logger.warning(
-                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 20.0: %s",
-                raw_val, e)
-            max_wait_s = 20.0
-        # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
-        max_wait_s = max(0.0, min(max_wait_s, 20.0))
+        # Configurable via: UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S (default: 20.0, max: 120.0).
+        # The ceiling used to equal the default, which silently neutered the override for
+        # projects whose reloads/test boundaries legitimately exceed 20s (#1207).
+        max_wait_s = _read_bounded_wait_env(
+            "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", default_s=20.0, max_s=120.0)
         if not retry_on_reload:
             max_wait_s = 0.0
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
@@ -907,9 +925,19 @@ class PluginHub(WebSocketEndpoint):
             # Multiple sessions but no explicit target is ambiguous
             return None, count, explicit_required
 
+        async def _available_instance_ids() -> list[str]:
+            # Error path only; one extra registry read keeps the refusal actionable.
+            try:
+                sessions = await cls._registry.list_sessions(user_id=user_id)
+                return sorted(
+                    f"{s.project_name}@{s.project_hash}" for s in sessions.values())
+            except Exception:
+                return []
+
         session_id, session_count, explicit_required = await _try_once()
         if session_id is None and explicit_required and not target_hash and session_count > 0:
-            raise InstanceSelectionRequiredError()
+            raise InstanceSelectionRequiredError(
+                available_instances=await _available_instance_ids())
         deadline = time.monotonic() + max_wait_s
         wait_started = None
 
@@ -918,9 +946,11 @@ class PluginHub(WebSocketEndpoint):
         while session_id is None and time.monotonic() < deadline:
             if not target_hash and session_count > 1:
                 raise InstanceSelectionRequiredError(
-                    InstanceSelectionRequiredError._MULTIPLE_INSTANCES)
+                    InstanceSelectionRequiredError._MULTIPLE_INSTANCES,
+                    available_instances=await _available_instance_ids())
             if session_id is None and explicit_required and not target_hash and session_count > 0:
-                raise InstanceSelectionRequiredError()
+                raise InstanceSelectionRequiredError(
+                    available_instances=await _available_instance_ids())
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
@@ -1009,17 +1039,8 @@ class PluginHub(WebSocketEndpoint):
         # a main-thread ping command (handled by TransportCommandDispatcher) rather than waiting on
         # register_tools (which can be delayed by EditorApplication.delayCall).
         if retry_on_reload and command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
-            try:
-                max_wait_s = float(os.environ.get(
-                    "UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6"))
-            except ValueError as e:
-                raw_val = os.environ.get(
-                    "UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6")
-                logger.warning(
-                    "Invalid UNITY_MCP_SESSION_READY_WAIT_SECONDS=%r, using default 6.0: %s",
-                    raw_val, e)
-                max_wait_s = 6.0
-            max_wait_s = max(0.0, min(max_wait_s, 20.0))
+            max_wait_s = _read_bounded_wait_env(
+                "UNITY_MCP_SESSION_READY_WAIT_SECONDS", default_s=6.0, max_s=120.0)
             if max_wait_s > 0:
                 deadline = time.monotonic() + max_wait_s
                 while time.monotonic() < deadline:

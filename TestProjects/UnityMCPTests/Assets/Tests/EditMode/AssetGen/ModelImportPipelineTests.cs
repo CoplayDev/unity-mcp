@@ -1,6 +1,7 @@
 using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Import;
 using NUnit.Framework;
+using UnityEditor;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -42,6 +43,20 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             AssetGenJob result = ModelImportPipeline.ImportInto(Job("fbx"), null);
             Assert.AreEqual(AssetGenJobState.Failed, result.State);
+        }
+
+        [TestCase("generic", ModelImporterAnimationType.Generic)]
+        [TestCase("Generic", ModelImporterAnimationType.Generic)]
+        [TestCase("humanoid", ModelImporterAnimationType.Human)]
+        [TestCase("human", ModelImporterAnimationType.Human)]
+        [TestCase(" LEGACY ", ModelImporterAnimationType.Legacy)]
+        [TestCase("none", ModelImporterAnimationType.None)]
+        [TestCase("", ModelImporterAnimationType.None)]
+        [TestCase(null, ModelImporterAnimationType.None)]
+        [TestCase("nonsense", ModelImporterAnimationType.None)]
+        public void ParseAnimationType_MapsRigMode(string input, ModelImporterAnimationType expected)
+        {
+            Assert.AreEqual(expected, ModelImportPipeline.ParseAnimationType(input));
         }
     }
 }

@@ -7,6 +7,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Advanced;
 using MCPForUnity.Editor.Windows.Components.AssetGen;
+using MCPForUnity.Editor.Windows.Components.Branding;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Resources;
@@ -183,6 +184,15 @@ namespace MCPForUnity.Editor.Windows
             if (commonStyleSheet != null)
             {
                 rootVisualElement.styleSheets.Add(commonStyleSheet);
+            }
+
+            // Embed the Ocean brand mark at the left of the header bar
+            var headerLeft = rootVisualElement.Q<VisualElement>("header-left");
+            if (headerLeft != null && headerLeft.Q<OceanMark>() == null)
+            {
+                var logo = new OceanMark { name = "header-logo" };
+                logo.AddToClassList("header-logo");
+                headerLeft.Insert(0, logo);
             }
 
             // Cache UI elements

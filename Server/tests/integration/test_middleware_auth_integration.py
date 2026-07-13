@@ -66,38 +66,6 @@ class TestMiddlewareAuthEnforcement:
         assert await ctx.get_state("user_id") == "user-55"
 
 
-class TestMiddlewareSessionKey:
-    @pytest.mark.asyncio
-    async def test_get_session_key_uses_user_id_fallback(self):
-        """When no client_id, middleware should use user:$user_id as session key."""
-        from transport.unity_instance_middleware import UnityInstanceMiddleware
-
-        middleware = UnityInstanceMiddleware()
-
-        ctx = DummyContext()
-        # Simulate no client_id attribute
-        if hasattr(ctx, "client_id"):
-            delattr(ctx, "client_id")
-        await ctx.set_state("user_id", "user-77")
-
-        key = await middleware.get_session_key(ctx)
-        assert key == "user:user-77"
-
-    @pytest.mark.asyncio
-    async def test_get_session_key_prefers_client_id(self):
-        """client_id should take precedence over user_id."""
-        from transport.unity_instance_middleware import UnityInstanceMiddleware
-
-        middleware = UnityInstanceMiddleware()
-
-        ctx = DummyContext()
-        ctx.client_id = "client-abc"
-        await ctx.set_state("user_id", "user-77")
-
-        key = await middleware.get_session_key(ctx)
-        assert key == "client-abc"
-
-
 class TestAutoSelectDisabledRemoteHosted:
     @pytest.mark.asyncio
     async def test_auto_select_returns_none_in_remote_hosted(self, monkeypatch):

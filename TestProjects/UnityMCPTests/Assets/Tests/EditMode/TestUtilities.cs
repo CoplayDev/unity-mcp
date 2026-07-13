@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Threading.Tasks;
+using MCPForUnity.Editor.Services.Transport;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -136,5 +138,45 @@ namespace MCPForUnityTests.Editor
             }
         }
     }
-}
 
+    /// <summary>
+    /// Synchronous IMcpTransportClient fake for transport-lifecycle tests: StartAsync
+    /// completes immediately with StartResult so retry loops run without awaits
+    /// (the test framework floor cannot run async tests).
+    /// </summary>
+    public sealed class FakeTransportClient : IMcpTransportClient
+    {
+        public bool StartResult = true;
+        public int StartCalls;
+        public Action OnStart;
+
+        public bool IsConnected { get; private set; }
+        public string TransportName => "http";
+        public TransportState State { get; private set; }
+            = TransportState.Disconnected("http");
+
+        public Task<bool> StartAsync()
+        {
+            StartCalls++;
+            OnStart?.Invoke();
+            IsConnected = StartResult;
+            State = StartResult
+                ? TransportState.Connected("http")
+                : TransportState.Disconnected("http", "fake start failure");
+            return Task.FromResult(StartResult);
+        }
+
+        public Task StopAsync()
+        {
+            IsConnected = false;
+            State = TransportState.Disconnected("http");
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> VerifyAsync()
+            => Task.FromResult(IsConnected);
+
+        public Task ReregisterToolsAsync()
+            => Task.CompletedTask;
+    }
+}

@@ -46,15 +46,12 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
     # List all ctx attributes for debugging
     ctx_attrs = [attr for attr in dir(ctx) if not attr.startswith("_")]
 
-    # Get session state info via middleware
+    # Get session state info via middleware. Active-instance storage now lives
+    # in FastMCP's session-scoped state store, keyed by ctx.session_id, so
+    # there is no global dict to enumerate — that snapshot was a footgun
+    # anyway (it exposed every connected client's selection).
     middleware = get_unity_instance_middleware()
-    derived_key = await middleware.get_session_key(ctx)
     active_instance = await middleware.get_active_instance(ctx)
-
-    # Debugging middleware internals
-    # NOTE: These fields expose internal implementation details and may change between versions.
-    with middleware._lock:
-        all_keys = list(middleware._active_by_key.keys())
 
     # Debugging PluginHub state
     plugin_hub_configured = PluginHub.is_configured()
@@ -77,9 +74,7 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
                 "client_id": ctx_client_id,
             },
             "session_state": {
-                "derived_key": derived_key,
                 "active_instance": active_instance,
-                "all_keys_in_store": all_keys,
                 "plugin_hub_configured": plugin_hub_configured,
                 "middleware_id": id(middleware),
             },
