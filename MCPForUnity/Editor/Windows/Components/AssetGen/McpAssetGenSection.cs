@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
+using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Import;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -41,6 +42,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private DropdownField formatDropdown;
         private TextField outputRootField;
         private Toggle autoNormalizeToggle;
+        private Button refreshButton;
+        private Label refreshStatusLabel;
 
         // Per-provider enable toggles for the GLB-capable (model) providers, used to
         // recompute the glTFast notice when a toggle changes.
@@ -63,6 +66,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             formatDropdown = Root.Q<DropdownField>("assetgen-format-dropdown");
             outputRootField = Root.Q<TextField>("assetgen-output-root");
             autoNormalizeToggle = Root.Q<Toggle>("assetgen-auto-normalize");
+            refreshButton = Root.Q<Button>("assetgen-refresh");
+            refreshStatusLabel = Root.Q<Label>("assetgen-refresh-status");
         }
 
         private void InitializeUI()
@@ -115,6 +120,26 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                     AssetGenPrefs.AutoNormalize = evt.newValue;
                 });
             }
+
+            if (refreshButton != null)
+            {
+                refreshButton.tooltip =
+                    "Re-check API-key presence and rebuild the provider/model rows. Picks up keys or " +
+                    "prefs set elsewhere (CLI, env override). The model list is curated in-package.";
+                refreshButton.clicked += OnRefreshClicked;
+            }
+        }
+
+        /// <summary>
+        /// Re-reads secure-store key presence and the curated catalog and rebuilds the rows — useful
+        /// to pick up keys/prefs set elsewhere (CLI, env override). fal has no public list-models API,
+        /// so the curated catalog is the source of truth; this never hits the network or blocks the tab.
+        /// </summary>
+        private void OnRefreshClicked()
+        {
+            SyncFromPrefs();
+            if (refreshStatusLabel != null)
+                SetStatus(refreshStatusLabel, "refreshed — using the built-in model catalog", true);
         }
 
         /// <summary>
@@ -143,20 +168,50 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             providersContainer.Clear();
             modelEnableToggles.Clear();
 
-            AddGroupLabel("3D Model Providers");
+            var modelPanel = AddCategoryPanel("3D Models");
             foreach (var provider in ModelProviders)
             {
-                var toggle = AddProviderRow(provider.Id, provider.Label);
+                var toggle = AddProviderRow(modelPanel, provider.Id, provider.Label, "model");
                 modelEnableToggles.Add((provider.Id, toggle));
             }
 
-            AddGroupLabel("Image Providers");
+            var imagePanel = AddCategoryPanel("2D Images");
             foreach (var provider in ImageProviders)
             {
-                AddProviderRow(provider.Id, provider.Label);
+                AddProviderRow(imagePanel, provider.Id, provider.Label, "image");
             }
 
+            var audioPanel = AddCategoryPanel("Sound (fal.ai)");
+            AddAudioRow(audioPanel);
+
             AddBlenderHandoffRow();
+        }
+
+        /// <summary>
+        /// Creates a darker rounded panel with a title (added to the providers container). Each of the
+        /// three categories (3D / 2D / sound) gets its own panel so they read as distinct blocks.
+        /// </summary>
+        private VisualElement AddCategoryPanel(string title)
+        {
+            var panel = new VisualElement();
+            panel.style.backgroundColor = new Color(0f, 0f, 0f, 0.20f);
+            panel.style.paddingTop = 8;
+            panel.style.paddingBottom = 8;
+            panel.style.paddingLeft = 8;
+            panel.style.paddingRight = 8;
+            panel.style.marginBottom = 10;
+            panel.style.borderTopLeftRadius = 4;
+            panel.style.borderTopRightRadius = 4;
+            panel.style.borderBottomLeftRadius = 4;
+            panel.style.borderBottomRightRadius = 4;
+
+            var label = new Label(title);
+            label.AddToClassList("config-label");
+            label.style.marginTop = 0;
+            panel.Add(label);
+
+            providersContainer.Add(panel);
+            return panel;
         }
 
         private void AddGroupLabel(string text)
@@ -195,7 +250,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             providersContainer.Add(row);
         }
 
-        private Toggle AddProviderRow(string id, string displayName)
+        private Toggle AddProviderRow(VisualElement parent, string id, string displayName, string kind)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -203,7 +258,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             row.style.borderBottomWidth = 1;
             row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
 
-            // Header: bold provider name + enable toggle.
+            var statusLabel = new Label();
+            statusLabel.AddToClassList("help-text");
+
+            // Header: bold provider name, key status inline to its right, enable toggle far right.
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
@@ -211,8 +269,12 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             var nameLabel = new Label(displayName);
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.flexGrow = 1;
+            nameLabel.style.flexShrink = 0;
             header.Add(nameLabel);
+
+            statusLabel.style.flexGrow = 1;
+            statusLabel.style.marginLeft = 8;
+            header.Add(statusLabel);
 
             var enableToggle = new Toggle("Enabled");
             enableToggle.SetValueWithoutNotify(AssetGenPrefs.IsProviderEnabled(id));
@@ -220,9 +282,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             header.Add(enableToggle);
 
             row.Add(header);
-
-            var statusLabel = new Label();
-            statusLabel.AddToClassList("help-text");
 
             // Masked key field + Save / Clear / Test buttons.
             var fieldRow = new VisualElement();
@@ -253,7 +312,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             fieldRow.Add(testButton);
 
             row.Add(fieldRow);
-            row.Add(statusLabel);
 
             // Persist the typed key, then clear the field so the secret is never displayed.
             void SaveKeyFromField()
@@ -269,6 +327,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                     SecureKeyStore.Current.Set(id, text);
                     keyField.SetValueWithoutNotify(string.Empty);
                     SetStatus(statusLabel, "saved ✓", true);
+                    RebuildIfSharedKey(id);
                 }
                 catch (Exception ex)
                 {
@@ -293,6 +352,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
                 keyField.SetValueWithoutNotify(string.Empty);
                 SetStatus(statusLabel, "not set", false);
+                RebuildIfSharedKey(id);
             };
 
             // v1 surfaces presence only. Live endpoint validation (an actual auth ping to the
@@ -313,8 +373,158 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             bool has = HasKey(id);
             SetStatus(statusLabel, has ? "saved ✓" : "not set", has);
 
-            providersContainer.Add(row);
+            // "Which model" selector for this provider (skipped for providers with no catalog
+            // models, e.g. the Sketchfab marketplace).
+            AddModelDropdown(row, kind, id);
+
+            parent.Add(row);
             return enableToggle;
+        }
+
+        /// <summary>
+        /// Adds a "Model" dropdown + metadata line for a (kind, provider) pair, if the catalog has
+        /// any models for it. The dropdown shows friendly labels; the pref stores the model id.
+        /// Selecting a model becomes the default that generate_* uses when no explicit model is passed.
+        /// </summary>
+        private void AddModelDropdown(VisualElement parent, string kind, string providerId)
+        {
+            IReadOnlyList<ModelEntry> models = AssetGenModelCatalog.ForProvider(providerId, kind);
+            if (models.Count == 0) return;
+
+            var choices = new List<string>();
+            foreach (ModelEntry m in models) choices.Add(m.Label);
+
+            string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
+            if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
+            ModelEntry selected = AssetGenModelCatalog.Find(selectedId);
+            if (selected == null)
+            {
+                // The stored pref points at a model that's no longer in the catalog (stale/invalid).
+                // The dropdown falls back to the first model — clear the pref so generate_* resolves to
+                // the same shown model instead of sending the stale id.
+                selected = models[0];
+                if (!string.IsNullOrEmpty(AssetGenPrefs.GetSelectedModel(kind, providerId)))
+                    AssetGenPrefs.SetSelectedModel(kind, providerId, string.Empty);
+            }
+
+            // Lay the dropdown out like the Format row: a horizontal .setting-row (align-items:center,
+            // min-height:24px) with a .setting-label + a label-less DropdownField. Adding the dropdown
+            // straight into the column row instead makes flex-grow expand it vertically into a huge box.
+            var dropdownRow = new VisualElement();
+            dropdownRow.AddToClassList("setting-row");
+
+            var modelLabel = new Label("Model");
+            modelLabel.AddToClassList("setting-label");
+            dropdownRow.Add(modelLabel);
+
+            var dropdown = new DropdownField(choices, 0);
+            dropdown.AddToClassList("setting-dropdown-inline");
+            dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
+            dropdown.SetValueWithoutNotify(selected.Label);
+            dropdownRow.Add(dropdown);
+
+            parent.Add(dropdownRow);
+
+            var meta = new Label();
+            meta.AddToClassList("help-text");
+            meta.style.whiteSpace = WhiteSpace.Normal;
+            parent.Add(meta);
+
+            var caveat = new Label();
+            caveat.AddToClassList("validation-description");
+            caveat.style.whiteSpace = WhiteSpace.Normal;
+            parent.Add(caveat);
+
+            UpdateModelMeta(meta, selected);
+            UpdateModelCaveat(caveat, selected);
+
+            dropdown.RegisterValueChangedCallback(evt =>
+            {
+                ModelEntry picked = FindByLabel(models, evt.newValue);
+                if (picked == null) return;
+                AssetGenPrefs.SetSelectedModel(kind, providerId, picked.Id);
+                UpdateModelMeta(meta, picked);
+                UpdateModelCaveat(caveat, picked);
+            });
+        }
+
+        /// <summary>
+        /// Audio row: no enable toggle and no key field — audio reuses the single fal key owned by
+        /// the Image "fal" row. Surfaces that key's presence and a fal-audio model dropdown.
+        /// </summary>
+        private void AddAudioRow(VisualElement parent)
+        {
+            var row = new VisualElement();
+            row.style.marginBottom = 8;
+            row.style.paddingBottom = 8;
+            row.style.borderBottomWidth = 1;
+            row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
+
+            // Header: name + shared-key status inline to its right. No key field — audio reuses the
+            // fal key owned by the 2D fal row.
+            var header = new VisualElement();
+            header.style.flexDirection = FlexDirection.Row;
+            header.style.alignItems = Align.Center;
+            header.style.marginBottom = 2;
+
+            var nameLabel = new Label("fal (audio)");
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            nameLabel.style.flexShrink = 0;
+            header.Add(nameLabel);
+
+            bool hasFal = HasKey("fal");
+            var status = new Label(hasFal ? "key present ✓ (shared with 2D fal)" : "no fal key — set it in 2D Images");
+            status.AddToClassList("help-text");
+            status.style.color = hasFal ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
+            status.style.flexGrow = 1;
+            status.style.marginLeft = 8;
+            header.Add(status);
+
+            row.Add(header);
+
+            AddModelDropdown(row, "audio", "fal");
+
+            parent.Add(row);
+        }
+
+        /// <summary>
+        /// The fal key is shared with the audio row, whose "key present" status is snapshotted at
+        /// build time. When the 2D fal key is saved/cleared, schedule a full rebuild so the audio row
+        /// reflects it without a manual Refresh. Deferred so we don't destroy the element whose
+        /// callback is still running.
+        /// </summary>
+        private void RebuildIfSharedKey(string id)
+        {
+            if (!string.Equals(id, "fal", StringComparison.OrdinalIgnoreCase)) return;
+            Root?.schedule.Execute(SyncFromPrefs);
+        }
+
+        private static ModelEntry FindByLabel(IReadOnlyList<ModelEntry> models, string label)
+        {
+            foreach (ModelEntry m in models)
+                if (m.Label == label) return m;
+            return null;
+        }
+
+        private static void UpdateModelMeta(Label label, ModelEntry m)
+        {
+            if (label == null || m == null) return;
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(m.UseCase)) parts.Add(m.UseCase);
+            if (!string.IsNullOrEmpty(m.PriceLabel)) parts.Add(m.PriceLabel);
+            // Only surface the "≤Ns" hint for models with an actual duration control (DurationField);
+            // Lyria advertises a max but takes no duration input, so showing a hint would mislead.
+            if (m.MaxDurationSeconds > 0f && !string.IsNullOrEmpty(m.DurationField)) parts.Add($"≤{m.MaxDurationSeconds:0}s");
+            if (m.Loopable) parts.Add("loopable");
+            label.text = string.Join(" · ", parts);
+        }
+
+        private static void UpdateModelCaveat(Label label, ModelEntry m)
+        {
+            if (label == null) return;
+            bool show = m != null && !string.IsNullOrEmpty(m.CommercialNote);
+            label.text = show ? m.CommercialNote : string.Empty;
+            label.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private static void SetStatus(Label label, string text, bool ok)

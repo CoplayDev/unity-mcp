@@ -71,7 +71,7 @@ Use this to run the latest released version from the repository. Change the vers
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/CoplayDev/unity-mcp@v10.0.2#subdirectory=Server",
+        "git+https://github.com/CoplayDev/unity-mcp@v10.1.0#subdirectory=Server",
         "mcp-for-unity",
         "--transport",
         "stdio"

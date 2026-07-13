@@ -46,6 +46,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             { "testing", "Testing" },
             { "probuilder", "ProBuilder — Experimental" },
             { "profiling", "Profiling & Frame Debugger" },
+            { "asset_gen", "Asset Gen" },
         };
 
         public VisualElement Root { get; }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,50 +11,29 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
-    /// fal.ai image provider via the queue API. Submits to queue.fal.run/{model} (auth header
-    /// "Authorization: Key &lt;key&gt;"), polls the request's status_url, then fetches the result and
-    /// returns the first image URL for the job manager to download.
+    /// fal.ai audio provider via the queue API. One adapter fronts every v1 audio model
+    /// (stable-audio-25, cassetteai/*, lyria2); the model id in <see cref="AudioGenRequest.Model"/>
+    /// selects the endpoint. Submits to queue.fal.run/{model} (auth header
+    /// "Authorization: Key &lt;key&gt;"), polls status, then returns the result audio URL for the job
+    /// manager to download. Reuses the single existing "fal" secure key.
     /// </summary>
-    public sealed class FalAdapter : IImageProviderAdapter
+    public sealed class FalAudioAdapter : IAudioProviderAdapter
     {
         private const string QueueBase = "https://queue.fal.run/";
         private const string QueueHost = "queue.fal.run";
-        // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
-        // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
+        // Stable Audio 2.5: music + SFX in one model, up to ~190s. The catalog default.
         // internal so the model catalog references it directly (single source of truth, drift-guarded).
-        internal const string DefaultModel = "fal-ai/flux-2";
+        internal const string DefaultModel = "fal-ai/stable-audio-25/text-to-audio";
 
         public string Id => "fal";
 
-        public async Task<string> SubmitAsync(ImageGenRequest req, string apiKey, IHttpTransport http, CancellationToken ct)
+        public async Task<string> SubmitAsync(AudioGenRequest req, string apiKey, IHttpTransport http, CancellationToken ct)
         {
             if (req == null) throw new ArgumentNullException(nameof(req));
             if (http == null) throw new ArgumentNullException(nameof(http));
 
             string model = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
-            bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
-                         && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
-
-            var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty, ["num_images"] = 1 };
-            string url;
-            if (image)
-            {
-                // image→image / editing lives on the model's /edit endpoint and takes an image_urls
-                // array; each entry accepts a hosted URL or an inline base64 data URI (local image_path).
-                url = QueueBase + model + "/edit";
-                string imageRef = !string.IsNullOrEmpty(req.ImageUrl) ? req.ImageUrl : LocalImage.ToDataUri(req.ImagePath);
-                body["image_urls"] = new JArray(imageRef);
-            }
-            else
-            {
-                url = QueueBase + model;
-            }
-            // Forward explicit output dimensions for text→image only; fal's image_size accepts a
-            // {width,height} object. (/edit derives size from the source image and may reject it.
-            // FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
-            if (!image && req.Width > 0 && req.Height > 0)
-                body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
-
+            string url = QueueBase + model;
             ProviderHttp.RequireHost(url, QueueHost, apiKey, "fal submit");
 
             var spec = new HttpRequestSpec
@@ -61,28 +41,47 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 Method = "POST",
                 Url = url,
                 ContentType = "application/json",
-                Body = Encoding.UTF8.GetBytes(body.ToString(Formatting.None))
+                Body = Encoding.UTF8.GetBytes(BuildBody(model, req).ToString(Formatting.None))
             };
             spec.Headers["Authorization"] = "Key " + apiKey;
 
             HttpResult res = await http.SendAsync(spec, ct);
             JObject json = ParseOk(res, apiKey, "submit");
 
-            // Prefer response_url; fall back to building it from request_id.
             string responseUrl = json["response_url"]?.ToString();
             if (string.IsNullOrEmpty(responseUrl))
             {
                 string requestId = json["request_id"]?.ToString();
                 if (string.IsNullOrEmpty(requestId))
                     throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
-                // Queue request URLs are namespaced by owner/app without the action sub-path,
-                // so build from the base model id (not `url`, which may end in /edit).
                 responseUrl = QueueBase + model + "/requests/" + requestId;
             }
             // The response_url is provider-controlled; refuse to later attach the key to any host
             // other than the fal queue.
             ProviderHttp.RequireHost(responseUrl, QueueHost, apiKey, "fal submit response_url");
             return responseUrl;
+        }
+
+        // Duration is catalog-driven: the model's ModelEntry names the request key (seconds_total /
+        // duration) and the clamp bounds. A duration-controllable endpoint (e.g. CassetteAI Music)
+        // always sends a duration >= 1 — a prompt-only body is rejected with fal 422
+        // "duration Field required" — while a non-duration model (Lyria) or an unknown model stays
+        // prompt-only.
+        private static JObject BuildBody(string model, AudioGenRequest req)
+        {
+            var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty };
+
+            ModelEntry entry = AssetGenModelCatalog.Find(model);
+            if (entry != null && !string.IsNullOrEmpty(entry.DurationField))
+            {
+                float dur = req.Duration > 0f ? req.Duration : entry.DefaultDurationSeconds;
+                float floor = Math.Max(1f, entry.MinDurationSeconds);
+                dur = Math.Min(Math.Max(dur, floor), entry.MaxDurationSeconds);
+                // Floor (not round) so we never exceed the requested duration, then enforce >= 1.
+                int seconds = Math.Max(1, (int)Math.Floor(dur));
+                body[entry.DurationField] = seconds;
+            }
+            return body;
         }
 
         public async Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
@@ -125,32 +124,43 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     return result;
             }
 
-            // Completed: fetch the result payload and extract the first image URL.
             var resultSpec = new HttpRequestSpec { Method = "GET", Url = responseUrl };
             resultSpec.Headers["Authorization"] = "Key " + apiKey;
             HttpResult resultRes = await http.SendAsync(resultSpec, ct);
             JObject resultJson = ParseOk(resultRes, apiKey, "result");
 
-            result.Progress = 1f;
-            result.DownloadUrl = ExtractImageUrl(resultJson);
-            if (string.IsNullOrEmpty(result.DownloadUrl))
+            string audioUrl = ExtractAudioUrl(resultJson);
+            if (string.IsNullOrEmpty(audioUrl))
             {
                 result.State = ProviderPollState.Failed;
-                result.Error = "fal completed but no image URL was present in the result.";
+                result.Error = "fal completed but no audio URL was present in the result.";
+                return result;
             }
+            result.Progress = 1f;
+            result.DownloadUrl = audioUrl;
+            // CassetteAI/Lyria return mp3, Stable Audio wav — derive the ext from the result URL.
+            result.ResultExt = ExtractExt(audioUrl);
             return result;
         }
 
-        private static string ExtractImageUrl(JObject result)
+        private static string ExtractAudioUrl(JObject result)
         {
-            JToken images = result["images"];
-            if (images is JArray arr && arr.Count > 0)
+            string u = result["audio"]?["url"]?.ToString();
+            if (!string.IsNullOrEmpty(u)) return u;
+            u = result["audio_file"]?["url"]?.ToString();
+            if (!string.IsNullOrEmpty(u)) return u;
+            u = result["audio_url"]?.ToString();
+            return string.IsNullOrEmpty(u) ? null : u;
+        }
+
+        private static string ExtractExt(string url)
+        {
+            try
             {
-                string u = arr[0]?["url"]?.ToString();
-                if (!string.IsNullOrEmpty(u)) return u;
+                string ext = Path.GetExtension(new Uri(url).AbsolutePath).TrimStart('.').ToLowerInvariant();
+                return string.IsNullOrEmpty(ext) ? "wav" : ext;
             }
-            string single = result["image"]?["url"]?.ToString();
-            return string.IsNullOrEmpty(single) ? null : single;
+            catch { return "wav"; }
         }
 
         private static JObject ParseOk(HttpResult res, string apiKey, string phase)
