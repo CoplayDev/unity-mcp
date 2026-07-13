@@ -1460,8 +1460,9 @@ namespace MCPForUnity.Editor.Tools
         private static bool TryGetColliderBounds(GameObject target, out Bounds bounds)
         {
             bounds = default(Bounds);
-            var colliders = target.GetComponentsInChildren<Collider>(true);
             bool hasBounds = false;
+#if MCP_HAS_PHYSICS
+            var colliders = target.GetComponentsInChildren<Collider>(true);
             foreach (var collider in colliders)
             {
                 if (collider == null || !collider.gameObject.activeInHierarchy)
@@ -1477,7 +1478,9 @@ namespace MCPForUnity.Editor.Tools
                     bounds.Encapsulate(collider.bounds);
                 }
             }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
             var colliders2D = target.GetComponentsInChildren<Collider2D>(true);
             foreach (var collider in colliders2D)
             {
@@ -1494,6 +1497,7 @@ namespace MCPForUnity.Editor.Tools
                     bounds.Encapsulate(collider.bounds);
                 }
             }
+#endif
 
             return hasBounds;
         }

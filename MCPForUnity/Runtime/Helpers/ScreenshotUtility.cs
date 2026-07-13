@@ -76,10 +76,21 @@ namespace MCPForUnity.Runtime.Helpers
             bool ensureUniqueFileName = true,
             string folderOverride = null)
         {
+#if MCP_HAS_SCREEN_CAPTURE
             ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: true);
             // ScreenCapture.CaptureScreenshot accepts paths relative to the project root.
             ScreenCapture.CaptureScreenshot(result.ProjectRelativePath, result.SuperSize);
             return result;
+#else
+            // Screen Capture module (com.unity.modules.screencapture) not installed —
+            // fall back to camera-based capture.
+            var cam = FindAvailableCamera();
+            if (cam != null)
+                return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride);
+            throw new InvalidOperationException(
+                "Cannot capture screenshot: the Screen Capture module is not installed and no Camera was found. " +
+                "Enable it via Window > Package Manager > Built-in > Screen Capture, or add a Camera to the scene.");
+#endif
         }
 
         /// <summary>
@@ -166,7 +177,7 @@ namespace MCPForUnity.Runtime.Helpers
             return result;
         }
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR && MCP_HAS_SCREEN_CAPTURE
         // Synchronously drive a WaitForEndOfFrame ScreenshotCapturer by pumping the editor's
         // player loop. Play-mode only; EditorApplication.Step is a no-op in edit mode.
         private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
@@ -226,6 +237,7 @@ namespace MCPForUnity.Runtime.Helpers
             int imgW = 0, imgH = 0;
             try
             {
+#if MCP_HAS_SCREEN_CAPTURE
 #if UNITY_EDITOR
                 // In play mode, inline ScreenCapture reads a backbuffer before UITK has
                 // composited; route through WaitForEndOfFrame instead.
@@ -235,9 +247,10 @@ namespace MCPForUnity.Runtime.Helpers
 #else
                 tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
 #endif
+#endif
                 if (tex == null)
                 {
-                    // Fallback to camera-based if ScreenCapture fails
+                    // Fallback to camera-based if ScreenCapture fails (or module not installed)
                     var cam = FindAvailableCamera();
                     if (cam != null)
                         return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName,
@@ -751,9 +764,12 @@ namespace MCPForUnity.Runtime.Helpers
         }
     }
 
+#if MCP_HAS_SCREEN_CAPTURE
     /// <summary>
     /// Transient MonoBehaviour that yields WaitForEndOfFrame, calls
     /// ScreenCapture.CaptureScreenshotAsTexture, invokes the callback, and self-destructs.
+    /// Only compiled when the Screen Capture module is present; callers must gate their use
+    /// behind MCP_HAS_SCREEN_CAPTURE and fall back otherwise.
     /// </summary>
     public sealed class ScreenshotCapturer : MonoBehaviour
     {
@@ -779,4 +795,5 @@ namespace MCPForUnity.Runtime.Helpers
             Destroy(gameObject);
         }
     }
+#endif
 }
