@@ -75,6 +75,7 @@ const sidebars = {
         'architecture/manage-physics',
         'architecture/project-roadmap',
         'architecture/roadmap',
+        'architecture/external-analytics',
       ],
     },
     {
@@ -96,6 +97,7 @@ const sidebars = {
         'migrations/v5',
         'migrations/v6',
         'migrations/v8',
+        'migrations/v10',
       ],
     },
     'releases',

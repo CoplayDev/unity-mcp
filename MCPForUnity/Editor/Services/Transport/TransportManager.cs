@@ -16,6 +16,8 @@ namespace MCPForUnity.Editor.Services.Transport
         private TransportState _stdioState = TransportState.Disconnected("stdio");
         private Func<IMcpTransportClient> _webSocketFactory;
         private Func<IMcpTransportClient> _stdioFactory;
+        private Task<bool> _httpStartTask;
+        private Task<bool> _stdioStartTask;
 
         public TransportManager()
         {
@@ -42,7 +44,30 @@ namespace MCPForUnity.Editor.Services.Transport
             };
         }
 
-        public async Task<bool> StartAsync(TransportMode mode)
+        public Task<bool> StartAsync(TransportMode mode)
+        {
+            // Editor-main-thread only (no locking needed). Coalesce concurrent starts for the
+            // same mode: manual Connect, reload-resume, and auto-start can otherwise race, and
+            // WebSocketTransportClient.StartAsync tears down a live connection first — two
+            // interleaved starts bounce each other's session.
+            Task<bool> inFlight = mode switch
+            {
+                TransportMode.Http => _httpStartTask,
+                TransportMode.Stdio => _stdioStartTask,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
+            };
+            if (inFlight != null && !inFlight.IsCompleted)
+            {
+                return inFlight;
+            }
+
+            Task<bool> started = StartCoreAsync(mode);
+            if (mode == TransportMode.Http) _httpStartTask = started;
+            else _stdioStartTask = started;
+            return started;
+        }
+
+        private async Task<bool> StartCoreAsync(TransportMode mode)
         {
             IMcpTransportClient client = GetOrCreateClient(mode);
 

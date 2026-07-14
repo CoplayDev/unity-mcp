@@ -21,6 +21,22 @@ from services.tools.set_active_instance import set_active_instance as set_active
 from transport.models import SessionList, SessionDetails
 
 
+def _make_stateful_ctx(session_id: str) -> Mock:
+    """Build a Context shim whose set/get/delete_state share one dict.
+
+    The middleware now defers persistence to FastMCP's session-scoped state
+    store, so a useful unit-test mock must actually round-trip values rather
+    than returning fresh Mocks. This helper does that minimally.
+    """
+    state: dict[str, object] = {}
+    ctx = Mock(spec=Context)
+    ctx.session_id = session_id
+    ctx.set_state = AsyncMock(side_effect=lambda k, v: state.__setitem__(k, v))
+    ctx.get_state = AsyncMock(side_effect=lambda k: state.get(k))
+    ctx.delete_state = AsyncMock(side_effect=lambda k: state.pop(k, None))
+    return ctx
+
+
 class TestInstanceRoutingBasics:
     """Test basic middleware functionality."""
 
@@ -28,61 +44,31 @@ class TestInstanceRoutingBasics:
     async def test_middleware_stores_and_retrieves_instance(self):
         """Middleware should store and retrieve instance per session."""
         middleware = UnityInstanceMiddleware()
-        ctx = Mock(spec=Context)
-        ctx.session_id = "test-session-1"
-        ctx.client_id = "test-client-1"
+        ctx = _make_stateful_ctx("test-session-1")
 
-        # Set active instance
         await middleware.set_active_instance(ctx, "TestProject@abc123")
 
-        # Retrieve should return same instance
         assert await middleware.get_active_instance(ctx) == "TestProject@abc123"
 
     @pytest.mark.asyncio
     async def test_middleware_isolates_sessions(self):
-        """Different sessions should have independent instance selections."""
+        """Two MCP sessions must not see each other's active instance.
+
+        Regression test for #1023: the prior implementation keyed on the
+        peer-supplied client_id and collapsed multiple clients onto a shared
+        record. Each ctx in this test holds its own private state dict, so
+        leakage would surface as a cross-read.
+        """
         middleware = UnityInstanceMiddleware()
 
-        ctx1 = Mock(spec=Context)
-        ctx1.session_id = "session-1"
-        ctx1.client_id = "client-1"
+        ctx1 = _make_stateful_ctx("session-1")
+        ctx2 = _make_stateful_ctx("session-2")
 
-        ctx2 = Mock(spec=Context)
-        ctx2.session_id = "session-2"
-        ctx2.client_id = "client-2"
-
-        # Set different instances for different sessions
         await middleware.set_active_instance(ctx1, "Project1@aaa")
         await middleware.set_active_instance(ctx2, "Project2@bbb")
 
-        # Each session should retrieve its own instance
         assert await middleware.get_active_instance(ctx1) == "Project1@aaa"
         assert await middleware.get_active_instance(ctx2) == "Project2@bbb"
-
-    @pytest.mark.asyncio
-    async def test_middleware_fallback_to_client_id(self):
-        """When session_id unavailable, should use client_id."""
-        middleware = UnityInstanceMiddleware()
-
-        ctx = Mock(spec=Context)
-        ctx.session_id = None
-        ctx.client_id = "client-123"
-
-        await middleware.set_active_instance(ctx, "Project@xyz")
-        assert await middleware.get_active_instance(ctx) == "Project@xyz"
-
-    @pytest.mark.asyncio
-    async def test_middleware_fallback_to_global(self):
-        """When no session/client id, should use 'global' key."""
-        middleware = UnityInstanceMiddleware()
-
-        ctx = Mock(spec=Context)
-        ctx.session_id = None
-        ctx.client_id = None
-        ctx.get_state = AsyncMock(return_value=None)
-
-        await middleware.set_active_instance(ctx, "Project@global")
-        assert await middleware.get_active_instance(ctx) == "Project@global"
 
 
 class TestInstanceRoutingIntegration:
@@ -90,34 +76,31 @@ class TestInstanceRoutingIntegration:
 
     @pytest.mark.asyncio
     async def test_middleware_injects_state_into_context(self):
-        """Middleware on_call_tool should inject instance into ctx state."""
+        """Middleware on_call_tool should inject instance into ctx state.
+
+        After this PR the middleware writes two distinct keys: a persistence
+        key (``mcpforunity.active_instance``) when ``set_active_instance`` is
+        called, and a per-request injection key (``unity_instance``) inside
+        ``on_call_tool``. Tools downstream read ``unity_instance``.
+        """
         middleware = UnityInstanceMiddleware()
 
-        # Create mock context with state management
-        ctx = Mock(spec=Context)
-        ctx.session_id = "test-session"
-        state_storage = {}
-        ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
-        ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
+        ctx = _make_stateful_ctx("test-session")
 
-        # Create middleware context
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = ctx
 
-        # Set active instance
         await middleware.set_active_instance(ctx, "TestProject@abc123")
 
-        # Mock call_next
         async def mock_call_next(ctx):
             return {"success": True}
 
-        # Execute middleware
         await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
-        # Verify state was injected
-        ctx.set_state.assert_called_once_with(
-            "unity_instance", "TestProject@abc123")
+        # The per-request injection must have happened so tools downstream
+        # can read it; the persistence write is verified by the round-trip
+        # test in TestInstanceRoutingBasics above.
+        ctx.set_state.assert_any_call("unity_instance", "TestProject@abc123")
 
     @pytest.mark.asyncio
     async def test_get_unity_instance_from_context_checks_state(self):

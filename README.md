@@ -1,46 +1,24 @@
-<img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-header-dark.png">
+    <img alt="MCP for Unity" src="docs/images/logo-header-light.png" width="400">
+  </picture>
+</p>
 
-| [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
-|----------------------|---------------------------------|
+<div align="center">
+
+[English](README.md) <img src="docs/images/connector.svg" alt="↔" height="14"> [简体中文](docs/i18n/README-zh.md) &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; [Discord](https://discord.gg/y4p8KfzrN4) <img src="docs/images/connector.svg" alt="↔" height="14"> [Wiki](https://coplaydev.github.io/unity-mcp/)
 
 #### Proudly sponsored and maintained by [Aura](https://www.tryaura.dev/) — the AI assistant for Unreal & Unity.
-##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source MCP/AI project from the makers of MCP for Unity.
+##### And don't miss [Godot AI](https://github.com/hi-godot/godot-ai), the new open source project from the makers of MCP for Unity.
 
-[![Docs](https://img.shields.io/badge/Docs-unity--mcp-4f46e5)](https://coplaydev.github.io/unity-mcp/)
-[![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
-[![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
-[![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
-[![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
-[![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
-[![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
+</div>
 
-**Create your Unity apps with LLMs.** MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate workflows.
+<p align="center"><b>Create your Unity apps with LLMs.</b> MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and more — with your Unity Editor via <a href="https://modelcontextprotocol.io/introduction">Model Context Protocol</a>. Give your LLM the tools to manage assets, control scenes, edit scripts, run tests, and automate your game dev workflows.</p>
 
-<img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
-
----
-
-## Read the Docs
-
-### **→ [coplaydev.github.io/unity-mcp](https://coplaydev.github.io/unity-mcp/)**
-
----
-
-## Install
-
-In Unity: **Window → Package Manager → + → Add package from git URL**, paste:
-
-```text
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main
-```
-
-Beta channel uses `#beta`. Asset Store and OpenUPM paths are documented in the [Install guide](https://coplaydev.github.io/unity-mcp/getting-started/install).
-
-Then **Window → MCP for Unity → Configure All Detected Clients**. That's it — try a prompt:
-
-> Create a red, blue, and yellow cube in the current scene.
-
-Full walkthrough: [Your First Prompt](https://coplaydev.github.io/unity-mcp/getting-started/first-prompt).
+<p align="center">
+  <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
+</p>
 
 ---
 
@@ -48,16 +26,35 @@ Full walkthrough: [Your First Prompt](https://coplaydev.github.io/unity-mcp/gett
 <details>
 <summary><strong>Recent Updates</strong></summary>
 
+* **[v10.0.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.0)** (2026-06-30)
+* **[v9.7.3](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.3)** (2026-06-15)
+* **[v9.7.1](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.1)** (2026-05-24)
 * **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)** (2026-05-22)
 * **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)** (2026-04-27)
-* **[v9.6.6](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.6)** (2026-04-07)
-* **[v9.6.5](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.5)** (2026-04-03)
-* **[v9.6.4](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.4)** (2026-03-31)
 
 Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
 </details>
 <!-- recent-updates:end -->
+
+---
+
+## What it does
+
+Control the Unity Editor in natural language from any MCP client — create scenes & GameObjects, edit C# scripts, manage assets, run tests, profile, and build. 47 focused MCP tool entrypoints, any client, free & MIT.
+
+**[Browse the full tool catalog →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
+
+---
+
+## Quickstart
+
+**Requirements:** Unity **2021.3 LTS → 6.x** · Python **3.10+** (via [`uv`](https://docs.astral.sh/uv/)). Works with **any MCP client** — Claude Desktop & Code, Cursor, VS Code, Windsurf, Cline, Gemini CLI, and more.
+
+1. **Install** — Unity → Package Manager → Add from git URL:
+   `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main` &nbsp;_(pin `#v10.0.0` for this release, or `openupm add com.coplaydev.unity-mcp`)_
+2. **Configure** — `Window → MCP for Unity → Configure All Detected Clients`.
+3. **Prompt** — *"Create a cube at the origin and add a Rigidbody."* The cube appears in seconds.
 
 ---
 
@@ -76,6 +73,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Branch off `beta`, not `main`. The full 
 
 - **Multiple Unity instances** — [Multi-Instance Routing](https://coplaydev.github.io/unity-mcp/guides/multi-instance)
 - **Tool groups (vfx / animation / ui / testing / etc.)** — [Tool Groups](https://coplaydev.github.io/unity-mcp/guides/tool-groups)
+- **v10 asset generation and upgrade notes** — [v10 Migration](https://coplaydev.github.io/unity-mcp/migrations/v10)
 - **Roslyn script validation** — [Roslyn Validation](https://coplaydev.github.io/unity-mcp/guides/roslyn)
 - **Remote-hosted server with auth** — [Remote Server Auth](https://coplaydev.github.io/unity-mcp/guides/remote-server-auth)
 

@@ -186,9 +186,20 @@ namespace MCPForUnity.Runtime.Helpers
                 result = tex;
                 done = true;
             });
-            for (int i = 0; i < timeoutSteps && !done; i++)
+            // Step() pauses play mode as a side effect; restore the prior state so a screenshot
+            // doesn't leave a running game paused (an already-paused game stays paused).
+            bool wasPaused = UnityEditor.EditorApplication.isPaused;
+            try
             {
-                UnityEditor.EditorApplication.Step();
+                for (int i = 0; i < timeoutSteps && !done; i++)
+                {
+                    UnityEditor.EditorApplication.Step();
+                }
+            }
+            finally
+            {
+                if (!wasPaused)
+                    UnityEditor.EditorApplication.isPaused = false;
             }
             callerReturned = true;
             return result;

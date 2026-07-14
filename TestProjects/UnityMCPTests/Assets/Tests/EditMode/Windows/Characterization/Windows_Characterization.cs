@@ -245,7 +245,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
                 "1. Get previous and new transport values",
                 "2. Persist UseHttpTransport to EditorPrefs",
                 "3. Persist HttpTransportScope if HTTP",
-                "4. Clear resume flags (ResumeStdioAfterReload, ResumeHttpAfterReload)",
+                "4. Clear resume flags (ResumeStdioAfterReload in EditorPrefs, HTTP resume key in SessionState)",
                 "5. Update UI visibility",
                 "6. Invoke OnManualConfigUpdateRequested event",
                 "7. Invoke OnTransportChanged event",
@@ -693,6 +693,48 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
             };
 
             Assert.Pass($"Domain-wide metrics:\n{string.Join("\n", metrics)}");
+        }
+
+        #endregion
+
+        #region Section 9: McpAssetGenSection model-selection structure (reflection, no instantiation)
+
+        /// <summary>
+        /// The Asset Gen section builds per-provider model dropdowns and a fal audio row. We assert
+        /// the private builders exist and keep the three-phase lifecycle, without instantiating the
+        /// section (its ctor requires the real UXML tree) — matching this suite's reflection style.
+        /// </summary>
+        [Test]
+        public void McpAssetGenSection_HasModelDropdownAndAudioRowBuilders()
+        {
+            var type = typeof(MCPForUnity.Editor.Windows.Components.AssetGen.McpAssetGenSection);
+
+            Assert.IsNotNull(type.GetMethod("AddModelDropdown", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected a per-provider model dropdown builder");
+            Assert.IsNotNull(type.GetMethod("AddAudioRow", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected a fal audio row builder");
+
+            // AddProviderRow takes (parent, id, displayName, kind) so each row knows its catalog kind.
+            var addRow = type.GetMethod("AddProviderRow", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(addRow);
+            Assert.AreEqual(4, addRow.GetParameters().Length, "AddProviderRow should take (parent, id, displayName, kind)");
+
+            foreach (string phase in new[] { "CacheUIElements", "InitializeUI", "RegisterCallbacks" })
+                Assert.IsNotNull(type.GetMethod(phase, BindingFlags.NonPublic | BindingFlags.Instance),
+                    $"three-phase lifecycle method {phase} should remain");
+        }
+
+        [Test]
+        public void McpAssetGenSection_HasRefreshHandler_AndCachedRefreshElements()
+        {
+            var type = typeof(MCPForUnity.Editor.Windows.Components.AssetGen.McpAssetGenSection);
+
+            Assert.IsNotNull(type.GetMethod("OnRefreshClicked", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected a Refresh click handler");
+            Assert.IsNotNull(type.GetField("refreshButton", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected the Refresh button to be cached (three-phase CacheUIElements)");
+            Assert.IsNotNull(type.GetField("refreshStatusLabel", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected the Refresh status label to be cached");
         }
 
         #endregion
