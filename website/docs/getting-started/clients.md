@@ -26,6 +26,7 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **Gemini CLI** | HTTP | yes | yes | yes | Auto-connects. |
 | **OpenClaw** | HTTP / stdio | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport choice. |
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
+| **Droid** | HTTP / stdio | yes | yes | yes | Factory's agent. Config written to `~/.factory/mcp.json`. Follows MCP for Unity's transport choice. |
 
 ## How to pick
 

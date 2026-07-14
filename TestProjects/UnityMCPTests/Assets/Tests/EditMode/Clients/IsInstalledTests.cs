@@ -41,5 +41,14 @@ namespace MCPForUnityTests.Editor.Clients
             bool expected = parent != null && Directory.Exists(parent);
             Assert.AreEqual(expected, claude.IsInstalled);
         }
+
+        [Test]
+        public void Droid_Installed_WhenFactoryDirExists()
+        {
+            var droid = new DroidConfigurator();
+            string parent = Path.GetDirectoryName(droid.GetConfigPath());
+            bool expected = parent != null && Directory.Exists(parent);
+            Assert.AreEqual(expected, droid.IsInstalled);
+        }
     }
 }
