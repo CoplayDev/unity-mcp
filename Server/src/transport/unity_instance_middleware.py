@@ -212,6 +212,35 @@ class UnityInstanceMiddleware(Middleware):
             "Read mcpforunity://instances for current sessions."
         )
 
+    async def _drop_stale_pin(self, ctx, active_instance: str) -> str | None:
+        """
+        Discard a pinned instance that no plugin is registered under.
+
+        A pin outlives the editor it names. Left in place it also suppresses
+        auto-select, so every later call fails with no_unity_session and neither
+        waiting nor relaunching the editor recovers: the editor re-registers
+        under its own name, which is not the name the pin holds.
+
+        An empty registry means a domain reload is in flight and the pin is
+        still good, so only drop it while some other instance is registered.
+        """
+        from transport.unity_transport import _is_http_transport
+        if not (_is_http_transport() and PluginHub.is_configured()):
+            return active_instance
+
+        instances = await self._discover_instances(ctx)
+        ids = [inst.id for inst in instances if getattr(inst, "id", None)]
+        if not ids or active_instance in ids:
+            return active_instance
+
+        _diag.warning(
+            "Active instance %s is no longer registered; dropping the stale pin. Registered: %s",
+            active_instance,
+            ", ".join(ids),
+        )
+        await self.clear_active_instance(ctx)
+        return None
+
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
         Auto-select the sole Unity instance when no active instance is set.
@@ -351,6 +380,8 @@ class UnityInstanceMiddleware(Middleware):
 
         if not active_instance:
             active_instance = await self.get_active_instance(ctx)
+            if active_instance:
+                active_instance = await self._drop_stale_pin(ctx, active_instance)
         if not active_instance:
             active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:
