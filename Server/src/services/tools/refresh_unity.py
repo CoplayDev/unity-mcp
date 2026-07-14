@@ -13,6 +13,11 @@ from mcp.types import ToolAnnotations
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.editor_operation_lease import (
+    operation_busy_response,
+    operation_owner_from_context,
+    try_acquire_editor_operation_lease,
+)
 import transport.unity_transport as unity_transport
 import transport.legacy.unity_connection as _legacy_conn
 from transport.legacy.unity_connection import _extract_response_reason
@@ -183,7 +188,29 @@ async def refresh_unity(
                               "If true, wait until editor_state.advice.ready_for_tools is true"] = True,
 ) -> MCPResponse | dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
+    lease, busy_lease = try_acquire_editor_operation_lease(
+        unity_instance,
+        "refresh_unity",
+        owner=operation_owner_from_context(ctx),
+    )
+    if busy_lease is not None:
+        return operation_busy_response(busy_lease)
 
+    try:
+        return await _refresh_unity_locked(ctx, unity_instance, mode, scope, compile, wait_for_ready)
+    finally:
+        if lease is not None:
+            lease.release()
+
+
+async def _refresh_unity_locked(
+    ctx: Context,
+    unity_instance: str | None,
+    mode: str,
+    scope: str,
+    compile: str,
+    wait_for_ready: bool,
+) -> MCPResponse | dict[str, Any]:
     params: dict[str, Any] = {
         "mode": mode,
         "scope": scope,
