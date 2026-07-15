@@ -80,17 +80,40 @@ async def manage_asset(
             # Handle case where path is not a string despite type annotation
             raw_path = ""
 
+        def _looks_like_asset_folder_scope(value: str) -> bool:
+            normalized = value.replace("\\", "/").strip("/")
+            return (
+                normalized == "Assets"
+                or normalized.startswith("Assets/")
+                or normalized == "Packages"
+                or normalized.startswith("Packages/")
+            )
+
         # If the caller put an AssetDatabase query into `path`, treat it as `search_pattern`.
         if (not search_pattern) and raw_path.startswith("t:"):
             search_pattern = raw_path
             path = "Assets"
             await ctx.info("manage_asset(search): normalized query from `path` into `search_pattern` and set path='Assets'")
+        elif raw_path and not _looks_like_asset_folder_scope(raw_path):
+            if not search_pattern:
+                search_pattern = raw_path
+            path = "Assets"
+            await ctx.info("manage_asset(search): normalized non-folder `path` into search criteria and set path='Assets'")
 
         # If the caller used `asset_type` to mean a search filter, map it to filter_type.
         # (In Unity, filterType becomes `t:<filterType>`.)
         if (not filter_type) and asset_type and isinstance(asset_type, str):
             filter_type = asset_type
             await ctx.info("manage_asset(search): mapped `asset_type` into `filter_type` for safer server-side filtering")
+
+        if not any((raw_path, search_pattern, filter_type)):
+            return {
+                "success": False,
+                "message": (
+                    "manage_asset search requires a folder scope in `path` or at least one search criterion "
+                    "such as `search_pattern` or `filter_type`."
+                ),
+            }
 
     # Prepare parameters for the C# handler
     params_dict = {
