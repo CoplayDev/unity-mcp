@@ -436,138 +436,44 @@ namespace MCPForUnity.Editor.Clients
     {
         public CodexMcpConfigurator(McpClient client) : base(client) { }
 
-        public override string GetConfigPath() => CurrentOsPath();
+        public override string GetConfigPath() => GetPreferredWriteConfigPath();
 
-        public override bool IsInstalled => ParentDirectoryExists(GetConfigPath());
+        public override bool IsInstalled
+        {
+            get
+            {
+                foreach (var path in GetCandidateConfigPaths())
+                {
+                    if (ParentDirectoryExists(path)) return true;
+                }
+                return false;
+            }
+        }
 
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
             try
             {
-                string path = GetConfigPath();
-                if (!File.Exists(path))
+                bool sawConfigFile = false;
+                foreach (string path in GetCandidateConfigPaths())
                 {
-                    client.SetStatus(McpStatus.NotConfigured);
-                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
-                    return client.status;
+                    if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    sawConfigFile = true;
+                    string toml = File.ReadAllText(path);
+                    if (!CodexConfigHelper.TryParseCodexServer(toml, out _, out var args, out var url))
+                    {
+                        continue;
+                    }
+
+                    return CheckParsedCodexServer(path, args, url, attemptAutoRewrite);
                 }
 
-                string toml = File.ReadAllText(path);
-                if (CodexConfigHelper.TryParseCodexServer(toml, out _, out var args, out var url))
-                {
-                    // Determine and set the configured transport type
-                    if (!string.IsNullOrEmpty(url))
-                    {
-                        // Distinguish HTTP Local from HTTP Remote
-                        string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
-                        if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(url, remoteRpcUrl))
-                        {
-                            client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
-                        }
-                        else
-                        {
-                            client.configuredTransport = Models.ConfiguredTransport.Http;
-                        }
-                    }
-                    else if (args != null && args.Length > 0)
-                    {
-                        client.configuredTransport = Models.ConfiguredTransport.Stdio;
-                    }
-                    else
-                    {
-                        client.configuredTransport = Models.ConfiguredTransport.Unknown;
-                    }
-
-                    bool matches = false;
-                    bool hasVersionMismatch = false;
-                    string mismatchReason = null;
-
-                    if (!string.IsNullOrEmpty(url))
-                    {
-                        // Match against the active scope's URL
-                        matches = UrlsEqual(url, HttpEndpointUtility.GetMcpRpcUrl());
-                    }
-                    else if (args != null && args.Length > 0)
-                    {
-                        // Use beta-aware expected package source for comparison
-                        string expected = GetExpectedPackageSourceForValidation();
-                        string configured = McpConfigurationHelper.ExtractUvxUrl(args);
-
-                        if (!string.IsNullOrEmpty(configured) && !string.IsNullOrEmpty(expected))
-                        {
-                            if (McpConfigurationHelper.PathsEqual(configured, expected))
-                            {
-                                matches = true;
-                            }
-                            else
-                            {
-                                // Check for beta/stable mismatch
-                                bool configuredIsBeta = IsBetaPackageSource(configured);
-                                bool expectedIsBeta = IsBetaPackageSource(expected);
-
-                                if (configuredIsBeta && !expectedIsBeta)
-                                {
-                                    hasVersionMismatch = true;
-                                    mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
-                                }
-                                else if (!configuredIsBeta && expectedIsBeta)
-                                {
-                                    hasVersionMismatch = true;
-                                    mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
-                                }
-                                else
-                                {
-                                    hasVersionMismatch = true;
-                                    mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
-                                }
-                            }
-                        }
-                    }
-
-                    if (matches)
-                    {
-                        client.SetStatus(McpStatus.Configured);
-                        return client.status;
-                    }
-
-                    if (hasVersionMismatch)
-                    {
-                        if (attemptAutoRewrite)
-                        {
-                            string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
-                            if (result == "Configured successfully")
-                            {
-                                client.SetStatus(McpStatus.Configured);
-                                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
-                                return client.status;
-                            }
-                        }
-                        client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
-                        return client.status;
-                    }
-                }
-                else
-                {
-                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
-                }
-
-                if (attemptAutoRewrite)
-                {
-                    string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
-                    if (result == "Configured successfully")
-                    {
-                        client.SetStatus(McpStatus.Configured);
-                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
-                    }
-                    else
-                    {
-                        client.SetStatus(McpStatus.IncorrectPath);
-                    }
-                }
-                else
-                {
-                    client.SetStatus(McpStatus.IncorrectPath);
-                }
+                client.SetStatus(sawConfigFile ? McpStatus.MissingConfig : McpStatus.NotConfigured);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
             }
             catch (Exception ex)
             {
@@ -578,9 +484,112 @@ namespace MCPForUnity.Editor.Clients
             return client.status;
         }
 
+        private McpStatus CheckParsedCodexServer(string path, string[] args, string url, bool attemptAutoRewrite)
+        {
+            if (!string.IsNullOrEmpty(url))
+            {
+                string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                client.configuredTransport =
+                    !string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(url, remoteRpcUrl)
+                        ? Models.ConfiguredTransport.HttpRemote
+                        : Models.ConfiguredTransport.Http;
+            }
+            else if (args != null && args.Length > 0)
+            {
+                client.configuredTransport = Models.ConfiguredTransport.Stdio;
+            }
+            else
+            {
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
+            }
+
+            bool matches = false;
+            bool hasVersionMismatch = false;
+            string mismatchReason = null;
+
+            if (!string.IsNullOrEmpty(url))
+            {
+                matches = UrlsEqual(url, HttpEndpointUtility.GetMcpRpcUrl());
+            }
+            else if (args != null && args.Length > 0)
+            {
+                string expected = GetExpectedPackageSourceForValidation();
+                string configured = McpConfigurationHelper.ExtractUvxUrl(args);
+
+                if (!string.IsNullOrEmpty(configured) && !string.IsNullOrEmpty(expected))
+                {
+                    if (McpConfigurationHelper.PathsEqual(configured, expected))
+                    {
+                        matches = true;
+                    }
+                    else
+                    {
+                        bool configuredIsBeta = IsBetaPackageSource(configured);
+                        bool expectedIsBeta = IsBetaPackageSource(expected);
+
+                        hasVersionMismatch = true;
+                        if (configuredIsBeta && !expectedIsBeta)
+                        {
+                            mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
+                        }
+                        else if (!configuredIsBeta && expectedIsBeta)
+                        {
+                            mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
+                        }
+                        else
+                        {
+                            mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
+                        }
+                    }
+                }
+            }
+
+            if (matches)
+            {
+                client.SetStatus(McpStatus.Configured);
+                return client.status;
+            }
+
+            if (hasVersionMismatch)
+            {
+                if (attemptAutoRewrite)
+                {
+                    string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
+                    if (result == "Configured successfully")
+                    {
+                        client.SetStatus(McpStatus.Configured);
+                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                        return client.status;
+                    }
+                }
+                client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
+                return client.status;
+            }
+
+            if (attemptAutoRewrite)
+            {
+                string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
+                if (result == "Configured successfully")
+                {
+                    client.SetStatus(McpStatus.Configured);
+                    client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                }
+                else
+                {
+                    client.SetStatus(McpStatus.IncorrectPath);
+                }
+            }
+            else
+            {
+                client.SetStatus(McpStatus.IncorrectPath);
+            }
+
+            return client.status;
+        }
+
         public override void Configure()
         {
-            string path = GetConfigPath();
+            string path = GetPreferredWriteConfigPath();
             McpConfigurationHelper.EnsureConfigDirectoryExists(path);
             string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
             if (result == "Configured successfully")
@@ -591,6 +600,34 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 throw new InvalidOperationException(result);
+            }
+        }
+
+        public override void Unregister()
+        {
+            try
+            {
+                foreach (string path in GetCandidateConfigPaths())
+                {
+                    if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    string toml = File.ReadAllText(path);
+                    string updatedToml = CodexConfigHelper.RemoveCodexServerBlock(toml, out bool removed);
+                    if (removed)
+                    {
+                        File.WriteAllText(path, updatedToml);
+                    }
+                }
+
+                client.SetStatus(McpStatus.NotConfigured);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to unregister: {ex.Message}", ex);
             }
         }
 
@@ -613,6 +650,55 @@ namespace MCPForUnity.Editor.Clients
             "Paste the TOML",
             "Save and restart Codex"
         };
+
+        protected virtual string GetProjectConfigPath()
+        {
+            string projectDir = GetClientProjectDir();
+            return string.IsNullOrEmpty(projectDir)
+                ? null
+                : Path.Combine(projectDir, ".codex", "config.toml");
+        }
+
+        private string GetUserConfigPath() => CurrentOsPath();
+
+        private string GetPreferredWriteConfigPath()
+        {
+            string projectPath = GetProjectConfigPath();
+            return string.IsNullOrEmpty(projectPath) ? GetUserConfigPath() : projectPath;
+        }
+
+        private IEnumerable<string> GetCandidateConfigPaths()
+        {
+            string projectPath = GetProjectConfigPath();
+            string userPath = GetUserConfigPath();
+
+            if (!string.IsNullOrEmpty(projectPath)) yield return projectPath;
+            if (!string.IsNullOrEmpty(userPath) && !PathsEqual(projectPath, userPath)) yield return userPath;
+        }
+
+        private static bool PathsEqual(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            try
+            {
+                return string.Equals(
+                    Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private static string GetClientProjectDir()
+        {
+            string overrideDir = EditorPrefs.GetString(EditorPrefKeys.ClientProjectDirOverride, string.Empty);
+            if (!string.IsNullOrEmpty(overrideDir) && Directory.Exists(overrideDir))
+                return overrideDir;
+            return Path.GetDirectoryName(Application.dataPath);
+        }
     }
 
     /// <summary>CLI-based configurator (Claude Code).</summary>
