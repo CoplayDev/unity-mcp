@@ -294,32 +294,58 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
 
+                // Compile to a controlled DLL path instead of in-memory. mcs prints a stray BOM line on
+                // stdout that Mono's CodeDom can't parse, so it fabricates a bogus error (no error number,
+                // text is just the BOM) and refuses to surface the assembly — even though mcs exits 0 and
+                // wrote the DLL. We skip that bogus error and Assembly.Load the produced DLL ourselves.
+                string outputAssemblyPath = Path.Combine(Path.GetTempPath(), $"mcp-codedom-{Guid.NewGuid():N}.dll");
                 using (var provider = new CSharpCodeProvider())
                 {
                     var parameters = new CompilerParameters
                     {
-                        GenerateInMemory = true,
+                        GenerateInMemory = false,
+                        OutputAssembly = outputAssemblyPath,
                         GenerateExecutable = false,
                         TreatWarningsAsErrors = false,
                         CompilerOptions = "@\"" + responseFilePath + "\"",
                     };
 
-                    var results = provider.CompileAssemblyFromSource(parameters, source);
-
-                    if (results.Errors.HasErrors)
+                    try
                     {
+                        var results = provider.CompileAssemblyFromSource(parameters, source);
+
+                        bool hasRealErrors = false;
                         foreach (CompilerError error in results.Errors)
                         {
-                            if (!error.IsWarning)
-                            {
-                                int userLine = Math.Max(1, error.Line - WrapperLineOffset);
-                                errors.Add($"Line {userLine}: {error.ErrorText}");
-                            }
-                        }
-                        return null;
-                    }
+                            if (error.IsWarning)
+                                continue;
 
-                    return results.CompiledAssembly;
+                            // The bogus BOM "error": no error number, text is just the BOM/whitespace.
+                            string text = error.ErrorText?.Trim('﻿', ' ', '\t', '\r', '\n');
+                            if (string.IsNullOrEmpty(error.ErrorNumber) && string.IsNullOrEmpty(text))
+                                continue;
+
+                            hasRealErrors = true;
+                            int userLine = Math.Max(1, error.Line - WrapperLineOffset);
+                            errors.Add($"Line {userLine}: {error.ErrorText}");
+                        }
+
+                        if (hasRealErrors)
+                            return null;
+
+                        if (!File.Exists(outputAssemblyPath))
+                        {
+                            errors.Add("CodeDom reported success but produced no assembly.");
+                            return null;
+                        }
+
+                        return Assembly.Load(File.ReadAllBytes(outputAssemblyPath));
+                    }
+                    finally
+                    {
+                        try { if (File.Exists(outputAssemblyPath)) File.Delete(outputAssemblyPath); }
+                        catch { /* best effort */ }
+                    }
                 }
             }
             finally
