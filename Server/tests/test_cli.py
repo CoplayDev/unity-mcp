@@ -470,10 +470,46 @@ class TestCameraCommands:
             ])
             assert result.exit_code == 0
             mock_run.assert_called_once()
-            params = mock_run.call_args[0][2]
+            command_type, params, _config = mock_run.call_args[0]
+            assert command_type == "manage_camera"
             assert params["captureSource"] == "scene_view"
             assert params["viewTarget"] == "Canvas"
             assert params["includeImage"] is True
+
+    def test_camera_pick(self, runner, mock_unity_response):
+        view_json = (
+            '{"captureSource":"scene_view","position":[0,1,-10],'
+            '"rotation":[0,0,0],"projection":"perspective",'
+            '"fieldOfView":60,"nearClipPlane":0.3,"farClipPlane":1000}'
+        )
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "camera", "pick",
+                "--x", "310",
+                "--y", "180",
+                "--image-width", "640",
+                "--image-height", "360",
+                "--view-json", view_json,
+                "--dimension", "3d",
+                "--scale-x", "2",
+                "--layer-mask", "Default",
+                "--max-distance", "100",
+                "--query-trigger-interaction", "Ignore",
+            ])
+
+            assert result.exit_code == 0
+            command_type, params, _config = mock_run.call_args[0]
+            assert command_type == "pick_gameobject_from_image"
+            assert params["imageX"] == 310
+            assert params["imageY"] == 180
+            assert params["imageWidth"] == 640
+            assert params["imageHeight"] == 360
+            assert params["pickView"]["captureSource"] == "scene_view"
+            assert params["dimension"] == "3d"
+            assert params["scaleX"] == 2
+            assert params["layerMask"] == "Default"
+            assert params["maxDistance"] == 100
+            assert params["queryTriggerInteraction"] == "Ignore"
 
 
 

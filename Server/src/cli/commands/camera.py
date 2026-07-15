@@ -51,7 +51,7 @@ def ping():
         unity-mcp camera ping
     """
     config = get_config()
-    result = run_command(config, "manage_camera", {"action": "ping"})
+    result = run_command("manage_camera", {"action": "ping"}, config)
     format_output(result, config)
 
 
@@ -65,7 +65,7 @@ def list_cameras():
         unity-mcp camera list
     """
     config = get_config()
-    result = run_command(config, "manage_camera", {"action": "list_cameras"})
+    result = run_command("manage_camera", {"action": "list_cameras"}, config)
     format_output(result, config)
 
 
@@ -79,7 +79,7 @@ def brain_status():
         unity-mcp camera brain-status
     """
     config = get_config()
-    result = run_command(config, "manage_camera", {"action": "get_brain_status"})
+    result = run_command("manage_camera", {"action": "get_brain_status"}, config)
     format_output(result, config)
 
 
@@ -125,7 +125,7 @@ def create(name, preset, follow, look_at, priority, fov):
     if props:
         params["properties"] = props
 
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -155,7 +155,7 @@ def ensure_brain(camera_ref, blend_style, blend_duration):
     if props:
         params["properties"] = props
 
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -189,7 +189,7 @@ def set_target(target, search_method, follow, look_at):
         "searchMethod": search_method,
         "properties": props if props else None,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -228,7 +228,7 @@ def set_lens(target, search_method, fov, near, far, ortho_size, dutch):
         "searchMethod": search_method,
         "properties": props if props else None,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -251,7 +251,7 @@ def set_priority(target, search_method, priority):
         "searchMethod": search_method,
         "properties": {"priority": priority},
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -286,7 +286,7 @@ def set_body(target, search_method, body_type, props):
         "searchMethod": search_method,
         "properties": properties if properties else None,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -316,7 +316,7 @@ def set_aim(target, search_method, aim_type, props):
         "searchMethod": search_method,
         "properties": properties if properties else None,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -346,7 +346,7 @@ def set_noise(target, search_method, amplitude, frequency):
         "searchMethod": search_method,
         "properties": props if props else None,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -379,7 +379,7 @@ def add_extension(target, extension_type, search_method, props):
         "searchMethod": search_method,
         "properties": properties,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -402,7 +402,7 @@ def remove_extension(target, extension_type, search_method):
         "searchMethod": search_method,
         "properties": {"extensionType": extension_type},
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -432,7 +432,7 @@ def set_blend(style, duration):
     if props:
         params["properties"] = props
 
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -453,7 +453,7 @@ def force_camera(target, search_method):
         "target": target,
         "searchMethod": search_method,
     })
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -467,7 +467,7 @@ def release_override():
         unity-mcp camera release
     """
     config = get_config()
-    result = run_command(config, "manage_camera", {"action": "release_override"})
+    result = run_command("manage_camera", {"action": "release_override"}, config)
     format_output(result, config)
 
 
@@ -523,7 +523,7 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
         params["viewTarget"] = view_target
     if output_folder:
         params["outputFolder"] = output_folder
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
     format_output(result, config)
 
 
@@ -550,5 +550,97 @@ def screenshot_multiview(max_resolution, view_target, output_folder):
         params["viewTarget"] = view_target
     if output_folder:
         params["outputFolder"] = output_folder
-    result = run_command(config, "manage_camera", params)
+    result = run_command("manage_camera", params, config)
+    format_output(result, config)
+
+
+@camera.command("pick")
+@click.option("--x", "image_x", type=float, required=True,
+              help="X coordinate in the inspected screenshot image (top-left origin).")
+@click.option("--y", "image_y", type=float, required=True,
+              help="Y coordinate in the inspected screenshot image (top-left origin).")
+@click.option("--image-width", type=int, required=True, help="Width of the inspected image in pixels.")
+@click.option("--image-height", type=int, required=True, help="Height of the inspected image in pixels.")
+@click.option("--camera-ref", default=None,
+              help="Camera name/path/ID. Use only when the camera is unchanged since capture.")
+@click.option("--view-json", default=None,
+              help="pickView JSON object returned by a supported screenshot response.")
+@click.option("--dimension", default="3d", type=click.Choice(["3d", "2d"], case_sensitive=False),
+              help="Physics dimension to query.")
+@click.option("--scale-x", type=float, default=None,
+              help="Scale from inspected image X pixels back to captured Unity viewport pixels.")
+@click.option("--scale-y", type=float, default=None,
+              help="Scale from inspected image Y pixels back to captured Unity viewport pixels. Defaults to scale-x.")
+@click.option("--viewport-width", type=int, default=None,
+              help="Original captured Unity viewport width. Use pickView.viewportWidth when present.")
+@click.option("--viewport-height", type=int, default=None,
+              help="Original captured Unity viewport height. Use pickView.viewportHeight when present.")
+@click.option("--layer-mask", default=None,
+              help="Layer mask as integer mask or layer name(s).")
+@click.option("--max-distance", type=float, default=None, help="Maximum ray distance.")
+@click.option("--query-trigger-interaction", default=None,
+              type=click.Choice(["UseGlobal", "Ignore", "Collide"], case_sensitive=False),
+              help="3D trigger query policy.")
+@handle_unity_errors
+def pick(
+    image_x,
+    image_y,
+    image_width,
+    image_height,
+    camera_ref,
+    view_json,
+    dimension,
+    scale_x,
+    scale_y,
+    viewport_width,
+    viewport_height,
+    layer_mask,
+    max_distance,
+    query_trigger_interaction,
+):
+    """Pick the GameObject at a Unity screenshot coordinate.
+
+    This is for Unity screenshots only. Prefer --view-json with the pickView
+    returned by camera screenshots. --camera-ref is valid only when that camera
+    has not moved or changed projection since the screenshot.
+
+    Scene View pickView screenshots first use Unity Editor Scene View picking,
+    then an Editor mesh-intersection fallback, which can hit visible
+    MeshRenderer/SkinnedMeshRenderer objects without Colliders. Other capture
+    modes use physics ray queries and require Collider/Collider2D.
+
+    \b
+    Examples:
+        unity-mcp camera screenshot --camera-ref MainCamera --include-image
+        unity-mcp camera pick --x 310 --y 180 --image-width 640 --image-height 360 --view-json '{"position":[0,1,-10],"rotation":[0,0,0],"projection":"perspective","fieldOfView":60,"nearClipPlane":0.3,"farClipPlane":1000,"aspect":1.777}'
+        unity-mcp camera pick --x 310 --y 180 --image-width 640 --image-height 360 --camera-ref MainCamera --dimension 3d
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "imageX": image_x,
+        "imageY": image_y,
+        "imageWidth": image_width,
+        "imageHeight": image_height,
+        "dimension": dimension.lower(),
+    }
+    if camera_ref:
+        params["camera"] = camera_ref
+    if view_json:
+        params["pickView"] = parse_json_dict_or_exit(view_json)
+    if scale_x is not None:
+        params["scaleX"] = scale_x
+    if scale_y is not None:
+        params["scaleY"] = scale_y
+    if viewport_width is not None:
+        params["viewportWidth"] = viewport_width
+    if viewport_height is not None:
+        params["viewportHeight"] = viewport_height
+    if layer_mask:
+        params["layerMask"] = layer_mask
+    if max_distance is not None:
+        params["maxDistance"] = max_distance
+    if query_trigger_interaction:
+        params["queryTriggerInteraction"] = query_trigger_interaction
+
+    result = run_command("pick_gameobject_from_image", params, config)
     format_output(result, config)
