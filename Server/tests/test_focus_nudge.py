@@ -10,7 +10,39 @@ from utils.focus_nudge import (
     reset_nudge_backoff,
     nudge_unity_focus,
     _is_available,
+    _find_unity_pid_by_project_path,
 )
+
+
+class TestFindUnityPidByProjectPath:
+    """Tests for matching Unity's macOS command-line project argument."""
+
+    @pytest.mark.parametrize("option", ["-projectPath", "-projectpath"])
+    def test_accepts_project_path_option_case(self, option):
+        process_list = (
+            "user 44915 0.0 0.0 0 0 ?? S 0:00.00 "
+            "/Applications/Unity/Hub/Editor/6000.0.0f1/Unity.app/Contents/MacOS/Unity "
+            f"{option} /Users/user/Projects/MyGame"
+        )
+        with patch("utils.focus_nudge.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = process_list
+
+            assert _find_unity_pid_by_project_path(
+                "/Users/user/Projects/MyGame"
+            ) == 44915
+
+    def test_matches_project_name_with_unity_hub_option(self):
+        process_list = (
+            "user 7331 0.0 0.0 0 0 ?? S 0:00.00 "
+            "/Applications/Unity/Unity.app/Contents/MacOS/Unity "
+            "-projectPath /Users/user/Projects/MyGame"
+        )
+        with patch("utils.focus_nudge.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = process_list
+
+            assert _find_unity_pid_by_project_path("MyGame") == 7331
 
 
 class TestShouldNudge:

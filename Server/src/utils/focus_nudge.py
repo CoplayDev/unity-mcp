@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import time
@@ -199,29 +200,29 @@ def _find_unity_pid_by_project_path(project_path: str) -> int | None:
         # Determine if project_path is a full path or just a name
         is_full_path = "/" in project_path or "\\" in project_path
 
-        # Look for Unity.app processes with matching -projectpath
+        # Unity Hub emits -projectPath while manually launched editors may use
+        # -projectpath. Treat the option name case-insensitively.
         for line in result.stdout.splitlines():
             if "Unity.app/Contents/MacOS/Unity" not in line:
                 continue
 
-            # Check for -projectpath argument
-            if "-projectpath" not in line:
+            project_arg = re.search(r"-projectpath\s+(\S+)", line, re.IGNORECASE)
+            if project_arg is None:
                 continue
+            candidate_path = project_arg.group(1)
 
             if is_full_path:
                 # Exact match for full path
-                if f"-projectpath {project_path}" not in line:
+                if candidate_path != project_path:
                     continue
             else:
                 # Match if path ends with project name (e.g., ".../UnityMCPTests")
-                if "-projectpath" in line:
-                    # Extract the path after -projectpath
-                    try:
-                        parts = line.split("-projectpath", 1)[1].split()[0]
-                        if not parts.endswith(f"/{project_path}") and not parts.endswith(f"\\{project_path}") and parts != project_path:
-                            continue
-                    except (IndexError, ValueError):
-                        continue
+                if (
+                    not candidate_path.endswith(f"/{project_path}")
+                    and not candidate_path.endswith(f"\\{project_path}")
+                    and candidate_path != project_path
+                ):
+                    continue
 
             # Extract PID (second column in ps aux output)
             parts = line.split()
