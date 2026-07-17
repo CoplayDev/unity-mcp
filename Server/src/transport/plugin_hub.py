@@ -109,7 +109,7 @@ class InstanceSelectionRequiredError(RuntimeError):
         self.available_instances = available_instances or []
         text = message or self._SELECTION_REQUIRED
         if self.available_instances:
-            text = f"{text} Available instances: {self.available_instances}."
+            text = f"{text} Available instances: {', '.join(self.available_instances)}."
         super().__init__(text)
 
 

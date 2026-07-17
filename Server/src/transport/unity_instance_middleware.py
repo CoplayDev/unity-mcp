@@ -126,10 +126,15 @@ class UnityInstanceMiddleware(Middleware):
         """Derive a stable key for the calling session's client-scoped caches.
 
         Active-instance selection is persisted via FastMCP session state (see
-        ``set_active_instance``); this key is only for caches that are legitimately
-        per-client, such as the advertised MCP roots. Prioritizes ``client_id``,
-        falls back to ``user:<user_id>`` in remote-hosted mode, then ``global``.
+        ``set_active_instance``); this key is only for caches keyed to the calling
+        session, such as the advertised MCP roots. Prioritizes ``session_id`` so
+        two MCP sessions do not share a roots cache, falls back to ``client_id``,
+        then ``user:<user_id>`` in remote-hosted mode, then ``global``.
         """
+        session_id = getattr(ctx, "session_id", None)
+        if isinstance(session_id, str) and session_id:
+            return session_id
+
         client_id = getattr(ctx, "client_id", None)
         if isinstance(client_id, str) and client_id:
             return client_id
