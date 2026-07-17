@@ -75,5 +75,42 @@ namespace MCPForUnityTests.Editor.Tools
             }
             Assert.IsTrue(found, $"The unique log message '{uniqueMessage}' was not found in retrieved logs.");
         }
+
+        [Test]
+        public void HandleCommand_Get_PreservesMultilineMessageBody()
+        {
+            string id = Guid.NewGuid().ToString();
+            string firstLine = $"First line {id}";
+            string secondLine = $"Second line {id}";
+            Debug.Log($"{firstLine}\n\n{secondLine}");
+
+            var paramsObj = new JObject
+            {
+                ["action"] = "get",
+                ["types"] = new JArray { "error", "warning", "log" },
+                ["format"] = "detailed",
+                ["count"] = 1000
+            };
+
+            var result = ToJObject(ReadConsole.HandleCommand(paramsObj));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JArray;
+            Assert.IsNotNull(data, "Data array should not be null.");
+
+            string message = null;
+            foreach (var entry in data)
+            {
+                string candidate = entry["message"]?.ToString();
+                if (candidate != null && candidate.Contains(firstLine))
+                {
+                    message = candidate;
+                    break;
+                }
+            }
+
+            Assert.IsNotNull(message, "Multi-line log entry was not found.");
+            StringAssert.Contains($"{firstLine}\n\n{secondLine}", message);
+            StringAssert.DoesNotContain("UnityEngine.Debug", message);
+        }
     }
 }

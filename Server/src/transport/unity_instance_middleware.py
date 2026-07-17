@@ -80,9 +80,11 @@ class UnityInstanceMiddleware(Middleware):
     for all tool and resource calls.
     """
 
+    # Key used in FastMCP's session-scoped state store for the active instance.
+    _ACTIVE_INSTANCE_STATE_KEY = "mcpforunity.active_instance"
+
     def __init__(self):
         super().__init__()
-        self._active_by_key: dict[str, str] = {}
         self._root_dirs_by_key: dict[str, list[str]] = {}
         self._root_dir_tasks_by_key: dict[str, asyncio.Task] = {}
         self._lock = RLock()
@@ -95,43 +97,48 @@ class UnityInstanceMiddleware(Middleware):
         self._tool_visibility_refresh_interval_seconds = 0.5
         self._has_logged_empty_registry_warning = False
 
-    async def get_session_key(self, ctx) -> str:
-        """
-        Derive a stable key for the calling session.
+    async def set_active_instance(self, ctx, instance_id: str) -> None:
+        """Store the active instance for this MCP session.
 
-        Prioritizes client_id for stability.
-        In remote-hosted mode, falls back to user_id for session isolation.
-        Otherwise falls back to 'global' (assuming single-user local mode).
+        Persisted via FastMCP's session-scoped state store, which keys by
+        ``ctx.session_id`` (the MCP-Session-Id header on HTTP, a per-subprocess
+        UUID on stdio). Two MCP sessions cannot share state — see #1023 for the
+        bug this replaces, which keyed on the peer-supplied ``client_id`` and
+        collapsed multiple clients onto the same record.
+        """
+        await ctx.set_state(self._ACTIVE_INSTANCE_STATE_KEY, instance_id)
+
+    async def get_active_instance(self, ctx) -> str | None:
+        """Retrieve the active instance for this MCP session."""
+        return await ctx.get_state(self._ACTIVE_INSTANCE_STATE_KEY)
+
+    async def clear_active_instance(self, ctx) -> None:
+        """Clear the stored instance for this MCP session.
+
+        Overwrites with None rather than calling ``delete_state``: the read
+        path already treats None as "no active instance", and this keeps the
+        method usable from minimal context shims that don't implement
+        ``delete_state``.
+        """
+        await ctx.set_state(self._ACTIVE_INSTANCE_STATE_KEY, None)
+
+    async def get_session_key(self, ctx) -> str:
+        """Derive a stable key for the calling session's client-scoped caches.
+
+        Active-instance selection is persisted via FastMCP session state (see
+        ``set_active_instance``); this key is only for caches that are legitimately
+        per-client, such as the advertised MCP roots. Prioritizes ``client_id``,
+        falls back to ``user:<user_id>`` in remote-hosted mode, then ``global``.
         """
         client_id = getattr(ctx, "client_id", None)
         if isinstance(client_id, str) and client_id:
             return client_id
 
-        # In remote-hosted mode, use user_id so different users get isolated instance selections
         user_id = await ctx.get_state("user_id")
         if isinstance(user_id, str) and user_id:
             return f"user:{user_id}"
 
-        # Fallback to global for local dev stability
         return "global"
-
-    async def set_active_instance(self, ctx, instance_id: str) -> None:
-        """Store the active instance for this session."""
-        key = await self.get_session_key(ctx)
-        with self._lock:
-            self._active_by_key[key] = instance_id
-
-    async def get_active_instance(self, ctx) -> str | None:
-        """Retrieve the active instance for this session."""
-        key = await self.get_session_key(ctx)
-        with self._lock:
-            return self._active_by_key.get(key)
-
-    async def clear_active_instance(self, ctx) -> None:
-        """Clear the stored instance for this session."""
-        key = await self.get_session_key(ctx)
-        with self._lock:
-            self._active_by_key.pop(key, None)
 
     async def _discover_instances(self, ctx) -> list:
         """

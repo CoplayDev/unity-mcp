@@ -46,6 +46,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static bool isStarting = false;
         private static double nextStartAt = 0.0f;
         private static double nextHeartbeatAt = 0.0f;
+        // EditorApplication.timeSinceStartup of the first AddressAlreadyInUse on the configured
+        // port; 0 when the port binds cleanly. Drives the same-port retry window (#1173).
+        private static double _portBusySince = 0.0;
+        // If the port has been continuously busy longer than this, _portBusySince is treated as a
+        // stale leftover from an abandoned retry and a fresh window is started (#1173).
+        private const double PortBusyStaleResetSeconds = 60.0;
         private static int heartbeatSeq = 0;
         private static Dictionary<string, QueuedCommand> commandQueue = new();
         private static int mainThreadId;
@@ -284,10 +290,45 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     }
                     catch (SocketException se) when (se.SocketErrorCode == SocketError.AddressAlreadyInUse)
                     {
-                        // Port is busy. Try switching to a new port once; if that also fails,
-                        // let the reload handler retry with async backoff instead of blocking here.
+                        // The configured port is busy. The usual cause is our own previous listener
+                        // whose OS socket has not been released yet after a domain reload: Stop()/
+                        // Dispose runs on the main thread, but the kernel frees the bound port a few
+                        // hundred ms later (longer on Windows/macOS).
+                        //
+                        // Do NOT silently switch to a new port on the first conflict — the Python
+                        // client stays pinned to the configured port and ends up talking to the
+                        // orphan, returning busy/timeout forever (#1173). Keep the configured port
+                        // and fail this attempt WITHOUT blocking: the reload handler's async resume
+                        // schedule and the editor-idle retry re-invoke Start() on the same port within
+                        // ~1s, by which point the OS has released it. Only after the port stays busy
+                        // past the fallback window do we treat it as a foreign occupant and switch.
+                        double now = EditorApplication.timeSinceStartup;
+                        // Start a fresh window on the first conflict, or if a stale timestamp
+                        // survived a long idle gap (a real reload + retry resolves in seconds).
+                        if (_portBusySince <= 0.0 || (now - _portBusySince) > PortBusyStaleResetSeconds) _portBusySince = now;
+
+                        if (!PortManager.ShouldAbandonBusyPort(now - _portBusySince))
+                        {
+                            try { listener?.Stop(); } catch { }
+                            try { listener?.Server?.Dispose(); } catch { }
+                            listener = null;
+                            McpLog.Warn($"Port {currentUnityPort} not released yet after reload; retrying same port.");
+                            WriteHeartbeat(true, "port_busy");
+                            nextStartAt = now + 0.3; // throttle the editor-idle retry loop
+                            // Arm the editor-idle retry even when Start() was called directly
+                            // (e.g. StartAutoConnect), not only during reload resume — so a transient
+                            // AddressAlreadyInUse can never leave the bridge permanently stopped.
+                            if (!ensureUpdateHooked)
+                            {
+                                ensureUpdateHooked = true;
+                                EditorApplication.update += EnsureStartedOnEditorIdle;
+                            }
+                            return;
+                        }
+
                         int oldPort = currentUnityPort;
                         currentUnityPort = PortManager.DiscoverNewPort();
+                        _portBusySince = 0.0;
 
                         try
                         {
@@ -295,15 +336,13 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         }
                         catch { }
 
-                        if (IsDebugEnabled())
-                        {
-                            McpLog.Info($"Port {oldPort} occupied, switching to port {currentUnityPort}");
-                        }
+                        McpLog.Warn($"Port {oldPort} still occupied after {PortManager.BusyPortFallbackWindowSeconds:0.#}s; falling back to port {currentUnityPort} (clients follow via the status file).");
 
                         listener = CreateConfiguredListener(currentUnityPort);
                         listener.Start();
                     }
 
+                    _portBusySince = 0.0;
                     isRunning = true;
                     isAutoConnectMode = false;
                     string platform = Application.platform.ToString();
@@ -631,7 +670,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                             bool isBenign =
                                 msg.IndexOf("Connection closed before reading expected bytes", StringComparison.OrdinalIgnoreCase) >= 0
                                 || msg.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
-                                || ex is IOException;
+                                || ex is IOException
+                                || ex is ObjectDisposedException;
                             if (isBenign)
                             {
                                 if (IsDebugEnabled()) McpLog.Info($"Client handler: {msg}", always: false);

@@ -76,7 +76,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 var tc = TypeCache.GetTypesDerivedFrom(requiredBaseType)
                                   .Where(t => NamesMatch(t, typeName));
-                candidates = PreferPlayer(tc).ToList();
+                candidates = DisambiguateByIdentity(PreferPlayer(tc).ToList());
                 if (candidates.Count == 1)
                 {
                     type = candidates[0];
@@ -182,7 +182,52 @@ namespace MCPForUnity.Editor.Helpers
             if (candidates.Count == 0)
                 candidates = fromEditor.ToList();
 
-            return candidates;
+            return DisambiguateByIdentity(candidates);
+        }
+
+        /// <summary>
+        /// Collapses spurious matches that are not a genuine user-facing ambiguity:
+        /// 1. De-dupe by FullName (same type surfaced via multiple assemblies / type-forwards).
+        /// 2. If still >1, prefer a single PUBLIC type (e.g. public BCL List`1 over an
+        ///    internal type that happens to share the short name).
+        /// 3. If still >1, prefer a single core/BCL type (mscorlib / System.* / netstandard /
+        ///    System.Private.CoreLib) so unqualified BCL generics resolve deterministically.
+        /// Each step only narrows when it yields exactly one survivor, so genuine clashes
+        /// between two public, non-BCL types (e.g. UnityEngine.UI.Button vs
+        /// UnityEngine.UIElements.Button) are still reported as ambiguous.
+        /// </summary>
+        private static List<Type> DisambiguateByIdentity(List<Type> candidates)
+        {
+            if (candidates.Count <= 1) return candidates;
+
+            // 1. De-dupe by FullName (keep first occurrence; Player-preferred ordering preserved).
+            var deduped = candidates
+                .GroupBy(t => t.FullName ?? t.Name, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .ToList();
+            if (deduped.Count <= 1) return deduped;
+
+            // 2. Prefer a single public type.
+            var publicTypes = deduped.Where(t => t.IsPublic || t.IsNestedPublic).ToList();
+            if (publicTypes.Count == 1) return publicTypes;
+            var pool = publicTypes.Count > 1 ? publicTypes : deduped;
+
+            // 3. Prefer a single core/BCL type.
+            var coreTypes = pool.Where(IsCoreBclType).ToList();
+            if (coreTypes.Count == 1) return coreTypes;
+
+            return pool;
+        }
+
+        private static bool IsCoreBclType(Type t)
+        {
+            string asmName = t.Assembly.GetName().Name;
+            if (string.IsNullOrEmpty(asmName)) return false;
+            return asmName.Equals("mscorlib", StringComparison.Ordinal)
+                || asmName.Equals("netstandard", StringComparison.Ordinal)
+                || asmName.Equals("System.Private.CoreLib", StringComparison.Ordinal)
+                || asmName.Equals("System", StringComparison.Ordinal)
+                || asmName.StartsWith("System.", StringComparison.Ordinal);
         }
 
         private static IEnumerable<Type> SafeGetTypes(System.Reflection.Assembly assembly)

@@ -15,7 +15,95 @@ For the canonical changelog with PR links, see [GitHub Releases](https://github.
 > Auto-generated from the GitHub Releases API by `tools/sync_release_notes.py`. Do not hand-edit — changes will be overwritten on the next sync.
 
 
+## v10.0 series
+
+### [v10.0.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.0) — 2026-06-30
+
+<details>
+<summary>Show release notes</summary>
+
+## What's Changed
+* chore: sync main (v9.7.3) into beta by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1205
+* feat(asset-gen): AI Asset Generation — 3D gen/import + 2D image (BYO-key) by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1218
+* chore: update Unity package to beta version 9.7.4-beta.2 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1221
+* Revamp brand, docs, distribution, and analytics by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1222
+* chore: update Unity package to beta version 9.7.4-beta.3 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1223
+* chore: bump version to 10.0.0 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1224
+
+**Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v9.7.3...v10.0.0
+
+</details>
+
+
 ## v9.7 series
+
+### [v9.7.3](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.3) — 2026-06-15
+
+<details>
+<summary>Show release notes</summary>
+
+## What's Changed
+* chore: sync main (v9.7.1) into beta by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1159
+* fix(build): avoid compile-time VisionOS enum references by @JMartinezRuiz in https://github.com/CoplayDev/unity-mcp/pull/1113
+* chore: update Unity package to beta version 9.7.2-beta.2 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1161
+* fix(compat): keep Runtime helpers compiling when built-in modules are disabled (#1160) by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1162
+* chore: update Unity package to beta version 9.7.2-beta.3 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1163
+* fix(screenshot): wait for end-of-frame before composited capture by @KamilDev in https://github.com/CoplayDev/unity-mcp/pull/1132
+* chore: update Unity package to beta version 9.7.2-beta.4 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1165
+* fix(prefabs): wire missing C# handler for editor/prefab-stage resource by @slikk66 in https://github.com/CoplayDev/unity-mcp/pull/1136
+* chore: update Unity package to beta version 9.7.2-beta.5 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1166
+* fix: declare required Unity module dependencies by @sean2077 in https://github.com/CoplayDev/unity-mcp/pull/1122
+* chore: update Unity package to beta version 9.7.2-beta.6 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1167
+* refactor: drop defensive scaffolding made obsolete by module dep declarations by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1168
+* chore: update Unity package to beta version 9.7.2-beta.7 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1169
+* fix(execute_code): route CodeDom references through a response file (#1144) by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1170
+* chore: update Unity package to beta version 9.7.2-beta.8 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1171
+* feat: add Kimi Code CLI client configurator by @namquang93 in https://github.com/CoplayDev/unity-mcp/pull/1119
+* chore: update Unity package to beta version 9.7.2-beta.9 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1174
+* fix: skip unsafe Fusion serialization types by @cyanxwh in https://github.com/CoplayDev/unity-mcp/pull/1127
+* chore: update Unity package to beta version 9.7.2-beta.10 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1190
+* fix(stdio): retry same port on bind race instead of silent fallback (#1173) by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1198
+* chore: update Unity package to beta version 9.7.2-beta.11 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1200
+* Patch: headless http server launch, Kilo Code (#1120), e2e bridge harness by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1201
+* chore: update Unity package to beta version 9.7.2-beta.12 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1202
+* Fix Memory Profiler snapshot actions on Unity 6 by @DLSinnocence in https://github.com/CoplayDev/unity-mcp/pull/1125
+* chore: update Unity package to beta version 9.7.2-beta.13 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1203
+* chore: bump version to 9.7.3 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1204
+
+## New Contributors
+* @KamilDev made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1132
+* @slikk66 made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1136
+* @sean2077 made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1122
+* @namquang93 made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1119
+* @DLSinnocence made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1125
+
+**Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v9.7.1...v9.7.3
+
+</details>
+
+### [v9.7.1](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.1) — 2026-05-24
+
+<details>
+<summary>Show release notes</summary>
+
+## What's Changed
+* chore: sync main (v9.7.0) into beta by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1149
+* fix(clients): point Antigravity at ~/.gemini/config/ after the 2.x migration by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1151
+* chore: update Unity package to beta version 9.7.1-beta.2 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1153
+* fix(ui): default the per-client setup foldout to expanded so Unregister is visible by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1152
+* chore: update Unity package to beta version 9.7.1-beta.3 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1154
+* fix(roslyn): install missing System.Runtime.CompilerServices.Unsafe v6 + surface inner errors by @sMartz1 in https://github.com/CoplayDev/unity-mcp/pull/1116
+* chore: update Unity package to beta version 9.7.1-beta.4 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1156
+* docs: clarify development setup and package-source checks by @JMartinezRuiz in https://github.com/CoplayDev/unity-mcp/pull/1101
+* [UPDATE] Wiki/Doc by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/pull/1157
+* chore: bump version to 9.7.1 by @github-actions[bot] in https://github.com/CoplayDev/unity-mcp/pull/1158
+
+## New Contributors
+* @JMartinezRuiz made their first contribution in https://github.com/CoplayDev/unity-mcp/pull/1101
+
+**Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v9.7.0...v9.7.1
+
+</details>
 
 ### [v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0) — 2026-05-22
 
@@ -1190,7 +1278,6 @@ For the canonical changelog with PR links, see [GitHub Releases](https://github.
 * Fix material mesh instantiation warnings by @dsarno in https://github.com/CoplayDev/unity-mcp/pull/331
 * Update certain file GUIDs to prevent conflict by @Scriptwonder in https://github.com/CoplayDev/unity-mcp/commit/15c35ae17459b1305666b4deefa5d720aa3e22c3
 
-
 **Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v6.2.0...v6.2.1
 
 </details>
@@ -1207,7 +1294,6 @@ For the canonical changelog with PR links, see [GitHub Releases](https://github.
 * test: remove unused tests for stale file cleanup in Python tools syncing by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/327
 * refactor: use Tommy TOML library directly for config file manipulation by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/328
 * Notify users when there's a new version by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/329
-
 
 **Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v6.1.0...v6.2.0
 
@@ -1227,7 +1313,6 @@ Release v6.1.0
 * docs: replace "Unity MCP" with "MCP for Unity" in all text strings by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/314
 * Add testing and move menu items to resources by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/316
 
-
 **Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v6.0.0...v6.1.0
 
 </details>
@@ -1245,7 +1330,6 @@ Release v6.0.0
 ## What's Changed
 * Update README.md by @JosvanderWesthuizen in https://github.com/CoplayDev/unity-mcp/pull/310
 * New UI and work without MCP server embedded by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/313
-
 
 **Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v5.0.0...v6.0.0
 
@@ -1265,7 +1349,6 @@ Release v6.0.0
 * Make it easier to add tools by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/301
 * Fix read_console includeStacktrace parameter behavior by @dsarno in https://github.com/CoplayDev/unity-mcp/pull/304
 * Rename plugin folder to MCPForUnity by @msanatan in https://github.com/CoplayDev/unity-mcp/pull/303
-
 
 **Full Changelog**: https://github.com/CoplayDev/unity-mcp/compare/v4.1.1...v5.0.0
 
@@ -1302,3 +1385,4 @@ Breaking changes from prior major versions live under [Migrations](/migrations/v
 - [v5 — UnityMcpBridge → MCPForUnity](/migrations/v5)
 - [v6 — New Editor Window (UI Toolkit + service architecture)](/migrations/v6)
 - [v8 — HTTP and Stdio support](/migrations/v8)
+- [v10 — Asset Generation and Docs Refresh](/migrations/v10)

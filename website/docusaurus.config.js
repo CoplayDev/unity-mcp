@@ -4,7 +4,7 @@
 // or "unity-mcp" into sidebar slugs, file paths, or docs URLs.
 
 import { themes as prismThemes } from 'prism-react-renderer';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,42 @@ function countConfigurators() {
 }
 const supportedClientCount = countConfigurators();
 
+function listMarkdownFiles(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((entry) => {
+    const path = resolve(dir, entry);
+    if (statSync(path).isDirectory()) return listMarkdownFiles(path);
+    return entry.endsWith('.md') ? [path] : [];
+  });
+}
+
+function countReferenceTools() {
+  const dir = resolve(__dirname, 'docs', 'reference', 'tools');
+  return listMarkdownFiles(dir).filter((path) => !path.endsWith('/index.md')).length;
+}
+
+function countToolGroups() {
+  const dir = resolve(__dirname, 'docs', 'reference', 'tools');
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((entry) => {
+    const path = resolve(dir, entry);
+    return statSync(path).isDirectory();
+  }).length;
+}
+
+function countReferenceResources() {
+  const path = resolve(__dirname, 'docs', 'reference', 'resources', 'index.md');
+  if (!existsSync(path)) return 0;
+  return (readFileSync(path, 'utf8').match(/\n## `/g) ?? []).length;
+}
+
+const latestVersion = 'v10.0.0';
+const toolCount = countReferenceTools();
+const toolGroupCount = countToolGroups();
+const resourceCount = countReferenceResources();
+
+const baseUrl = '/unity-mcp/';
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'MCP for Unity',
@@ -29,7 +65,7 @@ const config = {
   // Hosted on GitHub Pages under the CoplayDev org.
   // Custom domain (CNAME) deferred — see plan Phase 2.
   url: 'https://coplaydev.github.io',
-  baseUrl: '/unity-mcp/',
+  baseUrl,
 
   organizationName: 'CoplayDev',
   projectName: 'unity-mcp',
@@ -39,6 +75,10 @@ const config = {
   // Build-time data the homepage components read via siteConfig.customFields.
   // Keeps stats accurate without a hand-maintained constant.
   customFields: {
+    latestVersion,
+    toolCount,
+    toolGroupCount,
+    resourceCount,
     supportedClientCount,
   },
 
@@ -58,6 +98,22 @@ const config = {
         href: 'https://fonts.gstatic.com',
         crossorigin: 'anonymous',
       },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${baseUrl}img/favicon-32.png` },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'apple-touch-icon', sizes: '180x180', href: `${baseUrl}img/apple-touch-icon.png` },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${baseUrl}img/android-chrome-192.png` },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '512x512', href: `${baseUrl}img/android-chrome-512.png` },
     },
   ],
   stylesheets: [
@@ -124,18 +180,20 @@ const config = {
         ],
       },
     ],
+    ...(process.env.GOATCOUNTER_CODE ? ['docusaurus-plugin-goatcounter'] : []),
   ],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: 'img/social-card.png',
+      metadata: [{ name: 'theme-color', content: '#4f46e5' }],
       navbar: {
         title: 'MCP for Unity',
         logo: {
           alt: 'MCP for Unity logo',
           src: 'img/logo-mark.svg',
-          srcDark: 'img/logo-mark-dark.svg',
+          srcDark: 'img/logo-mark.svg',
         },
         items: [
           {
@@ -205,6 +263,7 @@ const config = {
         defaultMode: 'light',
         respectPrefersColorScheme: true,
       },
+      ...(process.env.GOATCOUNTER_CODE ? { goatcounter: { code: process.env.GOATCOUNTER_CODE } } : {}),
     }),
 };
 

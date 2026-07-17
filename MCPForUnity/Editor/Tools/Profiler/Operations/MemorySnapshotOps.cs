@@ -11,7 +11,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
     internal static class MemorySnapshotOps
     {
         private static readonly Type MemoryProfilerType =
-            Type.GetType("Unity.MemoryProfiler.MemoryProfiler, Unity.MemoryProfiler.Editor");
+            Type.GetType("Unity.Profiling.Memory.MemoryProfiler, UnityEngine.CoreModule")
+            ?? Type.GetType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler, UnityEngine.CoreModule")
+            ?? Type.GetType("Unity.MemoryProfiler.MemoryProfiler, Unity.MemoryProfiler.Editor");
 
         private static bool HasPackage => MemoryProfilerType != null;
 
@@ -35,11 +37,30 @@ namespace MCPForUnity.Editor.Tools.Profiler
             try
             {
                 var debugScreenCaptureType = Type.GetType(
-                    "Unity.Profiling.Memory.Experimental.DebugScreenCapture, Unity.MemoryProfiler.Editor");
+                    "Unity.Profiling.DebugScreenCapture, UnityEngine.CoreModule")
+                    ?? Type.GetType("UnityEngine.Profiling.Experimental.DebugScreenCapture, UnityEngine.CoreModule")
+                    ?? Type.GetType("Unity.Profiling.Memory.Experimental.DebugScreenCapture, Unity.MemoryProfiler.Editor");
+                var captureFlagsType = Type.GetType(
+                    "Unity.Profiling.Memory.CaptureFlags, UnityEngine.CoreModule")
+                    ?? Type.GetType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags, UnityEngine.CoreModule");
 
                 System.Reflection.MethodInfo takeMethod = null;
 
-                if (debugScreenCaptureType != null)
+                if (debugScreenCaptureType != null && captureFlagsType != null)
+                {
+                    var screenshotCallbackType = typeof(Action<,,>).MakeGenericType(
+                        typeof(string), typeof(bool), debugScreenCaptureType);
+                    takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot",
+                        new[] { typeof(string), typeof(Action<string, bool>), screenshotCallbackType, captureFlagsType });
+                }
+
+                if (takeMethod == null && captureFlagsType != null)
+                {
+                    takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot",
+                        new[] { typeof(string), typeof(Action<string, bool>), captureFlagsType });
+                }
+
+                if (takeMethod == null && debugScreenCaptureType != null)
                 {
                     var screenshotCallbackType = typeof(Action<,,>).MakeGenericType(
                         typeof(string), typeof(bool), debugScreenCaptureType);
@@ -49,7 +70,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
                 if (takeMethod == null)
                 {
-                    // Try 2-param overload: TakeSnapshot(string, Action<string, bool>)
                     takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot",
                         new[] { typeof(string), typeof(Action<string, bool>) });
                 }
@@ -75,8 +95,13 @@ namespace MCPForUnity.Editor.Tools.Profiler
                     }
                 };
 
-                int paramCount = takeMethod.GetParameters().Length;
-                if (paramCount == 4)
+                var takeMethodParams = takeMethod.GetParameters();
+                int paramCount = takeMethodParams.Length;
+                if (paramCount == 4 && takeMethodParams[3].ParameterType == captureFlagsType)
+                    takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, Enum.ToObject(captureFlagsType, 0) });
+                else if (paramCount == 3 && takeMethodParams[2].ParameterType == captureFlagsType)
+                    takeMethod.Invoke(null, new object[] { snapshotPath, callback, Enum.ToObject(captureFlagsType, 0) });
+                else if (paramCount == 4 && takeMethodParams[3].ParameterType == typeof(uint))
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, 0u });
                 else if (paramCount == 2)
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback });
@@ -98,9 +123,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
         internal static object ListSnapshots(JObject @params)
         {
-            if (!HasPackage)
-                return PackageMissingError();
-
             var p = new ToolParams(@params);
             string searchPath = p.Get("search_path");
 
@@ -141,9 +163,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
         internal static object CompareSnapshots(JObject @params)
         {
-            if (!HasPackage)
-                return PackageMissingError();
-
             var p = new ToolParams(@params);
             var pathAResult = p.GetRequired("snapshot_a");
             if (!pathAResult.IsSuccess)
