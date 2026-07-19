@@ -562,6 +562,7 @@ class UnityConnectionPool:
         self._last_full_scan: float = 0
         self._scan_interval: float = 5.0  # Cache for 5 seconds
         self._pool_lock = threading.Lock()
+        self._scan_lock = threading.Lock()
         self._default_instance_id: str | None = None
 
         # Check for default instance from environment
@@ -590,13 +591,20 @@ class UnityConnectionPool:
                     f"Returning cached Unity instances (age: {now - self._last_full_scan:.1f}s)")
                 return list(self._known_instances.values())
 
-            # Serialize forced scans so overlapping per-call targets cannot
-            # replace a complete snapshot with a transient partial one.
+        # Serialize scans without blocking readers that can use a valid cache.
+        with self._scan_lock:
+            # Re-check the cache after waiting for an overlapping scan.
+            with self._pool_lock:
+                now = time.time()
+                if not force_refresh and (now - self._last_full_scan) < self._scan_interval:
+                    return list(self._known_instances.values())
+
             logger.debug("Scanning for instances...")
             instances = PortDiscovery.discover_all_unity_instances()
 
-            self._known_instances = {inst.id: inst for inst in instances}
-            self._last_full_scan = now
+            with self._pool_lock:
+                self._known_instances = {inst.id: inst for inst in instances}
+                self._last_full_scan = time.time()
 
         logger.info(
             f"Found {len(instances)} Unity instances: {[inst.id for inst in instances]}")
