@@ -30,12 +30,16 @@ TOOL_GROUPS: dict[str, str] = {
 
 DEFAULT_ENABLED_GROUPS: set[str] = {"core"}
 
+# FastMCP tag used to identify tools whose calls can target a Unity instance.
+UNITY_TARGETABLE_TAG = "mcpforunity:unity-targetable"
+
 
 def mcp_for_unity_tool(
     name: str | None = None,
     description: str | None = None,
     unity_target: str | None = "self",
     group: str | None = "core",
+    unity_targetable: bool | None = None,
     **kwargs
 ) -> Callable:
     """
@@ -50,6 +54,9 @@ def mcp_for_unity_tool(
             - "self" (default): tool follows its own enabled state.
             - None: server-only tool, always visible in tool listing.
             - "<tool_name>": alias tool that follows another Unity tool state.
+        unity_targetable: Whether calls to this tool accept the optional
+            ``unity_instance`` routing envelope. Defaults to True for Unity
+            tools and False for server-only tools.
         group: Tool group for dynamic visibility.
             - A group name string (e.g. "core", "vfx") assigns the tool to
               that group and adds a ``tags={"group:<name>"}`` entry.
@@ -67,6 +74,8 @@ def mcp_for_unity_tool(
         tool_kwargs = dict(kwargs)  # Create a copy to avoid side effects
         if "unity_target" in tool_kwargs:
             del tool_kwargs["unity_target"]
+        if "unity_targetable" in tool_kwargs:
+            del tool_kwargs["unity_targetable"]
         if "group" in tool_kwargs:
             del tool_kwargs["group"]
 
@@ -96,11 +105,27 @@ def mcp_for_unity_tool(
                 "Expected None or a non-empty string."
             )
 
+        if unity_targetable is None:
+            resolved_unity_targetable = normalized_unity_target is not None
+        elif isinstance(unity_targetable, bool):
+            resolved_unity_targetable = unity_targetable
+        else:
+            raise ValueError(
+                f"Invalid unity_targetable for tool '{tool_name}': "
+                f"{unity_targetable!r}. Expected a bool or None."
+            )
+
+        if resolved_unity_targetable:
+            existing_tags = set(tool_kwargs.get("tags") or set())
+            existing_tags.add(UNITY_TARGETABLE_TAG)
+            tool_kwargs["tags"] = existing_tags
+
         _tool_registry.append({
             'func': func,
             'name': tool_name,
             'description': description,
             'unity_target': normalized_unity_target,
+            'unity_targetable': resolved_unity_targetable,
             'group': resolved_group,
             'kwargs': tool_kwargs,
         })

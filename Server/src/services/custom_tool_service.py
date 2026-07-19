@@ -21,7 +21,7 @@ from transport.legacy.unity_connection import (
 )
 from transport.plugin_hub import PluginHub
 from services.tools import get_unity_instance_from_context
-from services.registry import get_registered_tools
+from services.registry import get_registered_tools, UNITY_TARGETABLE_TAG
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -361,6 +361,7 @@ class CustomToolService:
             wrapped = self._mcp.tool(
                 name=definition.name,
                 description=definition.description,
+                tags={UNITY_TARGETABLE_TAG},
             )(wrapped)
         except Exception as exc:  # pragma: no cover - defensive against tool conflicts
             logger.warning(

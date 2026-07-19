@@ -244,8 +244,8 @@ class TestUnityInstanceMiddlewareInjection:
     @pytest.mark.asyncio
     async def test_middleware_does_not_inject_when_no_instance(self, mock_context):
         """
-        Current behavior: When no active instance is set and auto-select fails,
-        middleware does not inject anything (None instance not stored).
+        When no active instance is set and auto-select fails, middleware still
+        initializes request-scoped routing state to None.
         """
         middleware = UnityInstanceMiddleware()
 
@@ -261,10 +261,11 @@ class TestUnityInstanceMiddlewareInjection:
             with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                 await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
-        # set_state should not be called for unity_instance if no instance found
+        # Every request explicitly shadows routing state, including no target.
         calls = [c for c in mock_context.set_state.call_args_list
                 if len(c[0]) > 0 and c[0][0] == "unity_instance"]
-        assert len(calls) == 0
+        assert calls
+        assert calls[-1][0][1] is None
 
     @pytest.mark.asyncio
     async def test_list_tools_filters_disabled_unity_tools_and_aliases(self, mock_context, monkeypatch):
@@ -1057,6 +1058,154 @@ class TestPluginHubCommandRouting:
         # unity_timeout_s = max(30, 100) = 100
         # server_wait_s = max(30, 100 + 5) = 105
         assert True  # This is implicit in send_command implementation
+
+
+class TestExplicitStdioInstanceRouting:
+    """Explicit per-call stdio targets must not fall back after disconnect."""
+
+    def test_explicit_target_disconnect_does_not_use_registry_default(self, monkeypatch):
+        from transport.legacy import unity_connection as legacy
+
+        class DeadSocket:
+            def sendall(self, _payload):
+                raise ConnectionResetError("target disconnected")
+
+            def close(self):
+                return None
+
+            def gettimeout(self):
+                return None
+
+        conn = legacy.UnityConnection(port=6401, instance_id="Project@target-hash")
+        conn.sock = DeadSocket()
+        monkeypatch.setattr(conn, "_ensure_live_connection", lambda: None)
+
+        monkeypatch.setattr(
+            legacy.stdio_port_registry,
+            "get_instance",
+            lambda _instance_id: None,
+        )
+        monkeypatch.setattr(
+            legacy.stdio_port_registry,
+            "get_port",
+            lambda _instance_id=None: pytest.fail("explicit target fell back to default port"),
+        )
+
+        with pytest.raises(ConnectionError, match="target-hash.*no longer available"):
+            conn.send_command(
+                "manage_scene",
+                {},
+                max_attempts=0,
+                allow_default_fallback=False,
+            )
+
+    def test_explicit_target_disconnect_retries_before_failing(self, monkeypatch):
+        from transport.legacy import unity_connection as legacy
+
+        class DeadSocket:
+            def sendall(self, _payload):
+                raise ConnectionResetError("target disconnected")
+
+            def close(self):
+                return None
+
+            def gettimeout(self):
+                return None
+
+        conn = legacy.UnityConnection(port=6401, instance_id="Project@target-hash")
+        conn.sock = DeadSocket()
+        monkeypatch.setattr(conn, "_ensure_live_connection", lambda: None)
+        monkeypatch.setattr(conn, "connect", lambda *_args, **_kwargs: False)
+        monkeypatch.setattr(legacy.time, "sleep", lambda _seconds: None)
+
+        registry_calls = 0
+
+        def missing_target(_instance_id):
+            nonlocal registry_calls
+            registry_calls += 1
+            return None
+
+        monkeypatch.setattr(
+            legacy.stdio_port_registry,
+            "get_instance",
+            missing_target,
+        )
+        monkeypatch.setattr(
+            legacy.stdio_port_registry,
+            "get_port",
+            lambda _instance_id=None: pytest.fail("explicit target fell back to default port"),
+        )
+
+        with pytest.raises(ConnectionError, match="target-hash.*no longer available"):
+            conn.send_command(
+                "manage_scene",
+                {},
+                max_attempts=1,
+                allow_default_fallback=False,
+            )
+
+        assert registry_calls == 2
+        assert conn.port is None
+
+    def test_explicit_target_recovery_is_discovered_before_retry_connect(self, monkeypatch):
+        from transport.legacy import unity_connection as legacy
+
+        class DeadSocket:
+            def sendall(self, _payload):
+                raise ConnectionResetError("target disconnected")
+
+            def close(self):
+                return None
+
+            def gettimeout(self):
+                return None
+
+        class LiveSocket:
+            def sendall(self, _payload):
+                return None
+
+            def gettimeout(self):
+                return None
+
+            def settimeout(self, _timeout):
+                return None
+
+        conn = legacy.UnityConnection(port=6401, instance_id="Project@target-hash")
+        conn.sock = DeadSocket()
+        monkeypatch.setattr(conn, "_ensure_live_connection", lambda: None)
+        monkeypatch.setattr(legacy.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(
+            conn,
+            "receive_full_response",
+            lambda _sock: b'{"status":"success","result":{"ok":true}}',
+        )
+
+        recovered = type("RecoveredInstance", (), {"port": 6410})()
+        registry_results = iter([None, recovered])
+        monkeypatch.setattr(
+            legacy.stdio_port_registry,
+            "get_instance",
+            lambda _instance_id: next(registry_results),
+        )
+
+        connect_ports = []
+
+        def reconnect(*_args, **_kwargs):
+            connect_ports.append(conn.port)
+            conn.sock = LiveSocket()
+            return True
+
+        monkeypatch.setattr(conn, "connect", reconnect)
+
+        result = conn.send_command(
+            "manage_scene",
+            {},
+            max_attempts=1,
+            allow_default_fallback=False,
+        )
+
+        assert result == {"ok": True}
+        assert connect_ports == [6410]
 
 
 # ============================================================================

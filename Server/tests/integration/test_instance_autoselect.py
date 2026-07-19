@@ -106,6 +106,41 @@ async def test_auto_selects_single_instance_via_stdio(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_stdio_instance_discovery_forces_refresh(monkeypatch):
+    plugin_hub = types.ModuleType("transport.plugin_hub")
+
+    class PluginHub:
+        @classmethod
+        def is_configured(cls) -> bool:
+            return False
+
+    plugin_hub.PluginHub = PluginHub
+    monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
+    monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
+
+    from transport.unity_instance_middleware import UnityInstanceMiddleware
+
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    middleware = UnityInstanceMiddleware()
+    ctx = DummyContext()
+    refresh_values = []
+
+    class PoolStub:
+        def discover_all_instances(self, force_refresh=False):
+            refresh_values.append(force_refresh)
+            return [SimpleNamespace(id="UnityMCPTests@cc8756d4")]
+
+    unity_connection = types.ModuleType("transport.legacy.unity_connection")
+    unity_connection.get_unity_connection_pool = lambda: PoolStub()
+    monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection)
+
+    instances = await middleware._discover_instances(ctx)
+
+    assert [instance.id for instance in instances] == ["UnityMCPTests@cc8756d4"]
+    assert refresh_values == [True]
+
+
+@pytest.mark.asyncio
 async def test_auto_select_handles_stdio_errors(monkeypatch):
     plugin_hub = types.ModuleType("transport.plugin_hub")
 
