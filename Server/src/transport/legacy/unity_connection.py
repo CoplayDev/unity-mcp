@@ -545,7 +545,7 @@ class UnityConnection:
                     time.sleep(sleep_s)
                     continue
                 if target_unavailable_error is not None:
-                    raise target_unavailable_error
+                    raise target_unavailable_error from e
                 raise
 
 
