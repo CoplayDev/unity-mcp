@@ -25,6 +25,7 @@ from services.tools import get_unity_instance_from_context
     ),
 )
 async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict[str, Any] | None = None) -> MCPResponse:
+    """Execute a Unity-registered custom tool for the current project."""
     unity_instance = await get_unity_instance_from_context(ctx)
     if not unity_instance:
         return MCPResponse(

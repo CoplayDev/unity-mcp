@@ -40,6 +40,7 @@ def _serialize_pydantic(
     """Wrap a resource function and serialize Pydantic results as JSON."""
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        """Call the resource and serialize its structured result."""
         if consume_unity_instance:
             kwargs.pop(_UNITY_INSTANCE_PARAMETER, None)
         result = await func(*args, **kwargs)

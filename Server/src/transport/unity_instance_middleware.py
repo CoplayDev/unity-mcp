@@ -41,17 +41,20 @@ class InstanceTargetError(ValueError):
     """A user-supplied Unity instance target could not be resolved."""
 
     def __init__(self, message: str, *, status_code: int = 404):
+        """Create an instance-target error with its HTTP status code."""
         super().__init__(message)
         self.status_code = status_code
 
 
 def _instance_attribute(instance: Any, name: str, default: Any = None) -> Any:
+    """Read an instance field from either a mapping or an object."""
     if isinstance(instance, Mapping):
         return instance.get(name, default)
     return getattr(instance, name, default)
 
 
 def _instance_id(instance: Any) -> str | None:
+    """Return an instance's canonical ``Name@hash`` identifier when available."""
     value = _instance_attribute(instance, "id")
     if isinstance(value, str) and value:
         return value
@@ -64,6 +67,7 @@ def _instance_id(instance: Any) -> str | None:
 
 
 def _instance_name(instance: Any) -> str | None:
+    """Return an instance's project name."""
     value = _instance_attribute(instance, "name") or _instance_attribute(instance, "project")
     if isinstance(value, str) and value:
         return value
@@ -74,6 +78,7 @@ def _instance_name(instance: Any) -> str | None:
 
 
 def _instance_hash(instance: Any) -> str | None:
+    """Return an instance's project hash."""
     value = _instance_attribute(instance, "hash")
     if isinstance(value, str) and value:
         return value
@@ -813,6 +818,7 @@ class UnityInstanceMiddleware(Middleware):
             self._last_tool_visibility_refresh = now
 
     def _is_tool_targetable(self, tool: Any) -> bool:
+        """Return whether a registered tool accepts per-call routing."""
         tool_name = getattr(tool, "name", None)
         tags = getattr(tool, "tags", None) or set()
         return (
