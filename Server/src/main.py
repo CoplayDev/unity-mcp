@@ -1,7 +1,9 @@
 from starlette.requests import Request
 from transport.unity_instance_middleware import (
+    InstanceTargetError,
     UnityInstanceMiddleware,
-    get_unity_instance_middleware
+    get_unity_instance_middleware,
+    resolve_instance_identifier,
 )
 from services.api_key_service import ApiKeyService
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
@@ -10,6 +12,7 @@ from core.telemetry import record_milestone, record_telemetry, MilestoneType, Re
 from services.resources import register_all_resources
 from transport.plugin_registry import PluginRegistry
 from transport.plugin_hub import PluginHub
+from transport.models import SessionDetails
 from services.custom_tool_service import (
     CustomToolService,
     resolve_project_id_for_unity_instance,
@@ -31,7 +34,8 @@ from contextlib import asynccontextmanager
 import os
 import threading
 import time
-from typing import AsyncIterator, Any
+from types import SimpleNamespace
+from typing import AsyncIterator, Any, Mapping
 from urllib.parse import urlparse
 
 # Workaround for environments where tool signature evaluation runs with a globals
@@ -363,13 +367,41 @@ Payload sizing & paging (important):
 """
 
 
-def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
-    if not instance_token:
-        return None, None
-    if "@" in instance_token:
-        name_part, _, hash_part = instance_token.partition("@")
-        return (name_part or None), (hash_part or None)
-    return None, instance_token
+def _resolve_http_instance_target(
+    unity_instance: str,
+    sessions: Mapping[str, SessionDetails],
+) -> tuple[str, str, SessionDetails]:
+    """Resolve an explicit HTTP target to ``(session_id, Name@hash, details)``."""
+    candidates: list[SimpleNamespace] = []
+    for session_id, details in sessions.items():
+        project = details.project or "Unknown"
+        hash_value = details.hash
+        if not hash_value:
+            continue
+        candidates.append(SimpleNamespace(
+            id=f"{project}@{hash_value}",
+            name=project,
+            hash=hash_value,
+            session_id=session_id,
+        ))
+
+    canonical_id = resolve_instance_identifier(
+        unity_instance,
+        candidates,
+        transport_mode="http",
+    )
+    target = next(
+        (candidate for candidate in candidates if candidate.id == canonical_id),
+        None,
+    )
+    if target is None:
+        # The resolver only returns ids from candidates; keep the failure explicit
+        # if a future candidate type violates that invariant.
+        raise InstanceTargetError(
+            f"Unity instance '{unity_instance}' not found.",
+            status_code=404,
+        )
+    return target.session_id, target.id, sessions[target.session_id]
 
 
 def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
@@ -434,15 +466,18 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                 # Find target session
                 session_id = None
                 session_details = None
-                instance_name, instance_hash = _normalize_instance_token(
-                    unity_instance)
-                if unity_instance:
-                    # Try to match by hash or project name
-                    for sid, details in sessions.sessions.items():
-                        if details.hash == instance_hash or details.project in (instance_name, unity_instance):
-                            session_id = sid
-                            session_details = details
-                            break
+                resolved_instance = None
+                if unity_instance is not None and unity_instance != "":
+                    try:
+                        session_id, resolved_instance, session_details = _resolve_http_instance_target(
+                            unity_instance,
+                            sessions.sessions,
+                        )
+                    except InstanceTargetError as exc:
+                        return JSONResponse(
+                            {"success": False, "error": str(exc)},
+                            status_code=exc.status_code,
+                        )
 
                 # If a specific unity_instance was requested but not found, return an error
                 # (Check done here so execute_custom_tool can also validate the instance)
@@ -503,9 +538,9 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         )
 
                     # Prefer a concrete hash for project-scoped tools.
-                    unity_instance_hint = unity_instance
+                    unity_instance_hint = resolved_instance
                     if session_details and session_details.hash:
-                        unity_instance_hint = session_details.hash
+                        unity_instance_hint = resolved_instance or session_details.hash
 
                     project_id = resolve_project_id_for_unity_instance(
                         unity_instance_hint)
@@ -553,8 +588,6 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             """REST endpoint to list custom tools for the active Unity project."""
             try:
                 unity_instance = request.query_params.get("instance")
-                instance_name, instance_hash = _normalize_instance_token(
-                    unity_instance)
 
                 sessions = await PluginHub.get_sessions()
                 if not sessions.sessions:
@@ -564,27 +597,25 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                     }, status_code=503)
 
                 session_details = None
+                resolved_instance = None
                 if unity_instance:
-                    # Try to match by hash or project name
-                    for _, details in sessions.sessions.items():
-                        if details.hash == instance_hash or details.project in (instance_name, unity_instance):
-                            session_details = details
-                            break
-                    if not session_details:
+                    try:
+                        _, resolved_instance, session_details = _resolve_http_instance_target(
+                            unity_instance,
+                            sessions.sessions,
+                        )
+                    except InstanceTargetError as exc:
                         return JSONResponse(
-                            {
-                                "success": False,
-                                "error": f"Unity instance '{unity_instance}' not found",
-                            },
-                            status_code=404,
+                            {"success": False, "error": str(exc)},
+                            status_code=exc.status_code,
                         )
                 else:
                     # No specific unity_instance requested: use first available session
                     session_details = next(iter(sessions.sessions.values()))
 
-                unity_instance_hint = unity_instance
+                unity_instance_hint = resolved_instance
                 if session_details and session_details.hash:
-                    unity_instance_hint = session_details.hash
+                    unity_instance_hint = resolved_instance or session_details.hash
 
                 project_id = resolve_project_id_for_unity_instance(
                     unity_instance_hint)

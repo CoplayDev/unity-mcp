@@ -1,6 +1,10 @@
 import pytest
 
-from services.registry import get_registered_tools, mcp_for_unity_tool
+from services.registry import (
+    UNITY_TARGETABLE_TAG,
+    get_registered_tools,
+    mcp_for_unity_tool,
+)
 import services.registry.tool_registry as tool_registry_module
 
 
@@ -21,6 +25,8 @@ def test_tool_registry_defaults_unity_target_to_tool_name():
     registered_tools = get_registered_tools()
     tool_info = next(item for item in registered_tools if item["name"] == "_default_target_tool")
     assert tool_info["unity_target"] == "_default_target_tool"
+    assert tool_info["unity_targetable"] is True
+    assert UNITY_TARGETABLE_TAG in tool_info["kwargs"]["tags"]
 
 
 def test_tool_registry_supports_server_only_and_alias_targets():
@@ -37,7 +43,20 @@ def test_tool_registry_supports_server_only_and_alias_targets():
     alias_tool = next(item for item in registered_tools if item["name"] == "_manage_script_alias_tool")
 
     assert server_only["unity_target"] is None
+    assert server_only["unity_targetable"] is False
     assert alias_tool["unity_target"] == "manage_script"
+    assert alias_tool["unity_targetable"] is True
+
+
+def test_server_only_tool_can_opt_into_per_call_targeting():
+    @mcp_for_unity_tool(unity_target=None, unity_targetable=True)
+    def _project_scoped_tool():
+        return None
+
+    tool_info = next(item for item in get_registered_tools() if item["name"] == "_project_scoped_tool")
+    assert tool_info["unity_target"] is None
+    assert tool_info["unity_targetable"] is True
+    assert UNITY_TARGETABLE_TAG in tool_info["kwargs"]["tags"]
 
 
 def test_tool_registry_does_not_leak_unity_target_into_tool_kwargs():
@@ -48,7 +67,9 @@ def test_tool_registry_does_not_leak_unity_target_into_tool_kwargs():
     registered_tools = get_registered_tools()
     tool_info = next(item for item in registered_tools if item["name"] == "_non_leaking_target_tool")
     assert tool_info["unity_target"] == "manage_script"
+    assert tool_info["unity_targetable"] is True
     assert "unity_target" not in tool_info["kwargs"]
+    assert "unity_targetable" not in tool_info["kwargs"]
     assert tool_info["kwargs"]["annotations"] == {"title": "x"}
 
 
@@ -61,4 +82,9 @@ def test_tool_registry_rejects_invalid_unity_target_values():
     with pytest.raises(ValueError, match="Invalid unity_target"):
         @mcp_for_unity_tool(unity_target=123)  # type: ignore[arg-type]
         def _invalid_non_string_target_tool():
+            return None
+
+    with pytest.raises(ValueError, match="Invalid unity_targetable"):
+        @mcp_for_unity_tool(unity_targetable=1)  # type: ignore[arg-type]
+        def _invalid_targetable_tool():
             return None

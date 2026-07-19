@@ -4,14 +4,17 @@ Middleware for managing Unity instance selection per session.
 This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
-from threading import RLock
+from copy import copy, deepcopy
 import logging
 import time
+from threading import RLock
+from typing import Any, Mapping, Sequence
+from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from core.config import config
-from services.registry import get_registered_tools
+from services.registry import UNITY_TARGETABLE_TAG, get_registered_tools
 from transport.plugin_hub import PluginHub
 
 logger = logging.getLogger("mcp-for-unity-server")
@@ -22,6 +25,207 @@ _diag = logging.getLogger("transport.unity_instance_middleware")
 # with it to set or clear the active unity instance.
 _unity_instance_middleware = None
 _middleware_lock = RLock()
+
+_UNITY_INSTANCE_PARAMETER_SCHEMA = {
+    "type": "string",
+    "minLength": 1,
+    "description": (
+        "Advanced: route only this call to a Unity Editor identified by exact "
+        "Name@hash, a unique hash prefix, or a stdio port. Usually omit this "
+        "parameter and use the session's active instance."
+    ),
+}
+
+
+class InstanceTargetError(ValueError):
+    """A user-supplied Unity instance target could not be resolved."""
+
+    def __init__(self, message: str, *, status_code: int = 404):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _instance_attribute(instance: Any, name: str, default: Any = None) -> Any:
+    if isinstance(instance, Mapping):
+        return instance.get(name, default)
+    return getattr(instance, name, default)
+
+
+def _instance_id(instance: Any) -> str | None:
+    value = _instance_attribute(instance, "id")
+    if isinstance(value, str) and value:
+        return value
+
+    name = _instance_attribute(instance, "name") or _instance_attribute(instance, "project")
+    hash_value = _instance_attribute(instance, "hash")
+    if name and hash_value:
+        return f"{name}@{hash_value}"
+    return None
+
+
+def _instance_name(instance: Any) -> str | None:
+    value = _instance_attribute(instance, "name") or _instance_attribute(instance, "project")
+    if isinstance(value, str) and value:
+        return value
+    instance_id = _instance_id(instance)
+    if instance_id and "@" in instance_id:
+        return instance_id.rsplit("@", 1)[0]
+    return None
+
+
+def _instance_hash(instance: Any) -> str | None:
+    value = _instance_attribute(instance, "hash")
+    if isinstance(value, str) and value:
+        return value
+    instance_id = _instance_id(instance)
+    if instance_id and "@" in instance_id:
+        return instance_id.rsplit("@", 1)[1]
+    return None
+
+
+def resolve_instance_identifier(
+    value: str,
+    instances: Sequence[Any],
+    *,
+    transport_mode: str = "stdio",
+) -> str:
+    """Resolve an explicit instance token to its canonical ``Name@hash`` id.
+
+    This helper is intentionally limited to explicit-target resolution.  It does
+    not implement the no-target default/auto-select policy used by the transports.
+    """
+    if not isinstance(value, str):
+        raise InstanceTargetError(
+            "unity_instance must be a string.",
+            status_code=400,
+        )
+    value = value.strip()
+    if not value:
+        raise InstanceTargetError("unity_instance value must not be empty.", status_code=400)
+
+    transport = (transport_mode or "stdio").lower()
+    if value.isdigit():
+        if transport == "http":
+            exact_hash_matches = [
+                instance for instance in instances
+                if (_instance_hash(instance) or "") == value
+            ]
+            if len(exact_hash_matches) == 1:
+                resolved_id = _instance_id(exact_hash_matches[0])
+                if resolved_id:
+                    return resolved_id
+            if len(exact_hash_matches) > 1:
+                ambiguous = ", ".join(
+                    _instance_id(instance) or "?"
+                    for instance in exact_hash_matches
+                )
+                raise InstanceTargetError(
+                    f"Hash '{value}' is ambiguous ({ambiguous}). "
+                    "Provide the full Name@hash.",
+                    status_code=400,
+                )
+            hash_prefix_matches = [
+                instance for instance in instances
+                if (_instance_hash(instance) or "").startswith(value)
+            ]
+            if len(hash_prefix_matches) == 1:
+                resolved_id = _instance_id(hash_prefix_matches[0])
+                if resolved_id:
+                    return resolved_id
+            if len(hash_prefix_matches) > 1:
+                ambiguous = ", ".join(
+                    _instance_id(instance) or "?"
+                    for instance in hash_prefix_matches
+                )
+                raise InstanceTargetError(
+                    f"Hash prefix '{value}' is ambiguous ({ambiguous}). "
+                    "Provide the full Name@hash from mcpforunity://instances.",
+                    status_code=400,
+                )
+            raise InstanceTargetError(
+                f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
+                "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances.",
+                status_code=400,
+            )
+
+        port_matches = [
+            instance for instance in instances
+            if str(_instance_attribute(instance, "port", "")) == value
+        ]
+        if len(port_matches) == 1:
+            resolved_id = _instance_id(port_matches[0])
+            if resolved_id:
+                return resolved_id
+        available = ", ".join(
+            f"{_instance_id(instance) or '?'} (port {_instance_attribute(instance, 'port', '?')})"
+            for instance in instances
+        ) or "none"
+        if len(port_matches) > 1:
+            raise InstanceTargetError(
+                f"Port '{value}' is ambiguous. Available: {available}.",
+                status_code=400,
+            )
+        raise InstanceTargetError(
+            f"No Unity instance found on port {value}. Available: {available}.",
+            status_code=404,
+        )
+
+    ids = [resolved_id for resolved_id in (_instance_id(item) for item in instances) if resolved_id]
+
+    # A composite target is deliberately exact.  In particular, a wrong hash
+    # must never fall back to a matching project name.
+    if "@" in value:
+        for instance in instances:
+            instance_id = _instance_id(instance)
+            if instance_id and instance_id.lower() == value.lower():
+                return instance_id
+        available = ", ".join(ids) or "none"
+        raise InstanceTargetError(
+            f"Instance '{value}' not found. Available: {available}. "
+            "Read mcpforunity://instances for current sessions."
+        )
+
+    name_matches = [
+        instance for instance in instances
+        if (_instance_name(instance) or "") == value
+    ]
+    if len(name_matches) == 1:
+        resolved_id = _instance_id(name_matches[0])
+        if resolved_id:
+            return resolved_id
+    if len(name_matches) > 1:
+        ambiguous = ", ".join(_instance_id(instance) or "?" for instance in name_matches)
+        raise InstanceTargetError(
+            f"Project name '{value}' matches multiple Unity instances ({ambiguous}). "
+            "Provide the full Name@hash.",
+            status_code=400,
+        )
+
+    # Match project names before hash prefixes, as the stdio connection pool
+    # does. This keeps an intentional project-name target stable if its text
+    # also happens to prefix another instance hash.
+    lookup = value.lower()
+    hash_matches = [
+        instance for instance in instances
+        if (_instance_hash(instance) or "").lower().startswith(lookup)
+    ]
+    if len(hash_matches) == 1:
+        resolved_id = _instance_id(hash_matches[0])
+        if resolved_id:
+            return resolved_id
+    if len(hash_matches) > 1:
+        ambiguous = ", ".join(_instance_id(instance) or "?" for instance in hash_matches)
+        raise InstanceTargetError(
+            f"Hash prefix '{value}' is ambiguous ({ambiguous}). "
+            "Provide the full Name@hash from mcpforunity://instances.",
+            status_code=400,
+        )
+
+    available = ", ".join(ids) or "none"
+    raise InstanceTargetError(
+        f"No running Unity instance matches '{value}'. Available: {available}. "
+        "Read mcpforunity://instances for current sessions."
+    )
 
 
 def get_unity_instance_middleware() -> 'UnityInstanceMiddleware':
@@ -64,12 +268,13 @@ class UnityInstanceMiddleware(Middleware):
         self._unity_managed_tool_names: set[str] = set()
         self._tool_alias_to_unity_target: dict[str, str] = {}
         self._server_only_tool_names: set[str] = set()
+        self._unity_targetable_tool_names: set[str] = set()
         self._tool_visibility_signature: tuple[tuple[str, str], ...] = ()
         self._last_tool_visibility_refresh = 0.0
         self._tool_visibility_refresh_interval_seconds = 0.5
         self._has_logged_empty_registry_warning = False
 
-    async def set_active_instance(self, ctx, instance_id: str) -> None:
+    async def set_active_instance(self, ctx: Any, instance_id: str) -> None:
         """Store the active instance for this MCP session.
 
         Persisted via FastMCP's session-scoped state store, which keys by
@@ -80,11 +285,11 @@ class UnityInstanceMiddleware(Middleware):
         """
         await ctx.set_state(self._ACTIVE_INSTANCE_STATE_KEY, instance_id)
 
-    async def get_active_instance(self, ctx) -> str | None:
+    async def get_active_instance(self, ctx: Any) -> str | None:
         """Retrieve the active instance for this MCP session."""
         return await ctx.get_state(self._ACTIVE_INSTANCE_STATE_KEY)
 
-    async def clear_active_instance(self, ctx) -> None:
+    async def clear_active_instance(self, ctx: Any) -> None:
         """Clear the stored instance for this MCP session.
 
         Overwrites with None rather than calling ``delete_state``: the read
@@ -94,7 +299,7 @@ class UnityInstanceMiddleware(Middleware):
         """
         await ctx.set_state(self._ACTIVE_INSTANCE_STATE_KEY, None)
 
-    async def _discover_instances(self, ctx) -> list:
+    async def _discover_instances(self, ctx: Any) -> list[Any]:
         """
         Return running Unity instances across both HTTP (PluginHub) and stdio transports.
 
@@ -102,7 +307,7 @@ class UnityInstanceMiddleware(Middleware):
         """
         from types import SimpleNamespace
         transport = (config.transport_mode or "stdio").lower()
-        results: list = []
+        results: list[Any] = []
 
         if PluginHub.is_configured():
             try:
@@ -138,7 +343,7 @@ class UnityInstanceMiddleware(Middleware):
 
         return results
 
-    async def _resolve_instance_value(self, value: str, ctx) -> str:
+    async def _resolve_instance_value(self, value: str, ctx: Any) -> str:
         """
         Resolve a unity_instance string to a validated instance identifier.
 
@@ -149,70 +354,15 @@ class UnityInstanceMiddleware(Middleware):
 
         Raises ValueError with a user-friendly message on failure.
         """
-        value = value.strip()
-        if not value:
-            raise ValueError("unity_instance value must not be empty.")
-
         transport = (config.transport_mode or "stdio").lower()
-
-        # Port number (stdio only) — resolve to Name@hash via status file lookup
-        if value.isdigit():
-            if transport == "http":
-                raise ValueError(
-                    f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
-                    "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
-                )
-            port_int = int(value)
-            instances = await self._discover_instances(ctx)
-            for inst in instances:
-                if getattr(inst, "port", None) == port_int:
-                    return inst.id
-            available = ", ".join(
-                f"{getattr(i, 'id', '?')} (port {getattr(i, 'port', '?')})"
-                for i in instances
-            ) or "none"
-            raise ValueError(
-                f"No Unity instance found on port {value}. Available: {available}."
-            )
-
         instances = await self._discover_instances(ctx)
-        ids = {
-            getattr(inst, "id", None): inst
-            for inst in instances
-            if getattr(inst, "id", None)
-        }
-
-        # Exact Name@hash match
-        if "@" in value:
-            if value in ids:
-                return value
-            available = ", ".join(ids) or "none"
-            raise ValueError(
-                f"Instance '{value}' not found. Available: {available}. "
-                "Read mcpforunity://instances for current sessions."
-            )
-
-        # Hash prefix match
-        lookup = value.lower()
-        matches = [
-            inst for inst in instances
-            if getattr(inst, "hash", "") and getattr(inst, "hash", "").lower().startswith(lookup)
-        ]
-        if len(matches) == 1:
-            return matches[0].id
-        if len(matches) > 1:
-            ambiguous = ", ".join(getattr(m, "id", "?") for m in matches)
-            raise ValueError(
-                f"Hash prefix '{value}' is ambiguous ({ambiguous}). "
-                "Provide the full Name@hash from mcpforunity://instances."
-            )
-        available = ", ".join(ids) or "none"
-        raise ValueError(
-            f"No running Unity instance matches '{value}'. Available: {available}. "
-            "Read mcpforunity://instances for current sessions."
+        return resolve_instance_identifier(
+            value,
+            instances,
+            transport_mode=transport,
         )
 
-    async def _maybe_autoselect_instance(self, ctx) -> str | None:
+    async def _maybe_autoselect_instance(self, ctx: Any) -> str | None:
         """
         Auto-select the sole Unity instance when no active instance is set.
 
@@ -321,9 +471,82 @@ class UnityInstanceMiddleware(Middleware):
         from transport.unity_transport import _resolve_user_id_from_request
         return await _resolve_user_id_from_request()
 
-    async def _inject_unity_instance(self, context: MiddlewareContext) -> None:
-        """Inject active Unity instance and user_id into context if available."""
+    @staticmethod
+    async def _set_request_routing_state(ctx: Any, instance_id: str | None) -> None:
+        """Set routing state for this request without shadowing session state."""
+        set_state = getattr(ctx, "set_state", None)
+        if not callable(set_state):
+            return
+
+        try:
+            await set_state("unity_instance", instance_id, serializable=False)
+        except TypeError:
+            # Keep minimal test contexts and older Context shims usable. FastMCP
+            # 3.x accepts serializable=False and uses request-scoped state.
+            await set_state("unity_instance", instance_id)
+
+    @staticmethod
+    def _consume_resource_target(context: MiddlewareContext) -> tuple[str | None, MiddlewareContext]:
+        """Extract unity_instance from a Resource URI and return a clean context."""
+        message = getattr(context, "message", None)
+        uri = getattr(message, "uri", None)
+        if uri is None:
+            return None, context
+
+        uri_text = str(uri)
+        parsed = urlsplit(uri_text)
+        if not parsed.query:
+            return None, context
+
+        target_values: list[str] = []
+        clean_query_parts: list[str] = []
+        for part in parsed.query.split("&"):
+            key, separator, value = part.partition("=")
+            if unquote_plus(key) == "unity_instance":
+                target_values.append(unquote_plus(value) if separator else "")
+            else:
+                clean_query_parts.append(part)
+
+        if not target_values:
+            return None, context
+        if len(target_values) > 1:
+            raise ValueError(
+                "Resource URI must contain at most one unity_instance query parameter."
+            )
+
+        clean_uri = urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                "&".join(clean_query_parts),
+                parsed.fragment,
+            )
+        )
+
+        # MiddlewareContext is immutable, so carry a copied MCP request message
+        # into FastMCP's resource matcher. The fallback keeps direct test shims
+        # that expose a mutable SimpleNamespace compatible.
+        if clean_uri == uri_text:
+            return target_values[0], context
+        if hasattr(message, "model_copy"):
+            clean_message = message.model_copy(update={"uri": clean_uri})
+        else:
+            clean_message = copy(message)
+            setattr(clean_message, "uri", clean_uri)
+        if hasattr(context, "copy"):
+            return target_values[0], context.copy(message=clean_message)
+        return target_values[0], context
+
+    async def _inject_unity_instance(self, context: MiddlewareContext) -> MiddlewareContext:
+        """Inject active Unity instance and user_id into request-scoped state."""
         ctx = context.fastmcp_context
+        if ctx is None:
+            return context
+
+        # Always shadow the routing key for this request, including no-target
+        # calls, so a reused context cannot retain a prior per-call selection.
+        await self._set_request_routing_state(ctx, None)
 
         # Resolve user_id from the HTTP request's API key header
         user_id = await self._resolve_user_id()
@@ -334,68 +557,34 @@ class UnityInstanceMiddleware(Middleware):
         if user_id:
             await ctx.set_state("user_id", user_id)
 
-        # Per-call routing: check if this tool call explicitly specifies unity_instance.
-        # context.message.arguments is a mutable dict on CallToolRequestParams; resource
-        # reads use ReadResourceRequestParams which has no .arguments, so this is a no-op for them.
-        # We pop the key here so Pydantic's type_adapter.validate_python() never sees it.
-        active_instance: str | None = None
+        # Per-call routing: consume the Tool argument before FastMCP/Pydantic
+        # validation, or consume the Resource URI query before URI matching.
+        requested_instance: str | None = None
+        clean_context = context
         msg_args = getattr(getattr(context, "message", None), "arguments", None)
         if isinstance(msg_args, dict) and "unity_instance" in msg_args:
             raw = msg_args.pop("unity_instance")
             if raw is not None:
                 raw_str = str(raw).strip()
                 if raw_str:
-                    # Raises ValueError with a user-friendly message on invalid input.
-                    active_instance = await self._resolve_instance_value(raw_str, ctx)
-                    logger.debug("Per-call unity_instance resolved to: %s", active_instance)
+                    requested_instance = await self._resolve_instance_value(raw_str, ctx)
+                    logger.debug("Per-call unity_instance resolved to: %s", requested_instance)
+        elif getattr(getattr(context, "message", None), "uri", None) is not None:
+            raw, clean_context = self._consume_resource_target(context)
+            if raw:
+                requested_instance = await self._resolve_instance_value(raw, ctx)
+                logger.debug("Per-call resource unity_instance resolved to: %s", requested_instance)
 
-        if not active_instance:
-            active_instance = await self.get_active_instance(ctx)
-        if not active_instance:
-            active_instance = await self._maybe_autoselect_instance(ctx)
-        if active_instance:
-            # If using HTTP transport (PluginHub configured), validate session
-            # But for stdio transport (no PluginHub needed or maybe partially configured),
-            # we should be careful not to clear instance just because PluginHub can't resolve it.
-            # The 'active_instance' (Name@hash) might be valid for stdio even if PluginHub fails.
+        # Explicit target > session active instance > the existing auto/default
+        # behavior. Only the auto-select path is allowed to persist a selection.
+        effective_instance = requested_instance
+        if not effective_instance:
+            effective_instance = await self.get_active_instance(ctx)
+        if not effective_instance:
+            effective_instance = await self._maybe_autoselect_instance(ctx)
 
-            session_id: str | None = None
-            # Only validate via PluginHub if we are actually using HTTP transport.
-            # For stdio transport, skip PluginHub entirely - we only need the instance ID.
-            from transport.unity_transport import _is_http_transport
-            if _is_http_transport() and PluginHub.is_configured():
-                try:
-                    # resolving session_id might fail if the plugin disconnected
-                    # We only need session_id for HTTP transport routing.
-                    # For stdio, we just need the instance ID.
-                    # Pass user_id for remote-hosted mode session isolation
-                    session_id = await PluginHub._resolve_session_id(active_instance, user_id=user_id)
-                except (ConnectionError, ValueError, KeyError, TimeoutError) as exc:
-                    # If resolution fails, it means the Unity instance is not reachable via HTTP/WS.
-                    # If we are in stdio mode, this might still be fine if the user is just setting state?
-                    # But usually if PluginHub is configured, we expect it to work.
-                    # Let's LOG the error but NOT clear the instance immediately to avoid flickering,
-                    # or at least debug why it's failing.
-                    logger.debug(
-                        "PluginHub session resolution failed for %s: %s; leaving active_instance unchanged",
-                        active_instance,
-                        exc,
-                        exc_info=True,
-                    )
-                except Exception as exc:
-                    # Re-raise unexpected system exceptions to avoid swallowing critical failures
-                    if isinstance(exc, (SystemExit, KeyboardInterrupt)):
-                        raise
-                    logger.error(
-                        "Unexpected error during PluginHub session resolution for %s: %s",
-                        active_instance,
-                        exc,
-                        exc_info=True
-                    )
-
-            await ctx.set_state("unity_instance", active_instance)
-            if session_id is not None:
-                await ctx.set_state("unity_session_id", session_id)
+        await self._set_request_routing_state(ctx, effective_instance)
+        return clean_context
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
         """Inject active Unity instance into tool context if available."""
@@ -404,8 +593,8 @@ class UnityInstanceMiddleware(Middleware):
 
     async def on_read_resource(self, context: MiddlewareContext, call_next):
         """Inject active Unity instance into resource context if available."""
-        await self._inject_unity_instance(context)
-        return await call_next(context)
+        clean_context = await self._inject_unity_instance(context)
+        return await call_next(clean_context)
 
     async def on_list_tools(self, context: MiddlewareContext, call_next):
         """Filter MCP tool listing to the Unity-enabled set when session data is available."""
@@ -422,6 +611,8 @@ class UnityInstanceMiddleware(Middleware):
 
         tools = await call_next(context)
 
+        self._refresh_tool_visibility_metadata_from_registry()
+
         tool_names_from_fastmcp = sorted(getattr(t, "name", "?") for t in tools)
         _diag.debug(
             "on_list_tools: FastMCP returned %d tools: %s",
@@ -430,13 +621,12 @@ class UnityInstanceMiddleware(Middleware):
 
         if not self._should_filter_tool_listing():
             _diag.debug("on_list_tools: skipping middleware filter (not HTTP or PluginHub not configured)")
-            return tools
+            return [self._with_unity_instance_schema(tool) for tool in tools]
 
-        self._refresh_tool_visibility_metadata_from_registry()
         enabled_tool_names = await self._resolve_enabled_tool_names_for_context(context)
         if enabled_tool_names is None:
             _diag.debug("on_list_tools: no Unity session data, returning %d tools from FastMCP as-is", len(tools))
-            return tools
+            return [self._with_unity_instance_schema(tool) for tool in tools]
 
         filtered = []
         for tool in tools:
@@ -449,7 +639,7 @@ class UnityInstanceMiddleware(Middleware):
             "enabled_names=%s",
             len(filtered), len(tools), sorted(enabled_tool_names),
         )
-        return filtered
+        return [self._with_unity_instance_schema(tool) for tool in filtered]
 
     def _should_filter_tool_listing(self) -> bool:
         transport = (config.transport_mode or "stdio").lower()
@@ -563,6 +753,7 @@ class UnityInstanceMiddleware(Middleware):
             unity_managed_tool_names: set[str] = set()
             tool_alias_to_unity_target: dict[str, str] = {}
             server_only_tool_names: set[str] = set()
+            unity_targetable_tool_names: set[str] = set()
             signature_entries: list[tuple[str, str]] = []
 
             for tool_info in registry_tools:
@@ -571,9 +762,19 @@ class UnityInstanceMiddleware(Middleware):
                     continue
 
                 unity_target = tool_info.get("unity_target", tool_name)
+                unity_targetable = tool_info.get(
+                    "unity_targetable",
+                    unity_target is not None,
+                )
+                if unity_targetable is True:
+                    unity_targetable_tool_names.add(tool_name)
+
                 if unity_target is None:
                     server_only_tool_names.add(tool_name)
-                    signature_entries.append((tool_name, "<server-only>"))
+                    signature_entries.append((
+                        tool_name,
+                        f"<server-only>|targetable={unity_targetable is True}",
+                    ))
                     continue
 
                 if not isinstance(unity_target, str) or not unity_target:
@@ -585,12 +786,18 @@ class UnityInstanceMiddleware(Middleware):
 
                 if unity_target == tool_name:
                     unity_managed_tool_names.add(tool_name)
-                    signature_entries.append((tool_name, unity_target))
+                    signature_entries.append((
+                        tool_name,
+                        f"{unity_target}|targetable={unity_targetable is True}",
+                    ))
                     continue
 
                 tool_alias_to_unity_target[tool_name] = unity_target
                 unity_managed_tool_names.add(unity_target)
-                signature_entries.append((tool_name, unity_target))
+                signature_entries.append((
+                    tool_name,
+                    f"{unity_target}|targetable={unity_targetable is True}",
+                ))
 
             signature = tuple(sorted(signature_entries, key=lambda item: item[0]))
             if signature == self._tool_visibility_signature:
@@ -600,8 +807,38 @@ class UnityInstanceMiddleware(Middleware):
             self._unity_managed_tool_names = unity_managed_tool_names
             self._tool_alias_to_unity_target = tool_alias_to_unity_target
             self._server_only_tool_names = server_only_tool_names
+            self._unity_targetable_tool_names = unity_targetable_tool_names
             self._tool_visibility_signature = signature
             self._last_tool_visibility_refresh = now
+
+    def _is_tool_targetable(self, tool: Any) -> bool:
+        tool_name = getattr(tool, "name", None)
+        tags = getattr(tool, "tags", None) or set()
+        return (
+            UNITY_TARGETABLE_TAG in tags
+            or (
+                isinstance(tool_name, str)
+                and tool_name in self._unity_targetable_tool_names
+            )
+        )
+
+    def _with_unity_instance_schema(self, tool: Any) -> Any:
+        """Return a tool copy advertising the optional routing envelope."""
+        if not self._is_tool_targetable(tool):
+            return tool
+
+        parameters = getattr(tool, "parameters", None)
+        model_copy = getattr(tool, "model_copy", None)
+        if not isinstance(parameters, dict) or not callable(model_copy):
+            return tool
+
+        updated_parameters = deepcopy(parameters)
+        properties = updated_parameters.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+            updated_parameters["properties"] = properties
+        properties["unity_instance"] = deepcopy(_UNITY_INSTANCE_PARAMETER_SCHEMA)
+        return model_copy(update={"parameters": updated_parameters})
 
     @staticmethod
     def _resolve_candidate_project_hashes(active_instance: str | None) -> list[str]:

@@ -11,6 +11,7 @@ def mcp_for_unity_resource(
     uri: str,
     name: str | None = None,
     description: str | None = None,
+    unity_targetable: bool = True,
     **kwargs
 ) -> Callable:
     """
@@ -21,6 +22,8 @@ def mcp_for_unity_resource(
     Args:
         name: Resource name (defaults to function name)
         description: Resource description
+        unity_targetable: Whether to expose the optional ``unity_instance``
+            URI query parameter for per-call routing.
         **kwargs: Additional arguments passed to @mcp.resource()
 
     Example:
@@ -35,6 +38,7 @@ def mcp_for_unity_resource(
             'uri': uri,
             'name': resource_name,
             'description': description,
+            'unity_targetable': unity_targetable,
             'kwargs': kwargs
         })
 

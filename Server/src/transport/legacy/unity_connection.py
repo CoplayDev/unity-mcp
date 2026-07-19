@@ -273,7 +273,15 @@ class UnityConnection:
             return timeout
         return max(floor, min(timeout, deadline - time.monotonic()))
 
-    def send_command(self, command_type: str, params: dict[str, Any] | None = None, max_attempts: int | None = None, deadline: float | None = None) -> dict[str, Any]:
+    def send_command(
+        self,
+        command_type: str,
+        params: dict[str, Any] | None = None,
+        max_attempts: int | None = None,
+        deadline: float | None = None,
+        *,
+        allow_default_fallback: bool = True,
+    ) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested.
 
         Args:
@@ -335,6 +343,8 @@ class UnityConnection:
             if maybe_hash:
                 target_hash = maybe_hash
 
+        target_unavailable_error: ConnectionError | None = None
+
         # Preflight: if Unity reports reloading, return a structured hint so clients can retry politely
         try:
             status = read_status_file(target_hash)
@@ -359,10 +369,29 @@ class UnityConnection:
                 raise TimeoutError(
                     f"Command '{command_type}' exceeded total deadline of "
                     f"{total_timeout:.1f}s (connection wedged or Unity unresponsive)")
+            target_refresh_failed = False
             try:
                 # Discard stale sockets left over from a previous domain reload
                 # so we reconnect instead of writing to a dead connection.
                 self._ensure_live_connection()
+                # An explicit target that disappeared on the previous attempt
+                # has no safe port to connect to. Rediscover it before the next
+                # connect so a recovered target does not consume another retry.
+                if not self.sock and not allow_default_fallback and self.port is None:
+                    target_refresh_failed = True
+                    refreshed_instance = stdio_port_registry.get_instance(
+                        self.instance_id)
+                    if refreshed_instance and isinstance(refreshed_instance.port, int):
+                        target_refresh_failed = False
+                        self.port = refreshed_instance.port
+                        target_unavailable_error = None
+                        logger.debug(
+                            f"Rediscovered instance {self.instance_id} on port {self.port}")
+                    else:
+                        target_unavailable_error = ConnectionError(
+                            f"Unity instance '{self.instance_id}' is no longer available"
+                        )
+                        raise target_unavailable_error
                 # Ensure connected (handshake occurs within connect())
                 t_conn_start = time.time()
                 if not self.sock and not self.connect(self._cap_to_deadline(config.connection_timeout, deadline)):
@@ -440,7 +469,7 @@ class UnityConnection:
                 # Re-discover the port for this specific instance
                 try:
                     new_port: int | None = None
-                    if self.instance_id:
+                    if self.instance_id and not target_refresh_failed:
                         # Try to rediscover the specific instance via shared registry
                         refreshed_instance = stdio_port_registry.get_instance(
                             self.instance_id)
@@ -450,22 +479,38 @@ class UnityConnection:
                                 f"Rediscovered instance {self.instance_id} on port {new_port}")
                         else:
                             logger.warning(
-                                f"Instance {self.instance_id} not found during reconnection; falling back to port scan",
+                                f"Instance {self.instance_id} not found during reconnection",
                             )
 
-                    # Fallback to registry default if instance-specific discovery failed
+                    # An explicit per-call target must never be replaced by the
+                    # registry default after that target disappears. Calls that
+                    # entered the pool without an identifier retain the legacy
+                    # fallback behavior.
                     if new_port is None:
-                        new_port = stdio_port_registry.get_port(
-                            self.instance_id)
-                        logger.info(
-                            f"Using Unity port from stdio_port_registry: {new_port}")
+                        if not allow_default_fallback:
+                            target_unavailable_error = ConnectionError(
+                                f"Unity instance '{self.instance_id}' is no longer available"
+                            )
+                            self.port = None
+                        else:
+                            new_port = stdio_port_registry.get_port(
+                                self.instance_id)
+                            logger.info(
+                                f"Using Unity port from stdio_port_registry: {new_port}")
 
-                    if new_port != self.port:
+                    if new_port is not None and new_port != self.port:
                         logger.info(
                             f"Unity port changed {self.port} -> {new_port}")
-                    self.port = new_port
+                    if new_port is not None:
+                        self.port = new_port
+                        target_unavailable_error = None
                 except Exception as de:
                     logger.debug(f"Port discovery failed: {de}")
+                    if not allow_default_fallback:
+                        target_unavailable_error = ConnectionError(
+                            f"Unity instance '{self.instance_id}' is no longer available"
+                        )
+                        self.port = None
 
                 if attempt < attempts:
                     # Heartbeat-aware, jittered backoff
@@ -499,6 +544,8 @@ class UnityConnection:
                     sleep_s = self._cap_to_deadline(sleep_s, deadline, floor=0.0)
                     time.sleep(sleep_s)
                     continue
+                if target_unavailable_error is not None:
+                    raise target_unavailable_error
                 raise
 
 
@@ -534,20 +581,20 @@ class UnityConnectionPool:
         Returns:
             List of UnityInstanceInfo objects
         """
-        now = time.time()
-
-        # Return cached results if valid
-        if not force_refresh and (now - self._last_full_scan) < self._scan_interval:
-            logger.debug(
-                f"Returning cached Unity instances (age: {now - self._last_full_scan:.1f}s)")
-            return list(self._known_instances.values())
-
-        # Scan for instances
-        logger.debug("Scanning for Unity instances...")
-        instances = PortDiscovery.discover_all_unity_instances()
-
-        # Update cache
         with self._pool_lock:
+            now = time.time()
+
+            # Return cached results if valid
+            if not force_refresh and (now - self._last_full_scan) < self._scan_interval:
+                logger.debug(
+                    f"Returning cached Unity instances (age: {now - self._last_full_scan:.1f}s)")
+                return list(self._known_instances.values())
+
+            # Serialize forced scans so overlapping per-call targets cannot
+            # replace a complete snapshot with a transient partial one.
+            logger.debug("Scanning for instances...")
+            instances = PortDiscovery.discover_all_unity_instances()
+
             self._known_instances = {inst.id: inst for inst in instances}
             self._last_full_scan = now
 
@@ -875,7 +922,12 @@ def send_command_with_retry(
     send_max_attempts = None if retry_on_reload else 0
 
     response = conn.send_command(
-        command_type, params, max_attempts=send_max_attempts, deadline=deadline)
+        command_type,
+        params,
+        max_attempts=send_max_attempts,
+        deadline=deadline,
+        allow_default_fallback=instance_id is None,
+    )
     retries = 0
     wait_started = None
     reason = _extract_response_reason(response)
@@ -912,7 +964,12 @@ def send_command_with_retry(
         )
         time.sleep(max(0.0, sleep_ms / 1000.0))
         retries += 1
-        response = conn.send_command(command_type, params, deadline=deadline)
+        response = conn.send_command(
+            command_type,
+            params,
+            deadline=deadline,
+            allow_default_fallback=instance_id is None,
+        )
         reason = _extract_response_reason(response)
 
     if wait_started is not None:

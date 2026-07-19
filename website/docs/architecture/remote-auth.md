@@ -26,8 +26,8 @@ MCP Client                    MCP Server                      External Auth
      |                           |                               |
      |                   Cache result (TTL)                      |
      |                           |                               |
-     |            ctx.set_state("user_id", "user-42")            |
-     |            ctx.set_state("unity_instance", "Proj@hash")   |
+     |            session user_id + active instance              |
+     |            request effective target                      |
      |                           |                               |
      |            PluginHub.send_command_for_instance             |
      |            (user_id scoped session lookup)                 |
@@ -118,7 +118,9 @@ Key methods:
 
 **File:** `Server/src/transport/unity_instance_middleware.py`
 
-FastMCP middleware that intercepts all tool and resource calls to inject the active Unity instance and user identity into the request-scoped context.
+FastMCP middleware that resolves the authenticated user and effective Unity
+target for every tool call and resource read. The authenticated user and active
+instance are MCP-session state; an explicit per-call target is request-local.
 
 Entry points:
 
@@ -129,9 +131,13 @@ Both delegate to `_inject_unity_instance(context)`, which:
 
 1. Calls `_resolve_user_id()` to extract the user identity from the HTTP request.
 2. If remote-hosted mode is active and no `user_id` is resolved, raises `RuntimeError` (surfaces as MCP error).
-3. Sets `ctx.set_state("user_id", user_id)`.
-4. Looks up or auto-selects the active Unity instance.
-5. Sets `ctx.set_state("unity_instance", active_instance)`.
+3. Stores the authenticated user in MCP session state so discovery and selector resolution are user-scoped.
+4. Consumes an explicit `unity_instance` from a targetable tool envelope or resource URI query, if present.
+5. Otherwise reads the active instance from FastMCP session state and applies the existing auto/default behavior when allowed.
+6. Stores the resulting effective target in request-scoped `unity_instance` state with `serializable=False`.
+
+The explicit target is never written to the session's active-instance key. This
+keeps concurrent calls in one MCP session isolated from one another.
 
 ### _resolve_user_id_from_request
 
@@ -153,13 +159,13 @@ The middleware calls this indirectly through `_resolve_user_id()`, which adds an
 
 ## Request Lifecycle
 
-A complete authenticated MCP tool call follows this path:
+A complete authenticated MCP tool call or resource read follows this path:
 
 1. **HTTP request arrives** at `/mcp` with `X-API-Key: <key>` header.
 
-2. **FastMCP dispatches** the MCP tool call through its middleware chain.
+2. **FastMCP dispatches** the MCP request through its middleware chain.
 
-3. **`UnityInstanceMiddleware.on_call_tool`** is invoked.
+3. **The middleware entry point** is invoked: `on_call_tool` for a tool call or `on_read_resource` for a resource read.
 
 4. **`_inject_unity_instance`** runs:
    - Calls `_resolve_user_id()`, which calls `_resolve_user_id_from_request()`.
@@ -168,19 +174,20 @@ A complete authenticated MCP tool call follows this path:
    - If valid, `user_id` is returned. If invalid or missing, `None` is returned.
    - In remote-hosted mode, `None` causes a `RuntimeError`.
 
-5. **`user_id` stored in context** via `ctx.set_state("user_id", user_id)`.
+5. **`user_id` stored in MCP session state** and used to scope visible Unity sessions.
 
-6. **Session key derived** by `get_session_key(ctx)`:
-   - Priority: `client_id` (if available) > `user:{user_id}` > `"global"`.
-   - The `user:{user_id}` fallback ensures session isolation when MCP transports don't provide stable client IDs.
+6. **Explicit target consumed**, if present:
+   - For a targetable tool, `unity_instance` is removed from the tool argument envelope before FastMCP validates the business arguments.
+   - For a targetable resource, `unity_instance` is removed from the URI before FastMCP matches the resource template.
+   - The selector is resolved against the authenticated user's sessions. Invalid and ambiguous selectors fail without fallback.
 
-7. **Active Unity instance looked up** from `_active_by_key` dict using the session key. If none is set, `_maybe_autoselect_instance` is called (but returns `None` in remote-hosted mode).
+7. **Session active instance looked up** from FastMCP's session-scoped state. If no active instance exists, the existing auto/default behavior runs; remote-hosted mode disables auto-selection.
 
-8. **Instance injected** via `ctx.set_state("unity_instance", active_instance)`.
+8. **Effective target injected** via request-scoped `ctx.set_state("unity_instance", target, serializable=False)`.
 
-9. **Tool executes**, reading the instance from `ctx.get_state("unity_instance")`.
+9. **Tool or resource executes**, reading the effective target from request state. A call without an explicit selector still uses the active session target.
 
-10. **Command routed** through `PluginHub.send_command_for_instance(unity_instance, ..., user_id=user_id)`, which resolves the session using `PluginRegistry.get_session_id_by_hash(project_hash, user_id)`.
+10. **Command routed** through the user-scoped PluginHub session. The `unity_instance` routing envelope is Python-only and is not included in Unity command `params`.
 
 ## WebSocket Auth Flow
 
@@ -293,19 +300,27 @@ The system fails closed at every boundary:
 
 API keys are never logged in full. Keys longer than 8 characters are redacted to `xxxx...yyyy` in log messages.
 
-## Session Key Derivation
+## Session and request state
 
-`UnityInstanceMiddleware.get_session_key(ctx)` determines which dict key to use for storing/retrieving the active Unity instance per session:
+FastMCP stores persistent state under the MCP session ID. MCP for Unity uses
+session-scoped state for authentication and the normal selection, and
+request-scoped state for the effective target of one request:
 
-```
-1. client_id (string, non-empty)  ->  return client_id
-2. ctx.get_state("user_id")       ->  return "user:{user_id}"
-3. fallback                       ->  return "global"
-```
+| State | Scope | Purpose |
+|-------|-------|---------|
+| `user_id` | MCP session | Authenticated identity used to scope remote session discovery |
+| `mcpforunity.active_instance` | MCP session | The instance selected by `set_active_instance` |
+| `unity_instance` | Current request (`serializable=False`) | The resolved target used by one tool call or resource read |
 
-- **`client_id`:** Stable per MCP client connection. Preferred when available.
-- **`user:{user_id}`:** Used in remote-hosted mode when the MCP transport doesn't provide a stable client ID. Ensures different users don't share instance selections.
-- **`"global"`:** Local-dev fallback for single-user scenarios. Unreachable in remote-hosted mode because the auth enforcement raises `RuntimeError` before this point if no `user_id` is available.
+The active selection is isolated by FastMCP's session ID, not by a peer-supplied
+`client_id` and not by a process-global dictionary. An explicit per-call target
+is resolved after authentication and is never written to the active-instance
+state. This allows concurrent requests in one session to target different
+Editors without changing the session default.
+
+In remote-hosted mode, the authenticated `user_id` limits instance discovery
+and selector resolution. The same user's MCP sessions still keep independent
+active selections.
 
 ## Disabled Features in Remote-Hosted Mode
 
@@ -359,5 +374,5 @@ create_mcp_server()
 | `Server/src/services/api_key_service.py` | API key validation singleton with caching and retry |
 | `Server/src/transport/plugin_hub.py` | WebSocket auth gate, user-scoped session queries |
 | `Server/src/transport/plugin_registry.py` | Dual-index session storage (local + user-scoped) |
-| `Server/src/transport/unity_instance_middleware.py` | Per-request user_id and instance injection |
+| `Server/src/transport/unity_instance_middleware.py` | User-scoped discovery, session active-instance state, and request-local effective-target injection |
 | `Server/src/transport/unity_transport.py` | `_resolve_user_id_from_request` helper |

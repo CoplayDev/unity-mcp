@@ -16,6 +16,7 @@ from services.tools import get_unity_instance_from_context
 @mcp_for_unity_tool(
     name="execute_custom_tool",
     unity_target=None,
+    unity_targetable=True,
     group=None,
     description="Execute a project-scoped custom tool registered by Unity.",
     annotations=ToolAnnotations(

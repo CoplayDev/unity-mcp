@@ -8,6 +8,7 @@ When a tool call includes unity_instance in its arguments, the middleware:
 """
 import sys
 import types
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +27,20 @@ class DummyMiddlewareContext:
     def __init__(self, ctx, arguments: dict | None = None):
         self.fastmcp_context = ctx
         self.message = SimpleNamespace(arguments=arguments if arguments is not None else {})
+
+
+class CopyableMiddlewareContext:
+    """Small middleware context stand-in that supports context.copy()."""
+
+    def __init__(self, message, fastmcp_context):
+        self.message = message
+        self.fastmcp_context = fastmcp_context
+
+    def copy(self, **changes):
+        return CopyableMiddlewareContext(
+            changes.get("message", self.message),
+            changes.get("fastmcp_context", self.fastmcp_context),
+        )
 
 
 def _make_middleware(monkeypatch, *, transport="stdio", plugin_hub_configured=False, sessions=None, pool_instances=None):
@@ -146,6 +161,8 @@ async def test_inline_does_not_persist_to_session(monkeypatch):
     mw_ctx1 = DummyMiddlewareContext(ctx, arguments={"unity_instance": "bbb222"})
     await mw._inject_unity_instance(mw_ctx1)
     assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
+    assert ctx._state[mw._ACTIVE_INSTANCE_STATE_KEY] == "ProjA@aaa111"
+    assert ctx._request_state["unity_instance"] == "ProjB@bbb222"
 
     # Call 2: no inline — must revert to session-persisted ProjA
     mw_ctx2 = DummyMiddlewareContext(ctx, arguments={})
@@ -172,6 +189,128 @@ async def test_inline_overrides_session_persisted_instance(monkeypatch):
     assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
     # Session still pinned to ProjA
     assert await mw.get_active_instance(ctx) == "ProjA@aaa111"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_per_call_targets_are_request_scoped(monkeypatch):
+    """Two calls in one MCP session keep independent request routing state."""
+    instances = [
+        SimpleNamespace(id="ProjA@aaa111", hash="aaa111"),
+        SimpleNamespace(id="ProjB@bbb222", hash="bbb222"),
+    ]
+    mw = _make_middleware(monkeypatch, pool_instances=instances)
+
+    shared_session_state = {}
+    ctx_a = DummyContext()
+    ctx_b = DummyContext()
+    ctx_a.session_id = ctx_b.session_id = "same-mcp-session"
+    ctx_a._state = ctx_b._state = shared_session_state
+
+    async def inject(ctx, target):
+        await asyncio.sleep(0)
+        return await mw._inject_unity_instance(
+            CopyableMiddlewareContext(
+                SimpleNamespace(
+                    name="manage_scene",
+                    arguments={"unity_instance": target},
+                ),
+                ctx,
+            )
+        )
+
+    await asyncio.gather(inject(ctx_a, "aaa111"), inject(ctx_b, "bbb222"))
+
+    assert ctx_a._request_state["unity_instance"] == "ProjA@aaa111"
+    assert ctx_b._request_state["unity_instance"] == "ProjB@bbb222"
+    assert "mcpforunity.active_instance" not in shared_session_state
+
+
+@pytest.mark.asyncio
+async def test_tool_routing_is_consumed_before_call_next(monkeypatch):
+    """FastMCP receives the tool arguments with routing metadata removed."""
+    mw = _make_middleware(
+        monkeypatch,
+        pool_instances=[SimpleNamespace(id="Proj@abc123", hash="abc123")],
+    )
+    ctx = DummyContext()
+    middleware_ctx = CopyableMiddlewareContext(
+        SimpleNamespace(
+            name="manage_scene",
+            arguments={"action": "get_active", "unity_instance": "abc123"},
+        ),
+        ctx,
+    )
+    seen = {}
+
+    async def call_next(clean_context):
+        seen["arguments"] = clean_context.message.arguments
+        return {"success": True}
+
+    await mw.on_call_tool(middleware_ctx, call_next)
+
+    assert seen["arguments"] == {"action": "get_active"}
+    assert "unity_instance" not in seen["arguments"]
+
+
+@pytest.mark.asyncio
+async def test_resource_target_is_consumed_and_command_params_stay_unchanged(monkeypatch):
+    """Resource routing query is removed before FastMCP and Unity execution."""
+    mw = _make_middleware(
+        monkeypatch,
+        pool_instances=[SimpleNamespace(id="Proj@abc123", hash="abc123")],
+    )
+    ctx = DummyContext()
+    resource_ctx = CopyableMiddlewareContext(
+        SimpleNamespace(
+            uri="mcpforunity://project/info?unity_instance=Proj%40abc123",
+        ),
+        ctx,
+    )
+    seen = {}
+
+    import services.resources.project_info as project_info
+
+    async def fake_send(_send_fn, target, command_type, params, **_kwargs):
+        seen["target"] = target
+        seen["command_type"] = command_type
+        seen["params"] = params
+        return {"success": True, "data": {}}
+
+    monkeypatch.setattr(project_info, "send_with_unity_instance", fake_send)
+
+    async def call_next(clean_context):
+        seen["uri"] = str(clean_context.message.uri)
+        return await project_info.get_project_info(ctx)
+
+    await mw.on_read_resource(resource_ctx, call_next)
+
+    assert seen["uri"] == "mcpforunity://project/info"
+    assert seen["target"] == "Proj@abc123"
+    assert seen["command_type"] == "get_project_info"
+    assert seen["params"] == {}
+    assert await ctx.get_state("unity_instance") == "Proj@abc123"
+
+
+@pytest.mark.asyncio
+async def test_resource_without_query_keeps_original_uri(monkeypatch):
+    """The original resource URI remains unchanged when no target is supplied."""
+    mw = _make_middleware(monkeypatch)
+    ctx = DummyContext()
+    resource_ctx = CopyableMiddlewareContext(
+        SimpleNamespace(uri="mcpforunity://editor/state"),
+        ctx,
+    )
+    seen = {}
+
+    async def call_next(clean_context):
+        seen["uri"] = str(clean_context.message.uri)
+        return {"success": True}
+
+    await mw.on_read_resource(resource_ctx, call_next)
+
+    assert seen["uri"] == "mcpforunity://editor/state"
+    assert await ctx.get_state("unity_instance") is None
+    assert ctx._request_state["unity_instance"] is None
 
 
 # ---------------------------------------------------------------------------
