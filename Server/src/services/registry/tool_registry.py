@@ -38,8 +38,8 @@ def mcp_for_unity_tool(
     name: str | None = None,
     description: str | None = None,
     unity_target: str | None = "self",
-    unity_targetable: bool | None = None,
     group: str | None = "core",
+    unity_targetable: bool | None = None,
     **kwargs
 ) -> Callable:
     """

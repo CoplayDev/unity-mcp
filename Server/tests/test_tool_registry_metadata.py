@@ -59,6 +59,19 @@ def test_server_only_tool_can_opt_into_per_call_targeting():
     assert UNITY_TARGETABLE_TAG in tool_info["kwargs"]["tags"]
 
 
+def test_tool_registry_preserves_group_position_argument():
+    @mcp_for_unity_tool(None, None, "self", "vfx")
+    def _positional_group_tool():
+        return None
+
+    tool_info = next(
+        item for item in get_registered_tools()
+        if item["name"] == "_positional_group_tool"
+    )
+    assert tool_info["group"] == "vfx"
+    assert tool_info["unity_targetable"] is True
+
+
 def test_tool_registry_does_not_leak_unity_target_into_tool_kwargs():
     @mcp_for_unity_tool(unity_target="manage_script", annotations={"title": "x"})
     def _non_leaking_target_tool():

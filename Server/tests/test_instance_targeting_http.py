@@ -58,6 +58,27 @@ def test_http_target_resolution_rejects_duplicate_project_name():
         resolve_instance_identifier("Project", _instances(), transport_mode="http")
 
 
+def test_http_target_resolution_prefers_numeric_project_name():
+    numeric_project = SimpleNamespace(
+        id="123@aaa111",
+        project="123",
+        name="123",
+        hash="aaa111",
+    )
+    hash_prefix_match = SimpleNamespace(
+        id="Other@123bbb",
+        project="Other",
+        name="Other",
+        hash="123bbb",
+    )
+
+    assert resolve_instance_identifier(
+        "123",
+        [numeric_project, hash_prefix_match],
+        transport_mode="http",
+    ) == "123@aaa111"
+
+
 def test_http_target_resolution_rejects_wrong_hash_without_name_fallback():
     with pytest.raises(InstanceTargetError, match="not found"):
         resolve_instance_identifier("Project@wrong", _instances(), transport_mode="http")

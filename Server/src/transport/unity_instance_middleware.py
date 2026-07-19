@@ -104,6 +104,39 @@ def resolve_instance_identifier(
         raise InstanceTargetError("unity_instance value must not be empty.", status_code=400)
 
     transport = (transport_mode or "stdio").lower()
+    ids = [resolved_id for resolved_id in (_instance_id(item) for item in instances) if resolved_id]
+
+    # A composite target is deliberately exact. In particular, a wrong hash
+    # must never fall back to a matching project name.
+    if "@" in value:
+        for instance in instances:
+            instance_id = _instance_id(instance)
+            if instance_id and instance_id.lower() == value.lower():
+                return instance_id
+        available = ", ".join(ids) or "none"
+        raise InstanceTargetError(
+            f"Instance '{value}' not found. Available: {available}. "
+            "Read mcpforunity://instances for current sessions."
+        )
+
+    # Project names take precedence over numeric hash/port shorthand, matching
+    # the legacy stdio connection-pool resolution order.
+    name_matches = [
+        instance for instance in instances
+        if (_instance_name(instance) or "") == value
+    ]
+    if len(name_matches) == 1:
+        resolved_id = _instance_id(name_matches[0])
+        if resolved_id:
+            return resolved_id
+    if len(name_matches) > 1:
+        ambiguous = ", ".join(_instance_id(instance) or "?" for instance in name_matches)
+        raise InstanceTargetError(
+            f"Project name '{value}' matches multiple Unity instances ({ambiguous}). "
+            "Provide the full Name@hash.",
+            status_code=400,
+        )
+
     if value.isdigit():
         if transport == "http":
             exact_hash_matches = [
@@ -170,40 +203,8 @@ def resolve_instance_identifier(
             status_code=404,
         )
 
-    ids = [resolved_id for resolved_id in (_instance_id(item) for item in instances) if resolved_id]
-
-    # A composite target is deliberately exact.  In particular, a wrong hash
-    # must never fall back to a matching project name.
-    if "@" in value:
-        for instance in instances:
-            instance_id = _instance_id(instance)
-            if instance_id and instance_id.lower() == value.lower():
-                return instance_id
-        available = ", ".join(ids) or "none"
-        raise InstanceTargetError(
-            f"Instance '{value}' not found. Available: {available}. "
-            "Read mcpforunity://instances for current sessions."
-        )
-
-    name_matches = [
-        instance for instance in instances
-        if (_instance_name(instance) or "") == value
-    ]
-    if len(name_matches) == 1:
-        resolved_id = _instance_id(name_matches[0])
-        if resolved_id:
-            return resolved_id
-    if len(name_matches) > 1:
-        ambiguous = ", ".join(_instance_id(instance) or "?" for instance in name_matches)
-        raise InstanceTargetError(
-            f"Project name '{value}' matches multiple Unity instances ({ambiguous}). "
-            "Provide the full Name@hash.",
-            status_code=400,
-        )
-
-    # Match project names before hash prefixes, as the stdio connection pool
-    # does. This keeps an intentional project-name target stable if its text
-    # also happens to prefix another instance hash.
+    # Match hash prefixes after exact IDs and project names, as the stdio
+    # connection pool does.
     lookup = value.lower()
     hash_matches = [
         instance for instance in instances
