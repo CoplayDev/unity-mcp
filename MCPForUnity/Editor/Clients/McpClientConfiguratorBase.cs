@@ -1393,31 +1393,21 @@ namespace MCPForUnity.Editor.Clients
                 // Walk up the directory tree to find a matching project config
                 // Claude Code may be configured at a parent directory (e.g., repo root)
                 // while Unity project is in a subdirectory (e.g., TestProjects/UnityMCPTests)
-                string currentDir = NormalizePath(projectDir);
-                while (!string.IsNullOrEmpty(currentDir))
-                {
-                    if (normalizedProjects.TryGetValue(currentDir, out var projectConfig))
-                    {
-                        var mcpServers = projectConfig?["mcpServers"] as JObject;
-                        if (mcpServers != null)
-                        {
-                            foreach (var server in mcpServers.Properties())
-                            {
-                                if (string.Equals(server.Name, "UnityMCP", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return (server.Value as JObject, null);
-                                }
-                            }
-                        }
-                        // Found the project but no UnityMCP - don't continue walking up
-                        return (null, null);
-                    }
+                var fromProjectDir = FindUnityServerFromWalk(normalizedProjects, NormalizePath(projectDir));
+                if (fromProjectDir != null)
+                    return (fromProjectDir, null);
 
-                    // Move up one directory
-                    int lastSlash = currentDir.LastIndexOf('/');
-                    if (lastSlash <= 0)
-                        break;
-                    currentDir = currentDir.Substring(0, lastSlash);
+                // `claude mcp add --scope local` keys the registration by the
+                // git MAIN repo root. When the Unity project lives in a linked
+                // worktree, that root is a sibling path the ancestor walk above
+                // can never reach — retry from the parsed main root.
+                string mainRoot = GetGitMainRepoRoot(projectDir);
+                if (!string.IsNullOrEmpty(mainRoot)
+                    && !string.Equals(mainRoot, NormalizePath(projectDir), StringComparison.OrdinalIgnoreCase))
+                {
+                    var fromMainRoot = FindUnityServerFromWalk(normalizedProjects, mainRoot);
+                    if (fromMainRoot != null)
+                        return (fromMainRoot, null);
                 }
 
                 return (null, null);
@@ -1426,6 +1416,65 @@ namespace MCPForUnity.Editor.Clients
             {
                 return (null, $"Error reading user Claude config: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Walks up from startDir (normalized) looking for a project entry with
+        /// a UnityMCP registration. Stops at the first project entry found even
+        /// if it lacks UnityMCP (a configured project boundary).
+        /// </summary>
+        private static JObject FindUnityServerFromWalk(Dictionary<string, JObject> normalizedProjects, string startDir)
+        {
+            string currentDir = startDir;
+            while (!string.IsNullOrEmpty(currentDir))
+            {
+                if (normalizedProjects.TryGetValue(currentDir, out var projectConfig))
+                {
+                    var mcpServers = projectConfig?["mcpServers"] as JObject;
+                    if (mcpServers != null)
+                    {
+                        foreach (var server in mcpServers.Properties())
+                        {
+                            if (string.Equals(server.Name, "UnityMCP", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return server.Value as JObject;
+                            }
+                        }
+                    }
+                    // Found the project but no UnityMCP - don't continue walking up
+                    return null;
+                }
+
+                // Move up one directory
+                int lastSlash = currentDir.LastIndexOf('/');
+                if (lastSlash <= 0)
+                    break;
+                currentDir = currentDir.Substring(0, lastSlash);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// For a linked git worktree, the main repo root parsed from the .git
+        /// pointer file ("gitdir: &lt;root&gt;/.git/worktrees/&lt;name&gt;"),
+        /// normalized. Null for a regular checkout (.git directory) or
+        /// anything unparseable.
+        /// </summary>
+        private static string GetGitMainRepoRoot(string dir)
+        {
+            try
+            {
+                string gitPath = Path.Combine(dir, ".git");
+                if (!File.Exists(gitPath)) return null;
+                string line = File.ReadAllText(gitPath).Trim();
+                if (!line.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase)) return null;
+                string gitDir = line.Substring("gitdir:".Length).Trim();
+                if (!Path.IsPathRooted(gitDir)) gitDir = Path.Combine(dir, gitDir);
+                gitDir = NormalizePath(Path.GetFullPath(gitDir));
+                int i = gitDir.LastIndexOf("/.git/", StringComparison.OrdinalIgnoreCase);
+                return i > 0 ? gitDir.Substring(0, i) : null;
+            }
+            catch { return null; }
         }
 
         /// <summary>
