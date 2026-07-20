@@ -1370,13 +1370,24 @@ namespace MCPForUnity.Editor.Clients
                 if (projects == null)
                     return (null, null);
 
-                // Build a dictionary of normalized paths for quick lookup
-                // Use last entry for duplicates (forward/backslash variants) as it's typically more recent
+                // Build a dictionary of normalized paths for quick lookup.
+                // Duplicate keys (forward/backslash variants of the same path)
+                // are merged by preferring the entry that actually carries a
+                // UnityMCP registration: JSON property order is not correlated
+                // with recency across variants, so blind last-entry-wins lets a
+                // stale variant without mcpServers shadow a real registration
+                // and CheckStatus reports NotConfigured despite a working
+                // `claude mcp add --scope local` setup.
                 var normalizedProjects = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
                 foreach (var project in projects.Properties())
                 {
                     string normalizedPath = NormalizePath(project.Name);
-                    normalizedProjects[normalizedPath] = project.Value as JObject;
+                    var value = project.Value as JObject;
+                    if (!normalizedProjects.TryGetValue(normalizedPath, out var existing)
+                        || RegistrationRank(value) >= RegistrationRank(existing))
+                    {
+                        normalizedProjects[normalizedPath] = value;
+                    }
                 }
 
                 // Walk up the directory tree to find a matching project config
@@ -1415,6 +1426,21 @@ namespace MCPForUnity.Editor.Clients
             {
                 return (null, $"Error reading user Claude config: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Ranks a ~/.claude.json project entry for duplicate-key merging:
+        /// 2 = has a UnityMCP registration, 1 = has other mcpServers, 0 = none.
+        /// </summary>
+        private static int RegistrationRank(JObject projectConfig)
+        {
+            if (!(projectConfig?["mcpServers"] is JObject servers)) return 0;
+            foreach (var server in servers.Properties())
+            {
+                if (string.Equals(server.Name, "UnityMCP", StringComparison.OrdinalIgnoreCase))
+                    return 2;
+            }
+            return servers.HasValues ? 1 : 0;
         }
 
         /// <summary>
