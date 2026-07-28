@@ -33,6 +33,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     return new FalAdapter();
                 case "openrouter":
                     return new OpenRouterAdapter();
+                case "minimax":
+                    return new MiniMaxImageAdapter();
                 default:
                     throw new NotSupportedException($"Unknown image provider '{id}'.");
             }
@@ -69,6 +71,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 new ProviderInfo { Id = "sketchfab", Kind = "marketplace", Configured = IsConfigured("sketchfab"), Capabilities = new[] { "search", "import" } },
                 new ProviderInfo { Id = "fal", Kind = "image", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },
+                new ProviderInfo { Id = "minimax", Kind = "image", Configured = IsConfigured("minimax"), Capabilities = new[] { "text", "image" } },
                 // fal appears twice by design — once per kind (image + audio) — sharing the single "fal" key.
                 new ProviderInfo { Id = "fal", Kind = "audio", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "music", "sfx" } },
             };
