@@ -212,6 +212,19 @@ namespace MCPForUnityTests.Editor.Services.Server
             StringAssert.Contains(">>", startInfo.Arguments, "output should be appended to the log via >>");
         }
 
+#if UNITY_EDITOR_WIN
+        [Test]
+        public void CreateHeadlessProcessStartInfo_RedirectsStdinFromNul()
+        {
+            // Regression guard for #1279: the Editor is a console-less GUI process, so a child
+            // launched with CreateNoWindow inherits an invalid stdin and uvx.exe fails with
+            // "The handle is invalid. (os error 6)". stdin must come from NUL instead.
+            var startInfo = _launcher.CreateHeadlessProcessStartInfo("uvx run-server", LogPath());
+
+            StringAssert.Contains("< NUL", startInfo.Arguments, "stdin should be redirected from NUL");
+        }
+#endif
+
         [Test]
         public void CreateHeadlessProcessStartInfo_LogPathWithSpaces_IsQuoted()
         {
