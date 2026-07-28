@@ -599,7 +599,26 @@ namespace MCPForUnity.Editor.Clients
             try
             {
                 string uvx = GetUvxPathOrError();
-                return CodexConfigHelper.BuildCodexServerBlock(uvx);
+
+                // BuildCodexServerBlock reads the global transport pref directly. Configure() gets
+                // that pref coerced for it by ClientConfigurationService.ConfigureWithTransportCoercion,
+                // but the snippet path does not, so a stdio-only client would otherwise render an
+                // HTTP block that connects and then exposes no tools (#1193).
+                bool original = EditorConfigurationCache.Instance.UseHttpTransport;
+                if (!original || Client.SupportsHttpTransport)
+                {
+                    return CodexConfigHelper.BuildCodexServerBlock(uvx);
+                }
+
+                try
+                {
+                    EditorConfigurationCache.Instance.SetUseHttpTransport(false);
+                    return CodexConfigHelper.BuildCodexServerBlock(uvx);
+                }
+                finally
+                {
+                    EditorConfigurationCache.Instance.SetUseHttpTransport(original);
+                }
             }
             catch (Exception ex)
             {
