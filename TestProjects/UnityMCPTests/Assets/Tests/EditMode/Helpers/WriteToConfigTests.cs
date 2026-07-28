@@ -27,15 +27,29 @@ namespace MCPForUnityTests.Editor.Helpers
         private bool _originalHttpTransport;
         private bool _hadHttpUrl;
         private string _originalHttpUrl;
+        private bool _hadHttpTransportScope;
+        private string _originalHttpTransportScope;
 
         [SetUp]
         public void SetUp()
         {
             // Save original pref values FIRST - TearDown runs even when test is ignored!
-            _hadHttpTransport = EditorPrefs.HasKey(UseHttpTransportPrefKey);
-            _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
-            _hadHttpUrl = EditorPrefs.HasKey(HttpUrlPrefKey);
-            _originalHttpUrl = EditorPrefs.GetString(HttpUrlPrefKey, "");
+            _hadHttpTransport = EditorPrefs.HasKey(ProjectScopedEditorPrefs.GetKey(UseHttpTransportPrefKey));
+            _originalHttpTransport = ProjectScopedEditorPrefs.GetBool(
+                UseHttpTransportPrefKey,
+                true,
+                allowLegacyFallback: false);
+            _hadHttpUrl = EditorPrefs.HasKey(ProjectScopedEditorPrefs.GetKey(HttpUrlPrefKey));
+            _originalHttpUrl = ProjectScopedEditorPrefs.GetString(
+                HttpUrlPrefKey,
+                "",
+                allowLegacyFallback: false);
+            _hadHttpTransportScope = EditorPrefs.HasKey(
+                ProjectScopedEditorPrefs.GetKey(EditorPrefKeys.HttpTransportScope));
+            _originalHttpTransportScope = ProjectScopedEditorPrefs.GetString(
+                EditorPrefKeys.HttpTransportScope,
+                "local",
+                allowLegacyFallback: false);
 
             // Tests are designed for Linux/macOS runners. Skip on Windows due to ProcessStartInfo
             // restrictions when UseShellExecute=false for .cmd/.bat scripts.
@@ -64,9 +78,9 @@ namespace MCPForUnityTests.Editor.Helpers
             // Disable auto-registration to avoid hitting user configs during tests
             EditorPrefs.SetBool(EditorPrefKeys.AutoRegisterEnabled, false);
             // Force HTTP transport defaults so expectations match current behavior
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
-            EditorPrefs.SetString(HttpUrlPrefKey, "http://localhost:8080");
-            EditorConfigCache.Instance.Refresh();
+            EditorConfigCache.Instance.SetUseHttpTransport(true);
+            EditorConfigCache.Instance.SetHttpBaseUrl("http://localhost:8080");
+            EditorConfigCache.Instance.SetHttpTransportScope("local");
         }
 
         [TearDown]
@@ -79,14 +93,20 @@ namespace MCPForUnityTests.Editor.Helpers
 
             // Restore original pref values (don't delete if user had them set!)
             if (_hadHttpTransport)
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, _originalHttpTransport);
+                EditorConfigCache.Instance.SetUseHttpTransport(_originalHttpTransport);
             else
-                EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
+                ProjectScopedEditorPrefs.DeleteKey(UseHttpTransportPrefKey);
 
             if (_hadHttpUrl)
-                EditorPrefs.SetString(HttpUrlPrefKey, _originalHttpUrl);
+                EditorConfigCache.Instance.SetHttpBaseUrl(_originalHttpUrl);
             else
-                EditorPrefs.DeleteKey(HttpUrlPrefKey);
+                ProjectScopedEditorPrefs.DeleteKey(HttpUrlPrefKey);
+
+            if (_hadHttpTransportScope)
+                EditorConfigCache.Instance.SetHttpTransportScope(_originalHttpTransportScope);
+            else
+                ProjectScopedEditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            EditorConfigCache.Instance.Refresh(allowLegacyFallback: false);
 
             // Remove temp files
             try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, true); } catch { }
@@ -407,7 +427,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
         private static void AssertTransportConfiguration(JObject unity, McpClient client)
         {
-            bool useHttp = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
+            bool useHttp = EditorConfigCache.Instance.UseHttpTransport;
             bool isWindsurf = string.Equals(client.HttpUrlProperty, "serverUrl", StringComparison.OrdinalIgnoreCase);
 
             if (useHttp)
@@ -458,17 +478,15 @@ namespace MCPForUnityTests.Editor.Helpers
 
         private static void WithTransportPreference(bool useHttp, Action action)
         {
-            bool original = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, useHttp);
-            EditorConfigCache.Instance.Refresh();
+            bool original = EditorConfigCache.Instance.UseHttpTransport;
+            EditorConfigCache.Instance.SetUseHttpTransport(useHttp);
             try
             {
                 action();
             }
             finally
             {
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, original);
-                EditorConfigCache.Instance.Refresh();
+                EditorConfigCache.Instance.SetUseHttpTransport(original);
             }
         }
     }

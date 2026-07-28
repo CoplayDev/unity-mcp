@@ -46,7 +46,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         }
 
         /// <summary>
-        /// Current behavior: Server metadata is stored in EditorPrefs for persistence
+        /// Current behavior: Server metadata is stored in project-scoped EditorPrefs for persistence
         /// across domain reloads. Keys include LastLocalHttpServerPid, Port, StartedUtc, etc.
         /// </summary>
         [Test]

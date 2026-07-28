@@ -133,13 +133,13 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             else
             {
                 // Back-compat: if scope pref isn't set yet, infer from current URL.
-                string scope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+                string scope = EditorConfigurationCache.Instance.HttpTransportScope;
                 if (string.IsNullOrEmpty(scope))
                 {
                     scope = MCPServiceLocator.Server.IsLocalUrl() ? "local" : "remote";
                     try
                     {
-                        EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, scope);
+                        EditorConfigurationCache.Instance.SetHttpTransportScope(scope);
                     }
                     catch
                     {

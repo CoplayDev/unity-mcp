@@ -42,14 +42,14 @@ namespace MCPForUnity.Editor.Services.Server
         void DeletePidFile(string pidFilePath);
 
         /// <summary>
-        /// Stores the handshake information (PID file path and instance token) in EditorPrefs.
+        /// Stores the handshake information (PID file path and instance token) in project-scoped EditorPrefs.
         /// </summary>
         /// <param name="pidFilePath">Path to the PID file</param>
         /// <param name="instanceToken">Unique instance token for the server</param>
         void StoreHandshake(string pidFilePath, string instanceToken);
 
         /// <summary>
-        /// Attempts to retrieve stored handshake information from EditorPrefs.
+        /// Attempts to retrieve stored project-scoped handshake information.
         /// </summary>
         /// <param name="pidFilePath">Output: stored PID file path</param>
         /// <param name="instanceToken">Output: stored instance token</param>
@@ -57,7 +57,7 @@ namespace MCPForUnity.Editor.Services.Server
         bool TryGetHandshake(out string pidFilePath, out string instanceToken);
 
         /// <summary>
-        /// Stores PID tracking information in EditorPrefs.
+        /// Stores PID tracking information in project-scoped EditorPrefs.
         /// </summary>
         /// <param name="pid">The process ID</param>
         /// <param name="port">The port number</param>
@@ -80,7 +80,7 @@ namespace MCPForUnity.Editor.Services.Server
         string GetStoredArgsHash();
 
         /// <summary>
-        /// Clears all PID tracking information from EditorPrefs.
+        /// Clears this project's PID tracking information from EditorPrefs.
         /// </summary>
         void ClearTracking();
 

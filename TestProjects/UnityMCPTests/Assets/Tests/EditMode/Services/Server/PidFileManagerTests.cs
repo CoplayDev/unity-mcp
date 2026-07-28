@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,15 +15,30 @@ namespace MCPForUnityTests.Editor.Services.Server
     [TestFixture]
     public class PidFileManagerTests
     {
+        private static readonly string[] IntPreferenceKeys =
+        {
+            EditorPrefKeys.LastLocalHttpServerPid,
+            EditorPrefKeys.LastLocalHttpServerPort,
+        };
+
+        private static readonly string[] StringPreferenceKeys =
+        {
+            EditorPrefKeys.LastLocalHttpServerStartedUtc,
+            EditorPrefKeys.LastLocalHttpServerPidArgsHash,
+            EditorPrefKeys.LastLocalHttpServerPidFilePath,
+            EditorPrefKeys.LastLocalHttpServerInstanceToken,
+        };
+
         private PidFileManager _manager;
         private string _testPidFilePath;
+        private readonly Dictionary<string, int> _savedIntPreferences = new Dictionary<string, int>();
+        private readonly Dictionary<string, string> _savedStringPreferences = new Dictionary<string, string>();
 
         [SetUp]
         public void SetUp()
         {
             _manager = new PidFileManager();
-            // Clear any test state
-            ClearTestEditorPrefs();
+            SnapshotAndClearTestEditorPrefs();
         }
 
         [TearDown]
@@ -32,18 +49,60 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 try { File.Delete(_testPidFilePath); } catch { }
             }
-            // Clear test state
+            ClearTestEditorPrefs();
+            RestoreTestEditorPrefs();
+        }
+
+        private void SnapshotAndClearTestEditorPrefs()
+        {
+            _savedIntPreferences.Clear();
+            _savedStringPreferences.Clear();
+
+            foreach (string baseKey in IntPreferenceKeys)
+            {
+                string key = ProjectScopedEditorPrefs.GetKey(baseKey);
+                if (EditorPrefs.HasKey(key))
+                {
+                    _savedIntPreferences[key] = EditorPrefs.GetInt(key, 0);
+                }
+            }
+
+            foreach (string baseKey in StringPreferenceKeys)
+            {
+                string key = ProjectScopedEditorPrefs.GetKey(baseKey);
+                if (EditorPrefs.HasKey(key))
+                {
+                    _savedStringPreferences[key] = EditorPrefs.GetString(key, string.Empty);
+                }
+            }
+
             ClearTestEditorPrefs();
         }
 
-        private void ClearTestEditorPrefs()
+        private static void ClearTestEditorPrefs()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            foreach (string baseKey in IntPreferenceKeys)
+            {
+                EditorPrefs.DeleteKey(ProjectScopedEditorPrefs.GetKey(baseKey));
+            }
+
+            foreach (string baseKey in StringPreferenceKeys)
+            {
+                EditorPrefs.DeleteKey(ProjectScopedEditorPrefs.GetKey(baseKey));
+            }
+        }
+
+        private void RestoreTestEditorPrefs()
+        {
+            foreach (KeyValuePair<string, int> preference in _savedIntPreferences)
+            {
+                EditorPrefs.SetInt(preference.Key, preference.Value);
+            }
+
+            foreach (KeyValuePair<string, string> preference in _savedStringPreferences)
+            {
+                EditorPrefs.SetString(preference.Key, preference.Value);
+            }
         }
 
         #region GetPidFilePath Tests
@@ -271,6 +330,46 @@ namespace MCPForUnityTests.Editor.Services.Server
         }
 
         [Test]
+        public void StoreHandshake_DoesNotOverwriteLegacyGlobalKeys()
+        {
+            const string legacyPath = "/another/project/mcp_http_8082.pid";
+            const string legacyToken = "another-project-token";
+            bool hadLegacyPath = EditorPrefs.HasKey(EditorPrefKeys.LastLocalHttpServerPidFilePath);
+            bool hadLegacyToken = EditorPrefs.HasKey(EditorPrefKeys.LastLocalHttpServerInstanceToken);
+            string originalLegacyPath = EditorPrefs.GetString(
+                EditorPrefKeys.LastLocalHttpServerPidFilePath,
+                string.Empty);
+            string originalLegacyToken = EditorPrefs.GetString(
+                EditorPrefKeys.LastLocalHttpServerInstanceToken,
+                string.Empty);
+            EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, legacyPath);
+            EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, legacyToken);
+
+            try
+            {
+                _manager.StoreHandshake("/this/project/mcp_http_8083.pid", "this-project-token");
+
+                Assert.AreEqual(
+                    legacyPath,
+                    EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, string.Empty));
+                Assert.AreEqual(
+                    legacyToken,
+                    EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, string.Empty));
+            }
+            finally
+            {
+                RestoreString(
+                    EditorPrefKeys.LastLocalHttpServerPidFilePath,
+                    hadLegacyPath,
+                    originalLegacyPath);
+                RestoreString(
+                    EditorPrefKeys.LastLocalHttpServerInstanceToken,
+                    hadLegacyToken,
+                    originalLegacyToken);
+            }
+        }
+
+        [Test]
         public void TryGetHandshake_NoHandshake_ReturnsFalse()
         {
             // Act
@@ -490,5 +589,17 @@ namespace MCPForUnityTests.Editor.Services.Server
         }
 
         #endregion
+
+        private static void RestoreString(string key, bool hadValue, string value)
+        {
+            if (hadValue)
+            {
+                EditorPrefs.SetString(key, value);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(key);
+            }
+        }
     }
 }

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
@@ -254,6 +256,193 @@ namespace MCPForUnity.Editor.Helpers
             catch
             {
                 return "default";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stores connection and local-server lifecycle preferences per Unity project while
+    /// retaining a single-owner read fallback for legacy machine-global preferences.
+    /// </summary>
+    internal static class ProjectScopedEditorPrefs
+    {
+        private const string MigrationOwnerKey = "MCPForUnity.ProjectScopedPrefs.MigrationOwner";
+        private const string MigrationMutexName = "MCPForUnity.ProjectPreferenceMigration";
+        private static readonly HashSet<string> KnownProjectScopedKeys = new HashSet<string>
+        {
+            EditorPrefKeys.UseHttpTransport,
+            EditorPrefKeys.HttpBaseUrl,
+            EditorPrefKeys.HttpTransportScope,
+            EditorPrefKeys.LastLocalHttpServerPid,
+            EditorPrefKeys.LastLocalHttpServerPort,
+            EditorPrefKeys.LastLocalHttpServerStartedUtc,
+            EditorPrefKeys.LastLocalHttpServerPidArgsHash,
+            EditorPrefKeys.LastLocalHttpServerPidFilePath,
+            EditorPrefKeys.LastLocalHttpServerInstanceToken,
+        };
+
+        internal static string GetKey(string baseKey, string projectHash = null)
+        {
+            string hash = string.IsNullOrWhiteSpace(projectHash)
+                ? ProjectIdentityUtility.GetProjectHash()
+                : projectHash;
+            return $"{baseKey}.{hash}";
+        }
+
+        internal static string GetMigrationOwnerKey()
+        {
+            return MigrationOwnerKey;
+        }
+
+        internal static string ResolveStorageKey(string baseKey, string projectHash = null)
+        {
+            return KnownProjectScopedKeys.Contains(baseKey) ? GetKey(baseKey, projectHash) : baseKey;
+        }
+
+        internal static bool HasKey(string baseKey)
+        {
+            return EditorPrefs.HasKey(ResolveStorageKey(baseKey));
+        }
+
+        internal static bool GetBool(
+            string baseKey,
+            bool defaultValue,
+            string projectHash = null,
+            bool allowLegacyFallback = true)
+        {
+            string scopedKey = ResolveStorageKey(baseKey, projectHash);
+            if (EditorPrefs.HasKey(scopedKey))
+            {
+                return EditorPrefs.GetBool(scopedKey, defaultValue);
+            }
+
+            if (allowLegacyFallback
+                && EditorPrefs.HasKey(baseKey)
+                && TryClaimLegacyPreference(projectHash))
+            {
+                bool migrated = EditorPrefs.GetBool(baseKey, defaultValue);
+                EditorPrefs.SetBool(scopedKey, migrated);
+                return migrated;
+            }
+
+            return defaultValue;
+        }
+
+        internal static int GetInt(
+            string baseKey,
+            int defaultValue,
+            string projectHash = null,
+            bool allowLegacyFallback = true)
+        {
+            string scopedKey = ResolveStorageKey(baseKey, projectHash);
+            if (EditorPrefs.HasKey(scopedKey))
+            {
+                return EditorPrefs.GetInt(scopedKey, defaultValue);
+            }
+
+            if (allowLegacyFallback
+                && EditorPrefs.HasKey(baseKey)
+                && TryClaimLegacyPreference(projectHash))
+            {
+                int migrated = EditorPrefs.GetInt(baseKey, defaultValue);
+                EditorPrefs.SetInt(scopedKey, migrated);
+                return migrated;
+            }
+
+            return defaultValue;
+        }
+
+        internal static string GetString(
+            string baseKey,
+            string defaultValue,
+            string projectHash = null,
+            bool allowLegacyFallback = true)
+        {
+            string scopedKey = ResolveStorageKey(baseKey, projectHash);
+            if (EditorPrefs.HasKey(scopedKey))
+            {
+                return EditorPrefs.GetString(scopedKey, defaultValue);
+            }
+
+            if (allowLegacyFallback
+                && EditorPrefs.HasKey(baseKey)
+                && TryClaimLegacyPreference(projectHash))
+            {
+                string migrated = EditorPrefs.GetString(baseKey, defaultValue);
+                EditorPrefs.SetString(scopedKey, migrated);
+                return migrated;
+            }
+
+            return defaultValue;
+        }
+
+        internal static void SetBool(string baseKey, bool value)
+        {
+            EditorPrefs.SetBool(ResolveStorageKey(baseKey), value);
+        }
+
+        internal static void SetInt(string baseKey, int value)
+        {
+            EditorPrefs.SetInt(ResolveStorageKey(baseKey), value);
+        }
+
+        internal static void SetString(string baseKey, string value)
+        {
+            EditorPrefs.SetString(ResolveStorageKey(baseKey), value);
+        }
+
+        internal static void DeleteKey(string baseKey)
+        {
+            EditorPrefs.DeleteKey(ResolveStorageKey(baseKey));
+        }
+
+        private static bool TryClaimLegacyPreference(string projectHash)
+        {
+            string hash = string.IsNullOrWhiteSpace(projectHash)
+                ? ProjectIdentityUtility.GetProjectHash()
+                : projectHash;
+            string ownerKey = GetMigrationOwnerKey();
+
+            Mutex migrationMutex = null;
+            bool lockTaken = false;
+            try
+            {
+                migrationMutex = new Mutex(false, MigrationMutexName);
+                try
+                {
+                    lockTaken = migrationMutex.WaitOne(TimeSpan.FromSeconds(2));
+                }
+                catch (AbandonedMutexException)
+                {
+                    lockTaken = true;
+                }
+
+                if (!lockTaken)
+                {
+                    return false;
+                }
+
+                string owner = EditorPrefs.GetString(ownerKey, string.Empty);
+                if (string.IsNullOrEmpty(owner))
+                {
+                    EditorPrefs.SetString(ownerKey, hash);
+                    owner = EditorPrefs.GetString(ownerKey, string.Empty);
+                }
+
+                return string.Equals(owner, hash, StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    try { migrationMutex.ReleaseMutex(); } catch { }
+                }
+
+                migrationMutex?.Dispose();
             }
         }
     }
