@@ -25,6 +25,17 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
+        public void Codex_SupportsStdioOnly()
+        {
+            // Regression guard for #1193: Codex does not expose tools over the HTTP block, so it
+            // must advertise stdio only and let CoerceTransportFor pick stdio before Configure().
+            var codex = new CodexConfigurator();
+            CollectionAssert.Contains(codex.SupportedTransports.ToList(), ConfiguredTransport.Stdio);
+            CollectionAssert.DoesNotContain(codex.SupportedTransports.ToList(), ConfiguredTransport.Http);
+            Assert.IsFalse(codex.Client.SupportsHttpTransport, "Codex must not be treated as HTTP-capable");
+        }
+
+        [Test]
         public void Cursor_SupportsBothTransports()
         {
             var cursor = new CursorConfigurator();
