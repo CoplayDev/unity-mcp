@@ -340,16 +340,103 @@ namespace MCPForUnity.Editor.Tools
             "System.Collections",
         };
 
-        private static string[] FilterAssemblyPathsForCodeDom(string[] allPaths)
+        internal static string[] FilterAssemblyPathsForCodeDom(string[] allPaths)
         {
-            bool hasNetstandard = allPaths.Any(p =>
+            var hasNetstandard = allPaths.Any(p =>
                 string.Equals(Path.GetFileNameWithoutExtension(p), "netstandard", StringComparison.OrdinalIgnoreCase));
 
-            if (!hasNetstandard)
-                return allPaths;
+            var filtered = hasNetstandard
+                ? allPaths.Where(p =>
+                    !_codedomDuplicateAssemblies.Contains(Path.GetFileNameWithoutExtension(p))).ToArray()
+                : allPaths;
 
-            return allPaths.Where(p =>
-                !_codedomDuplicateAssemblies.Contains(Path.GetFileNameWithoutExtension(p))).ToArray();
+            return DeduplicateAssemblyPathsForCodeDom(filtered);
+        }
+
+        private static string[] DeduplicateAssemblyPathsForCodeDom(string[] paths)
+        {
+            var candidates = new List<CodeDomAssemblyCandidate>();
+            var unresolvedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var path in paths)
+            {
+                try
+                {
+                    candidates.Add(new CodeDomAssemblyCandidate(path, AssemblyName.GetAssemblyName(path)));
+                }
+                catch
+                {
+                    unresolvedPaths.Add(path);
+                }
+            }
+
+            var groups = candidates
+                .GroupBy(candidate => candidate.AssemblyName.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (groups.All(group => group.Count() == 1))
+                return paths;
+
+            var referenceCounts = GetLoadedAssemblyReferenceCounts();
+            var selectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in groups)
+            {
+                var selected = group
+                    .OrderByDescending(candidate => GetReferenceCount(referenceCounts, candidate.AssemblyName.FullName))
+                    .ThenByDescending(candidate => candidate.AssemblyName.Version)
+                    .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                    .First();
+                selectedPaths.Add(selected.Path);
+            }
+
+            return paths.Where(path => unresolvedPaths.Contains(path) || selectedPaths.Contains(path)).ToArray();
+        }
+
+        private static Dictionary<string, int> GetLoadedAssemblyReferenceCounts()
+        {
+            var referenceCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var assembly in UnityAssembliesCompat.GetLoadedAssemblies())
+            {
+                if (assembly.IsDynamic) continue;
+
+                AssemblyName[] referencedAssemblies;
+                try
+                {
+                    referencedAssemblies = assembly.GetReferencedAssemblies();
+                }
+                catch (NotSupportedException)
+                {
+                    continue;
+                }
+
+                foreach (var referencedAssembly in referencedAssemblies)
+                {
+                    var fullName = referencedAssembly.FullName;
+                    referenceCounts.TryGetValue(fullName, out var count);
+                    referenceCounts[fullName] = count + 1;
+                }
+            }
+
+            return referenceCounts;
+        }
+
+        private static int GetReferenceCount(Dictionary<string, int> referenceCounts, string fullName)
+        {
+            return referenceCounts.TryGetValue(fullName, out var count) ? count : 0;
+        }
+
+        private sealed class CodeDomAssemblyCandidate
+        {
+            public CodeDomAssemblyCandidate(string path, AssemblyName assemblyName)
+            {
+                Path = path;
+                AssemblyName = assemblyName;
+            }
+
+            public string Path { get; }
+            public AssemblyName AssemblyName { get; }
         }
 
         // ──────────────────── Shared helpers ────────────────────

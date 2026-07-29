@@ -1,3 +1,8 @@
+using System;
+using System.CodeDom.Compiler;
+using System.IO;
+using System.Linq;
+using Microsoft.CSharp;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using MCPForUnity.Editor.Tools;
@@ -367,7 +372,122 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(result["data"]["result"]);
         }
 
+        [Test]
+        public void FilterAssemblyPathsForCodeDom_WithNetstandard_PreservesSystemSecurity()
+        {
+            var tempRoot = CreateTempDirectory();
+            try
+            {
+                var netstandardPath = CompileVersionedAssembly(tempRoot, "netstandard", "2.0.0.0");
+                var securityFixturePath = CompileVersionedAssembly(tempRoot, "SystemSecurityFixture", "4.0.0.0");
+                var systemSecurityPath = Path.Combine(
+                    Path.GetDirectoryName(securityFixturePath),
+                    "System.Security.dll");
+                File.Copy(securityFixturePath, systemSecurityPath);
+
+                var filtered = ExecuteCode.FilterAssemblyPathsForCodeDom(new[]
+                {
+                    netstandardPath,
+                    systemSecurityPath,
+                });
+
+                CollectionAssert.Contains(filtered, systemSecurityPath);
+            }
+            finally
+            {
+                Directory.Delete(tempRoot, true);
+            }
+        }
+
+        [Test]
+        public void FilterAssemblyPathsForCodeDom_DuplicateNames_PrefersReferencedVersion()
+        {
+            var tempRoot = CreateTempDirectory();
+            try
+            {
+                var assemblyName = "McpCodeDomDuplicate" + Guid.NewGuid().ToString("N");
+                var referencedPath = CompileVersionedAssembly(tempRoot, assemblyName, "1.0.0.0");
+                var newerPath = CompileVersionedAssembly(tempRoot, assemblyName, "2.0.0.0");
+                LoadAssemblyReferencing(referencedPath);
+
+                var filtered = ExecuteCode.FilterAssemblyPathsForCodeDom(new[]
+                {
+                    newerPath,
+                    referencedPath,
+                });
+
+                Assert.AreEqual(1, filtered.Length);
+                Assert.AreEqual(referencedPath, filtered[0]);
+            }
+            finally
+            {
+                Directory.Delete(tempRoot, true);
+            }
+        }
+
         // ──────────────────── Helpers ────────────────────
+
+        private static string CreateTempDirectory()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "UnityMCPTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private static string CompileVersionedAssembly(string tempRoot, string assemblyName, string version)
+        {
+            var outputDirectory = Path.Combine(tempRoot, version);
+            Directory.CreateDirectory(outputDirectory);
+            var outputPath = Path.Combine(outputDirectory, assemblyName + ".dll");
+            var source =
+                "using System.Reflection;\n" +
+                "[assembly: AssemblyVersion(\"" + version + "\")]\n" +
+                "public sealed class VersionMarker { }";
+
+            using (var provider = new CSharpCodeProvider())
+            {
+                var parameters = new CompilerParameters
+                {
+                    GenerateExecutable = false,
+                    GenerateInMemory = false,
+                    OutputAssembly = outputPath,
+                };
+                var results = provider.CompileAssemblyFromSource(parameters, source);
+                AssertCompilerSuccess(results);
+            }
+
+            return outputPath;
+        }
+
+        private static void LoadAssemblyReferencing(string referencedAssemblyPath)
+        {
+            using (var provider = new CSharpCodeProvider())
+            {
+                var parameters = new CompilerParameters
+                {
+                    GenerateExecutable = false,
+                    GenerateInMemory = true,
+                };
+                parameters.ReferencedAssemblies.Add(referencedAssemblyPath);
+
+                var results = provider.CompileAssemblyFromSource(
+                    parameters,
+                    "public static class ReferenceHolder { " +
+                    "public static System.Type Get() { return typeof(VersionMarker); } }");
+                AssertCompilerSuccess(results);
+                Assert.IsNotNull(results.CompiledAssembly);
+            }
+        }
+
+        private static void AssertCompilerSuccess(CompilerResults results)
+        {
+            var errors = results.Errors
+                .Cast<CompilerError>()
+                .Where(error => !error.IsWarning)
+                .Select(error => error.ToString())
+                .ToArray();
+            Assert.IsFalse(results.Errors.HasErrors, string.Join("\n", errors));
+        }
 
         private static JObject Execute(string code)
         {
