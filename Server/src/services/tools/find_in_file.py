@@ -71,6 +71,9 @@ def _split_uri(uri: str) -> tuple[str, str]:
     annotations=ToolAnnotations(
         title="Find in File",
         readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def find_in_file(

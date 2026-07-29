@@ -243,6 +243,9 @@ async def run_tests(
     annotations=ToolAnnotations(
         title="Get Test Job",
         readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def get_test_job(
