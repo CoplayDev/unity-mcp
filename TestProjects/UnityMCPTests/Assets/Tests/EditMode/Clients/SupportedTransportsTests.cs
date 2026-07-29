@@ -26,23 +26,21 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
-        public void Codex_SupportsStdioOnly()
+        public void Codex_SupportsBothTransports()
         {
-            // Regression guard for #1193: Codex does not expose tools over the HTTP block, so it
-            // must advertise stdio only and let CoerceTransportFor pick stdio before Configure().
+            // Verified against Codex CLI 0.47.0: a bare `[mcp_servers.x] url = "..."` entry reports
+            // `transport: streamable_http` from `codex mcp get` and completes a full MCP handshake
+            // against a live server, with no feature flag set. #1193 was not Codex lacking HTTP.
             var codex = new CodexConfigurator();
-            CollectionAssert.AreEqual(
-                new[] { ConfiguredTransport.Stdio },
-                codex.SupportedTransports.ToList(),
-                "Codex must advertise stdio and nothing else");
-            Assert.IsFalse(codex.Client.SupportsHttpTransport, "Codex must not be treated as HTTP-capable");
+            var list = codex.SupportedTransports.ToList();
+            CollectionAssert.Contains(list, ConfiguredTransport.Stdio);
+            CollectionAssert.Contains(list, ConfiguredTransport.Http);
+            Assert.IsTrue(codex.Client.SupportsHttpTransport, "Codex is HTTP-capable");
         }
 
         [Test]
-        public void Codex_ManualSnippet_IsStdio_EvenWhenHttpPreferred()
+        public void Codex_ManualSnippet_RendersUrl_WhenHttpPreferred()
         {
-            // The snippet path does not go through ConfigureWithTransportCoercion, so with the
-            // global HTTP pref on it used to render a url block for a client that cannot use one.
             var cache = EditorConfigurationCache.Instance;
             bool original = cache.UseHttpTransport;
             try
@@ -50,9 +48,27 @@ namespace MCPForUnityTests.Editor.Clients
                 cache.SetUseHttpTransport(true);
                 string snippet = new CodexConfigurator().GetManualSnippet();
 
-                StringAssert.Contains("command", snippet, "Codex snippet must configure stdio");
-                Assert.IsFalse(snippet.Contains("url ="), "Codex snippet must not configure an HTTP url");
+                StringAssert.Contains("url =", snippet, "Codex snippet must configure the HTTP url");
                 Assert.IsTrue(cache.UseHttpTransport, "The global transport pref must be restored");
+            }
+            finally
+            {
+                cache.SetUseHttpTransport(original);
+            }
+        }
+
+        [Test]
+        public void Codex_ManualSnippet_RendersCommand_WhenStdioPreferred()
+        {
+            var cache = EditorConfigurationCache.Instance;
+            bool original = cache.UseHttpTransport;
+            try
+            {
+                cache.SetUseHttpTransport(false);
+                string snippet = new CodexConfigurator().GetManualSnippet();
+
+                StringAssert.Contains("command", snippet, "Codex snippet must configure stdio");
+                Assert.IsFalse(snippet.Contains("url ="), "Stdio snippet must not carry an HTTP url");
             }
             finally
             {
