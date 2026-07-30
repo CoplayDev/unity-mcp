@@ -36,6 +36,14 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Audio_MiniMax_ReturnsAdapter()
+        {
+            IAudioProviderAdapter adapter = AssetGenProviders.Audio("minimax");
+            Assert.IsNotNull(adapter);
+            Assert.AreEqual("minimax", adapter.Id);
+        }
+
+        [Test]
         public void Audio_Unimplemented_Throws()
         {
             Assert.Throws<NotSupportedException>(() => AssetGenProviders.Audio("elevenlabs"));
@@ -47,6 +55,15 @@ namespace MCPForUnityTests.Editor.AssetGen
             ProviderInfo row = FindByIdKind("fal", "audio");
             Assert.IsNotNull(row, "List() should advertise a fal audio row");
             Assert.AreEqual("audio", row.Kind);
+        }
+
+        [Test]
+        public void List_IncludesMiniMaxAudioRow()
+        {
+            ProviderInfo row = FindByIdKind("minimax", "audio");
+            Assert.IsNotNull(row, "List() should advertise a minimax audio row");
+            Assert.AreEqual("audio", row.Kind);
+            CollectionAssert.Contains(row.Capabilities, "music");
         }
 
         [Test]

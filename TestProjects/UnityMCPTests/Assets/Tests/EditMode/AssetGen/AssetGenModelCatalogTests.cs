@@ -80,6 +80,21 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(MeshyAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("meshy", "model"));
             Assert.AreEqual(FalAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "image"));
             Assert.AreEqual(FalAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "audio"));
+            Assert.AreEqual(MiniMaxAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("minimax", "audio"));
+        }
+
+        [Test]
+        public void Curated_HasMiniMaxMusicGenerationModels()
+        {
+            IReadOnlyList<ModelEntry> audio = AssetGenModelCatalog.ForProvider("minimax", "audio");
+
+            CollectionAssert.AreEqual(
+                new[] { "music-3.0", "music-2.6", "music-3.0-free", "music-2.6-free" },
+                audio.Select(e => e.Id).ToList());
+
+            // Music generation has no duration knob (the model returns a full track).
+            foreach (ModelEntry e in audio)
+                Assert.IsNull(e.DurationField, e.Id + " should be prompt-only (no duration control)");
         }
 
         [Test]

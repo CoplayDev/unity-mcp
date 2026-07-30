@@ -68,6 +68,14 @@ namespace MCPForUnity.Editor.Services.AssetGen
             new ModelEntry { Id = "cassetteai/music-generator", Label = "CassetteAI Music", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.02/min", MaxDurationSeconds = 180f,
                 DurationField = "duration", DefaultDurationSeconds = 10f, MinDurationSeconds = 1f },
             new ModelEntry { Id = "fal-ai/lyria2", Label = "Google Lyria 2", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.10/30s", MaxDurationSeconds = 30f },
+
+            // Audio — minimax (music generation, MiniMaxAudioAdapter.DefaultModel is first => the
+            // default). The endpoint produces a full track from the prompt, so there is no duration
+            // knob (prompt-only, DurationField null / MaxDurationSeconds 0).
+            new ModelEntry { Id = MiniMaxAudioAdapter.DefaultModel, Label = "MiniMax Music 3.0", Provider = "minimax", Kind = "audio", UseCase = "Background music" },
+            new ModelEntry { Id = "music-2.6", Label = "MiniMax Music 2.6", Provider = "minimax", Kind = "audio", UseCase = "Background music" },
+            new ModelEntry { Id = "music-3.0-free", Label = "MiniMax Music 3.0 (free)", Provider = "minimax", Kind = "audio", UseCase = "Background music" },
+            new ModelEntry { Id = "music-2.6-free", Label = "MiniMax Music 2.6 (free)", Provider = "minimax", Kind = "audio", UseCase = "Background music" },
         };
 
         /// <summary>Curated entries for a provider+kind, in curated order (default first). Never null.</summary>

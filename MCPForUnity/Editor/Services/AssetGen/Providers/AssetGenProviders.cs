@@ -6,7 +6,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
     /// Factory + registry for asset-gen provider adapters. Resolves a provider id to its adapter
-    /// (model: tripo/meshy; image: fal/openrouter; audio: fal; marketplace: sketchfab); unknown ids
+    /// (model: tripo/meshy; image: fal/openrouter; audio: fal/minimax; marketplace: sketchfab); unknown ids
     /// throw <see cref="NotSupportedException"/>. <see cref="List"/> advertises providers and reports
     /// <c>Configured</c> existence only — never a key value.
     /// </summary>
@@ -44,6 +44,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 case "fal":
                     return new FalAudioAdapter();
+                case "minimax":
+                    return new MiniMaxAudioAdapter();
                 default:
                     throw new NotSupportedException($"Unknown audio provider '{id}'.");
             }
@@ -71,6 +73,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },
                 // fal appears twice by design — once per kind (image + audio) — sharing the single "fal" key.
                 new ProviderInfo { Id = "fal", Kind = "audio", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "music", "sfx" } },
+                new ProviderInfo { Id = "minimax", Kind = "audio", Configured = IsConfigured("minimax"), Capabilities = new[] { "text", "music" } },
             };
         }
 
