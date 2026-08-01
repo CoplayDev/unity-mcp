@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Tools
                 resulting_state = resultingState,
                 hint = shouldWaitForReady
                     ? "Unity refresh completed; editor should be ready."
-                    : "If Unity enters compilation/domain reload, poll editor_state until ready_for_tools is true."
+                    : "If Unity enters compilation/domain reload, poll the mcpforunity://editor/state resource until data.advice.ready_for_tools is true."
             });
         }
 
