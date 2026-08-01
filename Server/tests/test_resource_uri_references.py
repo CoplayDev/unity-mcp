@@ -104,10 +104,7 @@ def test_tool_descriptions_reference_resources_by_uri(
         offenders += _offenders(
             func.__doc__, f"tool '{name}' docstring", resource_uris_by_name)
 
-        try:
-            hints = typing.get_type_hints(func, include_extras=True)
-        except Exception:
-            continue
+        hints = typing.get_type_hints(func, include_extras=True)
         for param, hint in hints.items():
             for meta in getattr(hint, "__metadata__", ()):
                 if isinstance(meta, str):
@@ -140,4 +137,34 @@ def test_unity_tool_result_strings_reference_resources_by_uri(
                     f"{source.relative_to(REPO_ROOT).as_posix()}:{line_no}",
                     resource_uris_by_name,
                 )
+    assert not offenders, "\n".join(offenders)
+
+
+def test_agent_facing_markdown_references_resources_by_uri(
+    resource_uris_by_name: dict[str, str]
+):
+    """Docs that tell a reader to go read a resource must give its URI.
+
+    Scoped to the surfaces that issue that instruction: the skill agents load,
+    and the per-tool reference pages. Excluded deliberately —
+    `website/docs/reference/resources/` is a generated catalog that puts each
+    name in a heading and its URI on the following line, and the guides and
+    getting-started pages name resources as subjects of a sentence rather than
+    telling anyone to construct a URI.
+    """
+    targets = [REPO_ROOT / "unity-mcp-skill" / "SKILL.md"]
+    targets += sorted((REPO_ROOT / "website" / "docs" /
+                       "reference" / "tools").rglob("*.md"))
+    assert len(targets) > 1, "expected the skill and the tool reference pages"
+
+    offenders = []
+    for doc in targets:
+        assert doc.is_file(), f"{doc} not found"
+        text = doc.read_text(encoding="utf-8", errors="replace")
+        for line_no, line in enumerate(text.splitlines(), 1):
+            offenders += _offenders(
+                line,
+                f"{doc.relative_to(REPO_ROOT).as_posix()}:{line_no}",
+                resource_uris_by_name,
+            )
     assert not offenders, "\n".join(offenders)
