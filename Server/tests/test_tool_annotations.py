@@ -12,8 +12,8 @@ true`` and nobody noticed for a year.
 
 So this guard requires ``title`` and ``destructiveHint`` to be stated outright,
 and pins the set of tools that are safe to auto-approve. ``readOnlyHint`` is not
-required: omitted it means *false*, which is the safe direction and is already
-true of every tool that leaves it unset.
+required: omitting it means *false*, which is the safe direction and is already
+correct for every tool that leaves it unset.
 """
 from pathlib import Path
 
@@ -83,7 +83,15 @@ def tools() -> dict:
     # FastMCP, which tests/integration/conftest.py replaces with a stub for the
     # whole session.
     list(discover_modules(Path(tools_package.__file__).parent, tools_package.__package__))
-    return {t["name"]: t for t in get_registered_tools()}
+    registered = get_registered_tools()
+
+    # Keying by name would silently drop a duplicate registration, hiding both the
+    # registry bug and the annotations of whichever entry lost. Fail on it instead.
+    names = [t["name"] for t in registered]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    assert not duplicates, f"Duplicate tool registrations: {duplicates}"
+
+    return {t["name"]: t for t in registered}
 
 
 def test_every_tool_declares_its_hints(tools):
