@@ -311,19 +311,19 @@ Targeting Unity instances:
 Important Workflows:
 
 Resources vs Tools:
-- Use RESOURCES to read editor state (editor_state, project_info, project_tags, tests, etc)
+- Use RESOURCES to read editor state (mcpforunity://editor/state, mcpforunity://project/info, mcpforunity://project/tags, mcpforunity://tests, etc)
 - Use TOOLS to perform actions and mutations (manage_editor for play mode control, tag/layer management, etc)
 - Always check related resources before modifying the engine state with tools
 
 Reading resources (read this before using ANY resource named below):
 - Resources are addressed by URI, never by name. A resource's name and URI are NOT interchangeable: names use underscores (e.g. editor_state) while URIs use slashes (e.g. mcpforunity://editor/state). Do NOT build a URI by swapping separators in the name — you will 404.
-- Always read the exact URI from your MCP client's resource listing (resources/list). Where these instructions mention a resource by name, look up its URI in that listing rather than guessing it.
+- These instructions always spell resources as full mcpforunity:// URIs — read one exactly as written. If you only have a name (from resources/list or another tool's output), look its URI up in resources/list rather than guessing it.
 - Resource payloads are wrapped: the content lives under a top-level `data` object, so field paths are `data.<section>.<field>` (e.g. `data.advice.ready_for_tools`), not bare top-level fields.
 
 Script Management:
 - After creating or modifying scripts (by your own tools or the `manage_script` tool) use `read_console` to check for compilation errors before proceeding
 - Only after successful compilation can new components/types be used
-- You can poll the `editor_state` resource's `isCompiling` field to check if the domain reload is complete
+- You can poll mcpforunity://editor/state and read `data.compilation.is_compiling` to check if the domain reload is complete, or `data.advice.ready_for_tools` for overall readiness
 
 Scene Setup:
 - Always include a Camera and main Light (Directional Light) in new scenes
@@ -339,7 +339,7 @@ Console Monitoring:
 - Filter by log type (Error, Warning, Log) to focus on specific issues
 
 Menu Items:
-- Use `execute_menu_item` when you have read the menu items resource
+- Use `execute_menu_item` when you have read the mcpforunity://menu-items resource
 - This lets you interact with Unity's menu system and third-party tools
 
 Unity API Verification (requires 'docs' tool group):
