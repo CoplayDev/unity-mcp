@@ -25,9 +25,14 @@ on:
   # Same-repo PRs get a unity-tests status check on every open / push via this trigger
   # (mirrors python-tests.yml). Fork PRs ALSO fire this trigger but run in the fork's
   # context without secrets — the detect step downstream writes unity_ok=false and the
-  # job exits clean with a "missing license secrets" notice so the status check still
-  # appears. Maintainers apply 'safe-to-test' to invoke pull_request_target below for
-  # a real fork-PR test run.
+  # job reports a green check having compiled and tested nothing. That skip is stated
+  # loudly in the job's step summary so it is never mistaken for a pass.
+  #
+  # There is deliberately no pull_request_target trigger here. Running fork-authored
+  # C# through game-ci/unity-test-runner with UNITY_* secrets in scope is the classic
+  # "pwn request" shape — an [InitializeOnLoad] script in the PR is enough to read
+  # them. To test a fork PR, review the diff and push its branch into this repo; the
+  # push trigger above then runs the full suite in a genuinely trusted context.
   pull_request:
     branches: [main, beta]
     paths:
@@ -35,20 +40,8 @@ on:
       - MCPForUnity/Editor/**
       - MCPForUnity/Runtime/**
       - .github/workflows/unity-tests.yml
-  # Fork PRs: maintainer applies the 'safe-to-test' label after reviewing
-  # the diff. The workflow runs with UNITY_LICENSE in scope against the
-  # PR's head SHA. Re-pushed commits do NOT auto-trigger — maintainer must
-  # remove and re-apply the label to re-run after additional review.
-  pull_request_target:
-    types: [labeled]
-    branches: [main, beta]
-    paths:
-      - TestProjects/UnityMCPTests/**
-      - MCPForUnity/Editor/**
-      - MCPForUnity/Runtime/**
-      - .github/workflows/unity-tests.yml
 
-# Dedup runs for the same branch across push / pull_request / pull_request_target / workflow_call.
+# Dedup runs for the same branch across push / pull_request / workflow_call.
 # Same-repo PRs would otherwise fire both push (on the branch SHA) AND pull_request (on the PR);
 # concurrency keeps only the newer in-flight run per branch.
 concurrency:
@@ -61,23 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # Gate (mirrored by testAllModes below):
-    #   - Always run for non-PR triggers (push / workflow_call / workflow_dispatch).
-    #   - Fork PRs: require 'safe-to-test' to be applied (existing secret-safety gate);
-    #     'full-matrix' may be added on top to opt into the full 4-version matrix.
-    #   - In-repo PRs: only re-run via pull_request_target when 'full-matrix' is the
-    #     label that just fired (the push-event run already covered the default leg).
-    if: >
-      github.event_name != 'pull_request_target' ||
-      (
-        github.event.pull_request.head.repo.full_name != github.repository &&
-        contains(github.event.pull_request.labels.*.name, 'safe-to-test') &&
-        (github.event.label.name == 'safe-to-test' || github.event.label.name == 'full-matrix')
-      ) ||
-      (
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.label.name == 'full-matrix'
-      )
     outputs:
       versions: ${{ steps.set.outputs.versions }}
     steps:
@@ -97,12 +73,13 @@ jobs:
         run: |
           set -euo pipefail
           # Full matrix on: beta push, workflow_call (release pipelines), workflow_dispatch,
-          # or any PR (pull_request OR pull_request_target) labeled with 'full-matrix'.
+          # or a PR carrying the 'full-matrix' label. Note the label is only read when the
+          # workflow fires, so applying it to an open PR takes effect on the next push.
           # Default (single defaultVersion from tools/unity-versions.json) otherwise — fast PR feedback.
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || \
              [[ "$EVENT_NAME" == "workflow_call" ]] || \
              { [[ "$EVENT_NAME" == "push" ]] && [[ "$GH_REF" == "refs/heads/beta" ]]; } || \
-             { { [[ "$EVENT_NAME" == "pull_request" ]] || [[ "$EVENT_NAME" == "pull_request_target" ]]; } && [[ "$FULL_MATRIX_LABEL" == "true" ]]; }; then
+             { [[ "$EVENT_NAME" == "pull_request" ]] && [[ "$FULL_MATRIX_LABEL" == "true" ]]; }; then
             versions=$(jq -c '[.versions[].id]' tools/unity-versions.json)
             echo "Trigger '$EVENT_NAME' on ref '$GH_REF' (full_matrix_label=$FULL_MATRIX_LABEL) → full matrix: $versions"
           else
@@ -117,17 +94,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: >
-      github.event_name != 'pull_request_target' ||
-      (
-        github.event.pull_request.head.repo.full_name != github.repository &&
-        contains(github.event.pull_request.labels.*.name, 'safe-to-test') &&
-        (github.event.label.name == 'safe-to-test' || github.event.label.name == 'full-matrix')
-      ) ||
-      (
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.label.name == 'full-matrix'
-      )
     strategy:
       fail-fast: false
       matrix:
@@ -159,10 +125,23 @@ jobs:
             echo "unity_ok=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # A skipped run and a real pass both report a green check, because step-level
+      # `if:` conditions produce step-conclusion `skipped`, which contributes nothing
+      # to the job conclusion. Make the difference unmissable on the run page so a
+      # reviewer never reads this green check as "the code compiled".
       - name: Skip Unity tests (missing license secrets)
         if: steps.detect.outputs.unity_ok != 'true'
         run: |
-          echo "Unity license secrets missing; skipping Unity tests."
+          echo "::warning::Unity tests SKIPPED - no license secrets in scope (normal for fork PRs). This check is NOT a pass: nothing was compiled or tested."
+          {
+            echo "## :warning: Unity tests were SKIPPED"
+            echo
+            echo "No Unity license secrets were in scope for this run, so **no C# was compiled and no test was executed**."
+            echo "The green check means the job exited cleanly - **not** that this code works."
+            echo
+            echo "GitHub withholds repository secrets from workflow runs triggered by a fork's pull request."
+            echo "To get real signal, a maintainer must run the suite against this code from a trusted context."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/cache@v4
         with:
@@ -218,8 +197,8 @@ jobs:
           fi
           python3 - "$RESULTS_XML" <<'PY'
           import sys, xml.etree.ElementTree as ET
-          # Escape workflow-command payloads so test-controlled XML (under pull_request_target this
-          # is fork-supplied) can't break annotation rendering or inject extra workflow commands.
+          # Escape workflow-command payloads so test-controlled XML can't break annotation
+          # rendering or inject extra workflow commands.
           # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
           def esc_data(s):
               return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
