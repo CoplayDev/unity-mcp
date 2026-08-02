@@ -11,6 +11,88 @@ from services.tools.utils import coerce_bool, parse_json_payload, normalize_vect
 from services.tools.preflight import preflight
 
 
+def _normalize_components_to_add(value: Any) -> tuple[list[str | dict[str, Any]] | None, str | None]:
+    """
+    Normalize components_to_add, accepting both plain type-name strings and
+    {"typeName": ..., "properties": {...}} objects for setting initial component
+    properties at creation time (matching what the C# 'create' handler reads out
+    of each componentsToAdd entry).
+
+    Handles various input formats from MCP clients/LLMs:
+    - None -> (None, None)
+    - list of strings and/or {"typeName": str, "properties": dict} objects -> validated list
+    - a single object entry -> wrapped in a list
+    - JSON string encoding either form -> parsed and normalized
+    - Plain non-JSON string "foo" -> treated as ["foo"]
+
+    Returns:
+        Tuple of (parsed_list, error_message). If error_message is set, parsed_list is None.
+    """
+    def _validate_items(items: list[Any]) -> tuple[list[str | dict[str, Any]] | None, str | None]:
+        normalized: list[str | dict[str, Any]] = []
+        for item in items:
+            if isinstance(item, str):
+                normalized.append(item)
+                continue
+            if isinstance(item, dict):
+                type_name = item.get("typeName") or item.get("type_name")
+                if not isinstance(type_name, str) or not type_name:
+                    return None, (
+                        "components_to_add object entries must include a string 'typeName', "
+                        f"got: {item}"
+                    )
+                entry: dict[str, Any] = {"typeName": type_name}
+                properties = item.get("properties")
+                if properties is not None:
+                    if not isinstance(properties, dict):
+                        return None, (
+                            f"components_to_add entry for '{type_name}' has a non-object "
+                            f"'properties': {properties}"
+                        )
+                    entry["properties"] = properties
+                normalized.append(entry)
+                continue
+            return None, f"components_to_add entries must be strings or objects, got: {item!r}"
+        return normalized, None
+
+    if value is None:
+        return None, None
+
+    if isinstance(value, (list, tuple)):
+        return _validate_items(list(value))
+
+    if isinstance(value, dict):
+        # A single {"typeName": ..., "properties": ...} entry without list wrapping.
+        return _validate_items([value])
+
+    if isinstance(value, str):
+        val_trimmed = value.strip()
+        if val_trimmed in ("[object Object]", "undefined", "null", ""):
+            return None, (
+                f"components_to_add received invalid value: '{value}'. Expected a JSON array "
+                'like ["Item1", {"typeName": "Item2", "properties": {...}}]'
+            )
+
+        looks_like_json = val_trimmed.startswith("[") or val_trimmed.startswith("{")
+        parsed = parse_json_payload(value)
+        if isinstance(parsed, list):
+            return _validate_items(parsed)
+        if isinstance(parsed, dict):
+            return _validate_items([parsed])
+        if parsed == value and looks_like_json:
+            return None, (
+                f"components_to_add has invalid JSON syntax: '{value}'. Expected a valid JSON "
+                'array like ["item1", "item2"]'
+            )
+        if parsed == value:
+            # Treat as single-element list
+            return [value], None
+
+        return None, f"components_to_add must be a JSON array (list), got string that parsed to {type(parsed).__name__}"
+
+    return None, f"components_to_add must be a list, object, or JSON string, got {type(value).__name__}"
+
+
 def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
     """
     Robustly normalize component_properties to a dict.
@@ -74,8 +156,12 @@ async def manage_gameobject(
                         "Rotation as [x, y, z] euler angles array, {x, y, z} object, or JSON string"] | None = None,
     scale: Annotated[list[float] | dict[str, float] | str,
                      "Scale as [x, y, z] array, {x, y, z} object, or JSON string"] | None = None,
-    components_to_add: Annotated[list[str] | str,
-                                 "List of component names to add during 'create' or 'modify'"] | None = None,
+    components_to_add: Annotated[list[str | dict[str, Any]] | dict[str, Any] | str,
+                                 """List of components to add during 'create' or 'modify'. Each entry is either
+                                 a plain type name string (e.g. "BoxCollider") or an object
+                                 {"typeName": "BoxCollider", "properties": {"size": [2, 2, 2]}} that adds the
+                                 component with initial properties applied in the same call. Mixing both forms
+                                 in one list is fine."""] | None = None,
     primitive_type: Annotated[str,
                               "Primitive type for 'create' action"] | None = None,
     save_as_prefab: Annotated[bool | str,
@@ -92,7 +178,9 @@ async def manage_gameobject(
     components_to_remove: Annotated[list[str] | str,
                                     "List of component names to remove"] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]] | str,
-                                    """Dictionary of component names to their properties to set. For example:
+                                    """Dictionary of component names to their properties to set. Works for both
+                                    'create' (applied to components already present on the new GameObject - add
+                                    them via components_to_add first) and 'modify'. For example:
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
                                     Example set nested property:
@@ -158,7 +246,7 @@ async def manage_gameobject(
         return {"success": False, "message": comp_props_error}
 
     # --- Normalize components_to_add and components_to_remove ---
-    components_to_add, add_error = normalize_string_list(components_to_add, "components_to_add")
+    components_to_add, add_error = _normalize_components_to_add(components_to_add)
     if add_error:
         return {"success": False, "message": add_error}
 
