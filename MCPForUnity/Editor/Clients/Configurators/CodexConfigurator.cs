@@ -12,8 +12,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             name = "Codex",
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "config.toml"),
             macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "config.toml"),
-            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "config.toml"),
-            SupportsHttpTransport = false
+            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "config.toml")
         })
         { }
 
@@ -31,8 +30,5 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "Paste the configuration TOML",
             "Save and restart Codex"
         };
-
-        private static readonly ConfiguredTransport[] StdioOnly = { ConfiguredTransport.Stdio };
-        public override IReadOnlyList<ConfiguredTransport> SupportedTransports => StdioOnly;
     }
 }
