@@ -19,6 +19,9 @@ from transport.plugin_hub import PluginHub
     annotations=ToolAnnotations(
         title="Debug Request Context",
         readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def debug_request_context(ctx: Context) -> dict[str, Any]:
