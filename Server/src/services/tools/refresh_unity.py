@@ -180,7 +180,7 @@ async def refresh_unity(
     compile: Annotated[Literal["none", "request"],
                        "Whether to request compilation"] = "none",
     wait_for_ready: Annotated[bool,
-                              "If true, wait until editor_state.advice.ready_for_tools is true"] = True,
+                              "If true, wait until mcpforunity://editor/state reports data.advice.ready_for_tools true"] = True,
 ) -> MCPResponse | dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 

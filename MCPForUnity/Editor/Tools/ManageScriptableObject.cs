@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -44,7 +45,7 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse(CodeInvalidParams);
             }
 
-            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            if (EditorStateCache.GetActualIsCompiling() || EditorApplication.isUpdating)
             {
                 // Unity is transient; treat as retryable on the client side.
                 return new ErrorResponse(CodeCompilingOrReloading, new { hint = "retry" });

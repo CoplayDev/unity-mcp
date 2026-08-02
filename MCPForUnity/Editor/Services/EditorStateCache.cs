@@ -260,8 +260,8 @@ namespace MCPForUnity.Editor.Services
                 EditorApplication.playModeStateChanged += _ => ForceUpdate("playmode");
 
                 // Tracks whether an assembly compilation is actually running, for
-                // GetActualIsCompiling's Play-mode check. Statics reset on domain reload
-                // and this [InitializeOnLoad] ctor re-subscribes, so the flag is per-domain.
+                // GetActualIsCompiling. Statics reset on domain reload and this
+                // [InitializeOnLoad] ctor re-subscribes, so the flag is per-domain.
                 UnityEditor.Compilation.CompilationPipeline.compilationStarted += _ => _pipelineCompilationRunning = true;
                 UnityEditor.Compilation.CompilationPipeline.compilationFinished += _ => _pipelineCompilationRunning = false;
 
@@ -288,7 +288,7 @@ namespace MCPForUnity.Editor.Services
         {
             // Throttle to reduce overhead while keeping the snapshot fresh enough for polling clients.
             double now = EditorApplication.timeSinceStartup;
-            // Use GetActualIsCompiling() to avoid Play mode false positives (issue #582)
+            // Use GetActualIsCompiling() to avoid isCompiling false positives (issues #549, #1276)
             bool isCompiling = GetActualIsCompiling();
 
             // Check for compilation edge transitions (always update on these)
@@ -543,10 +543,12 @@ namespace MCPForUnity.Editor.Services
         private static bool _pipelineCompilationRunning;
 
         /// <summary>
-        /// Returns the actual compilation state, working around a known Unity quirk where
-        /// EditorApplication.isCompiling can return false positives in Play mode (e.g. a
-        /// recompile deferred by Recompile-After-Finished-Playing keeps it true for the
-        /// whole play session). See: https://github.com/CoplayDev/unity-mcp/issues/549
+        /// Returns the actual compilation state, working around known Unity quirks where
+        /// EditorApplication.isCompiling reports false positives while no compilation is
+        /// running: a recompile deferred by Recompile-After-Finished-Playing keeps it true
+        /// for the whole play session (issue #549), and a project holding
+        /// EditorApplication.LockReloadAssemblies keeps it true until the lock is released
+        /// (issue #1276). In both cases the event-tracked pipeline flag is authoritative.
         /// </summary>
         internal static bool GetActualIsCompiling()
         {
@@ -556,16 +558,9 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            // In Play mode, trust the event-tracked pipeline state instead: a deferred
-            // recompile keeps EditorApplication.isCompiling true without any compilation
-            // actually running.
-            if (EditorApplication.isPlaying)
-            {
-                return _pipelineCompilationRunning;
-            }
-
-            // Outside Play mode the raw signal is reliable.
-            return true;
+            // Otherwise trust the event-tracked pipeline state: isCompiling stays true for as
+            // long as an assembly reload is deferred, with no compilation actually running.
+            return _pipelineCompilationRunning;
         }
     }
 }

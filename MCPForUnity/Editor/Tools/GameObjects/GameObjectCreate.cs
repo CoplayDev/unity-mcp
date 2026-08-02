@@ -269,6 +269,16 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 }
             }
 
+            // Set Component Properties (same "componentProperties" argument 'modify' consumes,
+            // applied here so it also works at creation time)
+            var componentPropertiesError = GameObjectComponentHelpers.ApplyComponentProperties(
+                newGo, @params["componentProperties"] as JObject, out _);
+            if (componentPropertiesError != null)
+            {
+                UnityEngine.Object.DestroyImmediate(newGo);
+                return componentPropertiesError;
+            }
+
             // Save as Prefab ONLY if we *created* a new object AND saveAsPrefab is true
             GameObject finalInstance = newGo;
             if (createdNewObject && saveAsPrefab)
