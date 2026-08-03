@@ -23,13 +23,14 @@ namespace MCPForUnity.Editor.Services.AssetGen
     public sealed class AssetGenJob
     {
         public string JobId;
-        public string Kind;       // model | image | marketplace
+        public string Kind;       // model | image | audio | marketplace
         public string Provider;
         public string Action;
         public AssetGenJobState State;
         public float Progress;
         public string Format;
         public float TargetSize = 1f;
+        public string AnimationType;   // FBX/OBJ rig mode: null/none | generic | humanoid | legacy
         public string AssetPath;
         public string AssetGuid;
         public string Error;
@@ -139,6 +140,34 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 Ext = "png",
                 Name = NameFrom(req.Name, req.Prompt, job.JobId),
                 Subfolder = "Images",
+            };
+            Register(job, runner);
+            return job;
+        }
+
+        public static AssetGenJob StartAudioGeneration(AudioGenRequest req)
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            string provider = string.IsNullOrEmpty(req.Provider) ? "fal" : req.Provider;
+            IAudioProviderAdapter adapter = AssetGenProviders.Audio(provider); // throws NotSupportedException if unimplemented
+
+            var job = NewJob("audio", provider, "generate");
+            job.Format = "wav";
+
+            if (!TryResolveKey(provider, job, out string apiKey)) return job;
+
+            IHttpTransport transport = TransportOverrideForTests ?? new UnityWebRequestTransport();
+            var runner = new Runner
+            {
+                Job = job,
+                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
+                ImportFn = ImportOverrideForTests ?? AudioImportPipeline.ImportInto,
+                Transport = transport,
+                OutputFolder = req.OutputFolder,
+                Ext = "wav", // default; the poll's ResultExt (wav/mp3) overrides at write time
+                Name = NameFrom(req.Name, req.Prompt, job.JobId),
+                Subfolder = "Audio",
             };
             Register(job, runner);
             return job;
@@ -408,10 +437,51 @@ namespace MCPForUnity.Editor.Services.AssetGen
             }
         }
 
+        // Per-kind allowlist of result file extensions. The write extension can come from a
+        // provider-controlled result URL (OverrideExt), so a rogue provider could otherwise land a
+        // .cs/.asmdef/.meta/.asset under Assets/ and get it compiled/imported on Refresh — Editor
+        // RCE. Anything outside these sets is rejected. Mirrors ModelImportPipeline's allowlist style.
+        private static readonly HashSet<string> AudioAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "wav", "mp3", "ogg", "aiff", "aif", "flac",
+        };
+        private static readonly HashSet<string> ImageAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "png", "jpg", "jpeg", "exr", "tga", "psd", "tiff", "webp", "gif", "bmp",
+        };
+        private static readonly HashSet<string> ModelAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "glb", "gltf", "fbx", "obj", "usd", "usdz", "dae", "ply", "stl", "zip",
+        };
+        // Fail closed: an unexpected kind allows nothing, so the RCE boundary never opens by default.
+        private static readonly HashSet<string> NoAllowedExtensions = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="ext"/> (no leading dot) is an allowed result extension for the
+        /// job <paramref name="kind"/> (audio | image | model | marketplace). Internal so the
+        /// allowlist can be unit-tested directly.
+        /// </summary>
+        internal static bool IsAllowedResultExtension(string kind, string ext)
+            => AllowedExtensionsFor(kind).Contains((ext ?? string.Empty).TrimStart('.'));
+
+        private static HashSet<string> AllowedExtensionsFor(string kind)
+        {
+            switch ((kind ?? string.Empty).ToLowerInvariant())
+            {
+                case "audio": return AudioAllowedExtensions;
+                case "image": return ImageAllowedExtensions;
+                case "model":
+                case "marketplace": return ModelAllowedExtensions;
+                default: return NoAllowedExtensions; // fail closed for unexpected kinds
+            }
+        }
+
         private static string WriteFile(Runner r, byte[] bytes)
         {
             string chosen = !string.IsNullOrEmpty(r.OverrideExt) ? r.OverrideExt : r.Ext;
             string ext = string.IsNullOrEmpty(chosen) ? "bin" : chosen.TrimStart('.').ToLowerInvariant();
+            if (!IsAllowedResultExtension(r.Job.Kind, ext))
+                throw new Exception($"provider returned a disallowed file type '.{ext}'");
             string requestedRoot = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
                                                                          : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
             if (!AssetGenPaths.TryGetAssetsFolder(requestedRoot, out string root))

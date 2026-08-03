@@ -17,7 +17,7 @@ from services.tools.import_model_file import import_model_file
 
 
 COMMAND = "import_model_file"
-ALLOWED_KEYS = {"sourcePath", "name", "outputFolder", "targetSize"}
+ALLOWED_KEYS = {"sourcePath", "name", "outputFolder", "targetSize", "animationType"}
 
 
 def _call_tool(**kwargs):
@@ -85,6 +85,13 @@ class TestImportModelFileRouting:
         _, sent = _call_tool(source_path="/tmp/x.obj")
         assert _sent_params(sent) == {"sourcePath": "/tmp/x.obj"}
 
+    def test_animation_type_mapped(self):
+        _, sent = _call_tool(source_path="/tmp/rig.fbx", animation_type="generic")
+        params = _sent_params(sent)
+        assert params["animationType"] == "generic"
+        assert "animation_type" not in params
+        assert set(params.keys()).issubset(ALLOWED_KEYS)
+
     def test_no_secret_keys_in_payload(self):
         _, sent = _call_tool(
             source_path="/tmp/a.glb", name="N",
@@ -120,4 +127,13 @@ class TestImportModelFileCLI:
         assert params["name"] == "Cube"
         assert params["outputFolder"] == "Assets/Props"
         assert params["targetSize"] == 1.5
+        assert set(params.keys()).issubset(ALLOWED_KEYS)
+
+    def test_import_model_file_cli_animation_type(self, cli_runner):
+        result, mock_run = cli_runner([
+            "import-model-file", "--source-path", "/tmp/rig.fbx", "--animation-type", "humanoid",
+        ])
+        assert result.exit_code == 0
+        params = mock_run.call_args.args[1]
+        assert params["animationType"] == "humanoid"
         assert set(params.keys()).issubset(ALLOWED_KEYS)

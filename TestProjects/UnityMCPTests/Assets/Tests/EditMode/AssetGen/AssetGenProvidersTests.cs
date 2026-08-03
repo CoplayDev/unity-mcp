@@ -28,6 +28,42 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Audio_Fal_ReturnsAdapter()
+        {
+            IAudioProviderAdapter adapter = AssetGenProviders.Audio("fal");
+            Assert.IsNotNull(adapter);
+            Assert.AreEqual("fal", adapter.Id);
+        }
+
+        [Test]
+        public void Audio_Unimplemented_Throws()
+        {
+            Assert.Throws<NotSupportedException>(() => AssetGenProviders.Audio("elevenlabs"));
+        }
+
+        [Test]
+        public void List_IncludesFalAudioRow()
+        {
+            ProviderInfo row = FindByIdKind("fal", "audio");
+            Assert.IsNotNull(row, "List() should advertise a fal audio row");
+            Assert.AreEqual("audio", row.Kind);
+        }
+
+        [Test]
+        public void List_HasExactlyOneFalImage_AndOneFalAudio()
+        {
+            int image = 0, audio = 0;
+            foreach (ProviderInfo p in AssetGenProviders.List())
+            {
+                if (p.Id != "fal") continue;
+                if (p.Kind == "image") image++;
+                else if (p.Kind == "audio") audio++;
+            }
+            Assert.AreEqual(1, image, "exactly one fal image row");
+            Assert.AreEqual(1, audio, "exactly one fal audio row");
+        }
+
+        [Test]
         public void List_IncludesTripo_ConfiguredIsBool()
         {
             const string envName = "MCPFORUNITY_TRIPO_API_KEY";
@@ -62,6 +98,15 @@ namespace MCPForUnityTests.Editor.AssetGen
             foreach (ProviderInfo p in AssetGenProviders.List())
             {
                 if (p.Id == "tripo") return p;
+            }
+            return null;
+        }
+
+        private static ProviderInfo FindByIdKind(string id, string kind)
+        {
+            foreach (ProviderInfo p in AssetGenProviders.List())
+            {
+                if (p.Id == id && p.Kind == kind) return p;
             }
             return null;
         }

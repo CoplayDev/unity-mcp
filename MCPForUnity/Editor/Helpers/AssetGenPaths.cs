@@ -81,6 +81,21 @@ namespace MCPForUnity.Editor.Helpers
             return true;
         }
 
+        /// <summary>
+        /// Validate an optional caller-supplied output folder. Empty is allowed (the tool picks a
+        /// default); a non-empty value must resolve under the project's Assets folder. Shared by the
+        /// generate_* tools.
+        /// </summary>
+        public static bool NormalizeOutputFolder(string outputFolder, out string normalized, out string error)
+        {
+            normalized = outputFolder;
+            error = null;
+            if (string.IsNullOrWhiteSpace(outputFolder)) return true;
+            if (TryGetAssetsFolder(outputFolder, out normalized)) return true;
+            error = "'output_folder' must resolve under the project's Assets folder.";
+            return false;
+        }
+
         private static string ProjectRoot()
         {
             string dataPath = Path.GetFullPath(Application.dataPath).Replace('\\', '/');

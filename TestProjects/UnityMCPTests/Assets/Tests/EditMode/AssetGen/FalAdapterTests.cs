@@ -121,5 +121,42 @@ namespace MCPForUnityTests.Editor.AssetGen
 
             Assert.AreEqual(ProviderPollState.Running, pr.State);
         }
+
+        [Test]
+        public void Poll_UnknownStatus_FailsFast_NotRunning()
+        {
+            // C4: an unmapped terminal status must fail immediately, not poll until the job timeout.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"status\":\"WEIRD_UNKNOWN\"}") };
+            var adapter = new FalAdapter();
+
+            ProviderPollResult pr = adapter.PollAsync(Resp, "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult();
+
+            Assert.AreEqual(ProviderPollState.Failed, pr.State);
+            StringAssert.Contains("WEIRD_UNKNOWN", pr.Error);
+        }
+
+        [Test]
+        public void Poll_ForeignHost_Throws_AndSendsNothing()
+        {
+            // H3: the key must never be attached to a provider-controlled host.
+            var fake = new FakeHttpTransport();
+            var adapter = new FalAdapter();
+
+            Assert.Throws<System.Exception>(() =>
+                adapter.PollAsync("https://attacker.example/harvest", "falkey123", fake, CancellationToken.None)
+                       .GetAwaiter().GetResult());
+            Assert.IsEmpty(fake.RecordedRequests, "no request (and no key) may be sent to a foreign host");
+        }
+
+        [Test]
+        public void Submit_ForeignResponseUrl_Throws()
+        {
+            // H3: a poisoned response_url from the provider must be rejected before it's used to poll.
+            var fake = new FakeHttpTransport { Handler = _ => Json("{\"response_url\":\"https://evil.example/x\"}") };
+            var adapter = new FalAdapter();
+
+            Assert.Throws<System.Exception>(() =>
+                adapter.SubmitAsync(Req(), "falkey123", fake, CancellationToken.None).GetAwaiter().GetResult());
+        }
     }
 }

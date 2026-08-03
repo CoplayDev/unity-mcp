@@ -40,6 +40,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         public float TargetSize = 1f;
         public bool Texture = true;
         public string Tier;
+        public string Model; // provider model id/version; null => adapter DefaultModel
         public string Name;
         public string OutputFolder;
     }
@@ -62,13 +63,28 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     }
 
     /// <summary>
+    /// Request to generate an audio clip (fal.ai for v1). <see cref="Model"/> selects the fal
+    /// endpoint (stable-audio-25 / cassetteai/* / lyria2). <see cref="Duration"/> is a per-gen
+    /// input; 0 => provider default. Never carries a key; never persisted (transient request only).
+    /// </summary>
+    public sealed class AudioGenRequest
+    {
+        public string Provider; // "fal" for v1
+        public string Model; // fal model id, e.g. fal-ai/stable-audio-25/text-to-audio
+        public string Prompt;
+        public float Duration; // seconds; 0 => per-model default. Soft-clamped per model in the adapter.
+        public string Name;
+        public string OutputFolder;
+    }
+
+    /// <summary>
     /// Public, key-free description of a provider for <c>list_providers</c>. Never carries a key
     /// value — <see cref="Configured"/> reports existence only.
     /// </summary>
     public sealed class ProviderInfo
     {
         public string Id;
-        public string Kind; // model | image | marketplace
+        public string Kind; // model | image | audio | marketplace
         public bool Configured;
         public string[] Capabilities;
     }

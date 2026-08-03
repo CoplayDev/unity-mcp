@@ -32,6 +32,8 @@ class ServerConfig:
 
     # Connection settings
     connection_timeout: float = 30.0
+    # Hard ceiling on a command's total time across all retries (wedged-socket guard).
+    command_total_timeout: float = 90.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
 
     # STDIO framing behaviour

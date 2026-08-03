@@ -14,7 +14,9 @@ description: "Import a local 3D model file that already exists on disk (e.g. an 
 
 Import a local 3D model file that already exists on disk (e.g. an FBX/OBJ/glTF exported from Blender or another DCC tool) into the Unity project. The file is copied under Assets/ and run through Unity's model-import pipeline (scale-normalize, material settings; glTF requires glTFast). Carries no API keys and no file bytes over the bridge.
 
-Params: source_path (absolute or Assets-relative path to a .fbx/.obj/.glb/.gltf/.zip), name, output_folder (under Assets/), target_size. Returns { asset_path, asset_guid }.
+Params: source_path (absolute or Assets-relative path to a .fbx/.obj/.glb/.gltf/.zip), name, output_folder (under Assets/), target_size, animation_type. Returns { asset_path, asset_guid }.
+
+animation_type (FBX/OBJ only): pass 'generic' or 'humanoid' for a rigged/animated mesh so Unity surfaces its AnimationClips; omitted or 'none' imports no rig (this is the usual cause of a rigged FBX importing with zero clips); 'legacy' selects Unity's legacy Animation system (rarely needed). glTF/GLB ignore it — glTFast imports animation itself.
 
 For multi-file exports (a text .gltf with an external .bin, or an .obj with a sibling .mtl/textures), zip them and pass the .zip — a bare .gltf/.obj is copied without its sidecars.
 
@@ -26,6 +28,7 @@ For multi-file exports (a text .gltf with an external .bin, or an .obj with a si
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `target_size` | `float \| None` | — | Normalize the largest dimension to this size (meters). |
+| `animation_type` | `Literal['none', 'generic', 'humanoid', 'legacy'] \| None` | — | FBX/OBJ only: rig/animation import mode. 'generic' or 'humanoid' surface the model's AnimationClips; 'legacy' selects Unity's legacy Animation system (rarely needed); omitted or 'none' imports no rig. Ignored for glTF/GLB. |
 
 ## Returns
 

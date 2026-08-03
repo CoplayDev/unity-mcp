@@ -31,6 +31,13 @@ namespace MCPForUnity.Editor.Services
         bool IsManagedServerLaunchProcessAlive();
 
         /// <summary>
+        /// True when this domain launched the local HTTP server and still holds its Process
+        /// handle. Handles do not survive domain reloads, so false also means "unknown" —
+        /// callers should wait rather than fail fast.
+        /// </summary>
+        bool HasManagedServerLaunchHandle { get; }
+
+        /// <summary>
         /// Writes a launch-failure report to the Console (Error): the tail of the launch log,
         /// the log path, and a copy-command hint pointing at the Manual Server Launch foldout.
         /// </summary>

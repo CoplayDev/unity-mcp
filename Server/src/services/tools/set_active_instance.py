@@ -17,6 +17,11 @@ from core.config import config
     description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
     annotations=ToolAnnotations(
         title="Set Active Instance",
+        # Changes session-local routing only; touches nothing in the project.
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def set_active_instance(

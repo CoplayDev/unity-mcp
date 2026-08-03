@@ -5,6 +5,7 @@ Supports add, remove, and set_property operations.
 from typing import Annotated, Any, Literal, Optional
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -20,7 +21,12 @@ from services.tools.preflight import preflight
         "For READING component data, use the mcpforunity://scene/gameobject/{id}/components resource "
         "or mcpforunity://scene/gameobject/{id}/component/{name} for a single component. "
         "For creating/deleting GameObjects themselves, use manage_gameobject instead."
-    )
+    ),
+    annotations=ToolAnnotations(
+        title="Manage Components",
+        readOnlyHint=False,
+        destructiveHint=True,
+    ),
 )
 async def manage_components(
     ctx: Context,

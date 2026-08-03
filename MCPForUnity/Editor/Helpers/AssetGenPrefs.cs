@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Helpers
         public const string DefaultOutputRoot = "Assets/Generated";
         public const string DefaultModelProvider = "tripo";
         public const string DefaultImageProvider = "fal";
+        public const string DefaultAudioProvider = "fal";
         public const string DefaultFormatValue = "glb";
 
         public static string ModelProvider
@@ -29,6 +30,33 @@ namespace MCPForUnity.Editor.Helpers
             get => EditorPrefs.GetString(EditorPrefKeys.AssetGenSelectedImageProvider, DefaultImageProvider);
             set => SetOrDelete(EditorPrefKeys.AssetGenSelectedImageProvider, value);
         }
+
+        public static string AudioProvider
+        {
+            get => EditorPrefs.GetString(EditorPrefKeys.AssetGenSelectedAudioProvider, DefaultAudioProvider);
+            set => SetOrDelete(EditorPrefKeys.AssetGenSelectedAudioProvider, value);
+        }
+
+        /// <summary>
+        /// Selected model id for a (kind, provider) pair — the GUI dropdown writes it and the
+        /// generate_* tools read it when the caller omits `model`. Empty by design: the tool's
+        /// empty -> catalog-default chain is the single source of the default, so a blank value
+        /// means "use the catalog default for this provider". Per-provider (not per-type) so
+        /// disjoint provider model lists (Tripo vs Meshy, fal vs OpenRouter) never clobber each other.
+        /// </summary>
+        public static string GetSelectedModel(string kind, string providerId)
+            => string.IsNullOrEmpty(providerId)
+                ? string.Empty
+                : EditorPrefs.GetString(ModelKey(kind, providerId), string.Empty);
+
+        public static void SetSelectedModel(string kind, string providerId, string value)
+        {
+            if (string.IsNullOrEmpty(providerId)) return;
+            SetOrDelete(ModelKey(kind, providerId), value);
+        }
+
+        private static string ModelKey(string kind, string providerId)
+            => EditorPrefKeys.AssetGenSelectedModelPrefix + kind + "." + providerId;
 
         public static string DefaultFormat
         {

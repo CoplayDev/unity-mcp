@@ -38,6 +38,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Http
                     request.SetRequestHeader(kv.Key, kv.Value);
                 }
             }
+            // UnityWebRequest re-sends the Authorization header to a 3xx target by default. Never
+            // follow a redirect on an auth-bearing request — the key must not leak to the redirect
+            // host. No-auth downloads may still follow.
+            if (CarriesAuth(spec)) request.redirectLimit = 0;
 
             CancellationTokenRegistration ctReg = default;
             if (ct.CanBeCanceled)
@@ -75,6 +79,16 @@ namespace MCPForUnity.Editor.Services.AssetGen.Http
             };
 
             return tcs.Task;
+        }
+
+        /// <summary>True iff the request carries an Authorization header (case-insensitive key).</summary>
+        internal static bool CarriesAuth(HttpRequestSpec spec)
+        {
+            if (spec?.Headers == null) return false;
+            foreach (var kv in spec.Headers)
+                if (string.Equals(kv.Key, "Authorization", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
     }
 }

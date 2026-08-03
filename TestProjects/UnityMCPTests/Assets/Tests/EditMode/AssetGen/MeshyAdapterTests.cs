@@ -62,6 +62,32 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Submit_UsesRequestModel_WhenProvided()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"t\"}") };
+            var adapter = new MeshyAdapter();
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x", Model = "meshy-5" };
+
+            adapter.SubmitAsync(req, "k", http, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = Encoding.UTF8.GetString(http.RecordedRequests[0].Body);
+            StringAssert.Contains("\"ai_model\":\"meshy-5\"", body);
+        }
+
+        [Test]
+        public void Submit_FallsBackToDefault_WhenModelEmpty()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"result\":\"t\"}") };
+            var adapter = new MeshyAdapter();
+            var req = new ModelGenRequest { Provider = "meshy", Mode = "text", Prompt = "x" }; // Model null
+
+            adapter.SubmitAsync(req, "k", http, CancellationToken.None).GetAwaiter().GetResult();
+
+            string body = Encoding.UTF8.GetString(http.RecordedRequests[0].Body);
+            StringAssert.Contains("\"ai_model\":\"" + MeshyAdapter.DefaultModel + "\"", body);
+        }
+
+        [Test]
         public void Poll_Succeeded_ReturnsGlbUrl()
         {
             var http = new FakeHttpTransport

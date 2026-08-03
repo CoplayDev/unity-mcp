@@ -181,6 +181,6 @@ Anchor ops are great for adding instrumentation near stable comment markers with
 
 ### After every edit
 
-Poll `editor_state.isCompiling` until it flips back to `false`, then run [`read_console`](./read_console) to catch any compile errors before relying on the new types.
+Poll the `mcpforunity://editor/state` resource until `data.compilation.is_compiling` flips back to `false`, then run [`read_console`](./read_console) to catch any compile errors before relying on the new types.
 <!-- examples:end -->
 

@@ -237,24 +237,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private static bool IsCompiling()
-        {
-            if (EditorApplication.isCompiling)
-            {
-                return true;
-            }
-            try
-            {
-                Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                var prop = pipeline?.GetProperty("isCompiling", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (prop != null)
-                {
-                    return (bool)prop.GetValue(null);
-                }
-            }
-            catch { }
-            return false;
-        }
+        // Routed through EditorStateCache so a deferred domain reload (issue #1276) does not
+        // pin the bridge off: raw EditorApplication.isCompiling stays true for as long as the
+        // reload is held, and this gates bridge startup.
+        private static bool IsCompiling() => EditorStateCache.GetActualIsCompiling();
 
         public static void Start()
         {

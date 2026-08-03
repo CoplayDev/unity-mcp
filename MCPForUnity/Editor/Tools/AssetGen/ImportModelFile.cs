@@ -46,7 +46,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 string destRel = StageUnderAssets(srcAbs, baseName, ext, p.Get("outputFolder"));
                 AssetDatabase.Refresh();
 
-                var job = new AssetGenJob { TargetSize = p.GetFloat("targetSize", 1f) ?? 1f };
+                var job = new AssetGenJob
+                {
+                    TargetSize = p.GetFloat("targetSize", 1f) ?? 1f,
+                    AnimationType = p.Get("animationType"),
+                };
                 AssetGenJob result = ModelImportPipeline.ImportInto(job, destRel);
 
                 if (result == null || result.State == AssetGenJobState.Failed)

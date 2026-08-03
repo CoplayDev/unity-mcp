@@ -14,7 +14,7 @@
             <uie:ToolbarToggle name="clients-tab" text="Connect" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
             <uie:ToolbarToggle name="resources-tab" text="Resources" />
-            <uie:ToolbarToggle name="assetgen-tab" text="Asset Gen" />
+            <uie:ToolbarToggle name="assetgen-tab" text="Generative" />
             <uie:ToolbarToggle name="deps-tab" text="Deps" />
             <uie:ToolbarToggle name="advanced-tab" text="Advanced" />
         </uie:Toolbar>

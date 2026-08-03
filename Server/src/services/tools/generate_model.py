@@ -26,7 +26,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- generate: Submit a generation job (text->3D or image->3D). Returns { job_id } "
         "immediately; poll with the status action. Params: provider, mode (text|image), "
         "prompt, image_path|image_url, format (glb|fbx|obj|usdz), target_size, texture, "
-        "tier, name, output_folder.\n"
+        "tier, model, name, output_folder.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured 3D providers and capabilities (no key values)."
@@ -50,6 +50,8 @@ async def generate_model(
     target_size: Annotated[float, "Normalize the largest dimension to this size (meters)."] | None = None,
     texture: Annotated[bool, "Whether to generate textures for the model."] | None = None,
     tier: Annotated[str, "Provider quality/cost tier."] | None = None,
+    model: Annotated[str, "Provider model id/version (e.g. Tripo v3.1, Meshy meshy-6). "
+                     "Omit for the GUI-selected default."] | None = None,
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,
@@ -67,6 +69,7 @@ async def generate_model(
         "targetSize": target_size,
         "texture": texture,
         "tier": tier,
+        "model": model,
         "name": name,
         "outputFolder": output_folder,
         "jobId": job_id,

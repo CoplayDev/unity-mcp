@@ -21,6 +21,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     {
         private const string TextEndpoint = "https://api.meshy.ai/openapi/v2/text-to-3d";
         private const string ImageEndpoint = "https://api.meshy.ai/openapi/v1/image-to-3d";
+        // Default model; the catalog mirrors this and the drift-guard test pins the two together.
+        internal const string DefaultModel = "meshy-6";
 
         public string Id => "meshy";
 
@@ -28,6 +30,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         private string _format = "glb";
         private bool _isImage;
         private bool _wantTexture = true;
+        private string _aiModel = DefaultModel; // stashed so the refine task reuses the submit model
         private string _refineTaskId;
         private bool _refineSubmitted;
 
@@ -38,6 +41,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
             _format = string.IsNullOrEmpty(req.Format) ? "glb" : req.Format.TrimStart('.').ToLowerInvariant();
             _wantTexture = req.Texture;
+            _aiModel = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
             _isImage = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
                        && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
 
@@ -52,7 +56,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 body = new JObject
                 {
                     ["image_url"] = imageRef,
-                    ["ai_model"] = "meshy-6",
+                    ["ai_model"] = _aiModel,
                     ["should_texture"] = _wantTexture
                 };
             }
@@ -64,7 +68,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 {
                     ["mode"] = "preview",
                     ["prompt"] = req.Prompt ?? string.Empty,
-                    ["ai_model"] = "meshy-6"
+                    ["ai_model"] = _aiModel
                 };
             }
 
@@ -107,7 +111,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     {
                         ["mode"] = "refine",
                         ["preview_task_id"] = providerJobId,
-                        ["ai_model"] = "meshy-6"
+                        ["ai_model"] = _aiModel
                     };
                     _refineTaskId = await PostTask(TextEndpoint, refineBody, apiKey, http, ct, "refine");
                     _refineSubmitted = true;

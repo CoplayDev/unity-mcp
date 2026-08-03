@@ -22,7 +22,7 @@ COMMAND = "generate_model"
 # Every camelCase key the tool is allowed to send. Crucially, no key/secret param.
 ALLOWED_KEYS = {
     "action", "provider", "mode", "prompt", "imagePath", "imageUrl",
-    "format", "targetSize", "texture", "tier", "name", "outputFolder", "jobId",
+    "format", "targetSize", "texture", "tier", "model", "name", "outputFolder", "jobId",
 }
 
 
@@ -129,6 +129,15 @@ class TestGenerateModelRouting:
         # snake_case keys must never reach Unity
         for snake in ("image_path", "image_url", "target_size", "output_folder", "job_id"):
             assert snake not in params
+
+    def test_model_param_passthrough(self):
+        _, sent = _call_tool(action="generate", provider="tripo", prompt="x", model="v3.1-20260211")
+        params = _sent_params(sent)
+        assert params["model"] == "v3.1-20260211"
+
+    def test_model_omitted_is_dropped(self):
+        _, sent = _call_tool(action="generate", provider="tripo", prompt="x")
+        assert "model" not in _sent_params(sent)
 
     def test_none_values_stripped(self):
         _, sent = _call_tool(action="generate", provider="tripo", prompt="x")

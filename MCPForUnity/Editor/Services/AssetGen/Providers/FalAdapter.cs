@@ -17,9 +17,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     public sealed class FalAdapter : IImageProviderAdapter
     {
         private const string QueueBase = "https://queue.fal.run/";
+        private const string QueueHost = "queue.fal.run";
         // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
         // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
-        private const string DefaultModel = "fal-ai/flux-2";
+        // internal so the model catalog references it directly (single source of truth, drift-guarded).
+        internal const string DefaultModel = "fal-ai/flux-2";
 
         public string Id => "fal";
 
@@ -52,6 +54,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (!image && req.Width > 0 && req.Height > 0)
                 body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
 
+            ProviderHttp.RequireHost(url, QueueHost, apiKey, "fal submit");
+
             var spec = new HttpRequestSpec
             {
                 Method = "POST",
@@ -75,6 +79,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 // so build from the base model id (not `url`, which may end in /edit).
                 responseUrl = QueueBase + model + "/requests/" + requestId;
             }
+            // The response_url is provider-controlled; refuse to later attach the key to any host
+            // other than the fal queue.
+            ProviderHttp.RequireHost(responseUrl, QueueHost, apiKey, "fal submit response_url");
             return responseUrl;
         }
 
@@ -82,6 +89,9 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         {
             if (string.IsNullOrEmpty(providerJobId)) throw new ArgumentNullException(nameof(providerJobId));
             string responseUrl = providerJobId;
+            // providerJobId is provider-supplied (the submit-time response_url). Re-validate before
+            // attaching the key so a poisoned URL can never exfiltrate it.
+            ProviderHttp.RequireHost(responseUrl, QueueHost, apiKey, "fal poll");
 
             var statusSpec = new HttpRequestSpec { Method = "GET", Url = responseUrl + "/status" };
             statusSpec.Headers["Authorization"] = "Key " + apiKey;
@@ -108,7 +118,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     result.Error = SecretRedactor.Scrub(statusJson["error"]?.ToString() ?? "fal task failed.", apiKey);
                     return result;
                 default:
-                    result.State = ProviderPollState.Running;
+                    // An unmapped terminal status would otherwise poll until the 600s job timeout —
+                    // fail fast instead.
+                    result.State = ProviderPollState.Failed;
+                    result.Error = SecretRedactor.Scrub($"fal returned an unexpected status '{status}'.", apiKey);
                     return result;
             }
 

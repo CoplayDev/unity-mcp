@@ -49,15 +49,30 @@ namespace MCPForUnity.Editor.Tools.Build
             BuildOptions buildOptions,
             int subtarget)
         {
-            return new BuildPlayerOptions
+            var options = new BuildPlayerOptions
             {
                 target = target,
                 targetGroup = BuildTargetMapping.GetTargetGroup(target),
                 locationPathName = outputPath,
                 scenes = scenes ?? GetDefaultScenes(),
                 options = buildOptions,
-                subtarget = subtarget
             };
+
+            // Subtarget is only meaningful for Standalone (Server vs Player).
+            // On Android/iOS it maps to MobileTextureSubtarget (texture compression format).
+            // Passing StandaloneBuildSubtarget.Player (0) for mobile platforms forces
+            // a specific texture format — confirmed Unity bug IN-102413 where value 0
+            // on Unity 6000+ triggers PVRTC, ignoring Player Settings.
+            // Leave at platform default (0) so Unity respects Player Settings.
+            if (target == BuildTarget.StandaloneWindows
+                || target == BuildTarget.StandaloneWindows64
+                || target == BuildTarget.StandaloneOSX
+                || target == BuildTarget.StandaloneLinux64)
+            {
+                options.subtarget = subtarget;
+            }
+
+            return options;
         }
 
         public static BuildOptions ParseBuildOptions(string[] optionNames, bool development)

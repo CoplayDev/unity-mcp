@@ -5,7 +5,7 @@ e.g. exported from Blender) into the Unity project.
 Thin pass-through: NO API keys and NO file bytes cross the bridge. The C# side copies
 the file under Assets/ and runs the shared model-import pipeline.
 """
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -24,7 +24,12 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "under Assets/ and run through Unity's model-import pipeline (scale-normalize, material "
         "settings; glTF requires glTFast). Carries no API keys and no file bytes over the bridge.\n\n"
         "Params: source_path (absolute or Assets-relative path to a .fbx/.obj/.glb/.gltf/.zip), "
-        "name, output_folder (under Assets/), target_size. Returns { asset_path, asset_guid }.\n\n"
+        "name, output_folder (under Assets/), target_size, animation_type. "
+        "Returns { asset_path, asset_guid }.\n\n"
+        "animation_type (FBX/OBJ only): pass 'generic' or 'humanoid' for a rigged/animated mesh so "
+        "Unity surfaces its AnimationClips; omitted or 'none' imports no rig (this is the usual "
+        "cause of a rigged FBX importing with zero clips); 'legacy' selects Unity's legacy Animation "
+        "system (rarely needed). glTF/GLB ignore it — glTFast imports animation itself.\n\n"
         "For multi-file exports (a text .gltf with an external .bin, or an .obj with a sibling "
         ".mtl/textures), zip them and pass the .zip — a bare .gltf/.obj is copied without its sidecars."
     ),
@@ -39,6 +44,12 @@ async def import_model_file(
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     target_size: Annotated[float, "Normalize the largest dimension to this size (meters)."] | None = None,
+    animation_type: Annotated[
+        Literal["none", "generic", "humanoid", "legacy"],
+        "FBX/OBJ only: rig/animation import mode. 'generic' or 'humanoid' surface the model's "
+        "AnimationClips; 'legacy' selects Unity's legacy Animation system (rarely needed); "
+        "omitted or 'none' imports no rig. Ignored for glTF/GLB.",
+    ] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -47,6 +58,7 @@ async def import_model_file(
         "name": name,
         "outputFolder": output_folder,
         "targetSize": target_size,
+        "animationType": animation_type,
     }
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
 
