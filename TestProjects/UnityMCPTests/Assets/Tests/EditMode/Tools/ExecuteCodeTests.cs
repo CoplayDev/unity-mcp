@@ -2,6 +2,7 @@ using System;
 using System.CodeDom.Compiler;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Microsoft.CSharp;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -421,6 +422,53 @@ namespace MCPForUnityTests.Editor.Tools
             }
             finally
             {
+                Directory.Delete(tempRoot, true);
+            }
+        }
+
+        [Test]
+        public void FilterAssemblyPathsForCodeDom_CachedAssemblyPaths_ReusesResultUntilDomainReload()
+        {
+            var tempRoot = CreateTempDirectory();
+            var cachedAssemblyPathsField = typeof(ExecuteCode).GetField(
+                "_cachedAssemblyPaths",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var cachedCodeDomAssemblyPathsField = typeof(ExecuteCode).GetField(
+                "_cachedCodeDomAssemblyPaths",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var onDomainReload = typeof(ExecuteCode).GetMethod(
+                "OnDomainReload",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(cachedAssemblyPathsField);
+            Assert.IsNotNull(cachedCodeDomAssemblyPathsField);
+            Assert.IsNotNull(onDomainReload);
+
+            try
+            {
+                onDomainReload.Invoke(null, null);
+                var assemblyName = "McpCodeDomCache" + Guid.NewGuid().ToString("N");
+                var olderPath = CompileVersionedAssembly(tempRoot, assemblyName, "1.0.0.0");
+                var newerPath = CompileVersionedAssembly(tempRoot, assemblyName, "2.0.0.0");
+                var cachedAssemblyPaths = new[] { olderPath, newerPath };
+                cachedAssemblyPathsField.SetValue(null, cachedAssemblyPaths);
+
+                var first = ExecuteCode.FilterAssemblyPathsForCodeDom(cachedAssemblyPaths);
+                Assert.AreEqual(1, first.Length);
+
+                File.WriteAllText(olderPath, "invalidated");
+                File.WriteAllText(newerPath, "invalidated");
+                var second = ExecuteCode.FilterAssemblyPathsForCodeDom(cachedAssemblyPaths);
+                Assert.AreSame(first, second);
+
+                onDomainReload.Invoke(null, null);
+                cachedAssemblyPathsField.SetValue(null, cachedAssemblyPaths);
+                var afterReload = ExecuteCode.FilterAssemblyPathsForCodeDom(cachedAssemblyPaths);
+                Assert.AreNotSame(first, afterReload);
+                Assert.AreEqual(2, afterReload.Length);
+            }
+            finally
+            {
+                onDomainReload.Invoke(null, null);
                 Directory.Delete(tempRoot, true);
             }
         }

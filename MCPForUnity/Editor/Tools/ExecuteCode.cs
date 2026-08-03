@@ -30,11 +30,13 @@ namespace MCPForUnity.Editor.Tools
 
         private static readonly List<HistoryEntry> _history = new List<HistoryEntry>();
         private static string[] _cachedAssemblyPaths;
+        private static string[] _cachedCodeDomAssemblyPaths;
 
         [UnityEditor.InitializeOnLoadMethod]
         private static void OnDomainReload()
         {
             _cachedAssemblyPaths = null;
+            _cachedCodeDomAssemblyPaths = null;
             RoslynCompiler.ResetCache();
         }
 
@@ -342,6 +344,10 @@ namespace MCPForUnity.Editor.Tools
 
         internal static string[] FilterAssemblyPathsForCodeDom(string[] allPaths)
         {
+            var useCache = ReferenceEquals(allPaths, _cachedAssemblyPaths);
+            if (useCache && _cachedCodeDomAssemblyPaths != null)
+                return _cachedCodeDomAssemblyPaths;
+
             var hasNetstandard = allPaths.Any(p =>
                 string.Equals(Path.GetFileNameWithoutExtension(p), "netstandard", StringComparison.OrdinalIgnoreCase));
 
@@ -350,7 +356,10 @@ namespace MCPForUnity.Editor.Tools
                     !_codedomDuplicateAssemblies.Contains(Path.GetFileNameWithoutExtension(p))).ToArray()
                 : allPaths;
 
-            return DeduplicateAssemblyPathsForCodeDom(filtered);
+            var result = DeduplicateAssemblyPathsForCodeDom(filtered);
+            if (useCache)
+                _cachedCodeDomAssemblyPaths = result;
+            return result;
         }
 
         private static string[] DeduplicateAssemblyPathsForCodeDom(string[] paths)
