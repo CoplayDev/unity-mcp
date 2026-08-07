@@ -661,7 +661,8 @@ class TestServerConfigDefaults:
         assert config.unity_host == "127.0.0.1"
         assert config.unity_port == 6400
         assert config.mcp_port == 6500
-        assert config.connection_timeout == 30.0
+        assert config.connection_timeout == 300.0
+        assert config.command_total_timeout == 600.0
         assert config.buffer_size == 16 * 1024 * 1024
         assert config.require_framing is True
         assert config.handshake_timeout == 1.0
