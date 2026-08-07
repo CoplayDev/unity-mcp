@@ -3,21 +3,23 @@ Configuration settings for the MCP for Unity Server.
 This file contains all configurable parameters for the server.
 """
 
+import math
 import os
 from dataclasses import dataclass, field
 
 
 def _env_float(name: str, default: float) -> float:
-    """Read a positive float from an environment variable, falling back to default.
+    """Read a positive, finite float from an environment variable.
 
-    Invalid or non-positive values are ignored so a bad override can't disable
-    the timeout entirely.
+    Invalid, non-positive, or non-finite values (e.g. "inf", "1e309", "nan")
+    are ignored so a bad override can't disable the timeout or produce unusable
+    socket/timeout behaviour.
     """
     raw = os.environ.get(name)
     if raw:
         try:
             value = float(raw.strip())
-            if value > 0:
+            if math.isfinite(value) and value > 0:
                 return value
         except (TypeError, ValueError):
             pass
