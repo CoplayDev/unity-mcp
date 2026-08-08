@@ -30,6 +30,8 @@ namespace MCPForUnity.Editor.Tools
         private static FieldInfo _messageField;
         private static FieldInfo _fileField;
         private static FieldInfo _lineField;
+        private static PropertyInfo _consoleFlagsProperty;
+        private static MethodInfo _setFilteringTextMethod;
     
         // Static constructor for reflection setup
         static ReadConsole()
@@ -99,6 +101,17 @@ namespace MCPForUnity.Editor.Tools
                 if (_lineField == null)
                     throw new Exception("Failed to reflect LogEntry.line");
 
+                // Reflect consoleFlags property to save/restore severity toggles
+                _consoleFlagsProperty = logEntriesType.GetProperty(
+                    "consoleFlags",
+                    staticFlags
+                );
+                // Reflect SetFilteringText to clear/restore the console search filter
+                _setFilteringTextMethod = logEntriesType.GetMethod(
+                    "SetFilteringText",
+                    staticFlags
+                );
+
                 // (Calibration removed)
 
             }
@@ -133,6 +146,7 @@ namespace MCPForUnity.Editor.Tools
                 || _messageField == null
                 || _fileField == null
                 || _lineField == null
+                || _consoleFlagsProperty == null
             )
             {
                 // Log the error here as well for easier debugging in Unity Console
@@ -245,6 +259,25 @@ namespace MCPForUnity.Editor.Tools
             int resolvedPageSize = Mathf.Clamp(pageSize ?? 50, 1, 500);
             int resolvedCursor = Mathf.Max(0, cursor ?? 0);
             int pageEndExclusive = resolvedCursor + resolvedPageSize;
+
+            // Save and override console severity toggles so that StartGettingEntries
+            // returns all entries regardless of the Console window's UI filter state.
+            // Unity's internal LogEntries.StartGettingEntries() respects these flags
+            // and silently returns 0 when a toggle is off.
+            int savedConsoleFlags = (int)_consoleFlagsProperty.GetValue(null);
+            int forcedFlags = savedConsoleFlags
+                | (1 << 7)  // LogLevelLog
+                | (1 << 8)  // LogLevelWarning
+                | (1 << 9); // LogLevelError
+            _consoleFlagsProperty.SetValue(null, forcedFlags);
+
+            // Also clear the console search filter to avoid text-based filtering
+            // at the source; the tool applies its own filterText parameter later.
+            // GetFilteringText may not exist, so we clear without saving.
+            if (_setFilteringTextMethod != null)
+            {
+                _setFilteringTextMethod.Invoke(null, new object[] { string.Empty });
+            }
 
             try
             {
@@ -391,6 +424,15 @@ namespace MCPForUnity.Editor.Tools
                 {
                     McpLog.Error($"[ReadConsole] Failed to call EndGettingEntries: {e}");
                     // Don't return error here as we might have valid data, but log it.
+                }
+                // Restore the original console severity toggles
+                try
+                {
+                    _consoleFlagsProperty.SetValue(null, savedConsoleFlags);
+                }
+                catch (Exception e)
+                {
+                    McpLog.Error($"[ReadConsole] Failed to restore console flags: {e}");
                 }
             }
 
