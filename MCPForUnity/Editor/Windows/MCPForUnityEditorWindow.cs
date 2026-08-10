@@ -49,7 +49,7 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement resourcesPanel;
         private VisualElement assetGenPanel;
 
-        private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
+        private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new HashSet<MCPForUnityEditorWindow>();
         private bool guiCreated = false;
         private bool toolsLoaded = false;
         private bool resourcesLoaded = false;
@@ -1053,18 +1053,37 @@ namespace MCPForUnity.Editor.Windows
 
         private static void BatchUpmAdd(string[] packageIds, Action onComplete = null)
         {
-            var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
             EditorUtility.DisplayProgressBar("Installing Packages", $"Installing {packageIds.Length} package(s)...", 0.5f);
+#if UNITY_2021_2_OR_NEWER
+            var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
             PollUpmRequest(request, "install", onComplete);
+#else
+            UnityEditor.PackageManager.Requests.AddRequest request = null;
+            foreach (var id in packageIds)
+            {
+                request = UnityEditor.PackageManager.Client.Add(id);
+            }
+            PollUpmAddRequest(request, onComplete);
+#endif
         }
 
         private static void BatchUpmRemove(string[] packageIds, Action onComplete = null)
         {
-            var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
             EditorUtility.DisplayProgressBar("Removing Packages", $"Removing {packageIds.Length} package(s)...", 0.5f);
+#if UNITY_2021_2_OR_NEWER
+            var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
             PollUpmRequest(request, "remove", onComplete);
+#else
+            UnityEditor.PackageManager.Requests.RemoveRequest request = null;
+            foreach (var id in packageIds)
+            {
+                request = UnityEditor.PackageManager.Client.Remove(id);
+            }
+            PollUpmRemoveRequest(request, onComplete);
+#endif
         }
 
+#if UNITY_2021_2_OR_NEWER
         private static void PollUpmRequest(UnityEditor.PackageManager.Requests.AddAndRemoveRequest request, string verb, Action onComplete)
         {
             EditorApplication.CallbackFunction pollCallback = null;
@@ -1081,6 +1100,46 @@ namespace MCPForUnity.Editor.Windows
             };
             EditorApplication.update += pollCallback;
         }
+
+#endif
+
+#if !UNITY_2021_2_OR_NEWER
+        private static void PollUpmAddRequest(UnityEditor.PackageManager.Requests.AddRequest request, Action onComplete)
+        {
+            if (request == null) { onComplete?.Invoke(); return; }
+            EditorApplication.CallbackFunction pollCallback = null;
+            pollCallback = () =>
+            {
+                if (!request.IsCompleted) return;
+                EditorApplication.update -= pollCallback;
+                EditorUtility.ClearProgressBar();
+                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+                    Debug.Log("[MCP] Package install succeeded.");
+                else
+                    Debug.LogError($"[MCP] Package install failed: {request.Error?.message}");
+                onComplete?.Invoke();
+            };
+            EditorApplication.update += pollCallback;
+        }
+
+        private static void PollUpmRemoveRequest(UnityEditor.PackageManager.Requests.RemoveRequest request, Action onComplete)
+        {
+            if (request == null) { onComplete?.Invoke(); return; }
+            EditorApplication.CallbackFunction pollCallback = null;
+            pollCallback = () =>
+            {
+                if (!request.IsCompleted) return;
+                EditorApplication.update -= pollCallback;
+                EditorUtility.ClearProgressBar();
+                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+                    Debug.Log("[MCP] Package remove succeeded.");
+                else
+                    Debug.LogError($"[MCP] Package remove failed: {request.Error?.message}");
+                onComplete?.Invoke();
+            };
+            EditorApplication.update += pollCallback;
+        }
+#endif
 
         private static void UninstallRoslyn()
         {

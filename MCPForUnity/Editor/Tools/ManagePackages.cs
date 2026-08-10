@@ -19,11 +19,11 @@ namespace MCPForUnity.Editor.Tools
     public static class ManagePackages
     {
         // Pending async requests keyed by job ID
-        private static readonly Dictionary<string, Request> PendingRequests = new();
+        private static readonly Dictionary<string, Request> PendingRequests = new Dictionary<string, Request>();
 
         // Pending list/search requests keyed by job ID
-        private static readonly Dictionary<string, ListRequest> PendingListRequests = new();
-        private static readonly Dictionary<string, SearchRequest> PendingSearchRequests = new();
+        private static readonly Dictionary<string, ListRequest> PendingListRequests = new Dictionary<string, ListRequest>();
+        private static readonly Dictionary<string, SearchRequest> PendingSearchRequests = new Dictionary<string, SearchRequest>();
 
         public static object HandleCommand(JObject @params)
         {
@@ -360,7 +360,7 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var allPackages = PackageInfo.GetAllRegisteredPackages();
+                var allPackages = GetRegisteredPackages();
                 var info = allPackages.FirstOrDefault(pkg =>
                     string.Equals(pkg.name, package, StringComparison.OrdinalIgnoreCase));
 
@@ -593,7 +593,7 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                var allPackages = PackageInfo.GetAllRegisteredPackages();
+                var allPackages = GetRegisteredPackages();
                 return new SuccessResponse(
                     "Package manager is available.",
                     new
@@ -721,7 +721,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 string name = PackageJobManager.ExtractPackageName(packageName);
 
-                var allPackages = PackageInfo.GetAllRegisteredPackages();
+                var allPackages = GetRegisteredPackages();
                 return allPackages
                     .Where(pkg => pkg.dependencies.Any(d =>
                         string.Equals(d.name, name, StringComparison.OrdinalIgnoreCase)))
@@ -733,5 +733,26 @@ namespace MCPForUnity.Editor.Tools
                 return null;
             }
         }
+
+        private static PackageInfo[] GetRegisteredPackages()
+        {
+#if UNITY_2021_2_OR_NEWER
+            return PackageInfo.GetAllRegisteredPackages();
+#else
+            var request = UnityEditor.PackageManager.Client.List(true);
+            while (!request.IsCompleted)
+            {
+                System.Threading.Thread.Sleep(10);
+            }
+            if (request.IsCompleted && request.Status == UnityEditor.PackageManager.StatusCode.Success)
+            {
+                var list = new System.Collections.Generic.List<PackageInfo>();
+                foreach (var pi in request.Result) list.Add(pi);
+                return list.ToArray();
+            }
+            return new PackageInfo[0];
+#endif
+        }
+
     }
 }

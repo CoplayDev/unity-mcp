@@ -1,7 +1,11 @@
 using System;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
+#if UNITY_2021_2_OR_NEWER
 using UnityEditor.SceneManagement;
+#else
+using UnityEditor.Experimental.SceneManagement;
+#endif
 
 namespace MCPForUnity.Editor.Resources.Editor
 {

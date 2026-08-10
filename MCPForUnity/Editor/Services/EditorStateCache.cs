@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Services
     [InitializeOnLoad]
     internal static class EditorStateCache
     {
-        private static readonly object LockObj = new();
+        private static readonly object LockObj = new object();
         private static long _sequence;
         private static long _observedUnixMs;
 

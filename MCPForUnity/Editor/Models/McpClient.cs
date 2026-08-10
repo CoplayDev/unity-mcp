@@ -22,7 +22,7 @@ namespace MCPForUnity.Editor.Models
         public string ServerContainerKey; // Top-level JSON container key for servers (null => "mcpServers"; Kilo => "mcp")
         public string SchemaUrl; // Optional root "$schema" URL written into the config (e.g. Kilo's kilo.jsonc)
         public string HttpUrlProperty = "url"; // The property name for the HTTP URL in the config
-        public Dictionary<string, object> DefaultUnityFields = new();
+        public Dictionary<string, object> DefaultUnityFields = new Dictionary<string, object>();
 
         // Helper method to convert the enum to a display string
         public string GetStatusDisplayString()

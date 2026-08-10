@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     internal static class LocalImage
     {
         // Extensions that can be inlined as a data URI for provider image input.
-        private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> SupportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".webp", ".gif" };
 
         /// <summary>

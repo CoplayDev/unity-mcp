@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:mcpx="MCPForUnity.Editor.Windows.Components" editor-extension-mode="True">
     <Style src="../Common.uss" />
     <ui:VisualElement name="client-section" class="section">
         <ui:Label text="Client Configuration" class="section-title" />
@@ -7,7 +7,7 @@
             <ui:Foldout name="client-details-foldout" text="Per-client setup" value="true" class="client-details-foldout">
                 <ui:VisualElement class="setting-row">
                     <ui:Label text="Client:" class="setting-label" />
-                    <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
+                    <mcpx:CompatDropdownField name="client-dropdown" class="setting-dropdown-inline" />
                 </ui:VisualElement>
                 <ui:VisualElement class="setting-row">
                     <ui:VisualElement class="status-container">

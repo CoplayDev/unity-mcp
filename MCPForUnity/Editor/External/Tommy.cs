@@ -517,7 +517,7 @@ namespace MCPForUnity.External.Tommy
             if (collapsedItems.Count == 0)
                 return;
 
-            var hasRealValues = !collapsedItems.All(n => n.Value is TomlTable { IsInline: false } or TomlArray { IsTableArray: true });
+            var hasRealValues = !collapsedItems.All(n => n.Value is TomlTable { IsInline: false } || n.Value is TomlArray { IsTableArray: true });
 
             Comment?.AsComment(tw);
 
@@ -539,7 +539,7 @@ namespace MCPForUnity.External.Tommy
             foreach (var collapsedItem in collapsedItems)
             {
                 var key = collapsedItem.Key;
-                if (collapsedItem.Value is TomlArray { IsTableArray: true } or TomlTable { IsInline: false })
+                if (collapsedItem.Value is TomlArray { IsTableArray: true } || collapsedItem.Value is TomlTable { IsInline: false })
                 {
                     if (!first) tw.WriteLine();
                     first = false;
@@ -819,7 +819,7 @@ namespace MCPForUnity.External.Tommy
                     if (TomlSyntax.IsWhiteSpace(c) || c == TomlSyntax.NEWLINE_CARRIAGE_RETURN_CHARACTER)
                         goto consume_character;
 
-                    if (c is TomlSyntax.COMMENT_SYMBOL or TomlSyntax.NEWLINE_CHARACTER)
+                    if (c == TomlSyntax.COMMENT_SYMBOL || c == TomlSyntax.NEWLINE_CHARACTER)
                     {
                         currentState = ParseState.None;
                         AdvanceLine();
@@ -1838,13 +1838,13 @@ namespace MCPForUnity.External.Tommy
         public const string POS_INF_VALUE = "+inf";
         public const string NEG_INF_VALUE = "-inf";
 
-        public static bool IsBoolean(string s) => s is TRUE_VALUE or FALSE_VALUE;
+        public static bool IsBoolean(string s) => s == TRUE_VALUE || s == FALSE_VALUE;
 
-        public static bool IsPosInf(string s) => s is INF_VALUE or POS_INF_VALUE;
+        public static bool IsPosInf(string s) => s == INF_VALUE || s == POS_INF_VALUE;
 
         public static bool IsNegInf(string s) => s == NEG_INF_VALUE;
 
-        public static bool IsNaN(string s) => s is NAN_VALUE or POS_NAN_VALUE or NEG_NAN_VALUE;
+        public static bool IsNaN(string s) => s == NAN_VALUE || s == POS_NAN_VALUE || s == NEG_NAN_VALUE;
 
         public static bool IsInteger(string s) => IntegerPattern.IsMatch(s);
 
@@ -1863,25 +1863,25 @@ namespace MCPForUnity.External.Tommy
          * A pattern to verify the integer value according to the TOML specification.
          */
         public static readonly Regex IntegerPattern =
-            new(@"^(\+|-)?(?!_)(0|(?!0)(_?\d)*)$", RegexOptions.Compiled);
+            new Regex(@"^(\+|-)?(?!_)(0|(?!0)(_?\d)*)$", RegexOptions.Compiled);
 
         /**
          * A pattern to verify a special 0x, 0o and 0b forms of an integer according to the TOML specification.
          */
         public static readonly Regex BasedIntegerPattern =
-            new(@"^0(?<base>x|b|o)(?!_)(_?[0-9A-F])*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            new Regex(@"^0(?<base>x|b|o)(?!_)(_?[0-9A-F])*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /**
          * A pattern to verify the float value according to the TOML specification.
          */
         public static readonly Regex FloatPattern =
-            new(@"^(\+|-)?(?!_)(0|(?!0)(_?\d)+)(((e(\+|-)?(?!_)(_?\d)+)?)|(\.(?!_)(_?\d)+(e(\+|-)?(?!_)(_?\d)+)?))$",
+            new Regex(@"^(\+|-)?(?!_)(0|(?!0)(_?\d)+)(((e(\+|-)?(?!_)(_?\d)+)?)|(\.(?!_)(_?\d)+(e(\+|-)?(?!_)(_?\d)+)?))$",
                 RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /**
          * A helper dictionary to map TOML base codes into the radii.
          */
-        public static readonly Dictionary<string, int> IntegerBases = new()
+        public static readonly Dictionary<string, int> IntegerBases = new Dictionary<string, int>()
         {
             ["x"] = 16,
             ["o"] = 8,
@@ -1891,7 +1891,7 @@ namespace MCPForUnity.External.Tommy
         /**
          * A helper dictionary to map non-decimal bases to their TOML identifiers
          */
-        public static readonly Dictionary<int, string> BaseIdentifiers = new()
+        public static readonly Dictionary<int, string> BaseIdentifiers = new Dictionary<int, string>()
         {
             [2] = "b",
             [8] = "o",
@@ -1962,29 +1962,29 @@ namespace MCPForUnity.External.Tommy
 
         public static readonly char[] NewLineCharacters = { NEWLINE_CHARACTER, NEWLINE_CARRIAGE_RETURN_CHARACTER };
 
-        public static bool IsQuoted(char c) => c is BASIC_STRING_SYMBOL or LITERAL_STRING_SYMBOL;
+        public static bool IsQuoted(char c) => c == BASIC_STRING_SYMBOL || c == LITERAL_STRING_SYMBOL;
 
-        public static bool IsWhiteSpace(char c) => c is ' ' or '\t';
+        public static bool IsWhiteSpace(char c) => c == ' ' || c == '\t';
 
-        public static bool IsNewLine(char c) => c is NEWLINE_CHARACTER or NEWLINE_CARRIAGE_RETURN_CHARACTER;
+        public static bool IsNewLine(char c) => c == NEWLINE_CHARACTER || c == NEWLINE_CARRIAGE_RETURN_CHARACTER;
 
         public static bool IsLineBreak(char c) => c == NEWLINE_CHARACTER;
 
         public static bool IsEmptySpace(char c) => IsWhiteSpace(c) || IsNewLine(c);
 
         public static bool IsBareKey(char c) =>
-            c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-';
+            (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
 
         public static bool MustBeEscaped(char c, bool allowNewLines = false)
         {
-            var result = c is (>= '\u0000' and <= '\u0008') or '\u000b' or '\u000c' or (>= '\u000e' and <= '\u001f') or '\u007f';
+            var result = (c >= '\u0000' && c <= '\u0008') || c == '\u000b' || c == '\u000c' || (c >= '\u000e' && c <= '\u001f') || c == '\u007f';
             if (!allowNewLines)
-                result |= c is >= '\u000a' and <= '\u000e';
+                result |= c >= '\u000a' && c <= '\u000e';
             return result;
         }
 
         public static bool IsValueSeparator(char c) =>
-            c is ITEM_SEPARATOR or ARRAY_END_SYMBOL or INLINE_TABLE_END_SYMBOL;
+            c == ITEM_SEPARATOR || c == ARRAY_END_SYMBOL || c == INLINE_TABLE_END_SYMBOL;
 
         #endregion
     }

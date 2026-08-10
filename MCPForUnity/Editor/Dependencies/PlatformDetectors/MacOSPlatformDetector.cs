@@ -180,7 +180,7 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
             if (additions.Length == 0) return null;
 
             // Only return the additions - ExecPath.TryRun will prepend to existing PATH
-            return string.Join(Path.PathSeparator, additions);
+            return string.Join(Path.PathSeparator.ToString(), additions);
         }
 
         private string[] GetPathAdditions()

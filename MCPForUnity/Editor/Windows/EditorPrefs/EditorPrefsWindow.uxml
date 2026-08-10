@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:mcpx="MCPForUnity.Editor.Windows.Components" editor-extension-mode="True">
     <Style src="../Components/Common.uss" />
     <Style src="EditorPrefsWindow.uss" />
     
@@ -14,7 +14,7 @@
             <ui:VisualElement class="add-row-content">
                 <ui:TextField name="new-key-field" label="Key" class="key-field" />
                 <ui:TextField name="new-value-field" label="Value" class="value-field" />
-                <ui:DropdownField name="new-type-dropdown" label="Type" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
+                <mcpx:CompatDropdownField name="new-type-dropdown" label="Type" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
                 <ui:VisualElement class="add-buttons">
                     <ui:Button name="create-button" text="Create" class="save-button" />
                     <ui:Button name="cancel-button" text="Cancel" class="cancel-button" />

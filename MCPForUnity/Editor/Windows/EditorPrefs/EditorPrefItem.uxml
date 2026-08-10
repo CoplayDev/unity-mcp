@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:mcpx="MCPForUnity.Editor.Windows.Components" editor-extension-mode="True">
     <ui:VisualElement class="pref-item">
         <ui:VisualElement class="pref-row">
             <!-- Key and Known indicator -->
@@ -10,7 +10,7 @@
             <ui:TextField name="value-field" class="value-field" />
             
             <!-- Type dropdown -->
-            <ui:DropdownField name="type-dropdown" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
+            <mcpx:CompatDropdownField name="type-dropdown" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
             
             <!-- Action buttons -->
             <ui:VisualElement class="action-buttons">

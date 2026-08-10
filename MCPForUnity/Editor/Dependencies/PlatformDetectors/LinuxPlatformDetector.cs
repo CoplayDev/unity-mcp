@@ -182,7 +182,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
             if (additions.Length == 0) return null;
 
             // Only return the additions - ExecPath.TryRun will prepend to existing PATH
-            return string.Join(Path.PathSeparator, additions);
+            return string.Join(Path.PathSeparator.ToString(), additions);
         }
 
         private string[] GetPathAdditions()

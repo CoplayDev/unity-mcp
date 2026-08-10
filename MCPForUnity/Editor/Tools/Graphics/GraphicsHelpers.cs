@@ -257,7 +257,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
             EditorUtility.SetDirty(obj);
             if (obj is Component comp)
             {
-                var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+    #if UNITY_2021_2_OR_NEWER
+            var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+#else
+            var prefabStage = UnityEditor.Experimental.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+#endif
                 if (prefabStage != null)
                     UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(prefabStage.scene);
                 else

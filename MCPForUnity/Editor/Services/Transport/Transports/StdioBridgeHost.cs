@@ -34,10 +34,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
     {
         private static TcpListener listener;
         private static bool isRunning = false;
-        private static readonly object lockObj = new();
-        private static readonly object startStopLock = new();
-        private static readonly object clientsLock = new();
-        private static readonly HashSet<TcpClient> activeClients = new();
+        private static readonly object lockObj = new object();
+        private static readonly object startStopLock = new object();
+        private static readonly object clientsLock = new object();
+        private static readonly HashSet<TcpClient> activeClients = new HashSet<TcpClient>();
         private static CancellationTokenSource cts;
         private static Task listenerTask;
         private static int processingCommands = 0;
@@ -53,7 +53,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         // stale leftover from an abandoned retry and a fresh window is started (#1173).
         private const double PortBusyStaleResetSeconds = 60.0;
         private static int heartbeatSeq = 0;
-        private static Dictionary<string, QueuedCommand> commandQueue = new();
+        private static Dictionary<string, QueuedCommand> commandQueue = new Dictionary<string, QueuedCommand>();
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
@@ -116,7 +116,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             string fullPath = Path.Combine(
                 Application.dataPath,
-                path.StartsWith("Assets/") ? path[7..] : path
+                path.StartsWith("Assets/") ? path.Substring(7) : path
             );
             return Directory.Exists(fullPath);
         }
@@ -896,7 +896,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                             status = "error",
                             error = "Invalid JSON format",
                             receivedText = commandText.Length > 50
-                                ? commandText[..50] + "..."
+                                ? commandText.Substring(0, 50) + "..."
                                 : commandText,
                         };
                         tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
@@ -940,7 +940,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         status = "error",
                         error = ex.Message,
                         receivedText = payload?.Length > 50
-                            ? payload[..50] + "..."
+                            ? payload.Substring(0, 50) + "..."
                             : payload,
                     };
                     completionSource.TrySetResult(JsonConvert.SerializeObject(response));
@@ -1109,7 +1109,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     sb.Append(b.ToString("x2"));
                 }
-                return sb.ToString()[..8];
+                return sb.ToString().Substring(0, 8);
             }
             catch
             {

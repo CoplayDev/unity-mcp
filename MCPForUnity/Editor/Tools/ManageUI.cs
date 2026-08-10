@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("manage_ui", AutoRegister = false, Group = "ui")]
     public static class ManageUI
     {
-        private static readonly HashSet<string> ValidExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> ValidExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".uxml", ".uss"
         };
@@ -296,6 +296,12 @@ namespace MCPForUnity.Editor.Tools
                 new { path });
         }
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object AttachUIDocument(JObject @params)
+        {
+            return new ErrorResponse("Attach UIDocument requires Unity 2021.2 or newer (UIDocument component).");
+        }
+#else
         private static object AttachUIDocument(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -391,7 +397,14 @@ namespace MCPForUnity.Editor.Tools
                     sortOrder
                 });
         }
+#endif
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object CreatePanelSettings(JObject @params)
+        {
+            return new ErrorResponse("PanelSettings requires Unity 2021.2 or newer.");
+        }
+#else
         private static object CreatePanelSettings(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -458,7 +471,14 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Created PanelSettings at {path}",
                 new { path, applied = changes });
         }
+#endif
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object UpdatePanelSettings(JObject @params)
+        {
+            return new ErrorResponse("PanelSettings requires Unity 2021.2 or newer.");
+        }
+#else
         private static object UpdatePanelSettings(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -479,7 +499,7 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"No PanelSettings found at {path}");
 
             JToken settingsToken = p.GetRaw("settings");
-            if (settingsToken is not JObject settingsObj || settingsObj.Count == 0)
+            if (!(settingsToken is JObject settingsObj) || settingsObj.Count == 0)
                 return new ErrorResponse("'settings' dict is required with at least one property to update.");
 
             var changes = new List<string>();
@@ -494,7 +514,14 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Updated PanelSettings at {path}",
                 new { path, applied = changes });
         }
+#endif
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object CreateDefaultPanelSettings(string path)
+        {
+            return null;
+        }
+#else
         private static PanelSettings CreateDefaultPanelSettings(string path)
         {
             string dir = Path.GetDirectoryName(path);
@@ -508,6 +535,7 @@ namespace MCPForUnity.Editor.Tools
             AssetDatabase.SaveAssets();
             return ps;
         }
+#endif
 
         /// <summary>
         /// Generic, data-driven applicator for PanelSettings properties.
@@ -518,6 +546,11 @@ namespace MCPForUnity.Editor.Tools
         ///   clearColor, colorClearValue, clearDepthStencil,
         ///   themeStyleSheet, dynamicAtlasSettings.
         /// </summary>
+#if !UNITY_2021_2_OR_NEWER
+        private static void ApplyPanelSettingsProperties(object ps, JObject settings, List<string> changes)
+        {
+        }
+#else
         private static void ApplyPanelSettingsProperties(PanelSettings ps, JObject settings, List<string> changes)
         {
             foreach (var prop in settings)
@@ -603,7 +636,13 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
         }
+#endif
 
+#if !UNITY_2021_2_OR_NEWER
+        private static void ApplyDynamicAtlasSettings(object ps, JObject da, List<string> changes)
+        {
+        }
+#else
         private static void ApplyDynamicAtlasSettings(PanelSettings ps, JObject da, List<string> changes)
         {
             var daCopy = ps.dynamicAtlasSettings;
@@ -620,6 +659,7 @@ namespace MCPForUnity.Editor.Tools
             ps.dynamicAtlasSettings = daCopy;
             changes.Add("dynamicAtlasSettings");
         }
+#endif
 
         // ── Tiny helpers to keep the switch compact ─────────────────────────
 
@@ -704,6 +744,12 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object GetVisualTree(JObject @params)
+        {
+            return new ErrorResponse("Get visual tree requires Unity 2021.2 or newer (UIDocument runtime UI).");
+        }
+#else
         private static object GetVisualTree(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -753,6 +799,7 @@ namespace MCPForUnity.Editor.Tools
                     tree
                 });
         }
+#endif
 
         private static object SerializeVisualElement(VisualElement element, int depth, int maxDepth)
         {
@@ -807,7 +854,7 @@ namespace MCPForUnity.Editor.Tools
 
         // Persistent RenderTextures keyed by PanelSettings instance ID so the panel
         // renders into them automatically every frame.
-        private static readonly Dictionary<int, RenderTexture> s_panelRTs = new();
+        private static readonly Dictionary<int, RenderTexture> s_panelRTs = new Dictionary<int, RenderTexture>();
 
         // Play-mode coroutine capture state.  Only one capture is in-flight at a
         // time; concurrent render_ui calls while a capture is pending are rejected
@@ -816,6 +863,12 @@ namespace MCPForUnity.Editor.Tools
         private static bool s_pendingCaptureDone;
         private static bool s_pendingCaptureStarted;
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object RenderUI(JObject @params)
+        {
+            return new ErrorResponse("Render UI requires Unity 2021.2 or newer (UIDocument runtime UI).");
+        }
+#else
         private static object RenderUI(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -1185,6 +1238,7 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
         }
+#endif
 
         // ---- Link Stylesheet ----
 
@@ -1386,6 +1440,12 @@ namespace MCPForUnity.Editor.Tools
 
         // ---- Detach UIDocument ----
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object DetachUIDocument(JObject @params)
+        {
+            return new ErrorResponse("Detach UIDocument requires Unity 2021.2 or newer (UIDocument component).");
+        }
+#else
         private static object DetachUIDocument(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -1421,9 +1481,16 @@ namespace MCPForUnity.Editor.Tools
                     removedSourceAsset = sourceAsset,
                 });
         }
+#endif
 
         // ---- Modify Visual Element ----
 
+#if !UNITY_2021_2_OR_NEWER
+        private static object ModifyVisualElement(JObject @params)
+        {
+            return new ErrorResponse("Modify visual element requires Unity 2021.2 or newer (UIDocument runtime UI).");
+        }
+#else
         private static object ModifyVisualElement(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -1580,6 +1647,7 @@ namespace MCPForUnity.Editor.Tools
                 $"Modified element '{elementName}' on {go.name}: {string.Join(", ", applied)}",
                 responseData);
         }
+#endif
 
         private static void ApplyInlineStyles(VisualElement element, JObject styleObj, List<string> modifications)
         {

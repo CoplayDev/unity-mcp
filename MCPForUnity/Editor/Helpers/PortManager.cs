@@ -336,7 +336,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     sb.Append(b.ToString("x2"));
                 }
-                return sb.ToString()[..8]; // short, sufficient for filenames
+                return sb.ToString().Substring(0, 8); // short, sufficient for filenames
             }
             catch
             {

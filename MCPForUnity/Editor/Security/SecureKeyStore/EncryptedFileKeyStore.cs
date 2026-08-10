@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Security
 {
@@ -92,7 +93,7 @@ namespace MCPForUnity.Editor.Security
             byte[] master = LoadOrCreate(Path.Combine(_dir, "secret.bin"), 32);
             byte[] salt = LoadOrCreate(Path.Combine(_dir, "salt.bin"), 16);
             string password = Convert.ToBase64String(master) + "|" + MachineId();
-            using (var kdf = new Rfc2898DeriveBytes(password, salt, Iterations, HashAlgorithmName.SHA256))
+            using (var kdf = new Rfc2898DeriveBytes(password, salt, Iterations))
             {
                 byte[] material = kdf.GetBytes(64);
                 encKey = new byte[32];
@@ -210,8 +211,8 @@ namespace MCPForUnity.Editor.Security
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                 };
-                psi.ArgumentList.Add(mode);
-                psi.ArgumentList.Add(path);
+                psi.AddArg(mode);
+                psi.AddArg(path);
                 using (var p = System.Diagnostics.Process.Start(psi)) p?.WaitForExit(2000);
             }
             catch { /* hardening is best-effort */ }
