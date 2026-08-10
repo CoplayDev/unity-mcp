@@ -360,7 +360,7 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var allPackages = GetRegisteredPackages();
+                var allPackages = RegisteredPackageInfo.GetRegisteredPackages();
                 var info = allPackages.FirstOrDefault(pkg =>
                     string.Equals(pkg.name, package, StringComparison.OrdinalIgnoreCase));
 
@@ -381,7 +381,7 @@ namespace MCPForUnity.Editor.Tools
                         description = info.description,
                         source = info.source.ToString(),
                         resolved_path = info.resolvedPath,
-                        author = info.author?.name,
+                        author = info.author.name,
                         dependencies,
                         dependency_count = dependencies.Length
                     }
@@ -593,7 +593,7 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                var allPackages = GetRegisteredPackages();
+                var allPackages = RegisteredPackageInfo.GetRegisteredPackages();
                 return new SuccessResponse(
                     "Package manager is available.",
                     new
@@ -721,7 +721,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 string name = PackageJobManager.ExtractPackageName(packageName);
 
-                var allPackages = GetRegisteredPackages();
+                var allPackages = RegisteredPackageInfo.GetRegisteredPackages();
                 return allPackages
                     .Where(pkg => pkg.dependencies.Any(d =>
                         string.Equals(d.name, name, StringComparison.OrdinalIgnoreCase)))
@@ -734,25 +734,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static PackageInfo[] GetRegisteredPackages()
-        {
-#if UNITY_2021_2_OR_NEWER
-            return PackageInfo.GetAllRegisteredPackages();
-#else
-            var request = UnityEditor.PackageManager.Client.List(true);
-            while (!request.IsCompleted)
-            {
-                System.Threading.Thread.Sleep(10);
-            }
-            if (request.IsCompleted && request.Status == UnityEditor.PackageManager.StatusCode.Success)
-            {
-                var list = new System.Collections.Generic.List<PackageInfo>();
-                foreach (var pi in request.Result) list.Add(pi);
-                return list.ToArray();
-            }
-            return new PackageInfo[0];
-#endif
-        }
+
 
     }
 }

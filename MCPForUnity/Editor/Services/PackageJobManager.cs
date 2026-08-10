@@ -128,7 +128,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 string packageName = ExtractPackageName(job.Package);
-                var allPackages = GetRegisteredPackages();
+                var allPackages = RegisteredPackageInfo.GetRegisteredPackages();
                 var info = FindPackageInfo(allPackages, packageName, job.Package);
 
                 if (job.Operation == "add" || job.Operation == "embed")
@@ -181,27 +181,9 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
 
 
-        private static PackageInfo[] GetRegisteredPackages()
-        {
-#if UNITY_2021_2_OR_NEWER
-            return PackageInfo.GetAllRegisteredPackages();
-#else
-            var request = UnityEditor.PackageManager.Client.List(true);
-            while (!request.IsCompleted)
-            {
-                System.Threading.Thread.Sleep(10);
-            }
-            if (request.IsCompleted && request.Status == UnityEditor.PackageManager.StatusCode.Success)
-            {
-                var list = new System.Collections.Generic.List<PackageInfo>();
-                foreach (var pi in request.Result) list.Add(pi);
-                return list.ToArray();
-            }
-            return new PackageInfo[0];
-#endif
-        }
 
-        private static PackageInfo FindPackageInfo(PackageInfo[] allPackages, string packageName, string originalIdentifier)
+
+        private static RegisteredPackageInfo FindPackageInfo(RegisteredPackageInfo[] allPackages, string packageName, string originalIdentifier)
         {
             // Direct name match (handles normal com.company.package identifiers)
             var info = allPackages.FirstOrDefault(p =>
@@ -222,7 +204,7 @@ namespace MCPForUnity.Editor.Services
             return allPackages.FirstOrDefault(p =>
                 p.source == PackageSource.Git || p.source == PackageSource.Local
                     ? p.packageId != null && p.packageId.Contains(originalIdentifier)
-                      || p.resolvedPath != null && p.resolvedPath.Contains(originalIdentifier)
+                      || p.name != null && p.name.Contains(originalIdentifier)
                     : false);
         }
 
