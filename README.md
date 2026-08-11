@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2FCoplayDev%2Funity-mcp.svg)](https://mcptoplist.com/server/glama%2FCoplayDev%2Funity-mcp)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-header-dark.png">
