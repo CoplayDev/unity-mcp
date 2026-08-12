@@ -68,6 +68,7 @@ const sidebars = {
       collapsed: true,
       items: [
         'architecture/transports',
+        'architecture/instance-routing',
         'architecture/python-layers',
         'architecture/unity-compat',
         'architecture/remote-auth',
