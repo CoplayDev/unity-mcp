@@ -24,7 +24,7 @@ if not "%~1"=="" (
         "C:\Program Files\Unity\Hub\Editor\2020.3.*\Editor\Unity.exe"
         "%ProgramFiles%\Unity\Hub\Editor\2020.3.*\Editor\Unity.exe"
     ) do (
-        if not defined UNITY_EXE if exist %%~E set "UNITY_EXE=%%~E"
+        if not defined UNITY_EXE if exist "%%~E" set "UNITY_EXE=%%~E"
     )
 )
 
