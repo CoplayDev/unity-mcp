@@ -24,7 +24,7 @@ if not "%~1"=="" (
         "C:\Program Files\Unity\Hub\Editor\2020.3.*\Editor\Unity.exe"
         "%ProgramFiles%\Unity\Hub\Editor\2020.3.*\Editor\Unity.exe"
     ) do (
-        if not defined UNITY_EXE if exist %%E set "UNITY_EXE=%%E"
+        if not defined UNITY_EXE if exist %%~E set "UNITY_EXE=%%~E"
     )
 )
 
@@ -44,6 +44,11 @@ del /q "%LOG_FILE%" 2>nul
 
 "%UNITY_EXE%" -batchmode -nographics -quit -projectPath "%PROJECT_DIR%" -logFile "%LOG_FILE%"
 set "UNITY_STATUS=%ERRORLEVEL%"
+
+if not "%UNITY_STATUS%"=="0" (
+    echo [verify] FAILED: Unity exited with status %UNITY_STATUS%.
+    exit /b 1
+)
 
 if not exist "%LOG_FILE%" (
     echo [verify] No log file produced (Unity may have failed to start).

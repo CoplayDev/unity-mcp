@@ -232,15 +232,8 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse(
                     $"Platform '{target}' is not installed. Install it via Unity Hub.");
 
-            if (EditorUserBuildSettings.activeBuildTarget == target)
-                return new SuccessResponse("Already on this platform.", new
-                {
-                    target = target.ToString()
-                });
-
-            // Capture previous target before switching
-            string previousTarget = EditorUserBuildSettings.activeBuildTarget.ToString();
-
+            // Process subtarget before the active-target short-circuit so a "server"
+            // request on Unity < 2021.2 errors out even when the platform is already active.
             string subtargetStr = p.Get("subtarget");
             if (!string.IsNullOrEmpty(subtargetStr))
             {
@@ -258,6 +251,15 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse("subtarget 'server' requires Unity 2021.2 or newer (StandaloneBuildSubtarget API).");
 #endif
             }
+
+            if (EditorUserBuildSettings.activeBuildTarget == target)
+                return new SuccessResponse("Already on this platform.", new
+                {
+                    target = target.ToString()
+                });
+
+            // Capture previous target before switching
+            string previousTarget = EditorUserBuildSettings.activeBuildTarget.ToString();
 
             // SwitchActiveBuildTarget is synchronous — blocks until reimport completes
             EditorUserBuildSettings.SwitchActiveBuildTarget(group, target);

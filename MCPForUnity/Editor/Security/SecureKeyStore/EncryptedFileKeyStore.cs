@@ -103,7 +103,7 @@ namespace MCPForUnity.Editor.Security
                 Buffer.BlockCopy(material, 32, macKey, 0, 32);
             }
 #else
-            // Unity 2020.3 (netstandard2.1) has no 4-arg Rfc2898DeriveBytes overload, so
+            // Unity 2020.3 (netstandard2.0 profile) has no 4-arg Rfc2898DeriveBytes overload, so
             // implement PBKDF2-HMAC-SHA256 (RFC 2898) manually to keep key derivation
             // byte-identical with the 2021.2+ path (a 3-arg SHA1 derivation would make
             // existing ciphertext fail MAC validation).
