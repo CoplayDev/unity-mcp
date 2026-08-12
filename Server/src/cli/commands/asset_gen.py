@@ -201,10 +201,19 @@ def generate_image(
 
 
 @asset_gen.command("generate-audio")
-@click.option("--provider", default=None, help="Provider id (fal).")
+@click.option("--provider", default=None, help="Provider id.")
 @click.option("--prompt", default=None, help="Text prompt describing the sound or music.")
-@click.option("--model", default=None, help="fal model id (omit for the GUI-selected default).")
+@click.option("--model", default=None, help="Provider model id (omit for the GUI-selected default).")
 @click.option("--duration", default=None, type=float, help="Requested length in seconds (soft-clamped per model).")
+@click.option("--lyrics", default=None, help="Optional cover lyrics.")
+@click.option("--lyrics-optimizer/--no-lyrics-optimizer", default=None, help="Set the lyrics optimization option.")
+@click.option("--is-instrumental/--with-vocals", default=None, help="Set the instrumental cover option.")
+@click.option("--audio-url", default=None, help="Reference-audio URL for a cover.")
+@click.option("--audio-base64", default=None, help="Base64 reference audio for a cover.")
+@click.option("--cover-feature-id", default=None, help="Preprocessed cover feature id.")
+@click.option("--output-format", type=click.Choice(["url", "hex"]), default=None, help="Provider response format.")
+@click.option("--audio-format", type=click.Choice(["mp3", "wav", "pcm"]), default=None, help="Generated audio encoding.")
+@click.option("--aigc-watermark/--no-aigc-watermark", default=None, help="Set the regional AIGC watermark option.")
 @click.option("--name", default=None, help="Base name for the imported asset.")
 @click.option("--output-folder", default=None, help="Destination folder under Assets/.")
 @handle_unity_errors
@@ -213,15 +222,23 @@ def generate_audio(
     prompt: Optional[str],
     model: Optional[str],
     duration: Optional[float],
+    lyrics: Optional[str],
+    lyrics_optimizer: Optional[bool],
+    is_instrumental: Optional[bool],
+    audio_url: Optional[str],
+    audio_base64: Optional[str],
+    cover_feature_id: Optional[str],
+    output_format: Optional[str],
+    audio_format: Optional[str],
+    aigc_watermark: Optional[bool],
     name: Optional[str],
     output_folder: Optional[str],
 ):
-    """Generate audio (SFX / music) with a fal.ai model.
+    """Generate or cover audio and import it into Unity.
 
     \b
     Examples:
-        unity-mcp asset-gen generate-audio --provider fal --prompt "8-bit coin pickup"
-        unity-mcp asset-gen generate-audio --prompt "calm ambient loop" --duration 30
+        unity-mcp asset-gen generate-audio --provider minimax --model music-cover --prompt "Warm acoustic folk cover" --audio-url https://example.com/reference.mp3
     """
     config = get_config()
 
@@ -231,6 +248,15 @@ def generate_audio(
         "prompt": prompt,
         "model": model,
         "duration": duration,
+        "lyrics": lyrics,
+        "lyricsOptimizer": lyrics_optimizer,
+        "isInstrumental": is_instrumental,
+        "audioUrl": audio_url,
+        "audioBase64": audio_base64,
+        "coverFeatureId": cover_feature_id,
+        "outputFormat": output_format,
+        "audioFormat": audio_format,
+        "aigcWatermark": aigc_watermark,
         "name": name,
         "outputFolder": output_folder,
     }

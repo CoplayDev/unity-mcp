@@ -1,6 +1,6 @@
-"""Tests for the generate_audio asset-gen tool and CLI command (fal.ai).
+"""Tests for the generate_audio asset-gen tool and CLI command.
 
-Pass-through tool: NO API keys, NO file bytes. Unity transport fully mocked.
+Pass-through tool: no API keys. Unity transport fully mocked.
 """
 
 import asyncio
@@ -18,7 +18,9 @@ from services.tools.generate_audio import generate_audio
 
 COMMAND = "generate_audio"
 ALLOWED_KEYS = {
-    "action", "provider", "prompt", "model", "duration", "name", "outputFolder", "jobId",
+    "action", "provider", "prompt", "model", "duration", "lyrics", "audioUrl",
+    "lyricsOptimizer", "isInstrumental", "audioBase64", "coverFeatureId", "outputFormat",
+    "audioFormat", "aigcWatermark", "name", "outputFolder", "jobId",
 }
 
 
@@ -107,6 +109,42 @@ class TestGenerateAudioRouting:
                              model="cassetteai/sound-effects-generator")
         assert _sent_params(sent)["model"] == "cassetteai/sound-effects-generator"
 
+    def test_cover_fields_map_to_bridge_names(self):
+        _, sent = _call_tool(
+            action="generate",
+            provider="minimax",
+            model="music-cover",
+            prompt="Warm acoustic folk cover",
+            audio_url="https://example.com/reference.mp3",
+            lyrics="[Verse]\nA rewritten verse",
+            lyrics_optimizer=True,
+            is_instrumental=False,
+            output_format="hex",
+            audio_format="wav",
+            aigc_watermark=True,
+        )
+        params = _sent_params(sent)
+        assert params["audioUrl"] == "https://example.com/reference.mp3"
+        assert params["lyrics"] == "[Verse]\nA rewritten verse"
+        assert params["lyricsOptimizer"] is True
+        assert params["isInstrumental"] is False
+        assert params["outputFormat"] == "hex"
+        assert params["audioFormat"] == "wav"
+        assert params["aigcWatermark"] is True
+        for snake in ("audio_url", "audio_base64", "cover_feature_id", "output_format", "audio_format"):
+            assert snake not in params
+
+    def test_cover_feature_id_passes_through(self):
+        _, sent = _call_tool(
+            action="generate",
+            provider="minimax",
+            model="music-cover-free",
+            audio_base64="SUQz",
+            cover_feature_id="feature-id",
+        )
+        assert _sent_params(sent)["audioBase64"] == "SUQz"
+        assert _sent_params(sent)["coverFeatureId"] == "feature-id"
+
     def test_no_secret_keys_in_payload(self):
         _, sent = _call_tool(
             action="generate", provider="fal", prompt="p",
@@ -143,3 +181,16 @@ class TestGenerateAudioCLI:
         assert params["provider"] == "fal"
         assert params["duration"] == 30.0
         assert set(params.keys()).issubset(ALLOWED_KEYS)
+
+    def test_generate_audio_cover_cli(self, cli_runner):
+        result, mock_run = cli_runner([
+            "generate-audio", "--provider", "minimax", "--model", "music-cover",
+            "--prompt", "Warm acoustic folk cover", "--audio-url", "https://example.com/reference.mp3",
+            "--output-format", "url", "--audio-format", "mp3", "--aigc-watermark",
+        ])
+        assert result.exit_code == 0
+        params = mock_run.call_args.args[1]
+        assert params["audioUrl"] == "https://example.com/reference.mp3"
+        assert params["outputFormat"] == "url"
+        assert params["audioFormat"] == "mp3"
+        assert params["aigcWatermark"] is True

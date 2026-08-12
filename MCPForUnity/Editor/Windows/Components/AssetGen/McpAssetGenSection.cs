@@ -181,8 +181,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                 AddProviderRow(imagePanel, provider.Id, provider.Label, "image");
             }
 
-            var audioPanel = AddCategoryPanel("Sound (fal.ai)");
+            var audioPanel = AddCategoryPanel("Sound");
             AddAudioRow(audioPanel);
+            AddProviderRow(audioPanel, "minimax", "MiniMax", "audio");
 
             AddBlenderHandoffRow();
         }

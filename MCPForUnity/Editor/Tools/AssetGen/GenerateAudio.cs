@@ -8,8 +8,8 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
     /// <summary>
-    /// Audio generation (SFX / music) via fal.ai. Triggered here (never from the GUI); the C# side
-    /// reads the fal key from the secure store and runs the job. Returns a job_id immediately; the
+    /// Audio generation and cover creation. Triggered here (never from the GUI); the C# side reads
+    /// the provider key from the secure store and runs the job. Returns a job_id immediately; the
     /// client polls the `status` action. When `model` is omitted it falls back to the model selected
     /// in the Asset Generation tab, then the catalog default. Status / cancel / list_providers are
     /// shared across the generate_* tools via <see cref="AssetGenToolHelpers"/>.
@@ -53,14 +53,27 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             if (!SecureKeyStore.Current.Has(provider))
                 return new ErrorResponse(AssetGenProviders.MissingKeyMessage(provider));
 
-            string prompt = p.Get("prompt");
-            if (string.IsNullOrWhiteSpace(prompt))
-                return new ErrorResponse("'prompt' is required for audio generation.");
-
             // Empty -> GUI-selected model -> catalog default. A null model reaches the adapter's own
             // default; a resolved id is passed through verbatim (the catalog default equals the
             // adapter constant, so an omitted model is a no-op either way).
             string model = AssetGenModelCatalog.ResolveModel("audio", provider, p.Get("model"));
+
+            string prompt = p.Get("prompt");
+            if (string.Equals(provider, "minimax", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!MiniMaxAudioAdapter.IsCoverModel(model))
+                    return new ErrorResponse("The MiniMax audio provider supports music-cover and music-cover-free.");
+
+                int sourceCount = 0;
+                if (!string.IsNullOrWhiteSpace(p.Get("audioUrl"))) sourceCount++;
+                if (!string.IsNullOrWhiteSpace(p.Get("audioBase64"))) sourceCount++;
+                if (sourceCount != 1)
+                    return new ErrorResponse("Provide exactly one of 'audioUrl' or 'audioBase64'.");
+            }
+            else if (string.IsNullOrWhiteSpace(prompt))
+            {
+                return new ErrorResponse("'prompt' is required for audio generation.");
+            }
 
             var req = new AudioGenRequest
             {
@@ -68,6 +81,15 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 Model = model,
                 Prompt = prompt,
                 Duration = p.GetFloat("duration", 0f) ?? 0f,
+                Lyrics = p.Get("lyrics"),
+                LyricsOptimizer = p.Has("lyricsOptimizer") ? p.GetBool("lyricsOptimizer") : null,
+                IsInstrumental = p.Has("isInstrumental") ? p.GetBool("isInstrumental") : null,
+                AudioUrl = p.Get("audioUrl"),
+                AudioBase64 = p.Get("audioBase64"),
+                CoverFeatureId = p.Get("coverFeatureId"),
+                OutputFormat = p.Get("outputFormat"),
+                AudioFormat = p.Get("audioFormat"),
+                AigcWatermark = p.Has("aigcWatermark") ? p.GetBool("aigcWatermark") : null,
                 Name = p.Get("name"),
                 OutputFolder = p.Get("outputFolder"),
             };
