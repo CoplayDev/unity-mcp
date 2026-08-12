@@ -30,14 +30,41 @@ namespace MCPForUnity.Editor.Helpers
                 return "\"\"";
             }
 
+            // Only quote when necessary; otherwise pass through verbatim so
+            // backslashes in paths (e.g. C:\Program Files\...) are preserved.
             if (arg.IndexOfAny(new[] { ' ', '\t', '"' }) < 0)
             {
                 return arg;
             }
 
-            // Escape embedded quotes the way Windows CreateProcess expects:
-            // backslashes before a quote are doubled, then the quote escaped.
-            return "\"" + arg.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            // Standard Windows command-line quoting (the algorithm used by
+            // .NET's ArgumentList / CommandLineToArgvW): wrap in quotes; for every
+            // run of backslashes, double them only when immediately followed by a
+            // quote or at the very end of the argument (before the closing quote).
+            var sb = new System.Text.StringBuilder();
+            sb.Append('"');
+            int backslashes = 0;
+            foreach (char ch in arg)
+            {
+                if (ch == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+                if (ch == '"')
+                {
+                    sb.Append('\\', backslashes * 2 + 1);
+                    sb.Append('"');
+                    backslashes = 0;
+                    continue;
+                }
+                sb.Append('\\', backslashes);
+                backslashes = 0;
+                sb.Append(ch);
+            }
+            sb.Append('\\', backslashes * 2);
+            sb.Append('"');
+            return sb.ToString();
         }
     }
 }

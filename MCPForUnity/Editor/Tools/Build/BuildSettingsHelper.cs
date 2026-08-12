@@ -26,7 +26,9 @@ namespace MCPForUnity.Editor.Tools.Build
                     return new { property, value = PlayerSettings.GetScriptingDefineSymbolsForGroup(namedTarget) };
                 case "architecture":
                     var arch = PlayerSettings.GetArchitecture(namedTarget);
-                    string archName = arch switch { 0 => "x86_64", 1 => "arm64", 2 => "universal", _ => "unknown" };
+                    // GetArchitecture returns the BuildTargetGroup's architecture setting,
+                    // where 0 means None (not x86_64); see PlayerSettings.SetArchitecture docs.
+                    string archName = arch switch { 0 => "none", 1 => "arm64", 2 => "universal", _ => "unknown" };
                     return new { property, value = archName, raw = arch };
                 default:
                     return null;
@@ -66,7 +68,6 @@ namespace MCPForUnity.Editor.Tools.Build
                     case "architecture":
                         int arch = value.ToLowerInvariant() switch
                         {
-                            "x86_64" => 0,
                             "none" => 0,
                             "default" => 0,
                             "arm64" => 1,
@@ -74,7 +75,7 @@ namespace MCPForUnity.Editor.Tools.Build
                             _ => -1
                         };
                         if (arch < 0)
-                            return $"Unknown architecture '{value}'. Valid: x86_64, arm64, universal";
+                            return $"Unknown architecture '{value}'. Valid: none, arm64, universal";
                         PlayerSettings.SetArchitecture(namedTarget, arch);
                         return null;
                     default:

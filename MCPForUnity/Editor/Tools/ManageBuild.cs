@@ -250,6 +250,12 @@ namespace MCPForUnity.Editor.Tools
                     EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
                 else if (subtargetLower == "player")
                     EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
+#else
+                // Unity 2020.3 has no server subtarget; fail loudly instead of silently
+                // building the player variant.
+                string subtargetLower = subtargetStr.ToLowerInvariant();
+                if (subtargetLower == "server")
+                    return new ErrorResponse("subtarget 'server' requires Unity 2021.2 or newer (StandaloneBuildSubtarget API).");
 #endif
             }
 

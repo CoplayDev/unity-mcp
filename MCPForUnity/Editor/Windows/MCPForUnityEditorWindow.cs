@@ -1058,12 +1058,10 @@ namespace MCPForUnity.Editor.Windows
             var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
             PollUpmRequest(request, "install", onComplete);
 #else
-            UnityEditor.PackageManager.Requests.AddRequest request = null;
-            foreach (var id in packageIds)
-            {
-                request = UnityEditor.PackageManager.Client.Add(id);
-            }
-            PollUpmAddRequest(request, onComplete);
+            // Unity 2020.3: queue adds serially — PackageManager accepts one in-flight
+            // request per operation on legacy editors; starting all at once and polling
+            // only the last one would leave earlier packages' results unchecked.
+            QueueUpmAdds(new Queue<string>(packageIds), onComplete);
 #endif
         }
 
@@ -1074,12 +1072,8 @@ namespace MCPForUnity.Editor.Windows
             var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
             PollUpmRequest(request, "remove", onComplete);
 #else
-            UnityEditor.PackageManager.Requests.RemoveRequest request = null;
-            foreach (var id in packageIds)
-            {
-                request = UnityEditor.PackageManager.Client.Remove(id);
-            }
-            PollUpmRemoveRequest(request, onComplete);
+            // Unity 2020.3: queue removes serially (see BatchUpmAdd).
+            QueueUpmRemoves(new Queue<string>(packageIds), onComplete);
 #endif
         }
 
@@ -1139,6 +1133,67 @@ namespace MCPForUnity.Editor.Windows
             };
             EditorApplication.update += pollCallback;
         }
+
+        private static void QueueUpmAdds(Queue<string> queue, Action onComplete)
+        {
+            if (queue.Count == 0)
+            {
+                EditorUtility.ClearProgressBar();
+                onComplete?.Invoke();
+                return;
+            }
+            string id = queue.Dequeue();
+            var request = UnityEditor.PackageManager.Client.Add(id);
+            EditorApplication.CallbackFunction poll = null;
+            poll = () =>
+            {
+                if (!request.IsCompleted) return;
+                EditorApplication.update -= poll;
+                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+                {
+                    Debug.Log($"[MCP] Package {id} installed.");
+                    QueueUpmAdds(queue, onComplete);
+                }
+                else
+                {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogError($"[MCP] Package {id} install failed: {request.Error?.message}");
+                    onComplete?.Invoke();
+                }
+            };
+            EditorApplication.update += poll;
+        }
+
+        private static void QueueUpmRemoves(Queue<string> queue, Action onComplete)
+        {
+            if (queue.Count == 0)
+            {
+                EditorUtility.ClearProgressBar();
+                onComplete?.Invoke();
+                return;
+            }
+            string id = queue.Dequeue();
+            var request = UnityEditor.PackageManager.Client.Remove(id);
+            EditorApplication.CallbackFunction poll = null;
+            poll = () =>
+            {
+                if (!request.IsCompleted) return;
+                EditorApplication.update -= poll;
+                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+                {
+                    Debug.Log($"[MCP] Package {id} removed.");
+                    QueueUpmRemoves(queue, onComplete);
+                }
+                else
+                {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogError($"[MCP] Package {id} remove failed: {request.Error?.message}");
+                    onComplete?.Invoke();
+                }
+            };
+            EditorApplication.update += poll;
+        }
+
 #endif
 
         private static void UninstallRoslyn()

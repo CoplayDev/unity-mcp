@@ -87,8 +87,7 @@ namespace MCPForUnity.Editor.Windows.Components
                 else if (clamped < 0) clamped = 0;
                 else if (clamped >= m_Choices.Count) clamped = m_Choices.Count - 1;
                 if (clamped == m_Index) return;
-                m_Index = clamped;
-                UpdateValueFromIndex();
+                SetValueWithoutNotify(clamped >= 0 && clamped < m_Choices.Count ? m_Choices[clamped] : null);
             }
         }
 
@@ -110,10 +109,10 @@ namespace MCPForUnity.Editor.Windows.Components
         public void SetValueWithoutNotify(string newValue)
         {
             int newIndex = m_Choices.IndexOf(newValue);
-            if (newIndex >= 0)
+            if (newIndex >= 0 && newIndex != m_Index)
             {
                 m_Index = newIndex;
-                UpdateValueFromIndex();
+                m_Value = newIndex < m_Choices.Count ? m_Choices[newIndex] : null;
             }
         }
 

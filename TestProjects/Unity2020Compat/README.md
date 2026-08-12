@@ -10,7 +10,8 @@
 
 ```cmd
 cd /d <repo>\TestProjects\Unity2020Compat
-"C:\SoftWare\Unity\2020.3.24f1\Editor\Unity.exe" -batchmode -nographics -quit -projectPath "%~dp0" -logFile compile.log
+verify_compile.cmd                       rem auto-detects Unity 2020.3
+verify_compile.cmd C:\path\to\Unity.exe  rem or pass the editor explicitly
 ```
 
 通过标准：`compile.log` 中无 `error CS`，结尾出现 `Exiting batchmode successfully now!`。

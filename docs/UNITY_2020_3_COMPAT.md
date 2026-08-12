@@ -52,7 +52,7 @@
 | `PrefabStage`/`PrefabStageUtility` 命名空间 | `UnityEditor.Experimental.SceneManagement` | 8 文件 |
 | `StandaloneBuildSubtarget`/`subtarget` | 返回 0（仅 Player，2020.3 无 Server 子目标） | Build 系列 |
 | `BuildOptions.CleanBuildCache` | 降级为空操作（2020.3 无此选项） | BuildRunner |
-| `PackageInfo.GetAllRegisteredPackages` | `Client.List(true)` 同步轮询 | 3 文件 |
+| `PackageInfo.GetAllRegisteredPackages` | 新增 `RegisteredPackageInfo`：2020.3 同步解析权威 `Packages/packages-lock.json`（纯文件 IO，无死锁；`Client.List` 轮询会死锁编辑器） | 3 文件 |
 | `AddAndRemoveRequest` | `Client.Add`/`Client.Remove` 逐个 | MCPForUnityEditorWindow |
 | `ShaderPropertyType.Int` | 2020.3 枚举无 Int（用 Float/Range 分支覆盖） | SkyboxOps |
 | `ProfilerCategory.FileIO/VirtualTexturing` | 映射 Loading/Render | CounterOps |
