@@ -6,7 +6,9 @@ rem  Usage:
 rem    verify_compile.cmd                (uses UNITY_EDITOR env var or auto-detect)
 rem    verify_compile.cmd <path\to\Unity.exe>
 rem
-rem  Exit codes: 0 = compile OK, 1 = compile errors found, 2 = Unity not found
+rem  Exit codes: 0 = verification passed, 1 = verification failed
+rem              (compile errors, Unity startup failure, missing log, unclean exit),
+rem              2 = Unity executable not found
 rem ============================================================
 setlocal
 
@@ -36,6 +38,13 @@ if not defined UNITY_EXE (
 if not exist "%UNITY_EXE%" (
     echo [verify] Unity executable not found: %UNITY_EXE%
     exit /b 2
+)
+
+echo %UNITY_EXE% | findstr /c:"2020.3" >nul
+if errorlevel 1 (
+    echo [verify] WARNING: %UNITY_EXE% is not a Unity 2020.3 editor.
+    echo [verify] This project validates the 2020.3 compatibility floor; a newer
+    echo [verify] editor only confirms forward-compatibility, not 2020.3 support.
 )
 
 echo [verify] Unity: %UNITY_EXE%
@@ -68,4 +77,6 @@ if errorlevel 1 (
 )
 
 echo [verify] PASS: 0 compiler errors, clean batchmode exit.
+echo [verify] NOTE: for the full supported-version matrix, also run
+echo [verify]   tools/check-unity-versions.sh (see repo CI).
 exit /b 0

@@ -1,18 +1,18 @@
 [LicensingClient] Error: Code 10 while verifying Licensing Client signature (process Id: 15080, path: "F:/UnityHub/Unity Hub/UnityLicensingClient_V1/Unity.Licensing.Client.exe")
 [Licensing::Module] Error: LicensingClient has failed validation
-[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-h-2020.3.24" (connect: 0.00s, validation: 0.01s, handshake: 0.66s)
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-h-2020.3.24" (connect: 0.00s, validation: 0.01s, handshake: 0.87s)
 Entitlement-based licensing initiated
 [LicensingClient] Licenses updated successfully
 
-LICENSE SYSTEM [2026812 11:51:12] Next license update check is after 2026-08-13T01:54:03
+LICENSE SYSTEM [2026812 14:1:6] Next license update check is after 2026-08-13T01:54:03
 
 
-LICENSE SYSTEM [2026812 11:51:12] Current license is already valid and activated. Skipping license activation process (Provided username/password will be ignored).
+LICENSE SYSTEM [2026812 14:1:6] Current license is already valid and activated. Skipping license activation process (Provided username/password will be ignored).
 Built from '2020.3/china_unity/release' branch; Version is '2020.3.24f1c2 (f3616f7ef48a) revision 15950191'; Using compiler version '192528614'; Build Type 'Release'
 OS: 'Windows 10  (10.0.19045) 64bit Professional' Language: 'zh' Physical Memory: 16318 MB
 [Licensing::Module] Serial number assigned to: "F4-JDDH-7CET-YVV5-4EPM-XXXX"
 BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1, IsPro: 0
-[Package Manager] Server::Start -- Port 4681 was selected
+[Package Manager] Server::Start -- Port 7719 was selected
 
 COMMAND LINE ARGUMENTS:
 C:\SoftWare\Unity\2020.3.24f1\Editor\Unity.exe
@@ -20,10 +20,10 @@ C:\SoftWare\Unity\2020.3.24f1\Editor\Unity.exe
 -nographics
 -quit
 -projectPath
-F:\AIProjects\Unity-shikiMCP\TestProjects\Unity2020Compat
+F:\AIProjects\Unity-shikiMCP\TestProjects\Unity2020Compat\
 -logFile
 F:\AIProjects\Unity-shikiMCP\TestProjects\Unity2020Compat\compile_check.log
-Successfully changed project path to: F:\AIProjects\Unity-shikiMCP\TestProjects\Unity2020Compat
+Successfully changed project path to: F:\AIProjects\Unity-shikiMCP\TestProjects\Unity2020Compat\
 F:/AIProjects/Unity-shikiMCP/TestProjects/Unity2020Compat
 It looks like another Unity instance is running with this project open.
 
@@ -63,43 +63,43 @@ C:\Windows\System32\WS2_32.dll:WS2_32.dll (00007FFBAEC30000), size: 438272 (resu
 C:\Windows\SYSTEM32\dhcpcsvc.dll:dhcpcsvc.dll (00007FFBA6D70000), size: 118784 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
 C:\Windows\System32\WINTRUST.dll:WINTRUST.dll (00007FFBACAB0000), size: 471040 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6456
 C:\Windows\SYSTEM32\dhcpcsvc6.dll:dhcpcsvc6.dll (00007FFBA6AD0000), size: 94208 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
-C:\Windows\SYSTEM32\wsock32.dll:wsock32.dll (00007FFBA8320000), size: 36864 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.1
 C:\Windows\System32\OLEAUT32.dll:OLEAUT32.dll (00007FFBAD270000), size: 839680 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
 C:\Windows\System32\combase.dll:combase.dll (00007FFBAD350000), size: 3489792 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6456
+C:\Windows\SYSTEM32\wsock32.dll:wsock32.dll (00007FFBA8320000), size: 36864 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.1
 C:\SoftWare\Unity\2020.3.24f1\Editor\libfbxsdk.dll:libfbxsdk.dll (00007FFA94830000), size: 10215424 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2020.2.0.0
-C:\SoftWare\Unity\2020.3.24f1\Editor\optix.6.0.0.dll:optix.6.0.0.dll (00007FFB921B0000), size: 208896 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 6.0.0.0
-C:\SoftWare\Unity\2020.3.24f1\Editor\OpenImageDenoise.dll:OpenImageDenoise.dll (00007FFA91E60000), size: 43806720 (result: 0), SymType: '-deferred-', PDB: ''
 C:\Windows\System32\IMM32.dll:IMM32.dll (00007FFBAD7F0000), size: 192512 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6157
 C:\Windows\System32\ole32.dll:ole32.dll (00007FFBAD6B0000), size: 1224704 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.5915
 C:\Windows\System32\SHLWAPI.dll:SHLWAPI.dll (00007FFBAD210000), size: 372736 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6392
+C:\SoftWare\Unity\2020.3.24f1\Editor\optix.6.0.0.dll:optix.6.0.0.dll (00007FFB921B0000), size: 208896 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 6.0.0.0
 C:\Windows\System32\CRYPT32.dll:CRYPT32.dll (00007FFBACC80000), size: 1429504 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6157
+C:\SoftWare\Unity\2020.3.24f1\Editor\OpenImageDenoise.dll:OpenImageDenoise.dll (00007FFA91E60000), size: 43806720 (result: 0), SymType: '-deferred-', PDB: ''
 C:\SoftWare\Unity\2020.3.24f1\Editor\umbraoptimizer64.dll:umbraoptimizer64.dll (00007FFB82100000), size: 1306624 (result: 0), SymType: '-deferred-', PDB: ''
-C:\SoftWare\Unity\2020.3.24f1\Editor\FreeImage.dll:FreeImage.dll (0000000180000000), size: 6582272 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 3.18.0.0
-C:\SoftWare\Unity\2020.3.24f1\Editor\ispc_texcomp.dll:ispc_texcomp.dll (00007FFB7F520000), size: 1609728 (result: 0), SymType: '-deferred-', PDB: ''
 C:\Windows\System32\WLDAP32.dll:WLDAP32.dll (00007FFBAE990000), size: 385024 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6157
-C:\SoftWare\Unity\2020.3.24f1\Editor\WinPixEventRuntime.dll:WinPixEventRuntime.dll (00007FFBA8310000), size: 45056 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 1.0.1812.6001
+C:\SoftWare\Unity\2020.3.24f1\Editor\FreeImage.dll:FreeImage.dll (0000000180000000), size: 6582272 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 3.18.0.0
 C:\Windows\System32\Normaliz.dll:Normaliz.dll (00007FFBAE360000), size: 32768 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
+C:\SoftWare\Unity\2020.3.24f1\Editor\ispc_texcomp.dll:ispc_texcomp.dll (00007FFB7F520000), size: 1609728 (result: 0), SymType: '-deferred-', PDB: ''
+C:\SoftWare\Unity\2020.3.24f1\Editor\WinPixEventRuntime.dll:WinPixEventRuntime.dll (00007FFBA8310000), size: 45056 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 1.0.1812.6001
 C:\SoftWare\Unity\2020.3.24f1\Editor\RadeonImageFilters.dll:RadeonImageFilters.dll (00007FFB70D80000), size: 2535424 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 1.5.1.0
 C:\SoftWare\Unity\2020.3.24f1\Editor\SketchUpAPI.dll:SketchUpAPI.dll (00007FFB3D560000), size: 8978432 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 19.0.753.0
-C:\Windows\SYSTEM32\WINMM.dll:WINMM.dll (00007FFBA14C0000), size: 159744 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
 C:\Windows\SYSTEM32\VERSION.dll:VERSION.dll (00007FFBA4920000), size: 40960 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
+C:\Windows\SYSTEM32\WINMM.dll:WINMM.dll (00007FFBA14C0000), size: 159744 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
 C:\Windows\SYSTEM32\WINHTTP.dll:WINHTTP.dll (00007FFBA77C0000), size: 1089536 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.5794
-C:\Windows\SYSTEM32\OPENGL32.dll:OPENGL32.dll (00007FFB87760000), size: 1212416 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.5794
 C:\Windows\SYSTEM32\GLU32.dll:GLU32.dll (00007FFB87730000), size: 180224 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
-C:\SoftWare\Unity\2020.3.24f1\Editor\tbb.dll:tbb.dll (00007FFB92140000), size: 413696 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2017.0.2016.1004
+C:\Windows\SYSTEM32\OPENGL32.dll:OPENGL32.dll (00007FFB87760000), size: 1212416 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.5794
 C:\Windows\SYSTEM32\VCRUNTIME140.dll:VCRUNTIME140.dll (00007FFB92920000), size: 122880 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 14.44.35211.0
+C:\SoftWare\Unity\2020.3.24f1\Editor\tbb.dll:tbb.dll (00007FFB92140000), size: 413696 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2017.0.2016.1004
 C:\Windows\SYSTEM32\MSVCP140.dll:MSVCP140.dll (00007FFB8F0B0000), size: 561152 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 14.44.35211.0
 C:\SoftWare\Unity\2020.3.24f1\Editor\SketchUpCommonPreferences.dll:SketchUpCommonPreferences.dll (00007FFB91FC0000), size: 483328 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 19.0.753.20342
 C:\Windows\SYSTEM32\Secur32.dll:Secur32.dll (00007FFB987F0000), size: 49152 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
+C:\Windows\SYSTEM32\VCRUNTIME140_1.dll:VCRUNTIME140_1.dll (00007FFB929A0000), size: 49152 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 14.44.35211.0
 C:\Windows\SYSTEM32\MSVCP120.dll:MSVCP120.dll (00007FFB82B30000), size: 679936 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 12.0.21005.1
 C:\Windows\SYSTEM32\MSVCR120.dll:MSVCR120.dll (00007FFB721F0000), size: 978944 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 12.0.21005.1
-C:\Windows\SYSTEM32\VCRUNTIME140_1.dll:VCRUNTIME140_1.dll (00007FFB929A0000), size: 49152 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 14.44.35211.0
 C:\Windows\SYSTEM32\SSPICLI.DLL:SSPICLI.DLL (00007FFBAC730000), size: 204800 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6328
-C:\SoftWare\Unity\2020.3.24f1\Editor\OpenRL.dll:OpenRL.dll (000001EC0E220000), size: 12779520 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 1.5.0.2907
-C:\Windows\SYSTEM32\MSVCP100.dll:MSVCP100.dll (0000000058F90000), size: 622592 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.40219.1
+C:\SoftWare\Unity\2020.3.24f1\Editor\OpenRL.dll:OpenRL.dll (0000011E424B0000), size: 12779520 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 1.5.0.2907
 C:\SoftWare\Unity\2020.3.24f1\Editor\embree.dll:embree.dll (00007FFA90E70000), size: 16711680 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2.14.0.0
 C:\Windows\SYSTEM32\MSVCR100.dll:MSVCR100.dll (0000000058EB0000), size: 860160 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.40219.1
-C:\SoftWare\Unity\2020.3.24f1\Editor\OpenRL_pthread.dll:OpenRL_pthread.dll (000001EC0EE70000), size: 61440 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2.9.0.0
+C:\Windows\SYSTEM32\MSVCP100.dll:MSVCP100.dll (0000000058F90000), size: 622592 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.40219.1
+C:\SoftWare\Unity\2020.3.24f1\Editor\OpenRL_pthread.dll:OpenRL_pthread.dll (0000011E430F0000), size: 61440 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 2.9.0.0
 C:\Windows\SYSTEM32\MSASN1.dll:MSASN1.dll (00007FFBAC440000), size: 73728 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.3636
 C:\Windows\SYSTEM32\CRYPTSP.dll:CRYPTSP.dll (00007FFBAC210000), size: 98304 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.5856
 C:\Windows\system32\rsaenh.dll:rsaenh.dll (00007FFBAB800000), size: 229376 (result: 0), SymType: '-deferred-', PDB: '', fileVersion: 10.0.19041.6093
