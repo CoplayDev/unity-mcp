@@ -166,46 +166,6 @@ namespace MCPForUnity.Runtime.Helpers
             return result;
         }
 
-#if UNITY_EDITOR
-        // Synchronously drive a WaitForEndOfFrame ScreenshotCapturer by pumping the editor's
-        // player loop. Play-mode only; EditorApplication.Step is a no-op in edit mode.
-        private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
-        {
-            Texture2D result = null;
-            bool done = false;
-            bool callerReturned = false;
-            ScreenshotCapturer.Begin(superSize, tex =>
-            {
-                // Late completion after the spin loop timed out: caller will never consume
-                // the texture, so destroy it here to avoid leaking a Unity object.
-                if (callerReturned)
-                {
-                    if (tex != null) DestroyTexture(tex);
-                    return;
-                }
-                result = tex;
-                done = true;
-            });
-            // Step() pauses play mode as a side effect; restore the prior state so a screenshot
-            // doesn't leave a running game paused (an already-paused game stays paused).
-            bool wasPaused = UnityEditor.EditorApplication.isPaused;
-            try
-            {
-                for (int i = 0; i < timeoutSteps && !done; i++)
-                {
-                    UnityEditor.EditorApplication.Step();
-                }
-            }
-            finally
-            {
-                if (!wasPaused)
-                    UnityEditor.EditorApplication.isPaused = false;
-            }
-            callerReturned = true;
-            return result;
-        }
-#endif
-
         /// <summary>
         /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
         /// final composited frame including UI Toolkit overlays, post-processing, etc.
@@ -226,15 +186,10 @@ namespace MCPForUnity.Runtime.Helpers
             int imgW = 0, imgH = 0;
             try
             {
-#if UNITY_EDITOR
-                // In play mode, inline ScreenCapture reads a backbuffer before UITK has
-                // composited; route through WaitForEndOfFrame instead.
-                tex = Application.isPlaying
-                    ? CaptureCompositedAfterFrame(result.SuperSize)
-                    : ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
-#else
+                // Commands execute through UnitySynchronizationContext while the PlayerLoop is
+                // already active. Capture the current frame directly; driving
+                // EditorApplication.Step here would re-enter that loop.
                 tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
-#endif
                 if (tex == null)
                 {
                     // Fallback to camera-based if ScreenCapture fails

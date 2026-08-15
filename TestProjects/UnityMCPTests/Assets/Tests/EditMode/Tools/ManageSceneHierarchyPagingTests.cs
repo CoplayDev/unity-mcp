@@ -169,6 +169,19 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void Screenshot_CompositedCaptureDoesNotExposePlayerLoopPump()
+        {
+            var utilityType = typeof(MCPForUnity.Runtime.Helpers.ScreenshotUtility);
+            var pumpMethod = utilityType.GetMethod(
+                "CaptureCompositedAfterFrame",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.IsNull(
+                pumpMethod,
+                "Play-mode screenshots must not synchronously pump Unity's PlayerLoop; commands run from UnitySynchronizationContext.ExecuteTasks, which is already inside that loop.");
+        }
+
+        [Test]
         public void Screenshot_ViewTargetAcceptedForGameView()
         {
             // view_target should be accepted for game_view (positioned capture path).
