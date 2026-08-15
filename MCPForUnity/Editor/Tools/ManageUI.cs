@@ -866,6 +866,14 @@ namespace MCPForUnity.Editor.Tools
                 playFullPath = EnsureUniqueFilePath(playFullPath);
                 string playProjectRelPath = ScreenshotUtility.ToProjectRelativePath(playFullPath);
 
+                if (s_pendingCaptureDone && s_pendingCaptureTex == null)
+                {
+                    s_pendingCaptureDone = false;
+                    s_pendingCaptureStarted = false;
+                    return new ErrorResponse(
+                        "Play-mode screenshot timed out or captured nothing. Keep the Game view visible and the editor unpaused.");
+                }
+
                 // ── Case 1: capture is ready ──────────────────────────────────────
                 if (s_pendingCaptureDone && s_pendingCaptureTex != null)
                 {
