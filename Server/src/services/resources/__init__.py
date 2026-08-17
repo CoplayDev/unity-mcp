@@ -210,14 +210,17 @@ def register_all_resources(mcp: FastMCP, *, project_scoped_tools: bool = True) -
             continue
 
         targeted_uri, has_path_parameters = _targeted_uri(uri, func)
+        targeted_description = (description or "") + _TARGETING_DESCRIPTION
         if not has_path_parameters:
             # Preserve concrete resources in resources/list for existing clients.
+            # Include the routing hint here as well as on the companion template;
+            # some clients do not query resources/templates/list.
             _register_resource(
                 mcp,
                 func=func,
                 uri=uri,
                 name=resource_name,
-                description=description,
+                description=targeted_description,
                 kwargs=kwargs,
                 consume_unity_instance=False,
             )
@@ -228,7 +231,7 @@ def register_all_resources(mcp: FastMCP, *, project_scoped_tools: bool = True) -
             func=func,
             uri=targeted_uri,
             name=resource_name,
-            description=(description or "") + _TARGETING_DESCRIPTION,
+            description=targeted_description,
             kwargs=kwargs,
             consume_unity_instance=True,
         )

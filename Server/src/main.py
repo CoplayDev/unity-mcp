@@ -321,7 +321,8 @@ Resources vs Tools:
 
 Reading resources (read this before using ANY resource named below):
 - Resources are addressed by URI, never by name. A resource's name and URI are NOT interchangeable: names use underscores (e.g. editor_state) while URIs use slashes (e.g. mcpforunity://editor/state). Do NOT build a URI by swapping separators in the name — you will 404.
-- Always read the exact URI from your MCP client's resource listing (resources/list). Where these instructions mention a resource by name, look up its URI in that listing rather than guessing it.
+- Always read the exact URI from your MCP client's resource listing (resources/list for concrete resources, resources/templates/list for parameterized resources). Where these instructions mention a resource by name, look up its URI in those listings rather than guessing it.
+- The MCP resources/read request accepts only a URI, not tool-style arguments. To route one resource read to a specific Unity instance, append the `unity_instance` query parameter to the URI (URL-encode `@` as `%40` when needed), for example: mcpforunity://editor/state?unity_instance=MyGame%40abc123. The active/session routing remains the default when this query parameter is omitted.
 - Resource payloads are wrapped: the content lives under a top-level `data` object, so field paths are `data.<section>.<field>` (e.g. `data.advice.ready_for_tools`), not bare top-level fields.
 
 Script Management:
