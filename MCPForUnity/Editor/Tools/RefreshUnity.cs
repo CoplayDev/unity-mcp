@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("refresh_unity", AutoRegister = false)]
     public static class RefreshUnity
     {
-        private const int DefaultWaitTimeoutSeconds = 60;
+        public const int DefaultWaitTimeoutSeconds = 60;
 
         public static async Task<object> HandleCommand(JObject @params)
         {
