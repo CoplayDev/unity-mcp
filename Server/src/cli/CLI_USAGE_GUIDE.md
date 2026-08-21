@@ -606,7 +606,7 @@ unity-mcp audio volume "MusicPlayer" 0.5
 ### Animation Commands
 
 ```bash
-# Control Animator (target must have Animator component)
+# Control Animator (target or one of its children must have an Animator component)
 unity-mcp animation play "Character" "Walk"
 unity-mcp animation set-parameter "Character" "Speed" 1.5 --type float
 unity-mcp animation set-parameter "Character" "IsRunning" true --type bool
