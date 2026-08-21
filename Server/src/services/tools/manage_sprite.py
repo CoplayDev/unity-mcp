@@ -85,7 +85,11 @@ async def manage_sprite(
         str | None,
         "Path for the .controller asset (e.g. 'Assets/Animators/Hero.controller').",
     ] = None,
-    overwrite: Annotated[bool, "Overwrite existing controller if it already exists."] = False,
+    overwrite: Annotated[
+        bool,
+        "Replace an existing .anim or .controller at the target path. Off by default: "
+        "without it an existing asset is kept and reported back, not silently replaced.",
+    ] = False,
     add_to_scene: Annotated[bool, "Attach Animator + controller to a scene GameObject."] = False,
     scene_target: Annotated[
         str | None,
