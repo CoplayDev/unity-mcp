@@ -34,9 +34,13 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
     {
         public static SpriteAnimEntry Detect(string clipName)
         {
-            string lower = clipName.ToLowerInvariant();
             var entry = new SpriteAnimEntry { ClipName = clipName };
-            Categorize(lower, entry);
+            // The raw name, not a lowercased one: Words splits on camelCase humps by testing
+            // char.IsUpper, which is never true once the string has been lowered. 'heroAttack'
+            // collapsed into the single word 'heroattack', matched nothing, and was filed
+            // Generic with no Attack trigger. Words lowercases each word it emits, so every
+            // comparison downstream is still case-insensitive.
+            Categorize(clipName, entry);
             entry.Loop = AutoDetectLoop(entry.Category);
             return entry;
         }
@@ -54,9 +58,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
         // ── Private ──────────────────────────────────────────────────────────
 
-        private static void Categorize(string lower, SpriteAnimEntry entry)
+        private static void Categorize(string name, SpriteAnimEntry entry)
         {
-            var words = Words(lower);
+            var words = Words(name);
 
             if (Has(words, "idle", "stand"))
             { entry.Category = SpriteAnimCategory.Idle; return; }
@@ -80,7 +84,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             { entry.Category = SpriteAnimCategory.Object; entry.TriggerName = Capitalize(hit); return; }
 
             entry.Category    = SpriteAnimCategory.Generic;
-            entry.TriggerName = Capitalize(lower);
+            entry.TriggerName = Capitalize(name.ToLowerInvariant());
         }
 
         /// <summary>

@@ -1222,5 +1222,26 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_TOO_MANY_FRAMES"));
             Assert.AreEqual(0, SpritesOf(path).Length, "nothing may be written past the limit");
         }
+
+        // =====================================================================
+        // Clip-name shapes
+        // =====================================================================
+
+        [Test]
+        public void SetupController_CamelCaseClipName_StillGetsItsTrigger()
+        {
+            // Detect used to lowercase the name before the tokenizer saw it, and the tokenizer
+            // splits camelCase by testing char.IsUpper - never true on a lowered string. So
+            // 'heroAttack' became one word, matched no keyword, and was filed Generic.
+            var result = SetupController(BuildClips("camel", "idle", "heroAttack"));
+            Assert.IsTrue(result.Value<bool>("success"));
+
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
+            var attack = controller.parameters.SingleOrDefault(p => p.name == "Attack");
+            Assert.IsNotNull(attack,
+                "a camelCase combat clip needs the same trigger a snake_case one gets; " +
+                "parameters present: " + string.Join(", ", controller.parameters.Select(p => p.name)));
+            Assert.AreEqual(AnimatorControllerParameterType.Trigger, attack.type);
+        }
     }
 }
