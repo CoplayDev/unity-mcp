@@ -96,7 +96,10 @@ def animator_play(target: str, state_name: str, layer: int, search_method: Optio
     result = run_command("manage_animation", _normalize_params(params), config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
-        print_success(f"Playing state '{state_name}' on {target}")
+        # Prefer the tool's own message: the Animator may live on a descendant of
+        # `target`, and only the tool knows which object actually played. The fallback
+        # names no object for the same reason - here the tool told us nothing.
+        print_success(result.get("message") or f"Playing state '{state_name}'")
 
 
 @animator.command("crossfade")
