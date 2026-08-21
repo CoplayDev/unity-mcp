@@ -115,7 +115,14 @@ async def manage_sprite(
     # separator in a clip name is wrong under every configuration.
     for clip in clips or []:
         name = clip.get("name") if isinstance(clip, dict) else None
-        if name and ("/" in name or "\\" in name):
+        if name is None:
+            continue
+        # `clips` is typed as list[dict[str, Any]], so a JSON number reaches this check.
+        # Testing membership on one raises TypeError before the tool can answer at all.
+        if not isinstance(name, str):
+            return {"success": False,
+                    "message": f"Clip name must be a string, got {type(name).__name__}."}
+        if "/" in name or "\\" in name:
             return {"success": False,
                     "message": f"Clip name '{name}' cannot contain a path separator; "
                                "use 'output_dir' to choose where clips are written."}

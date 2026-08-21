@@ -81,6 +81,12 @@ class TestManageSpriteValidation:
         assert result["success"] is False
         assert "separator" in result["message"]
 
+    def test_non_string_clip_name_is_refused_not_raised(self):
+        # clips is typed list[dict[str, Any]], so a JSON number reaches the name check.
+        result = self._call(action="setup_clips", path="Assets/hero.png", clips=[{"name": 7}])
+        assert result["success"] is False
+        assert "must be a string" in result["message"]
+
     def test_setup_controller_requires_controller_path(self):
         result = self._call(action="setup_controller", clips=[{"name": "walk", "path": "a.anim"}])
         assert result["success"] is False

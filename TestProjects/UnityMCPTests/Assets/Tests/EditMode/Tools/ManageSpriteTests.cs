@@ -339,6 +339,36 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SliceSheet_FrameWiderThanTheTexture_LeavesTheTextureTypeAlone()
+        {
+            // This refusal is only reachable after the texture has been measured, so it is the
+            // form of the class that moving the argument checks earlier could not close.
+            string path = CreateSheet("restore_w", 2, 1);
+            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path, ["frame_width"] = 4096 });
+            Assert.IsFalse(result.Value<bool>("success"));
+
+            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
+                "a refused request must not leave the texture converted behind it");
+        }
+
+        [Test]
+        public void SliceSheet_FrameTallerThanTheTexture_LeavesTheTextureTypeAlone()
+        {
+            // The second form of the same class: the height axis reaches the same refusal.
+            string path = CreateSheet("restore_h", 2, 1);
+            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["frame_width"] = Cell, ["frame_height"] = 4096 });
+            Assert.IsFalse(result.Value<bool>("success"));
+
+            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
+                "a refused request must not leave the texture converted behind it");
+        }
+
+        [Test]
         public void SliceSheet_ReslicingWithADifferentGrid_ReplacesTheOldFrames()
         {
             string path = CreateSheet("reslice", 4, 2);

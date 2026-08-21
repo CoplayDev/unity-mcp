@@ -75,6 +75,15 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             return result;
         }
 
+        /// <summary>Undoes the conversion above when the request is refused after it.</summary>
+        private static void RestoreTextureType(TextureImporter importer, TextureImporterType previous)
+        {
+            if (importer.textureType == previous) return;
+            importer.textureType = previous;
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
+        }
+
         // ── SliceSheet ───────────────────────────────────────────────────────
 
         public static object SliceSheet(JObject @params, SpriteDiagnosticBuilder diagnostics)
@@ -108,6 +117,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // and a grid computed against that size puts the trailing frames outside the real
             // texture, where Unity drops them without an error. Measured on 6000.4.4f1: a
             // 96x16 sheet asked for 6 columns produced 4 sprites of 21px.
+            // Some refusals can only be reached after the texture has been measured - a frame
+            // size larger than the sheet is one - so the previous type is kept and restored on
+            // the way out. A request that was refused must not leave a converted texture behind.
+            var previousType = importer.textureType;
             if (importer.textureType != TextureImporterType.Sprite)
             {
                 importer.textureType = TextureImporterType.Sprite;
@@ -117,7 +130,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
+            {
+                RestoreTextureType(importer, previousType);
                 return new ErrorResponse($"Could not load texture at '{path}'.");
+            }
 
             int texW = texture.width;
             int texH = texture.height;
@@ -126,6 +142,22 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (frameH <= 0) frameH = texH / rows;
             if (cols  <= 0) cols   = texW / frameW;
             if (rows  <= 0) rows   = texH / frameH;
+
+            // A frame larger than the sheet still yields a non-zero grid, so the empty-grid
+            // check below never sees it: the rects simply land outside the texture and Unity
+            // drops them while the call reports success. Measured on 6000.4.4f1 with
+            // frame_height=4096 on a 16px-tall sheet.
+            if (cols * frameW > texW || rows * frameH > texH)
+            {
+                diagnostics.AddError(
+                    "SLICE_OUT_OF_BOUNDS",
+                    "The grid does not fit inside the texture, so some frames would fall outside it.",
+                    new { cols, rows, frame_width = frameW, frame_height = frameH, texture_width = texW, texture_height = texH },
+                    new[] { "Reduce frame_width/frame_height, or cols/rows", "Confirm the texture dimensions with get_info" }
+                );
+                RestoreTextureType(importer, previousType);
+                return new { success = false, diagnostics = diagnostics.Build() };
+            }
 
             int totalFrames = cols * rows;
             if (totalFrames == 0)
@@ -136,6 +168,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     new { cols, rows, frame_width = frameW, frame_height = frameH, texture_width = texW, texture_height = texH },
                     new[] { "Check the cols and rows values", "Confirm the texture dimensions with get_info" }
                 );
+                RestoreTextureType(importer, previousType);
                 return new { success = false, diagnostics = diagnostics.Build() };
             }
 
