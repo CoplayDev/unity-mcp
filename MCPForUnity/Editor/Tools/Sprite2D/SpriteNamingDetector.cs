@@ -1,0 +1,135 @@
+using System.Collections.Generic;
+using System.Linq;
+
+namespace MCPForUnity.Editor.Tools.Sprite2D
+{
+    internal enum SpriteAnimCategory
+    {
+        Idle,
+        Locomotion,   // walk or run: a candidate for a 1D blend tree.
+        Jump,
+        Combat,       // attack, slash, combo and the like: a trigger state.
+        Object,       // open, close, activate: a single state.
+        Generic,
+    }
+
+    internal enum ControllerComplexity
+    {
+        Single,       // a lone animation, or an object/generic name: one plain state.
+        BlendTree1D,  // locomotion: a 1D blend tree driven by a Speed float.
+        StateMachine, // combat present: trigger states.
+        Full,         // locomotion + combat: a blend tree plus trigger states.
+    }
+
+    internal class SpriteAnimEntry
+    {
+        public string ClipName;
+        public SpriteAnimCategory Category;
+        public bool Loop;
+        public string TriggerName;
+        public float BlendValue; // Position on the 1D blend tree: walk=1, run=2.
+    }
+
+    internal static class SpriteNamingDetector
+    {
+        public static SpriteAnimEntry Detect(string clipName)
+        {
+            string lower = clipName.ToLowerInvariant();
+            var entry = new SpriteAnimEntry { ClipName = clipName };
+            Categorize(lower, entry);
+            entry.Loop = AutoDetectLoop(entry.Category);
+            return entry;
+        }
+
+        public static ControllerComplexity DecideComplexity(IEnumerable<SpriteAnimEntry> entries)
+        {
+            bool hasLocomotion = entries.Any(e => e.Category == SpriteAnimCategory.Locomotion);
+            bool hasCombat     = entries.Any(e => e.Category == SpriteAnimCategory.Combat);
+
+            if (hasLocomotion && hasCombat) return ControllerComplexity.Full;
+            if (hasLocomotion)              return ControllerComplexity.BlendTree1D;
+            if (hasCombat)                 return ControllerComplexity.StateMachine;
+            return ControllerComplexity.Single;
+        }
+
+        // ── Private ──────────────────────────────────────────────────────────
+
+        private static void Categorize(string lower, SpriteAnimEntry entry)
+        {
+            var words = Words(lower);
+
+            if (Has(words, "idle", "stand"))
+            { entry.Category = SpriteAnimCategory.Idle; return; }
+
+            if (words.Contains("walk"))
+            { entry.Category = SpriteAnimCategory.Locomotion; entry.BlendValue = 1f; return; }
+
+            if (Has(words, "run", "sprint"))
+            { entry.Category = SpriteAnimCategory.Locomotion; entry.BlendValue = 2f; return; }
+
+            string hit = Match(words, "jump", "fall", "land");
+            if (hit != null)
+            { entry.Category = SpriteAnimCategory.Jump; entry.TriggerName = Capitalize(hit); return; }
+
+            hit = Match(words, "attack", "slash", "punch", "combo", "cast", "shoot");
+            if (hit != null)
+            { entry.Category = SpriteAnimCategory.Combat; entry.TriggerName = Capitalize(hit); return; }
+
+            hit = Match(words, "open", "close", "activate", "die", "death", "hurt", "hit");
+            if (hit != null)
+            { entry.Category = SpriteAnimCategory.Object; entry.TriggerName = Capitalize(hit); return; }
+
+            entry.Category    = SpriteAnimCategory.Generic;
+            entry.TriggerName = Capitalize(lower);
+        }
+
+        /// <summary>
+        /// The words in a clip name, split on separators, camelCase humps and letter/digit
+        /// boundaries. Matching on raw substrings instead files 'white_flash' under 'hit'
+        /// and 'drunk_walk' under 'run', which then shapes the controller around a category
+        /// the clip never belonged to.
+        /// </summary>
+        private static HashSet<string> Words(string name)
+        {
+            var words = new HashSet<string>();
+            var word  = new System.Text.StringBuilder();
+
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                bool breaks = !char.IsLetterOrDigit(c)
+                    || (i > 0 && char.IsUpper(c)  && char.IsLower(name[i - 1]))
+                    || (i > 0 && char.IsDigit(c)  && char.IsLetter(name[i - 1]))
+                    || (i > 0 && char.IsLetter(c) && char.IsDigit(name[i - 1]));
+
+                if (breaks && word.Length > 0)
+                {
+                    words.Add(word.ToString().ToLowerInvariant());
+                    word.Clear();
+                }
+                if (char.IsLetterOrDigit(c)) word.Append(c);
+            }
+            if (word.Length > 0) words.Add(word.ToString().ToLowerInvariant());
+
+            return words;
+        }
+
+        private static bool Has(HashSet<string> words, params string[] keys) =>
+            Match(words, keys) != null;
+
+        /// <summary>The first key the name actually contains, so a trigger is named after the
+        /// action rather than after whatever happened to come first in the clip name.</summary>
+        private static string Match(HashSet<string> words, params string[] keys)
+        {
+            foreach (string k in keys)
+                if (words.Contains(k)) return k;
+            return null;
+        }
+
+        private static bool AutoDetectLoop(SpriteAnimCategory cat) =>
+            cat == SpriteAnimCategory.Idle || cat == SpriteAnimCategory.Locomotion;
+
+        private static string Capitalize(string s) =>
+            string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
+    }
+}
