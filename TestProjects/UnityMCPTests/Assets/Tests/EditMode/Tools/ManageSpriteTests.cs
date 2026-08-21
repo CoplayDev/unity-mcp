@@ -226,7 +226,11 @@ namespace MCPForUnityTests.Editor.Tools
             // The point of the default page size is that a sheet anyone would slice through
             // this tool never meets paging at all. If this turns red the default shrank.
             Assert.AreEqual(8, ((JArray)result["slices"]).Count);
-            Assert.IsNull(result["next_cursor"].Value<int?>(),
+            // Value<int?>("next_cursor") rather than indexing then reading: an omitted
+            // property indexes to a C# null and would throw here instead of asserting,
+            // and the Python side treats an absent next_cursor as completion. Same rule
+            // as ErrorText above - do not pin the response shape.
+            Assert.IsNull(result.Value<int?>("next_cursor"),
                 "a finished list has no next cursor");
         }
 
@@ -269,7 +273,7 @@ namespace MCPForUnityTests.Editor.Tools
                     ["cursor"] = cursor.Value,
                 });
                 seen.AddRange(((JArray)result["slices"]).Select(t => t.Value<string>("name")));
-                cursor = result["next_cursor"].Value<int?>();
+                cursor = result.Value<int?>("next_cursor");
             }
 
             Assert.IsNull(cursor, "the walk has to terminate on its own");
