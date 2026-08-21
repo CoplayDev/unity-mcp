@@ -138,19 +138,32 @@ async def manage_sprite(
 
     params: dict[str, Any] = {"action": action_lower}
 
-    if path is not None:            params["path"]           = path
-    if cols is not None:            params["cols"]           = cols
-    if rows is not None:            params["rows"]           = rows
-    if frame_width is not None:     params["frame_width"]    = frame_width
-    if frame_height is not None:    params["frame_height"]   = frame_height
-    if base_name is not None:       params["base_name"]      = base_name
-    if clips is not None:           params["clips"]          = clips
-    if animation_name is not None:  params["animation_name"] = animation_name
-    if output_dir is not None:      params["output_dir"]     = output_dir
-    if controller_path is not None: params["controller_path"]= controller_path
-    if overwrite:                   params["overwrite"]      = True
-    if add_to_scene:                params["add_to_scene"]   = True
-    if scene_target is not None:    params["scene_target"]   = scene_target
+    if path is not None:
+        params["path"] = path
+    if cols is not None:
+        params["cols"] = cols
+    if rows is not None:
+        params["rows"] = rows
+    if frame_width is not None:
+        params["frame_width"] = frame_width
+    if frame_height is not None:
+        params["frame_height"] = frame_height
+    if base_name is not None:
+        params["base_name"] = base_name
+    if clips is not None:
+        params["clips"] = clips
+    if animation_name is not None:
+        params["animation_name"] = animation_name
+    if output_dir is not None:
+        params["output_dir"] = output_dir
+    if controller_path is not None:
+        params["controller_path"] = controller_path
+    if overwrite:
+        params["overwrite"] = True
+    if add_to_scene:
+        params["add_to_scene"] = True
+    if scene_target is not None:
+        params["scene_target"] = scene_target
 
     result = await send_with_unity_instance(
         async_send_command_with_retry,
