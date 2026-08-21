@@ -53,8 +53,16 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             var createdClips = new List<object>();
 
-            foreach (JObject clipDef in clipsToken)
+            foreach (JToken clipToken in clipsToken)
             {
+                // Measured: the Python surface forwards a clips entry that is not an
+                // object, and the typed foreach cast threw InvalidCastException on it.
+                if (!(clipToken is JObject clipDef))
+                {
+                    diagnostics.AddWarning("CLIP_NOT_AN_OBJECT", "A clips entry is not an object - skipped.", null, new[] { "Each clip must be an object with a 'name'." });
+                    continue;
+                }
+
                 string clipName = clipDef["name"]?.ToString();
                 if (string.IsNullOrEmpty(clipName))
                 { diagnostics.AddWarning("CLIP_NO_NAME", "Clip name is missing — skipped.", null, new[] { "Add a 'name' field to each clip definition." }); continue; }

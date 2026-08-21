@@ -36,8 +36,16 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
 
             var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
-            foreach (JObject cd in clipsToken)
+            foreach (JToken clipToken in clipsToken)
             {
+                // Measured: the Python surface forwards a clips entry that is not an
+                // object, and the typed foreach cast threw InvalidCastException on it.
+                if (!(clipToken is JObject cd))
+                {
+                    diagnostics.AddWarning("CLIP_NOT_AN_OBJECT", "A clips entry is not an object - skipped.", null, new[] { "Each clip must be an object with a 'name'." });
+                    continue;
+                }
+
                 string clipName = cd["name"]?.ToString() ?? "";
                 string clipPath = cd["path"]?.ToString() ?? "";
                 var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(

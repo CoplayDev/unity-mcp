@@ -147,7 +147,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // check below never sees it: the rects simply land outside the texture and Unity
             // drops them while the call reports success. Measured on 6000.4.4f1 with
             // frame_height=4096 on a 16px-tall sheet.
-            if (cols * frameW > texW || rows * frameH > texH)
+            // Three ways a grid fails to fit, and only the first is obvious. Integer division
+            // can drive a DERIVED frame size to zero - 64 columns across 32 pixels gives 0-wide
+            // frames - and the product is then 0, which passes any bounds test while the
+            // metadata is degenerate: measured, 64 zero-width sprites reported as success. And
+            // the product itself is computed in long, because two large caller-supplied values
+            // wrap in 32-bit arithmetic and slip under the comparison.
+            if (frameW <= 0 || frameH <= 0
+                || (long)cols * frameW > texW || (long)rows * frameH > texH)
             {
                 diagnostics.AddError(
                     "SLICE_OUT_OF_BOUNDS",

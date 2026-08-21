@@ -369,6 +369,64 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SliceSheet_MoreColumnsThanPixels_IsRefused()
+        {
+            // 64 columns across 32 pixels derives a 0-wide frame. The bounds product is then
+            // 0, which passes any "does it fit" test, and 64 degenerate rects were written
+            // with the call reporting success.
+            string path = CreateSheet("degenerate_w", 2, 1);   // 32x16
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path, ["cols"] = 64 });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
+            Assert.AreEqual(0, SpritesOf(path).Length, "no degenerate frame may be written");
+        }
+
+        [Test]
+        public void SliceSheet_MoreRowsThanPixels_IsRefused()
+        {
+            string path = CreateSheet("degenerate_h", 2, 1);   // 32x16
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 2, ["rows"] = 32 });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
+        }
+
+        [Test]
+        public void SliceSheet_GridProductThatOverflowsInt_IsStillRefused()
+        {
+            // 65536 * 65536 wraps to 0 in unchecked 32-bit arithmetic and slipped under the
+            // comparison; the product is computed in long for that reason.
+            string path = CreateSheet("overflow", 2, 1);
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 65536, ["frame_width"] = 65536 });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+        }
+
+        [Test]
+        public void SetupClips_ClipEntryThatIsNotAnObject_IsSkipped()
+        {
+            // The Python surface forwards these unchanged - measured - and the typed foreach
+            // cast threw InvalidCastException on them.
+            string path = CreateSheet("nonobj", 4, 1);
+            Slice(path, 4, 1);
+
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = Run(new JObject
+            {
+                ["action"] = "setup_clips",
+                ["path"] = path,
+                ["clips"] = new JArray { "not_an_object", 7 },
+                ["output_dir"] = TempRoot,
+            }), "a malformed clips entry must come back as a diagnostic, not an exception");
+
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_NOT_AN_OBJECT"));
+        }
+
+        [Test]
         public void SliceSheet_ReslicingWithADifferentGrid_ReplacesTheOldFrames()
         {
             string path = CreateSheet("reslice", 4, 2);
