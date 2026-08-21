@@ -1245,6 +1245,8 @@ namespace MCPForUnityTests.Editor.Tools
             // 128x128 cut into 1px frames is 16,384 entries. It fits inside the texture, so
             // every bounds check above passes; what stops it is the frame ceiling.
             string path = CreateSheet("huge", 8, 8);   // 128x128
+            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+
             var result = Run(new JObject
             {
                 ["action"] = "slice_sheet",
@@ -1256,6 +1258,11 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_TOO_MANY_FRAMES"));
             Assert.AreEqual(0, SpritesOf(path).Length, "nothing may be written past the limit");
+            // Every refusal after the Sprite conversion owes a RestoreTextureType call, and
+            // that obligation is carried by whoever adds the next early return rather than by
+            // the code. This assertion is what makes a forgotten one fail loudly.
+            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
+                "a refused request must not leave the texture converted behind it");
         }
 
         // =====================================================================
