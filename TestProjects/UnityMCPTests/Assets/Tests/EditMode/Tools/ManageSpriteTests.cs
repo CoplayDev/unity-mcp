@@ -356,6 +356,121 @@ namespace MCPForUnityTests.Editor.Tools
                 "it still has to say which asset it could not read");
         }
 
+        [Test]
+        public void SetupClips_NonBooleanLoop_IsRefusedRatherThanConverted()
+        {
+            string path = CreateSheet("cliploop", 4, 2);
+            Slice(path, 4, 2);
+            var clips = OneClip("walk", 0, 3);
+            ((JObject)clips[0])["loop"] = "maybe";
+
+            // Measured 2026-08-21: this raised an uncaught FormatException out of the tool,
+            // and `loop: 2` was accepted silently. loop is the one flag with no type above
+            // C# - it lives inside the untyped `clips` array.
+            var result = SetupClips(path, clips);
+
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_LOOP"));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+        }
+
+        [TestCase("cols")]
+        [TestCase("rows")]
+        [TestCase("frame_width")]
+        [TestCase("frame_height")]
+        public void SliceSheet_GridValueTooLargeForAnInt_IsRefusedNotThrown(string key)
+        {
+            string path = CreateSheet($"gridovf{key}", 4, 2);
+            var request = new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                        ["cols"] = 4, ["rows"] = 2 };
+            request[key] = 2147483648L;
+
+            // Measured 2026-08-21, before the guard: all four raised an uncaught
+            // OverflowException. Nothing between here and the bridge catches, so the tool
+            // failed at the transport instead of answering - reaching the assertions at
+            // all is half of what this test checks.
+            var result = Run(request);
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            // "32-bit", not just the key name: if the conversion wrapped instead of
+            // refusing, cols would land on the "either cols or frame_width" message, which
+            // also contains the key - measured, the weaker assertion passed the mutation.
+            Assert.That(ErrorText(result), Does.Contain(key).And.Contain("32-bit"));
+        }
+
+        [Test]
+        public void SliceSheet_FractionalGridValue_IsRefusedRatherThanRounded()
+        {
+            string path = CreateSheet("gridfrac", 4, 2);
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 2.7, ["rows"] = 2 });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("cols"));
+        }
+
+        [TestCase("start_frame")]
+        [TestCase("end_frame")]
+        public void SetupClips_FrameIndexTooLargeForAnInt_IsRefusedNotThrown(string key)
+        {
+            string path = CreateSheet($"clipovf{key}", 4, 2);
+            Slice(path, 4, 2);
+            var clip = new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 3 };
+            clip[key] = 2147483648L;
+
+            var result = SetupClips(path, new JArray { clip });
+
+            // The clip is skipped with a named diagnostic rather than taking the whole
+            // call down; before the guard this threw out of the tool entirely.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
+        }
+
+        [Test]
+        public void SetupClips_FractionalStartFrame_IsRefusedRatherThanRounded()
+        {
+            string path = CreateSheet("clipfrac", 4, 2);
+            Slice(path, 4, 2);
+            var clips = OneClip("walk", 0, 5);
+            ((JObject)clips[0])["start_frame"] = 2.7;
+
+            var result = SetupClips(path, clips);
+
+            // Measured before the guard: this rounded to 3 and wrote a clip, reporting
+            // success. A caller asking for a frame index that does not exist got an asset.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+        }
+
+        [Test]
+        public void SetupClips_NaNFps_IsRefusedRatherThanWrittenIntoTheClip()
+        {
+            string path = CreateSheet("clipnan", 4, 2);
+            Slice(path, 4, 2);
+            var clips = OneClip("walk", 0, 5);
+            ((JObject)clips[0])["fps"] = double.NaN;
+
+            var result = SetupClips(path, clips);
+
+            // NaN is not greater than 0 and not less than or equal to 0, so the existing
+            // `fps <= 0f` guard let it through and the clip was written with NaN keyframe
+            // times - measured, and reported as a success.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_FPS"));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+        }
+
+        [Test]
+        public void SetupClips_EndFramePastTheLastSprite_IsRefusedRatherThanTruncated()
+        {
+            string path = CreateSheet("clippast", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = SetupClips(path, OneClip("walk", 0, 99));
+
+            // Skip/Take clamps silently, so this used to produce an eight-frame clip for a
+            // hundred-frame request and call it a success.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+        }
+
         [TestCase("page_size")]
         [TestCase("cursor")]
         public void GetInfo_PagingValueTooLargeForAnInt_IsRefusedNotThrown(string key)
@@ -373,7 +488,10 @@ namespace MCPForUnityTests.Editor.Tools
             var result = Run(request);
 
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(ErrorText(result), Does.Contain(key));
+            // Same reason as the grid case: a wrapped value is still refused, but by the
+            // 1..4096 range guard, whose message also names the key. Only this phrase
+            // distinguishes the conversion refusing from something downstream refusing.
+            Assert.That(ErrorText(result), Does.Contain(key).And.Contain("32-bit"));
         }
 
         [Test]
@@ -842,7 +960,11 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = SetupClips(path, OneClip("walk", 90, 99));
             Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_EMPTY"));
+            // CLIP_BAD_RANGE, not CLIP_EMPTY: the range is now refused for naming frames
+            // that do not exist, before it can produce an empty selection. The behaviour
+            // this test is named for - warn, write nothing - is unchanged; only the
+            // diagnostic moved from describing the result to naming the wrong input.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
             Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
         }
 
@@ -1041,6 +1163,10 @@ namespace MCPForUnityTests.Editor.Tools
                 new JObject { ["name"] = "walk", ["path"] = $"{TempRoot}/missing.anim" },
             });
             Assert.IsFalse(result.Value<bool>("success"));
+            // Not just success=false: Newtonsoft reads an absent "success" as false too,
+            // so a response of `{ }` would satisfy that alone and this test is named for
+            // the explanation, not the failure.
+            Assert.That(ErrorText(result), Is.Not.Empty);
         }
 
         [Test]

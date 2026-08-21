@@ -78,8 +78,28 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     continue;
                 }
 
-                int startFrame = clipDef["start_frame"]?.ToObject<int>() ?? 0;
-                int endFrame   = clipDef["end_frame"]?.ToObject<int>()   ?? allSprites.Length - 1;
+                // Through SpriteParams, not ToObject: measured 2026-08-21, start_frame at
+                // 2147483648 raised an OverflowException that left the tool entirely, and
+                // start_frame 2.7 was silently rounded to 3 and written into a clip. The
+                // range check below only ever saw values that survived the conversion.
+                // Sequential, not chained with ||: a short-circuited call leaves its out
+                // parameter unassigned and the second value is used below.
+                int endFrame = allSprites.Length - 1;
+                bool rangeOk = SpriteParams.TryReadWholeNumber(clipDef, "start_frame", 0, out int startFrame, out string frameError);
+                if (rangeOk) rangeOk = SpriteParams.TryReadWholeNumber(clipDef, "end_frame", allSprites.Length - 1, out endFrame, out frameError);
+                if (!rangeOk)
+                {
+                    diagnostics.AddWarning("CLIP_BAD_RANGE", $"Clip '{clipName}': {frameError} - skipped.", null, new[] { "start_frame and end_frame must be whole numbers within a sprite index." });
+                    continue;
+                }
+                if (endFrame > allSprites.Length - 1)
+                {
+                    // Skip/Take clamps silently, so an end_frame past the last sprite produced
+                    // a shorter clip and reported success - the caller asked for frames that
+                    // do not exist and had no way to notice they were missing.
+                    diagnostics.AddWarning("CLIP_BAD_RANGE", $"Clip '{clipName}': end_frame {endFrame} is past the last sprite index {allSprites.Length - 1} - skipped.", null, new[] { $"This sheet has {allSprites.Length} sprites, so end_frame must be at most {allSprites.Length - 1}." });
+                    continue;
+                }
                 if (startFrame < 0 || endFrame < startFrame)
                 {
                     // Enumerable.Skip yields everything for a negative count, so start_frame=-2
@@ -89,7 +109,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     diagnostics.AddWarning("CLIP_BAD_RANGE", $"Clip '{clipName}': frame range [{startFrame},{endFrame}] is invalid - skipped.", null, new[] { "start_frame must be 0 or more, and end_frame must not be below start_frame." });
                     continue;
                 }
-                float fps      = clipDef["fps"]?.ToObject<float>()       ?? 12f;
+                // NaN passes every comparison, so `fps <= 0f` was false for it and a clip
+                // was written whose keyframe times were all NaN - measured, and reported as
+                // a success. TryReadFiniteFloat refuses NaN and both infinities by name.
+                if (!SpriteParams.TryReadFiniteFloat(clipDef, "fps", 12f, out float fps, out string fpsError))
+                {
+                    diagnostics.AddWarning("CLIP_BAD_FPS", $"Clip '{clipName}': {fpsError} - skipped.", null, new[] { "Leave fps out to use the default of 12." });
+                    continue;
+                }
                 if (fps <= 0f)
                 {
                     // Keyframe times are i / fps, so a non-positive rate writes a clip whose
@@ -99,7 +126,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 }
 
                 var entry      = SpriteNamingDetector.Detect(clipName);
-                bool loop      = clipDef["loop"]?.ToObject<bool?>() ?? entry.Loop;
+                if (!SpriteParams.TryReadBool(clipDef, "loop", entry.Loop, out bool loop, out string loopError))
+                {
+                    diagnostics.AddWarning("CLIP_BAD_LOOP", $"Clip '{clipName}': {loopError} - skipped.", null, new[] { "Leave loop out to let the clip name decide." });
+                    continue;
+                }
 
                 var frameSprites = allSprites.Skip(startFrame).Take(endFrame - startFrame + 1).ToArray();
                 if (frameSprites.Length == 0)

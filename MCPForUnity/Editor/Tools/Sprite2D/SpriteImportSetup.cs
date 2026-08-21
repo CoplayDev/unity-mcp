@@ -39,20 +39,24 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // GENERATES at 4096 frames, but this reads what is already on the asset, and a
             // sheet sliced by hand in the Sprite Editor carries as many entries as someone
             // drew - the ceiling on the writing end never bounded the reading end.
-            // 512 is the default page because it clears any grid a caller would slice here
-            // (a 32x16 sheet fits whole), so the common case gets one page, no cursor, and
-            // never learns paging exists. The maximum is what stops page_size from being
-            // used to ask for the unbounded result again.
+            // 512 is the default page because it clears the grids callers actually slice -
+            // a 32x16 sheet fits whole - not because it clears every grid this tool can
+            // produce: slice_sheet allows up to MaxFrames, so a sheet between 513 and 4096
+            // frames pages like any other and next_cursor is not optional for it. The
+            // maximum stops page_size being used to ask for the unbounded result again.
+            // Changing either number means changing the page_size description in
+            // Server/src/services/tools/manage_sprite.py, which is the copy the generated
+            // reference publishes. These two are the enforcement; that one is the promise.
             const int DefaultSlicePageSize = 512;
             const int MaxSlicePageSize = 4096;
 
-            if (!TryReadWholeNumber(@params, "page_size", DefaultSlicePageSize, out int pageSize, out string paramError))
+            if (!SpriteParams.TryReadWholeNumber(@params, "page_size", DefaultSlicePageSize, out int pageSize, out string paramError))
                 return new ErrorResponse(paramError);
             if (pageSize < 1 || pageSize > MaxSlicePageSize)
                 return new ErrorResponse($"'page_size' must be between 1 and {MaxSlicePageSize}; got {pageSize}.");
 
             int totalSlices = importer.spritesheet.Length;
-            if (!TryReadWholeNumber(@params, "cursor", 0, out int cursor, out paramError))
+            if (!SpriteParams.TryReadWholeNumber(@params, "cursor", 0, out int cursor, out paramError))
                 return new ErrorResponse(paramError);
             // Skip yields every element for a negative count rather than throwing, so a
             // negative cursor would silently return page one and call it a success - the
@@ -178,55 +182,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             return result;
         }
 
-        /// <summary>
-        /// Reads an optional whole-number parameter without throwing and without rounding.
-        /// ToObject&lt;int&gt; does both, measured 2026-08-21: `page_size: 2147483648` raised
-        /// an OverflowException that nothing in ManageSprite catches, so it left the tool as
-        /// a transport failure rather than a named refusal; and `page_size: 2.7` was silently
-        /// rounded to 3 and answered with three slices, which is worse - the caller asked for
-        /// something this tool cannot do and got a success.
-        /// </summary>
-        private static bool TryReadWholeNumber(JObject @params, string key, int fallback,
-                                               out int value, out string error)
-        {
-            value = fallback;
-            error = null;
-
-            JToken token = @params[key];
-            // An explicit JSON null arrives as a JValue, not a C# null, so it has to be
-            // named here: it means "unset", which is the default.
-            if (token == null || token.Type == JTokenType.Null)
-                return true;
-
-            if (token.Type != JTokenType.Integer)
-            {
-                error = $"'{key}' must be a whole number; got {token.Type.ToString().ToLowerInvariant()}.";
-                return false;
-            }
-
-            long raw;
-            try
-            {
-                raw = token.Value<long>();
-            }
-            catch (Exception)
-            {
-                // An integer too large for long parses as a BigInteger, still typed Integer,
-                // and the read throws. That is out of range by definition.
-                error = $"'{key}' is out of range for a 32-bit integer.";
-                return false;
-            }
-
-            if (raw < int.MinValue || raw > int.MaxValue)
-            {
-                error = $"'{key}' must be between {int.MinValue} and {int.MaxValue}; got {raw}.";
-                return false;
-            }
-
-            value = (int)raw;
-            return true;
-        }
-
         /// <summary>Undoes the conversion above when the request is refused after it.</summary>
         private static void RestoreTextureType(TextureImporter importer, TextureImporterType previous)
         {
@@ -253,10 +208,22 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             // These arguments need no texture, so they are checked before the conversion below:
             // a refused request used to return an error with the texture already turned into a Sprite.
-            int cols = @params["cols"]?.ToObject<int>() ?? 0;
-            int rows = @params["rows"]?.ToObject<int>() ?? 1;
-            int frameW = @params["frame_width"]?.ToObject<int>() ?? 0;
-            int frameH = @params["frame_height"]?.ToObject<int>() ?? 0;
+            // Through SpriteParams, not ToObject: measured 2026-08-21, each of these four
+            // raised an uncaught OverflowException at 2147483648 and each silently rounded
+            // a fractional value. The same class was closed for page_size first and left
+            // open here, which is why the reader is now shared rather than local.
+            // Sequential rather than chained with ||: a short-circuited call leaves its out
+            // parameter unassigned, so the chain would not compile once the values are used.
+            int rows = 1, frameW = 0, frameH = 0;
+            bool gridOk = SpriteParams.TryReadWholeNumber(@params, "cols", 0, out int cols, out string gridError);
+            if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "rows", 1, out rows, out gridError);
+            if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "frame_width", 0, out frameW, out gridError);
+            if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "frame_height", 0, out frameH, out gridError);
+            if (!gridOk)
+            {
+                diagnostics.AddError("SLICE_BAD_PARAM", gridError, null, new string[0]);
+                return new { success = false, message = gridError, diagnostics = diagnostics.Build() };
+            }
 
             if (cols <= 0 && frameW <= 0)
                 return new ErrorResponse("Either 'cols' or 'frame_width' is required.");
