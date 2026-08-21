@@ -30,7 +30,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new ErrorResponse("'path' is required.");
 
             path = AssetPathUtility.SanitizeAssetPath(path);
-            if (!AssetDatabase.AssetPathExists(path))
+            // Not AssetDatabase.AssetPathExists: that landed in Unity 2023.1 and package.json
+            // declares 2021.3, so it does not compile on the lower half of the support range -
+            // TestProjects/UnityMCPTests is pinned to 2021.3.45f2, which is where CI would have
+            // caught it. GetMainAssetTypeAtPath answers the same question on every version,
+            // which is why ManageAsset.cs uses it; no shim is needed when one API spans the range.
+            if (AssetDatabase.GetMainAssetTypeAtPath(path) == null)
                 return new ErrorResponse($"Sprite not found: '{path}'");
 
             var diagnostics = new SpriteDiagnosticBuilder();
