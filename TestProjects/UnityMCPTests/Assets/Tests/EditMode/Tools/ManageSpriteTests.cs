@@ -1185,5 +1185,23 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result.Value<bool>("success"));
             Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_PATH"));
         }
+
+        // =====================================================================
+        // Bounds
+        // =====================================================================
+
+        [Test]
+        public void SetupClips_NegativeStartFrame_IsRefusedRatherThanShiftedToZero()
+        {
+            // Enumerable.Skip ignores a negative count, so [-2,3] used to select frames 0..5
+            // and report success with a clip the caller never asked for.
+            string path = CreateSheet("negrange", 4, 1);
+            Slice(path, 4, 1);
+
+            var result = SetupClips(path, OneClip("walk", -2, 3));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
+            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
+        }
     }
 }

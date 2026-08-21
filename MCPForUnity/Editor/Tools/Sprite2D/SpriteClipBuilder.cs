@@ -80,6 +80,15 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
                 int startFrame = clipDef["start_frame"]?.ToObject<int>() ?? 0;
                 int endFrame   = clipDef["end_frame"]?.ToObject<int>()   ?? allSprites.Length - 1;
+                if (startFrame < 0 || endFrame < startFrame)
+                {
+                    // Enumerable.Skip yields everything for a negative count, so start_frame=-2
+                    // with end_frame=3 wrote frames 0..5 and called it a success. A reversed
+                    // range already lands on CLIP_EMPTY, but naming it here says which input
+                    // was wrong instead of which result was empty.
+                    diagnostics.AddWarning("CLIP_BAD_RANGE", $"Clip '{clipName}': frame range [{startFrame},{endFrame}] is invalid - skipped.", null, new[] { "start_frame must be 0 or more, and end_frame must not be below start_frame." });
+                    continue;
+                }
                 float fps      = clipDef["fps"]?.ToObject<float>()       ?? 12f;
                 if (fps <= 0f)
                 {
