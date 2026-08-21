@@ -70,7 +70,7 @@ namespace MCPForUnityTests.Editor.Tools
         /// A square PNG of incompressible noise, used to exceed the inline-image ceiling.
         /// Written through the same import path as CreateSheet.
         /// </summary>
-        private static string CreateNoiseSheet(string name, int side)
+        private static string CreateNoiseSheet(string name, int side, bool assertOverCeiling = true)
         {
             var tex = new Texture2D(side, side, TextureFormat.RGBA32, false);
             var pixels = new Color32[side * side];
@@ -89,8 +89,13 @@ namespace MCPForUnityTests.Editor.Tools
             File.WriteAllBytes(sysPath, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
 
-            Assert.Greater(new FileInfo(sysPath).Length, 4 * 1024 * 1024,
-                "fixture: the noise sheet must exceed the inline-image ceiling");
+            // Both callers depend on where this lands relative to the 4 MB ceiling in
+            // SpriteImportSetup, so the fixture asserts the side it was asked for rather
+            // than trusting the compressor. Changing that ceiling breaks these two lines
+            // loudly, which is the intent.
+            if (assertOverCeiling)
+                Assert.Greater(new FileInfo(sysPath).Length, 4 * 1024 * 1024,
+                    "fixture: the noise sheet must exceed the inline-image ceiling");
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
             return assetPath;
         }
@@ -1306,5 +1311,29 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(2048, result.Value<int>("width"));
             Assert.AreEqual(2048, result.Value<int>("height"));
         }
+        [Test]
+        public void GetInfo_ImageJustUnderTheSourceLimit_StillDoesNotBlowThePayloadLimit()
+        {
+            // The ceiling is checked against the file on disk, but what travels in the
+            // response is base64 - 4 bytes out for every 3 in. A source comfortably under
+            // the limit therefore still produces a payload above it.
+            string path = CreateNoiseSheet("midsize", 1024, assertOverCeiling: false);
+            long sourceBytes = new FileInfo(Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName, path)).Length;
+            Assert.Less(sourceBytes, 4 * 1024 * 1024,
+                "fixture: this sheet must pass the source-size check to test what happens after it");
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            string b64 = result.Value<string>("image_base64");
+            if (b64 != null)
+                Assert.LessOrEqual(System.Text.Encoding.UTF8.GetByteCount(b64), 4 * 1024 * 1024,
+                    $"inline payload is {System.Text.Encoding.UTF8.GetByteCount(b64)} bytes " +
+                    $"from a {sourceBytes}-byte source; the bound must cover what is sent, not what was read");
+            else
+                Assert.IsNotEmpty(result.Value<string>("image_omitted_reason") ?? "",
+                    "an omitted image must say why");
+        }
+
     }
 }

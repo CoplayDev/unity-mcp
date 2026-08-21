@@ -50,34 +50,58 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // across cursors is not an image any client can reassemble. Over the ceiling the
             // payload is dropped and the reason is named - width, height and the slice list
             // still answer everything the caller needs to compute a grid.
-            const int MaxImageBytes = 4 * 1024 * 1024;
+            // 4 MB because that is a payload a single tool response can carry without the
+            // transport or the model's context becoming the limiting factor; it is a budget,
+            // not a measured protocol boundary, and moving it breaks the two fixture
+            // assertions in ManageSpriteTests on purpose.
+            // The ceiling is applied to the ENCODED length, not the file size. base64 emits
+            // 4 characters per 3 bytes, so bounding the source let a 3.67 MB sheet through as
+            // a 4.89 MB payload - measured, and the reason this arithmetic is written out.
+            const int MaxInlinePayloadBytes = 4 * 1024 * 1024;
             string imageBase64 = null;
             string imageOmittedReason = null;
             try
             {
-                string fullPath = Path.Combine(
-                    Application.dataPath.Replace("/Assets", ""),
-                    path
-                );
-                if (File.Exists(fullPath))
+                // Not Application.dataPath.Replace("/Assets", ""): Replace removes EVERY
+                // occurrence, so a project under a directory like /work/AssetsLab lost the
+                // wrong segment and the lookup silently missed a file that was really there.
+                string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+                string fullPath = projectRoot != null ? Path.Combine(projectRoot, path) : null;
+                if (fullPath == null)
                 {
+                    imageOmittedReason = "The project root could not be resolved from Application.dataPath.";
+                }
+                else if (!File.Exists(fullPath))
+                {
+                    imageOmittedReason = $"No file on disk at '{fullPath}'.";
+                }
+                else
+                {
+                    string ext = Path.GetExtension(path).ToLowerInvariant();
+                    string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
+                    string prefix = $"data:{mime};base64,";
                     long size = new FileInfo(fullPath).Length;
-                    if (size > MaxImageBytes)
+                    long encoded = 4L * ((size + 2) / 3) + prefix.Length;
+                    if (encoded > MaxInlinePayloadBytes)
                     {
                         imageOmittedReason =
-                            $"The source file is {size} bytes, above the {MaxImageBytes}-byte inline limit. " +
-                            "Read the file directly if the image itself is needed.";
+                            $"The {size}-byte source encodes to {encoded} base64 bytes, above the " +
+                            $"{MaxInlinePayloadBytes}-byte inline limit. Read the file directly if the " +
+                            "image itself is needed.";
                     }
                     else
                     {
-                        byte[] bytes = File.ReadAllBytes(fullPath);
-                        string ext = Path.GetExtension(path).ToLowerInvariant();
-                        string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
-                        imageBase64 = $"data:{mime};base64," + Convert.ToBase64String(bytes);
+                        imageBase64 = prefix + Convert.ToBase64String(File.ReadAllBytes(fullPath));
                     }
                 }
             }
-            catch { /* The base64 payload is optional; leaving it null is a valid answer. */ }
+            catch (Exception ex)
+            {
+                // The payload is optional, but a swallowed failure and a deliberate omission
+                // are different answers and the response now has a field that can tell them
+                // apart. Leaving it null was the whole complaint about `catch {}`.
+                imageOmittedReason = $"The image could not be read: {ex.GetType().Name}: {ex.Message}";
+            }
 
             var result = new
             {
