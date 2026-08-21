@@ -75,6 +75,12 @@ class TestManageSpriteValidation:
         assert result["success"] is False
         assert "path" in result["message"]
 
+    def test_clip_name_with_a_separator_is_refused(self):
+        result = self._call(action="setup_clips", path="Assets/hero.png",
+                            clips=[{"name": "nested/walk"}])
+        assert result["success"] is False
+        assert "separator" in result["message"]
+
     def test_setup_controller_requires_controller_path(self):
         result = self._call(action="setup_controller", clips=[{"name": "walk", "path": "a.anim"}])
         assert result["success"] is False

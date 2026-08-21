@@ -517,6 +517,68 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SetupClips_ClipNameWithASeparator_IsSkipped()
+        {
+            // A separator is not traversal, so the '..' check lets it through - and the name
+            // then selects a path in a descendant directory instead of a leaf in output_dir.
+            // The tool's own CLIP_BAD_NAME hint already tells callers to remove separators.
+            string path = CreateSheet("sepname", 4, 1);
+            Slice(path, 4, 1);
+
+            var result = SetupClips(path, OneClip("nested/walk", 0, 3));
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/nested/walk.anim"),
+                "a clip name must not choose the directory it lands in");
+        }
+
+        [Test]
+        public void SetupClips_ExistingClipWithoutOverwrite_IsLeftAlone()
+        {
+            // setup_controller refuses an existing controller unless overwrite is set. Clips
+            // took the opposite policy and deleted whatever sat at the composed path, so an
+            // unrelated clip that merely shared a name was destroyed by a request that never
+            // asked for a replacement.
+            string path = CreateSheet("existing", 4, 1);
+            Slice(path, 4, 1);
+
+            var sentinel = new AnimationClip { frameRate = 99f };
+            AssetDatabase.CreateAsset(sentinel, $"{TempRoot}/walk.anim");
+            AssetDatabase.SaveAssets();
+
+            var result = SetupClips(path, OneClip("walk", 0, 3));
+
+            var after = AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim");
+            Assert.IsNotNull(after, "the existing clip must survive");
+            Assert.AreEqual(99f, after.frameRate, "the existing clip must not be replaced");
+            Assert.AreEqual(0, result.Value<int>("clip_count"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_EXISTS"));
+        }
+
+        [Test]
+        public void SetupClips_ExistingClipWithOverwrite_IsReplaced()
+        {
+            string path = CreateSheet("existing2", 4, 1);
+            Slice(path, 4, 1);
+
+            var sentinel = new AnimationClip { frameRate = 99f };
+            AssetDatabase.CreateAsset(sentinel, $"{TempRoot}/walk.anim");
+            AssetDatabase.SaveAssets();
+
+            var result = Run(new JObject
+            {
+                ["action"] = "setup_clips",
+                ["path"] = path,
+                ["clips"] = OneClip("walk", 0, 3),
+                ["output_dir"] = TempRoot,
+                ["overwrite"] = true,
+            });
+
+            Assert.AreEqual(1, result.Value<int>("clip_count"));
+            var after = AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim");
+            Assert.AreEqual(12f, after.frameRate, "an authorised overwrite must actually replace it");
+        }
+
+        [Test]
         public void SetupClips_ZeroFps_IsSkippedInsteadOfWritingInfiniteKeyTimes()
         {
             string path = CreateSheet("zerofps", 4, 1);
@@ -722,6 +784,131 @@ namespace MCPForUnityTests.Editor.Tools
             var clips = BuildClips("overwrite", "idle", "walk");
             Assert.IsTrue(SetupController(clips).Value<bool>("success"));
             Assert.IsTrue(SetupController(clips, overwrite: true).Value<bool>("success"));
+        }
+
+        // =====================================================================
+        // Audit verification - each of these asserts the behaviour a finding says
+        // is missing. Red here means the finding reproduces.
+        // =====================================================================
+
+        [Test]
+        public void AuditS2_OverwriteThatCannotBuildAReplacement_KeepsTheOldController()
+        {
+            var clips = BuildClips("s2", "idle", "walk");
+            Assert.IsTrue(SetupController(clips).Value<bool>("success"));
+            string ctrl = $"{TempRoot}/Hero.controller";
+            var before = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrl);
+            Assert.IsNotNull(before);
+
+            // Every replacement clip is unloadable, so the rebuild cannot succeed.
+            var doomed = new JArray {
+                new JObject { ["name"] = "idle", ["path"] = $"{TempRoot}/does_not_exist.anim" },
+            };
+            Run(new JObject
+            {
+                ["action"] = "setup_controller",
+                ["clips"] = doomed,
+                ["controller_path"] = ctrl,
+                ["overwrite"] = true,
+            });
+
+            Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrl),
+                "a failed rebuild must not leave the caller without the controller they had");
+        }
+
+        [Test]
+        public void AuditS5_ControllerRefusal_StopsBeforeTouchingTheScene()
+        {
+            string path = CreateSheet("s5", 4, 1);
+            var go = new GameObject("SpriteTest_S5");
+            try
+            {
+                string ctrl = $"{TempRoot}/S5.controller";
+                Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = ctrl });
+
+                // Second run: the controller exists and overwrite is not set, so the
+                // controller step fails - and a failed step must not fall through.
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = ctrl,
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S5" });
+
+                Assert.IsFalse(result.Value<bool>("success"));
+                Assert.AreEqual("setup_controller", result.Value<string>("step"),
+                    "the response must name the step that failed");
+                Assert.IsNull(go.GetComponent<Animator>(),
+                    "a refused controller step must not go on to modify the scene");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void AuditS6_RequestedSceneTargetMissing_IsNotReportedAsSuccess()
+        {
+            string path = CreateSheet("s6", 4, 1);
+            var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                              ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S6.controller",
+                              ["add_to_scene"] = true, ["scene_target"] = "NoSuchObject" });
+
+            Assert.IsFalse(result.Value<bool>("success"),
+                "an attachment that was asked for and did not happen is not a success");
+        }
+
+        [Test]
+        public void AuditS7_ControllerPathWithoutExtension_StillReachesTheSceneObject()
+        {
+            string path = CreateSheet("s7", 4, 1);
+            var go = new GameObject("SpriteTest_S7");
+            try
+            {
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot,
+                                  ["controller_path"] = $"{TempRoot}/S7",   // no .controller suffix
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S7" });
+
+                // Count the components rather than null-checking the result of GetComponent:
+                // a missing component compares equal to null but is not a null reference, so
+                // Assert.IsNotNull passes and the next member access throws instead of failing.
+                Assert.AreEqual(1, go.GetComponents<Animator>().Length,
+                    "the object should have received an Animator; result was " + result.ToString(Newtonsoft.Json.Formatting.None));
+                Assert.IsTrue(go.GetComponents<Animator>()[0].runtimeAnimatorController != null,
+                    "the suffix the builder added must not lose the controller on the way to the scene");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void AuditS4_RefusedClip_IsNotCountedAsCreated()
+        {
+            string path = CreateSheet("s4", 6, 1);
+            var result = Run(new JObject
+            {
+                ["action"] = "full_setup", ["path"] = path, ["cols"] = 6,
+                ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S4.controller",
+                ["clips"] = new JArray {
+                    new JObject { ["name"] = "idle",   ["start_frame"] = 0, ["end_frame"] = 1 },
+                    new JObject { ["name"] = "attack", ["start_frame"] = 2, ["end_frame"] = 3, ["fps"] = 0 },
+                    new JObject { ["name"] = "walk",   ["start_frame"] = 4, ["end_frame"] = 5 },
+                },
+            });
+
+            int onDisk = AssetDatabase.FindAssets("t:AnimationClip", new[] { TempRoot }).Length;
+            Assert.AreEqual(onDisk, result.Value<int>("clip_count"),
+                "clip_count must count the clips that exist, not the ones that were asked for");
+        }
+
+        [Test]
+        public void AuditS1_RowsRejected_LeavesTheTextureTypeAlone()
+        {
+            string path = CreateSheet("s1", 4, 1);
+            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+
+            var result = Slice(path, 4, 0);   // refused: rows must be >= 1
+            Assert.IsFalse(result.Value<bool>("success"));
+
+            var after = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+            Assert.AreEqual(before, after,
+                "a refused request must not leave the texture converted behind it");
         }
 
         // =====================================================================

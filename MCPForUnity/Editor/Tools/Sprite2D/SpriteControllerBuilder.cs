@@ -35,6 +35,23 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
 
+            var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
+            foreach (JObject cd in clipsToken)
+            {
+                string clipName = cd["name"]?.ToString() ?? "";
+                string clipPath = cd["path"]?.ToString() ?? "";
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                    AssetPathUtility.SanitizeAssetPath(clipPath));
+                if (clip == null)
+                { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped.", null, new string[0]); continue; }
+                entries.Add((SpriteNamingDetector.Detect(clipName), clip));
+            }
+
+            if (entries.Count == 0)
+                return new ErrorResponse("No valid clips loaded.");
+
+            // The existing controller is only removed once the replacement is known to be
+            // buildable: deleting first left a failed rebuild with no controller at all.
             if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
             {
                 if (!overwrite)
@@ -53,21 +70,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             string dir = Path.GetDirectoryName(controllerPath)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(dir) && !AssetDatabase.IsValidFolder(dir))
                 CreateFolders(dir);
-
-            var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
-            foreach (JObject cd in clipsToken)
-            {
-                string clipName = cd["name"]?.ToString() ?? "";
-                string clipPath = cd["path"]?.ToString() ?? "";
-                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(
-                    AssetPathUtility.SanitizeAssetPath(clipPath));
-                if (clip == null)
-                { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped.", null, new string[0]); continue; }
-                entries.Add((SpriteNamingDetector.Detect(clipName), clip));
-            }
-
-            if (entries.Count == 0)
-                return new ErrorResponse("No valid clips loaded.");
 
             var complexity = SpriteNamingDetector.DecideComplexity(entries.Select(e => e.entry));
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);

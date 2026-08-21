@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         ///   path         - sprite texture asset path
         ///   clips        - [{name, start_frame, end_frame, fps (opt, def=12), loop (opt)}]
         ///   output_dir   - where the clips are written (default: the sprite's own folder)
+        ///   overwrite    - bool (default false); an existing clip is kept unless this is true
         /// </summary>
         public static object SetupClips(JObject @params, SpriteDiagnosticBuilder diagnostics)
         {
@@ -48,6 +49,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (!AssetDatabase.IsValidFolder(outputDir))
                 CreateFolders(outputDir);
 
+            bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
+
             var createdClips = new List<object>();
 
             foreach (JObject clipDef in clipsToken)
@@ -55,6 +58,15 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 string clipName = clipDef["name"]?.ToString();
                 if (string.IsNullOrEmpty(clipName))
                 { diagnostics.AddWarning("CLIP_NO_NAME", "Clip name is missing — skipped.", null, new[] { "Add a 'name' field to each clip definition." }); continue; }
+
+                // Measured: a name like "nested/walk" composes into a path under a folder that
+                // does not exist and AssetDatabase.CreateAsset throws an uncaught UnityException;
+                // where the folder happens to exist the clip is written outside output_dir instead.
+                if (clipName.Contains("/") || clipName.Contains("\\"))
+                {
+                    diagnostics.AddWarning("CLIP_BAD_NAME", $"Clip '{clipName}': the name cannot contain a path separator - skipped.", null, new[] { "Remove '..' and path separators from the clip name." });
+                    continue;
+                }
 
                 int startFrame = clipDef["start_frame"]?.ToObject<int>() ?? 0;
                 int endFrame   = clipDef["end_frame"]?.ToObject<int>()   ?? allSprites.Length - 1;
@@ -79,6 +91,27 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
                 if (frameSprites.Length <= 2)
                     diagnostics.AddWarning("LOW_FRAME_COUNT", $"Clip '{clipName}' has only {frameSprites.Length} frame(s) — animation may not be visible.", null, new string[0]);
+
+                // Both refusals below come before the clip is allocated: a `new AnimationClip`
+                // that never becomes an asset is a leaked UnityEngine.Object, not a collected one.
+                // The delete stays down next to CreateAsset, so nothing is destroyed until the
+                // replacement has actually been built.
+                string clipPath = AssetPathUtility.SanitizeAssetPath($"{outputDir}/{clipName}.anim");
+                if (clipPath == null)
+                {
+                    diagnostics.AddWarning("CLIP_BAD_NAME", $"Clip '{clipName}': the name cannot be used as a file name - skipped.", null, new[] { "Remove '..' and path separators from the clip name." });
+                    continue;
+                }
+
+                var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+                if (existing != null && !overwrite)
+                {
+                    // Measured: an unrelated clip already at this path was deleted and replaced by a
+                    // request that carried no overwrite field. The sibling controller builder refuses
+                    // instead, so clips follow the same policy: destruction needs authorisation.
+                    diagnostics.AddWarning("CLIP_EXISTS", $"Clip '{clipName}': an animation clip already exists at '{clipPath}' - skipped.", new { path = clipPath }, new[] { "Set overwrite=true to replace it.", "Choose a different clip name or output_dir." });
+                    continue;
+                }
 
                 var clip = new AnimationClip { frameRate = fps };
 
@@ -105,15 +138,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 settings.loopTime = loop;
                 AnimationUtility.SetAnimationClipSettings(clip, settings);
 
-                string clipPath = AssetPathUtility.SanitizeAssetPath($"{outputDir}/{clipName}.anim");
-                if (clipPath == null)
-                {
-                    diagnostics.AddWarning("CLIP_BAD_NAME", $"Clip '{clipName}': the name cannot be used as a file name - skipped.", null, new[] { "Remove '..' and path separators from the clip name." });
-                    continue;
-                }
-                var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
                 if (existing != null) AssetDatabase.DeleteAsset(clipPath);
-
                 AssetDatabase.CreateAsset(clip, clipPath);
 
                 createdClips.Add(new
@@ -140,24 +165,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         }
 
         // ── Internal helper ──────────────────────────────────────────────────
-
-        /// <summary>
-        /// For full_setup: returns the clip name to asset path mapping.
-        /// </summary>
-        internal static List<(string name, string path)> GetClipPaths(JArray clipsToken, string outputDir)
-        {
-            var result = new List<(string, string)>();
-            foreach (JObject cd in clipsToken)
-            {
-                string name = cd["name"]?.ToString();
-                if (string.IsNullOrEmpty(name)) continue;
-                // Must match the path SetupClips wrote, refusals included.
-                string clipPath = AssetPathUtility.SanitizeAssetPath($"{outputDir}/{name}.anim");
-                if (clipPath != null)
-                    result.Add((name, clipPath));
-            }
-            return result;
-        }
 
         internal static AnimationClip LoadClip(string clipPath) =>
             AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);

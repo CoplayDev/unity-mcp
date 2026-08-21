@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -65,11 +64,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 });
             }
 
+            bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
+
             var clipsParams = new JObject
             {
                 ["path"]       = path,
                 ["clips"]      = clipsToken,
                 ["output_dir"] = outputDir,
+                ["overwrite"]  = overwrite,
             };
             var clipResult = SpriteClipBuilder.SetupClips(clipsParams, diagnostics);
             if (clipResult is ErrorResponse)
@@ -81,14 +83,36 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             string controllerPath = @params["controller_path"]?.ToString()
                 ?? $"{outputDir}/{Path.GetFileNameWithoutExtension(path)}_Controller.controller";
-            bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
 
-            // Derive the paths from clipsToken directly - the builder's return value is an
-            // anonymous object, and parsing it back would be the long way round.
-            var clipPaths = SpriteClipBuilder.GetClipPaths(clipsToken, outputDir);
+            // The builder suffixes its own local copy, so keeping the raw string here made the
+            // scene step load '<dir>/S7' instead of '<dir>/S7.controller' and attach nothing.
+            controllerPath = AssetPathUtility.SanitizeAssetPath(controllerPath);
+            if (controllerPath == null)
+                return new { success = false, step = "setup_controller",
+                    error = "'controller_path' must stay under Assets/ and cannot contain '..'.",
+                    diagnostics = diagnostics.Build() };
+            if (!controllerPath.EndsWith(".controller"))
+                controllerPath += ".controller";
+
+            // Only the clips SetupClips really wrote may reach the controller: rebuilding the
+            // list from the request counted refused clips and fed the controller stale assets.
             var createdClips = new JArray();
-            foreach (var (cname, cpath) in clipPaths)
-                createdClips.Add(new JObject { ["name"] = cname, ["path"] = cpath });
+            var clipObj = AsJObject(clipResult);
+            if (clipObj == null)
+            {
+                diagnostics.AddError("CLIP_RESULT_UNREADABLE",
+                    "The clip step result could not be read back, so the created clips are unknown.",
+                    null, new[] { "Run setup_clips on its own to see which clips were created." });
+            }
+            else
+            {
+                foreach (var c in clipObj["clips"] as JArray ?? new JArray())
+                {
+                    string cpath = c["path"]?.ToString();
+                    if (!string.IsNullOrEmpty(cpath))
+                        createdClips.Add(new JObject { ["name"] = c["name"]?.ToString(), ["path"] = cpath });
+                }
+            }
 
             var ctrlParams = new JObject
             {
@@ -103,13 +127,26 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (ctrlResult is ErrorResponse)
                 return new { success = false, step = "setup_controller",
                     error = ((ErrorResponse)ctrlResult).Error, diagnostics = diagnostics.Build() };
+            // An existing-controller refusal arrives as an error diagnostic, not an ErrorResponse;
+            // without this the scene step went on to attach the OLD controller.
+            if (diagnostics.HasErrors)
+                return new { success = false, step = "setup_controller", diagnostics = diagnostics.Build() };
 
             // ── Step 4: Add to scene ───────────────────────────────────────────
 
             bool addToScene  = @params["add_to_scene"]?.ToObject<bool>() ?? false;
             string sceneTarget = @params["scene_target"]?.ToString();
 
-            if (addToScene && !string.IsNullOrEmpty(sceneTarget))
+            // An attachment that was asked for but did not happen is not a success, so both
+            // misses below are errors rather than a warning or nothing at all.
+            if (addToScene && string.IsNullOrEmpty(sceneTarget))
+            {
+                diagnostics.AddError("SCENE_TARGET_MISSING",
+                    "'add_to_scene' is true but 'scene_target' is empty.",
+                    null,
+                    new[] { "Pass 'scene_target' with the GameObject name.", "Set add_to_scene=false." });
+            }
+            else if (addToScene)
             {
                 var go = UnityEngine.GameObject.Find(sceneTarget);
                 if (go != null)
@@ -118,44 +155,65 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                         AssetPathUtility.SanitizeAssetPath(controllerPath));
                     if (controller != null)
                     {
-                        var animator = go.GetComponent<UnityEngine.Animator>()
-                            ?? go.AddComponent<UnityEngine.Animator>();
+                        // `??` compares references and so never sees Unity's overloaded ==: a
+                        // GameObject without an Animator yields an object that equals null but is
+                        // not a null reference, so AddComponent was never called and the next line
+                        // threw MissingComponentException. Measured: this path never once worked.
+                        var animator = go.GetComponent<UnityEngine.Animator>();
+                        if (animator == null)
+                        {
+                            UnityEditor.Undo.RecordObject(go, "Add Animator Component");
+                            animator = UnityEditor.Undo.AddComponent<UnityEngine.Animator>(go);
+                        }
+                        // Recorded and dirtied like the sibling controller_assign path, so the
+                        // change is undoable and survives a scene save.
+                        UnityEditor.Undo.RecordObject(animator, "Assign AnimatorController");
                         animator.runtimeAnimatorController = controller;
+                        EditorUtility.SetDirty(go);
+
                         diagnostics.AddInfo("SCENE_ANIMATOR_SET",
                             $"Animator set on '{sceneTarget}'.", new { target = sceneTarget });
+                    }
+                    else
+                    {
+                        diagnostics.AddError("SCENE_CONTROLLER_NOT_LOADED",
+                            $"The controller at '{controllerPath}' could not be loaded, so '{sceneTarget}' was left unchanged.",
+                            new { path = controllerPath },
+                            new[] { "Check the controller_path in the response." });
                     }
                 }
                 else
                 {
-                    diagnostics.AddWarning("SCENE_TARGET_NOT_FOUND",
+                    diagnostics.AddError("SCENE_TARGET_NOT_FOUND",
                         $"GameObject '{sceneTarget}' not found in scene.",
                         null,
                         new[] { "Check GameObject name or open the correct scene first." });
                 }
             }
 
-            // ctrlResult is an anonymous object, so round-trip it through JSON to read two fields.
-            string complexity = null;
-            int stateCount = 0;
-            try
-            {
-                var ctrlJson = JsonConvert.SerializeObject(ctrlResult);
-                var ctrlObj  = JObject.Parse(ctrlJson);
-                complexity  = ctrlObj["complexity"]?.ToString();
-                stateCount  = ctrlObj["state_count"]?.ToObject<int>() ?? 0;
-            }
-            catch { /* non-critical */ }
+            var ctrlObj = AsJObject(ctrlResult);
+            if (ctrlObj == null)
+                diagnostics.AddWarning("CONTROLLER_RESULT_UNREADABLE",
+                    "The controller step result could not be read back; complexity and state_count are unknown.",
+                    null, new string[0]);
 
             return new
             {
                 success               = !diagnostics.HasErrors,
                 sprite_path           = path,
                 controller_path       = controllerPath,
-                controller_complexity = complexity,
-                state_count           = stateCount,
-                clip_count            = clipPaths.Count,
+                controller_complexity = ctrlObj?["complexity"]?.ToString(),
+                state_count           = ctrlObj?["state_count"]?.ToObject<int>() ?? 0,
+                clip_count            = createdClips.Count,
                 diagnostics           = diagnostics.Build(),
             };
+        }
+
+        /// <summary>Reads a builder's anonymous result back as JSON; null when it cannot be parsed.</summary>
+        private static JObject AsJObject(object result)
+        {
+            try { return JObject.Parse(JsonConvert.SerializeObject(result)); }
+            catch { return null; }
         }
 
         private static int GetSliceCount(string path)

@@ -88,6 +88,21 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (importer == null)
                 return new ErrorResponse($"No TextureImporter found at '{path}'.");
 
+            // These arguments need no texture, so they are checked before the conversion below:
+            // a refused request used to return an error with the texture already turned into a Sprite.
+            int cols = @params["cols"]?.ToObject<int>() ?? 0;
+            int rows = @params["rows"]?.ToObject<int>() ?? 1;
+            int frameW = @params["frame_width"]?.ToObject<int>() ?? 0;
+            int frameH = @params["frame_height"]?.ToObject<int>() ?? 0;
+
+            if (cols <= 0 && frameW <= 0)
+                return new ErrorResponse("Either 'cols' or 'frame_width' is required.");
+
+            // `?? 1` above only covers an absent key, so an explicit rows=0 reaches the
+            // texH / rows division below and throws instead of answering.
+            if (rows <= 0 && frameH <= 0)
+                return new ErrorResponse("'rows' must be 1 or more; pass 'frame_height' instead if the row count is unknown.");
+
             // Measure the texture only once it is imported the way a sprite sheet is.
             // A Default-type import rescales a non-power-of-two sheet (96px becomes 128px),
             // and a grid computed against that size puts the trailing frames outside the real
@@ -106,19 +121,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             int texW = texture.width;
             int texH = texture.height;
-
-            int cols = @params["cols"]?.ToObject<int>() ?? 0;
-            int rows = @params["rows"]?.ToObject<int>() ?? 1;
-            int frameW = @params["frame_width"]?.ToObject<int>() ?? 0;
-            int frameH = @params["frame_height"]?.ToObject<int>() ?? 0;
-
-            if (cols <= 0 && frameW <= 0)
-                return new ErrorResponse("Either 'cols' or 'frame_width' is required.");
-
-            // `?? 1` above only covers an absent key, so an explicit rows=0 reaches the
-            // texH / rows division below and throws instead of answering.
-            if (rows <= 0 && frameH <= 0)
-                return new ErrorResponse("'rows' must be 1 or more; pass 'frame_height' instead if the row count is unknown.");
 
             if (frameW <= 0) frameW = texW / cols;
             if (frameH <= 0) frameH = texH / rows;

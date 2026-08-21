@@ -110,6 +110,16 @@ async def manage_sprite(
         return {"success": False, "message": f"'cols' or 'frame_width' is required for '{action}'. "
                 "Use get_info first to retrieve image_base64, analyze the grid visually, then call full_setup with cols/rows."}
 
+    # The Unity side is the authority here - it composes the asset path and refuses the
+    # name again. Checking it up front turns a round-trip into an immediate answer, and a
+    # separator in a clip name is wrong under every configuration.
+    for clip in clips or []:
+        name = clip.get("name") if isinstance(clip, dict) else None
+        if name and ("/" in name or "\\" in name):
+            return {"success": False,
+                    "message": f"Clip name '{name}' cannot contain a path separator; "
+                               "use 'output_dir' to choose where clips are written."}
+
     if action_lower == "setup_controller" and not controller_path:
         return {"success": False, "message": "'controller_path' is required for setup_controller (e.g. 'Assets/Animators/Hero.controller')."}
 
