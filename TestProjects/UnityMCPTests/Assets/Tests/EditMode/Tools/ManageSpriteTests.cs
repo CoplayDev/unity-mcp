@@ -65,6 +65,36 @@ namespace MCPForUnityTests.Editor.Tools
             return assetPath;
         }
 
+
+        /// <summary>
+        /// A square PNG of incompressible noise, used to exceed the inline-image ceiling.
+        /// Written through the same import path as CreateSheet.
+        /// </summary>
+        private static string CreateNoiseSheet(string name, int side)
+        {
+            var tex = new Texture2D(side, side, TextureFormat.RGBA32, false);
+            var pixels = new Color32[side * side];
+            uint state = 0x13579BDFu;   // fixed seed: the file size must not vary between runs
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                state = state * 1664525u + 1013904223u;
+                pixels[i] = new Color32((byte)(state >> 24), (byte)(state >> 16), (byte)(state >> 8), 255);
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+
+            string assetPath = $"{TempRoot}/{name}.png";
+            string sysPath = Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName, assetPath);
+            File.WriteAllBytes(sysPath, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+
+            Assert.Greater(new FileInfo(sysPath).Length, 4 * 1024 * 1024,
+                "fixture: the noise sheet must exceed the inline-image ceiling");
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
+            return assetPath;
+        }
+
         private static JObject Run(JObject p) => ToJObject(ManageSprite.HandleCommand(p));
 
         /// <summary>
@@ -1242,6 +1272,39 @@ namespace MCPForUnityTests.Editor.Tools
                 "a camelCase combat clip needs the same trigger a snake_case one gets; " +
                 "parameters present: " + string.Join(", ", controller.parameters.Select(p => p.name)));
             Assert.AreEqual(AnimatorControllerParameterType.Trigger, attack.type);
+        }
+
+        // =====================================================================
+        // Inline image bound
+        // =====================================================================
+
+        [Test]
+        public void GetInfo_SmallSheet_CarriesTheImageInline()
+        {
+            string path = CreateSheet("inline", 4, 2);
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            Assert.That(result.Value<string>("image_base64"), Does.StartWith("data:image/png;base64,"));
+            Assert.IsNull(result.Value<string>("image_omitted_reason"));
+        }
+
+        [Test]
+        public void GetInfo_OversizeSheet_DropsTheImageAndSaysWhy()
+        {
+            // Two things the fixture has to get right. Noise, not a flat colour: a solid
+            // sheet compresses to a few kilobytes and would never reach the ceiling. And a
+            // power-of-two side: a Default-type import rescales anything else, so a 1200px
+            // sheet reads back as 1024 - measured here first - and the dimensions below
+            // would then be pinning the rescale rather than the file.
+            string path = CreateNoiseSheet("oversize", 2048);
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            Assert.IsTrue(result.Value<bool>("success"), "the call still answers");
+            Assert.IsNull(result.Value<string>("image_base64"));
+            Assert.That(result.Value<string>("image_omitted_reason"), Does.Contain("limit"));
+            // Everything a caller needs to work out a grid is still here.
+            Assert.AreEqual(2048, result.Value<int>("width"));
+            Assert.AreEqual(2048, result.Value<int>("height"));
         }
     }
 }

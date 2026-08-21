@@ -45,7 +45,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }).ToArray();
 
             // Base64 payload so a vision-capable caller can read the grid off the image.
+            // It is bounded by size rather than paged: the point of the payload is that one
+            // response carries one whole image a vision model can look at, and an image split
+            // across cursors is not an image any client can reassemble. Over the ceiling the
+            // payload is dropped and the reason is named - width, height and the slice list
+            // still answer everything the caller needs to compute a grid.
+            const int MaxImageBytes = 4 * 1024 * 1024;
             string imageBase64 = null;
+            string imageOmittedReason = null;
             try
             {
                 string fullPath = Path.Combine(
@@ -54,10 +61,20 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 );
                 if (File.Exists(fullPath))
                 {
-                    byte[] bytes = File.ReadAllBytes(fullPath);
-                    string ext = Path.GetExtension(path).ToLowerInvariant();
-                    string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
-                    imageBase64 = $"data:{mime};base64," + Convert.ToBase64String(bytes);
+                    long size = new FileInfo(fullPath).Length;
+                    if (size > MaxImageBytes)
+                    {
+                        imageOmittedReason =
+                            $"The source file is {size} bytes, above the {MaxImageBytes}-byte inline limit. " +
+                            "Read the file directly if the image itself is needed.";
+                    }
+                    else
+                    {
+                        byte[] bytes = File.ReadAllBytes(fullPath);
+                        string ext = Path.GetExtension(path).ToLowerInvariant();
+                        string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
+                        imageBase64 = $"data:{mime};base64," + Convert.ToBase64String(bytes);
+                    }
                 }
             }
             catch { /* The base64 payload is optional; leaving it null is a valid answer. */ }
@@ -74,6 +91,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 slice_count   = existingSlices.Length,
                 slices        = existingSlices,
                 image_base64  = imageBase64,
+                image_omitted_reason = imageOmittedReason,
             };
 
             return result;
