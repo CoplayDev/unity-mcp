@@ -331,6 +331,46 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(ErrorText(result), Does.Contain("cursor"));
         }
 
+        [TestCase("page_size")]
+        [TestCase("cursor")]
+        public void GetInfo_PagingValueTooLargeForAnInt_IsRefusedNotThrown(string key)
+        {
+            string path = CreateSheet($"overflow{key}", 4, 2);
+            Slice(path, 4, 2);
+
+            var request = new JObject { ["action"] = "get_info", ["path"] = path };
+            request[key] = 2147483648L;
+
+            // Measured before the guard: ToObject<int> raised OverflowException here, and
+            // nothing between this and the bridge catches it - the tool failed at the
+            // transport instead of answering. Run() would propagate it, so reaching the
+            // assertions at all is half of what this test checks.
+            var result = Run(request);
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain(key));
+        }
+
+        [Test]
+        public void GetInfo_FractionalPageSize_IsRefusedRatherThanRounded()
+        {
+            string path = CreateSheet("fractional", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["page_size"] = 2.7,
+            });
+
+            // Measured before the guard: this returned three slices and reported success.
+            // Answering a request the tool cannot honour is worse than refusing it, because
+            // the caller has no way to notice.
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("page_size"));
+        }
+
         [TestCase(0)]
         [TestCase(-1)]
         [TestCase(4097)]

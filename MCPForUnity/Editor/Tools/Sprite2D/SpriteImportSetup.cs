@@ -46,16 +46,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             const int DefaultSlicePageSize = 512;
             const int MaxSlicePageSize = 4096;
 
-            // ToObject<int?> rather than the ToObject<int> the slice_sheet parameters below
-            // use: an explicit JSON null reaches here as a JValue, so `?.` does not
-            // short-circuit and the non-nullable form would read it as 0 and refuse the
-            // call. Nulling a parameter out means "unset", which is the default.
-            int pageSize = @params["page_size"]?.ToObject<int?>() ?? DefaultSlicePageSize;
+            if (!TryReadWholeNumber(@params, "page_size", DefaultSlicePageSize, out int pageSize, out string paramError))
+                return new ErrorResponse(paramError);
             if (pageSize < 1 || pageSize > MaxSlicePageSize)
                 return new ErrorResponse($"'page_size' must be between 1 and {MaxSlicePageSize}; got {pageSize}.");
 
             int totalSlices = importer.spritesheet.Length;
-            int cursor = @params["cursor"]?.ToObject<int?>() ?? 0;
+            if (!TryReadWholeNumber(@params, "cursor", 0, out int cursor, out paramError))
+                return new ErrorResponse(paramError);
             // Skip yields every element for a negative count rather than throwing, so a
             // negative cursor would silently return page one and call it a success - the
             // same trap that let start_frame=-2 write frames 0..5 in SpriteClipBuilder.
@@ -167,6 +165,55 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             };
 
             return result;
+        }
+
+        /// <summary>
+        /// Reads an optional whole-number parameter without throwing and without rounding.
+        /// ToObject&lt;int&gt; does both, measured 2026-08-21: `page_size: 2147483648` raised
+        /// an OverflowException that nothing in ManageSprite catches, so it left the tool as
+        /// a transport failure rather than a named refusal; and `page_size: 2.7` was silently
+        /// rounded to 3 and answered with three slices, which is worse - the caller asked for
+        /// something this tool cannot do and got a success.
+        /// </summary>
+        private static bool TryReadWholeNumber(JObject @params, string key, int fallback,
+                                               out int value, out string error)
+        {
+            value = fallback;
+            error = null;
+
+            JToken token = @params[key];
+            // An explicit JSON null arrives as a JValue, not a C# null, so it has to be
+            // named here: it means "unset", which is the default.
+            if (token == null || token.Type == JTokenType.Null)
+                return true;
+
+            if (token.Type != JTokenType.Integer)
+            {
+                error = $"'{key}' must be a whole number; got {token.Type.ToString().ToLowerInvariant()}.";
+                return false;
+            }
+
+            long raw;
+            try
+            {
+                raw = token.Value<long>();
+            }
+            catch (Exception)
+            {
+                // An integer too large for long parses as a BigInteger, still typed Integer,
+                // and the read throws. That is out of range by definition.
+                error = $"'{key}' is out of range for a 32-bit integer.";
+                return false;
+            }
+
+            if (raw < int.MinValue || raw > int.MaxValue)
+            {
+                error = $"'{key}' must be between {int.MinValue} and {int.MaxValue}; got {raw}.";
+                return false;
+            }
+
+            value = (int)raw;
+            return true;
         }
 
         /// <summary>Undoes the conversion above when the request is refused after it.</summary>
