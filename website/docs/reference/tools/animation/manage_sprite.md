@@ -1,7 +1,7 @@
 ---
 title: manage_sprite
 sidebar_label: manage_sprite
-description: "2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis. slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build Animat…"
+description: "2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from…"
 ---
 
 # `manage_sprite`
@@ -12,7 +12,7 @@ description: "2D sprite animation tool. get_info: read sprite import settings + 
 
 ## Description
 
-2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis. slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, trigger states for combat, simple state for single animations). full_setup: one command — slice → clips → controller.
+2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, trigger states for combat, simple state for single animations). full_setup: one command — slice → clips → controller.
 
 ## Parameters
 
@@ -32,6 +32,8 @@ description: "2D sprite animation tool. get_info: read sprite import settings + 
 | `overwrite` | `bool` | — | Replace an existing .anim or .controller at the target path. Off by default: without it an existing asset is kept and reported back, not silently replaced. |
 | `add_to_scene` | `bool` | — | Attach Animator + controller to a scene GameObject. |
 | `scene_target` | `str \| None` | — | Existing GameObject name to attach Animator to. |
+| `page_size` | `int \| None` | — | get_info: how many entries of the 'slices' list to return (1-4096, default 512). A sheet sliced by hand can hold more slices than one response should carry. |
+| `cursor` | `int \| None` | — | get_info: index to start the 'slices' page at. Pass back the 'next_cursor' from the previous response; absent next_cursor means the list is finished. The image is returned only on the first page. |
 
 ## Returns
 
@@ -48,6 +50,16 @@ frames before committing to a grid.
 
 ```json
 { "action": "get_info", "path": "Assets/Sprites/hero_walk.png" }
+```
+
+The `slices` list is paged. A grid sliced through this tool comes back whole, but a sheet
+sliced by hand in the Sprite Editor can hold more entries than one response should carry,
+so `slice_count` reports the total and `next_cursor` appears only while entries remain.
+Walk it by passing the previous `next_cursor` back; the image comes with the first page
+only, since it is the same picture on every one.
+
+```json
+{ "action": "get_info", "path": "Assets/Sprites/atlas.png", "cursor": 512 }
 ```
 
 ### One command from sheet to controller

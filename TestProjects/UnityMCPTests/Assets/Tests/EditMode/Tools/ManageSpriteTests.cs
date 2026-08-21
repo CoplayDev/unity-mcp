@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
@@ -212,6 +213,167 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
             Assert.AreEqual(8, result.Value<int>("slice_count"));
+        }
+
+        [Test]
+        public void GetInfo_ModestSheet_ComesBackInOnePageWithNoCursor()
+        {
+            string path = CreateSheet("onepage", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            // The point of the default page size is that a sheet anyone would slice through
+            // this tool never meets paging at all. If this turns red the default shrank.
+            Assert.AreEqual(8, ((JArray)result["slices"]).Count);
+            Assert.IsNull(result["next_cursor"].Value<int?>(),
+                "a finished list has no next cursor");
+        }
+
+        [Test]
+        public void GetInfo_MoreSlicesThanThePage_ReturnsOnePageAndPointsAtTheRest()
+        {
+            string path = CreateSheet("paged", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["page_size"] = 3,
+            });
+
+            Assert.AreEqual(3, ((JArray)result["slices"]).Count, "the page is bounded");
+            Assert.AreEqual(8, result.Value<int>("slice_count"),
+                "slice_count stays the total, not the size of the page");
+            Assert.AreEqual(3, result["next_cursor"].Value<int?>());
+        }
+
+        [Test]
+        public void GetInfo_WalkingTheCursor_VisitsEverySliceOnceAndThenStops()
+        {
+            string path = CreateSheet("walk", 4, 2);
+            Slice(path, 4, 2);
+
+            var seen = new List<string>();
+            int? cursor = 0;
+            // Bounded so a cursor that never advances fails as a wrong count rather than
+            // hanging the whole EditMode run.
+            for (int page = 0; page < 10 && cursor != null; page++)
+            {
+                var result = Run(new JObject
+                {
+                    ["action"] = "get_info",
+                    ["path"] = path,
+                    ["page_size"] = 3,
+                    ["cursor"] = cursor.Value,
+                });
+                seen.AddRange(((JArray)result["slices"]).Select(t => t.Value<string>("name")));
+                cursor = result["next_cursor"].Value<int?>();
+            }
+
+            Assert.IsNull(cursor, "the walk has to terminate on its own");
+            Assert.AreEqual(8, seen.Count, "no slice returned twice and none skipped");
+            CollectionAssert.AllItemsAreUnique(seen);
+        }
+
+        [Test]
+        public void GetInfo_CursorAtTheEnd_ReturnsAnEmptyPageRatherThanAnError()
+        {
+            string path = CreateSheet("tail", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["cursor"] = 8,
+            });
+
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.AreEqual(0, ((JArray)result["slices"]).Count);
+        }
+
+        [Test]
+        public void GetInfo_NegativeCursor_IsRefusedRatherThanReadAsPageOne()
+        {
+            string path = CreateSheet("negcursor", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["cursor"] = -3,
+            });
+
+            // Skip(-3) yields the whole list, so without the guard this call answers with
+            // every slice and reports success - the failure mode is a right-looking answer,
+            // which is why the assertion is on the refusal and not on the count.
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("cursor"));
+        }
+
+        [Test]
+        public void GetInfo_CursorPastTheEnd_IsRefused()
+        {
+            string path = CreateSheet("farcursor", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["cursor"] = 9,
+            });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("cursor"));
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        [TestCase(4097)]
+        public void GetInfo_PageSizeOutsideItsRange_IsRefused(int pageSize)
+        {
+            string path = CreateSheet($"pagesize{pageSize}", 4, 2);
+            Slice(path, 4, 2);
+
+            var result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["page_size"] = pageSize,
+            });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("page_size"));
+        }
+
+        [Test]
+        public void GetInfo_PagesAfterTheFirst_DropTheImageAndSayWhy()
+        {
+            string path = CreateSheet("imageonce", 4, 2);
+            Slice(path, 4, 2);
+
+            var first = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["page_size"] = 3,
+            });
+            var second = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = path,
+                ["page_size"] = 3,
+                ["cursor"] = 3,
+            });
+
+            Assert.IsNotNull(first.Value<string>("image_base64"),
+                "fixture: the first page is supposed to carry the image");
+            Assert.IsNull(second.Value<string>("image_base64"));
+            Assert.That(second.Value<string>("image_omitted_reason"), Does.Contain("first page"));
         }
 
         // =====================================================================

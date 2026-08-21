@@ -129,3 +129,29 @@ class TestParameterForwarding:
 
         params = sent.await_args.args[3]
         assert params == {"action": "slice_sheet", "path": "Assets/hero.png", "cols": 4}
+
+    def test_paging_arguments_reach_unity_only_when_asked_for(self):
+        """page_size and cursor are get_info's, and absent means "use the default".
+
+        Forwarding cursor=0 unasked would be harmless, but forwarding page_size=0
+        would not: the C# side refuses anything below 1, so a null that turned into
+        a zero on the wire would break every plain get_info call.
+        """
+        from services.tools.manage_sprite import manage_sprite
+
+        with patch("services.tools.manage_sprite.get_unity_instance_from_context",
+                   new=AsyncMock(return_value=None)), \
+             patch("services.tools.manage_sprite.send_with_unity_instance",
+                   new=AsyncMock(return_value={"success": True})) as sent:
+            asyncio.run(manage_sprite(self._ctx(), action="get_info",
+                                      path="Assets/atlas.png"))
+            plain = sent.await_args.args[3]
+
+            asyncio.run(manage_sprite(self._ctx(), action="get_info",
+                                      path="Assets/atlas.png",
+                                      page_size=100, cursor=200))
+            paged = sent.await_args.args[3]
+
+        assert plain == {"action": "get_info", "path": "Assets/atlas.png"}
+        assert paged["page_size"] == 100
+        assert paged["cursor"] == 200

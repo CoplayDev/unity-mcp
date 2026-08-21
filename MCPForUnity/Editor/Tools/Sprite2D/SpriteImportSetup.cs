@@ -35,7 +35,38 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             int w = texture != null ? texture.width  : 0;
             int h = texture != null ? texture.height : 0;
 
-            var existingSlices = importer.spritesheet.Select(s => new
+            // The slice list is paged, unlike the image below. slice_sheet caps what it
+            // GENERATES at 4096 frames, but this reads what is already on the asset, and a
+            // sheet sliced by hand in the Sprite Editor carries as many entries as someone
+            // drew - the ceiling on the writing end never bounded the reading end.
+            // 512 is the default page because it clears any grid a caller would slice here
+            // (a 32x16 sheet fits whole), so the common case gets one page, no cursor, and
+            // never learns paging exists. The maximum is what stops page_size from being
+            // used to ask for the unbounded result again.
+            const int DefaultSlicePageSize = 512;
+            const int MaxSlicePageSize = 4096;
+
+            // ToObject<int?> rather than the ToObject<int> the slice_sheet parameters below
+            // use: an explicit JSON null reaches here as a JValue, so `?.` does not
+            // short-circuit and the non-nullable form would read it as 0 and refuse the
+            // call. Nulling a parameter out means "unset", which is the default.
+            int pageSize = @params["page_size"]?.ToObject<int?>() ?? DefaultSlicePageSize;
+            if (pageSize < 1 || pageSize > MaxSlicePageSize)
+                return new ErrorResponse($"'page_size' must be between 1 and {MaxSlicePageSize}; got {pageSize}.");
+
+            int totalSlices = importer.spritesheet.Length;
+            int cursor = @params["cursor"]?.ToObject<int?>() ?? 0;
+            // Skip yields every element for a negative count rather than throwing, so a
+            // negative cursor would silently return page one and call it a success - the
+            // same trap that let start_frame=-2 write frames 0..5 in SpriteClipBuilder.
+            // Landing exactly on totalSlices returns an empty page rather than an error.
+            // next_cursor never points there, so this is for a caller walking the list by
+            // adding page_size itself - and it is what makes cursor 0 legal on a sheet
+            // with no slices at all, where 0 IS the end.
+            if (cursor < 0 || cursor > totalSlices)
+                return new ErrorResponse($"'cursor' must be between 0 and {totalSlices}; got {cursor}.");
+
+            var existingSlices = importer.spritesheet.Skip(cursor).Take(pageSize).Select(s => new
             {
                 name   = s.name,
                 x      = (int)s.rect.x,
@@ -43,6 +74,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 width  = (int)s.rect.width,
                 height = (int)s.rect.height,
             }).ToArray();
+
+            int nextIndex = cursor + existingSlices.Length;
+            int? nextCursor = nextIndex < totalSlices ? nextIndex : (int?)null;
 
             // Base64 payload so a vision-capable caller can read the grid off the image.
             // It is bounded by size rather than paged: the point of the payload is that one
@@ -60,47 +94,60 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             const int MaxInlinePayloadBytes = 4 * 1024 * 1024;
             string imageBase64 = null;
             string imageOmittedReason = null;
-            try
+            if (cursor > 0)
             {
-                // Not Application.dataPath.Replace("/Assets", ""): Replace removes EVERY
-                // occurrence, so a project under a directory like /work/AssetsLab lost the
-                // wrong segment and the lookup silently missed a file that was really there.
-                string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
-                string fullPath = projectRoot != null ? Path.Combine(projectRoot, path) : null;
-                if (fullPath == null)
+                // Only the first page carries the image. The picture does not change
+                // between pages, and paging exists to bound the response - sending the
+                // whole payload again with every page would multiply by the page count
+                // the very thing the page size is there to cap.
+                imageOmittedReason =
+                    "The image is returned only on the first page. Request this path with " +
+                    "cursor 0 (or omit cursor) if the image itself is needed.";
+            }
+            else
+            {
+                try
                 {
-                    imageOmittedReason = "The project root could not be resolved from Application.dataPath.";
-                }
-                else if (!File.Exists(fullPath))
-                {
-                    imageOmittedReason = $"No file on disk at '{fullPath}'.";
-                }
-                else
-                {
-                    string ext = Path.GetExtension(path).ToLowerInvariant();
-                    string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
-                    string prefix = $"data:{mime};base64,";
-                    long size = new FileInfo(fullPath).Length;
-                    long encoded = 4L * ((size + 2) / 3) + prefix.Length;
-                    if (encoded > MaxInlinePayloadBytes)
+                    // Not Application.dataPath.Replace("/Assets", ""): Replace removes EVERY
+                    // occurrence, so a project under a directory like /work/AssetsLab lost the
+                    // wrong segment and the lookup silently missed a file that was really there.
+                    string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+                    string fullPath = projectRoot != null ? Path.Combine(projectRoot, path) : null;
+                    if (fullPath == null)
                     {
-                        imageOmittedReason =
-                            $"The {size}-byte source encodes to {encoded} base64 bytes, above the " +
-                            $"{MaxInlinePayloadBytes}-byte inline limit. Read the file directly if the " +
-                            "image itself is needed.";
+                        imageOmittedReason = "The project root could not be resolved from Application.dataPath.";
+                    }
+                    else if (!File.Exists(fullPath))
+                    {
+                        imageOmittedReason = $"No file on disk at '{fullPath}'.";
                     }
                     else
                     {
-                        imageBase64 = prefix + Convert.ToBase64String(File.ReadAllBytes(fullPath));
+                        string ext = Path.GetExtension(path).ToLowerInvariant();
+                        string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
+                        string prefix = $"data:{mime};base64,";
+                        long size = new FileInfo(fullPath).Length;
+                        long encoded = 4L * ((size + 2) / 3) + prefix.Length;
+                        if (encoded > MaxInlinePayloadBytes)
+                        {
+                            imageOmittedReason =
+                                $"The {size}-byte source encodes to {encoded} base64 bytes, above the " +
+                                $"{MaxInlinePayloadBytes}-byte inline limit. Read the file directly if the " +
+                                "image itself is needed.";
+                        }
+                        else
+                        {
+                            imageBase64 = prefix + Convert.ToBase64String(File.ReadAllBytes(fullPath));
+                        }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                // The payload is optional, but a swallowed failure and a deliberate omission
-                // are different answers and the response now has a field that can tell them
-                // apart. Leaving it null was the whole complaint about `catch {}`.
-                imageOmittedReason = $"The image could not be read: {ex.GetType().Name}: {ex.Message}";
+                catch (Exception ex)
+                {
+                    // The payload is optional, but a swallowed failure and a deliberate omission
+                    // are different answers and the response now has a field that can tell them
+                    // apart. Leaving it null was the whole complaint about `catch {}`.
+                    imageOmittedReason = $"The image could not be read: {ex.GetType().Name}: {ex.Message}";
+                }
             }
 
             var result = new
@@ -112,8 +159,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 sprite_mode   = importer.spriteImportMode.ToString(),
                 pixels_per_unit = importer.spritePixelsPerUnit,
                 filter_mode   = importer.filterMode.ToString(),
-                slice_count   = existingSlices.Length,
+                slice_count   = totalSlices,
                 slices        = existingSlices,
+                next_cursor   = nextCursor,
                 image_base64  = imageBase64,
                 image_omitted_reason = imageOmittedReason,
             };

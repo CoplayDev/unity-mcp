@@ -26,7 +26,8 @@ VALID_ACTIONS = [
     group="animation",
     description=(
         "2D sprite animation tool. "
-        "get_info: read sprite import settings + return image for vision analysis. "
+        "get_info: read sprite import settings + return image for vision analysis; "
+        "the slice list is paged (page_size / cursor). "
         "slice_sheet: apply grid slicing to a sprite sheet. "
         "setup_clips: create AnimationClips from sliced sprites. "
         "setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, "
@@ -95,6 +96,17 @@ async def manage_sprite(
         str | None,
         "Existing GameObject name to attach Animator to.",
     ] = None,
+    page_size: Annotated[
+        int | None,
+        "get_info: how many entries of the 'slices' list to return (1-4096, default 512). "
+        "A sheet sliced by hand can hold more slices than one response should carry.",
+    ] = None,
+    cursor: Annotated[
+        int | None,
+        "get_info: index to start the 'slices' page at. Pass back the 'next_cursor' from "
+        "the previous response; absent next_cursor means the list is finished. The image "
+        "is returned only on the first page.",
+    ] = None,
 ) -> dict[str, Any]:
     """2D sprite animation tool."""
 
@@ -158,6 +170,10 @@ async def manage_sprite(
         params["output_dir"] = output_dir
     if controller_path is not None:
         params["controller_path"] = controller_path
+    if page_size is not None:
+        params["page_size"] = page_size
+    if cursor is not None:
+        params["cursor"] = cursor
     if overwrite:
         params["overwrite"] = True
     if add_to_scene:
