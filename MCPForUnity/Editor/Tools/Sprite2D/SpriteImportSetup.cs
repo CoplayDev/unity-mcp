@@ -117,7 +117,13 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     }
                     else if (!File.Exists(fullPath))
                     {
-                        imageOmittedReason = $"No file on disk at '{fullPath}'.";
+                        // The asset path, not fullPath: the response crosses the bridge to
+                        // the caller, and the absolute form discloses the machine's directory
+                        // layout while telling the caller nothing it can act on - it already
+                        // knows the asset path, it asked with it. The absolute path is what a
+                        // human debugging this needs, so it goes to the Editor log instead.
+                        McpLog.Warn($"[Sprite2D] get_info found no file on disk at '{fullPath}'.");
+                        imageOmittedReason = $"No file on disk for '{path}'.";
                     }
                     else
                     {
@@ -144,7 +150,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     // The payload is optional, but a swallowed failure and a deliberate omission
                     // are different answers and the response now has a field that can tell them
                     // apart. Leaving it null was the whole complaint about `catch {}`.
-                    imageOmittedReason = $"The image could not be read: {ex.GetType().Name}: {ex.Message}";
+                    // The exception TYPE crosses the bridge, the message does not: the type
+                    // says which kind of failure this was, while the message routinely
+                    // carries the absolute path that threw.
+                    McpLog.Warn($"[Sprite2D] get_info could not read '{path}': {ex}");
+                    imageOmittedReason =
+                        $"The image could not be read ({ex.GetType().Name}); the Unity console has the detail.";
                 }
             }
 

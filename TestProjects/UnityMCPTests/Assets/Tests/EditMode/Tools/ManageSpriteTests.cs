@@ -331,6 +331,27 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(ErrorText(result), Does.Contain("cursor"));
         }
 
+        [Test]
+        public void GetInfo_MissingFileOnDisk_DoesNotPutTheAbsolutePathInTheResponse()
+        {
+            string path = CreateSheet("nofile", 4, 2);
+            // Deleted WITHOUT AssetDatabase.Refresh, so the importer still resolves and the
+            // File.Exists branch is the one that answers. This is the only branch that used
+            // to interpolate the absolute path into a field the caller receives.
+            string full = Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName, path);
+            File.Delete(full);
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+            string reason = result.Value<string>("image_omitted_reason");
+
+            Assert.IsNotNull(reason, "fixture: the image was supposed to be dropped here");
+            Assert.That(reason, Does.Not.Contain(Application.dataPath),
+                "the response must not disclose where the project lives on disk");
+            Assert.That(reason, Does.Contain(path),
+                "it still has to say which asset it could not read");
+        }
+
         [TestCase("page_size")]
         [TestCase("cursor")]
         public void GetInfo_PagingValueTooLargeForAnInt_IsRefusedNotThrown(string key)
