@@ -172,7 +172,26 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new { success = false, diagnostics = diagnostics.Build() };
             }
 
-            int totalFrames = cols * rows;
+            // A 4096x4096 sheet cut into 1px frames is 16,777,216 entries, and this method
+            // allocates and reimports every one of them in one call. That size was not run
+            // here - the ceiling is a precaution, not a reproduction - but it sits far above
+            // any real sheet (Unity's own Sprite Editor works in the hundreds), so what it
+            // actually catches is a typo in cols/rows. The count is long because it is
+            // compared before it is trusted.
+            const int MaxFrames = 4096;
+            long totalFrames = (long)cols * rows;
+            if (totalFrames > MaxFrames)
+            {
+                diagnostics.AddError(
+                    "SLICE_TOO_MANY_FRAMES",
+                    $"The grid works out to {totalFrames} frames, above the {MaxFrames}-frame limit.",
+                    new { cols, rows, frame_width = frameW, frame_height = frameH, total_frames = totalFrames, max_frames = MaxFrames },
+                    new[] { "Increase frame_width/frame_height", "Slice the sheet in smaller pieces" }
+                );
+                RestoreTextureType(importer, previousType);
+                return new { success = false, diagnostics = diagnostics.Build() };
+            }
+
             if (totalFrames == 0)
             {
                 diagnostics.AddError(
@@ -188,7 +207,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             string baseName = @params["base_name"]?.ToString()
                 ?? Path.GetFileNameWithoutExtension(path);
 
-            var metas = new SpriteMetaData[totalFrames];
+            var metas = new SpriteMetaData[(int)totalFrames];
             for (int r = 0; r < rows; r++)
             {
                 for (int c = 0; c < cols; c++)

@@ -1203,5 +1203,24 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
             Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
         }
+
+        [Test]
+        public void SliceSheet_GridFarBeyondAnyRealSheet_IsRefusedBeforeAllocating()
+        {
+            // 128x128 cut into 1px frames is 16,384 entries. It fits inside the texture, so
+            // every bounds check above passes; what stops it is the frame ceiling.
+            string path = CreateSheet("huge", 8, 8);   // 128x128
+            var result = Run(new JObject
+            {
+                ["action"] = "slice_sheet",
+                ["path"] = path,
+                ["cols"] = 128,
+                ["rows"] = 128,
+            });
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_TOO_MANY_FRAMES"));
+            Assert.AreEqual(0, SpritesOf(path).Length, "nothing may be written past the limit");
+        }
     }
 }
