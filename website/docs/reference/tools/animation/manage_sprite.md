@@ -52,9 +52,10 @@ frames before committing to a grid.
 { "action": "get_info", "path": "Assets/Sprites/hero_walk.png" }
 ```
 
-The `slices` list is paged. A grid sliced through this tool comes back whole, but a sheet
-sliced by hand in the Sprite Editor can hold more entries than one response should carry,
-so `slice_count` reports the total and `next_cursor` appears only while entries remain.
+The `slices` list is paged. A sheet can hold more entries than one response should carry —
+`slice_sheet` alone allows up to 4096 — so `slice_count` reports the total and
+`next_cursor` appears only while entries remain. Follow it whenever it is present rather
+than assuming a sheet arrives whole.
 Walk it by passing the previous `next_cursor` back; the image comes with the first page
 only, since it is the same picture on every one.
 
