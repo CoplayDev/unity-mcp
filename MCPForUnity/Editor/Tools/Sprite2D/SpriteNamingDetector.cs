@@ -103,6 +103,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 char c = name[i];
                 bool breaks = !char.IsLetterOrDigit(c)
                     || (i > 0 && char.IsUpper(c)  && char.IsLower(name[i - 1]))
+                    // The end of an acronym: 'heroXMLAttack' has no lower-to-upper boundary
+                    // at the 'A', so without this the tail read as one word 'xmlattack' and
+                    // lost the keyword its snake_case twin matches on.
+                    || (i > 0 && i + 1 < name.Length
+                        && char.IsUpper(c) && char.IsUpper(name[i - 1]) && char.IsLower(name[i + 1]))
                     || (i > 0 && char.IsDigit(c)  && char.IsLetter(name[i - 1]))
                     || (i > 0 && char.IsLetter(c) && char.IsDigit(name[i - 1]));
 

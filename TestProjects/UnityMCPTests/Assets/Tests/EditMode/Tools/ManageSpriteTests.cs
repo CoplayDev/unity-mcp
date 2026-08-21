@@ -1311,6 +1311,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(2048, result.Value<int>("width"));
             Assert.AreEqual(2048, result.Value<int>("height"));
         }
+
         [Test]
         public void GetInfo_ImageJustUnderTheSourceLimit_StillDoesNotBlowThePayloadLimit()
         {
@@ -1335,5 +1336,40 @@ namespace MCPForUnityTests.Editor.Tools
                     "an omitted image must say why");
         }
 
+        [Test]
+        public void SetupController_AcronymInACamelCaseClipName_StillGetsItsTrigger()
+        {
+            // 'heroAttack' splits because a capital follows a lowercase. 'heroXMLAttack' has
+            // no such boundary at the acronym's end, so it used to tokenize as one word
+            // 'xmlattack', match nothing, and lose the trigger its snake_case twin gets.
+            var result = SetupController(BuildClips("acronym", "idle", "heroXMLAttack"));
+            Assert.IsTrue(result.Value<bool>("success"));
+
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
+            var attack = controller.parameters.SingleOrDefault(p => p.name == "Attack");
+            Assert.IsNotNull(attack,
+                "an acronym must not swallow the keyword after it; parameters present: " +
+                string.Join(", ", controller.parameters.Select(p => p.name)));
+        }
+
+        [Test]
+        public void SetupController_TwoOtherAcronymShapes_AlsoKeepTheirTriggers()
+        {
+            // Closing the class rather than the one spelling that was reported, with the two
+            // variants carrying different verdicts - which is the point of naming them.
+            // 'heroATTACK': a trailing all-caps keyword. Measured to hold ALREADY - the break
+            // comes from the lowercase 'o' before the run, so the new rule is not what saves
+            // it. Kept as a parity tripwire, not offered as evidence for the fix.
+            // 'XMLSlash': an acronym followed directly by the keyword, with no lowercase in
+            // between. Nothing in the original rule set sees that boundary, so this one does
+            // depend on the fix - reverting the rule turns this test red.
+            var result = SetupController(BuildClips("acroshapes", "idle", "heroATTACK", "XMLSlash"));
+            Assert.IsTrue(result.Value<bool>("success"));
+
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
+            var names = controller.parameters.Select(p => p.name).ToArray();
+            Assert.Contains("Attack", names, "a trailing all-caps keyword still names its trigger");
+            Assert.Contains("Slash", names, "an acronym running straight into the keyword must still split");
+        }
     }
 }
