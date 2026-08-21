@@ -133,9 +133,11 @@ class TestParameterForwarding:
     def test_paging_arguments_reach_unity_only_when_asked_for(self):
         """page_size and cursor are get_info's, and absent means "use the default".
 
-        Forwarding cursor=0 unasked would be harmless, but forwarding page_size=0
-        would not: the C# side refuses anything below 1, so a null that turned into
-        a zero on the wire would break every plain get_info call.
+        The receiver reads an absent key and an explicit JSON null the same way -
+        SpriteParams.TryReadWholeNumber names the null case and falls back - so this
+        is about the wire staying readable, not about avoiding a broken call. An
+        earlier version of this docstring claimed a null would become a zero and
+        break plain get_info; that was wrong, and an audit caught it.
         """
         from services.tools.manage_sprite import manage_sprite
 
@@ -155,3 +157,48 @@ class TestParameterForwarding:
         assert plain == {"action": "get_info", "path": "Assets/atlas.png"}
         assert paged["page_size"] == 100
         assert paged["cursor"] == 200
+
+    def test_every_optional_argument_has_a_forwarding_branch(self):
+        """A parameter accepted at the surface but dropped before the bridge is silent.
+
+        The forwarder rebuilds the request by hand, one `if` per parameter, so adding
+        an argument to the signature and forgetting its branch produces a tool that
+        accepts the value and ignores it - no error anywhere. Fifteen branches are
+        fifteen chances for that, and review is the only thing preventing it, which
+        is a habit rather than a check. This is the check.
+        """
+        import inspect
+
+        from services.tools.manage_sprite import manage_sprite
+
+        fn = getattr(manage_sprite, "fn", manage_sprite)
+        # A value each parameter's annotation accepts. Booleans must be True: the
+        # forwarder deliberately omits a False flag, so False would look like a
+        # dropped branch and this guard would cry wolf.
+        sample = {
+            "path": "Assets/a.png", "cols": 1, "rows": 1, "frame_width": 1,
+            "frame_height": 1, "base_name": "b", "clips": [{"name": "walk"}],
+            "animation_name": "walk", "output_dir": "Assets/out",
+            "controller_path": "Assets/a.controller", "overwrite": True,
+            "add_to_scene": True, "scene_target": "Hero", "page_size": 1, "cursor": 1,
+        }
+        optional = [
+            name for name, prm in inspect.signature(fn).parameters.items()
+            if name not in ("ctx", "action") and prm.default is not inspect.Parameter.empty
+        ]
+        missing_sample = [n for n in optional if n not in sample]
+        assert not missing_sample, (
+            f"this test has no sample value for {missing_sample}; add one rather than "
+            "narrowing the guard"
+        )
+
+        with patch("services.tools.manage_sprite.get_unity_instance_from_context",
+                   new=AsyncMock(return_value=None)), \
+             patch("services.tools.manage_sprite.send_with_unity_instance",
+                   new=AsyncMock(return_value={"success": True})) as sent:
+            asyncio.run(manage_sprite(self._ctx(), action="full_setup",
+                                      **{k: sample[k] for k in optional}))
+
+        forwarded = sent.await_args.args[3]
+        dropped = [n for n in optional if n not in forwarded]
+        assert not dropped, f"accepted at the surface but never sent to Unity: {dropped}"

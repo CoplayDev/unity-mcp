@@ -96,6 +96,10 @@ async def manage_sprite(
         str | None,
         "Existing GameObject name to attach Animator to.",
     ] = None,
+    # The numbers below are documentation, not enforcement: SpriteParams and
+    # SpriteImportSetup.GetInfo are what actually refuse an out-of-range page_size, and
+    # this text is what the generated reference publishes to callers. Two copies, so
+    # changing the C# bounds means changing this line in the same commit.
     page_size: Annotated[
         int | None,
         "get_info: how many entries of the 'slices' list to return (1-4096, default 512). "
