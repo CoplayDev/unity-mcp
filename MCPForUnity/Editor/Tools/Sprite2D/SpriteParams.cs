@@ -79,10 +79,19 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         /// <summary>
         /// Reads an optional flag. Measured 2026-08-21: `loop: "maybe"` raised an uncaught
         /// FormatException and `loop: 2` was accepted silently, because ToObject&lt;bool?&gt;
-        /// converts rather than validates. The top-level flags do not need this - the Python
-        /// surface types `overwrite` and `add_to_scene` as bool, so FastMCP refuses a
-        /// non-boolean before it reaches here - but `loop` hides inside the untyped `clips`
-        /// array, where nothing above C# looks at it.
+        /// converts rather than validates. `loop` needs this because it hides inside the
+        /// untyped `clips` array, where nothing above C# looks at it.
+        ///
+        /// The top-level flags do not, but not for the reason it first looked like. FastMCP
+        /// does not REFUSE a non-boolean `overwrite`; it coerces one - measured 2026-08-21
+        /// through server.call_tool: 'yes' and 1 both arrive here as a real bool, 'off'
+        /// arrives as false, and only a value Pydantic cannot read as a boolean (2) is
+        /// refused. Either way what reaches C# is already the right type. The same holds
+        /// for the top-level integers: '4' arrives as 4 and 2.7 is refused outright, so of
+        /// the classes below only an out-of-int-range integer reaches C# from a real
+        /// caller - Python ints have no ceiling. The guards still cover the rest, because
+        /// this layer owns the conversion and a caller-facing refusal is not something to
+        /// leave to the layer above.
         /// </summary>
         internal static bool TryReadBool(JObject @params, string key, bool fallback,
                                          out bool value, out string error)

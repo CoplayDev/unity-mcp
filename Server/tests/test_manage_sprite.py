@@ -166,6 +166,12 @@ class TestParameterForwarding:
         accepts the value and ignores it - no error anywhere. Fifteen branches are
         fifteen chances for that, and review is the only thing preventing it, which
         is a habit rather than a check. This is the check.
+
+        Known limitation, named rather than fixed: this drives every parameter through
+        one action, so it assumes the forwarder stays action-agnostic - which it is
+        today, every branch being a plain `is not None`. If a branch is ever scoped to
+        the actions that own it (page_size and cursor belong to get_info), this test
+        will fail on correct code and must be scoped with it.
         """
         import inspect
 
@@ -202,3 +208,7 @@ class TestParameterForwarding:
         forwarded = sent.await_args.args[3]
         dropped = [n for n in optional if n not in forwarded]
         assert not dropped, f"accepted at the surface but never sent to Unity: {dropped}"
+        # The value too, not only the key. An audit reproduced a branch that kept the key
+        # and replaced the caller's value; membership alone stayed green for it.
+        changed = {n: (sample[n], forwarded[n]) for n in optional if forwarded[n] != sample[n]}
+        assert not changed, f"forwarded under a different value than the caller sent: {changed}"
