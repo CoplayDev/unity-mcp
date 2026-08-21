@@ -48,8 +48,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
                 string clipName = cd["name"]?.ToString() ?? "";
                 string clipPath = cd["path"]?.ToString() ?? "";
-                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(
-                    AssetPathUtility.SanitizeAssetPath(clipPath));
+                string safeClipPath = AssetPathUtility.SanitizeAssetPath(clipPath);
+                if (safeClipPath == null)
+                { diagnostics.AddWarning("CLIP_BAD_PATH", $"Clip '{clipName}': path '{clipPath}' must stay under Assets/ and cannot contain '..' - skipped.", null, new string[0]); continue; }
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(safeClipPath);
                 if (clip == null)
                 { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped.", null, new string[0]); continue; }
                 entries.Add((SpriteNamingDetector.Detect(clipName), clip));

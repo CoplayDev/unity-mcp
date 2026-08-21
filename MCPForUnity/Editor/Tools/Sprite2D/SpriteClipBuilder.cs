@@ -25,6 +25,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new ErrorResponse("'path' is required.");
 
             path = AssetPathUtility.SanitizeAssetPath(path);
+            if (path == null)
+                return new ErrorResponse("'path' must stay under Assets/ and cannot contain '..'.");
 
             var allSprites = AssetDatabase.LoadAllAssetsAtPath(path)
                 .OfType<Sprite>()

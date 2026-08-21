@@ -1101,5 +1101,89 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/hero_idle.anim"));
         }
+
+        // =====================================================================
+        // Refused paths
+        //
+        // SanitizeAssetPath answers a traversal path with null, and null is a value every
+        // AssetDatabase entry point accepts. Each action below used to hand that null on and
+        // then describe the result - "no TextureImporter here", "no sprites found" - which
+        // names a lookup that never happened. These pin the refusal itself.
+        // =====================================================================
+
+        [Test]
+        public void GetInfo_PathEscapingAssets_RefusesInsteadOfLookingItUp()
+        {
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = Run(new JObject
+            {
+                ["action"] = "get_info",
+                ["path"] = $"{TempRoot}/../../../outside.png",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain(".."));
+        }
+
+        [Test]
+        public void SliceSheet_PathEscapingAssets_RefusesInsteadOfLookingItUp()
+        {
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = Run(new JObject
+            {
+                ["action"] = "slice_sheet",
+                ["path"] = $"{TempRoot}/../../../outside.png",
+                ["cols"] = 4,
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain(".."));
+        }
+
+        [Test]
+        public void SetupClips_PathEscapingAssets_RefusesInsteadOfLookingItUp()
+        {
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = SetupClips(
+                $"{TempRoot}/../../../outside.png", OneClip("walk", 0, 3)));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain(".."));
+        }
+
+        [Test]
+        public void FullSetup_PathEscapingAssets_RefusesInsteadOfLookingItUp()
+        {
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = Run(new JObject
+            {
+                ["action"] = "full_setup",
+                ["path"] = $"{TempRoot}/../../../outside.png",
+                ["cols"] = 4,
+                ["output_dir"] = TempRoot,
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain(".."));
+        }
+
+        [Test]
+        public void SetupController_ClipPathEscapingAssets_SkipsThatClipAndSaysWhy()
+        {
+            var clips = BuildClips("badclippath", "idle", "walk");
+            clips.Add(new JObject
+            {
+                ["name"] = "attack",
+                ["path"] = $"{TempRoot}/../../../outside.anim",
+            });
+
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = SetupController(clips));
+
+            // The other two clips are fine, so the controller is still built - but the refused
+            // entry must be reported as refused, not as merely missing.
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_PATH"));
+        }
     }
 }

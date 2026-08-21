@@ -23,6 +23,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new ErrorResponse("'path' is required.");
 
             path = AssetPathUtility.SanitizeAssetPath(path);
+            // A refused path comes back null, and reporting that as "no TextureImporter here"
+            // names the wrong problem: the path was never looked up.
+            if (path == null)
+                return new ErrorResponse("'path' must stay under Assets/ and cannot contain '..'.");
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer == null)
                 return new ErrorResponse($"No TextureImporter found at '{path}'. Is it a texture/sprite?");
@@ -93,6 +97,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new ErrorResponse("'path' is required.");
 
             path = AssetPathUtility.SanitizeAssetPath(path);
+            if (path == null)
+                return new ErrorResponse("'path' must stay under Assets/ and cannot contain '..'.");
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer == null)
                 return new ErrorResponse($"No TextureImporter found at '{path}'.");

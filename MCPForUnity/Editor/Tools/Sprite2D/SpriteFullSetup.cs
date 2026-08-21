@@ -30,6 +30,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new ErrorResponse("'path' is required.");
 
             path = AssetPathUtility.SanitizeAssetPath(path);
+            if (path == null)
+                return new ErrorResponse("'path' must stay under Assets/ and cannot contain '..'.");
             // Not AssetDatabase.AssetPathExists: that landed in Unity 2023.1 and package.json
             // declares 2021.3, so it does not compile on the lower half of the support range -
             // TestProjects/UnityMCPTests is pinned to 2021.3.45f2, which is where CI would have
@@ -157,7 +159,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 if (go != null)
                 {
                     var controller = AssetDatabase.LoadAssetAtPath<UnityEditor.Animations.AnimatorController>(
-                        AssetPathUtility.SanitizeAssetPath(controllerPath));
+                        controllerPath);
                     if (controller != null)
                     {
                         // `??` compares references and so never sees Unity's overloaded ==: a
