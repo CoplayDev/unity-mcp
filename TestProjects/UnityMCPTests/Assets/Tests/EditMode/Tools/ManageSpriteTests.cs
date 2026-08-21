@@ -782,6 +782,25 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SetupController_EveryEntrySkipped_StillReportsWhy()
+        {
+            // The builder records why it skipped each entry, but the all-skipped path returns
+            // a generic error - so the caller was told the clips did not load without being
+            // told that none of them were objects.
+            JObject result = null;
+            Assert.DoesNotThrow(() => result = Run(new JObject
+            {
+                ["action"] = "setup_controller",
+                ["clips"] = new JArray { 7 },
+                ["controller_path"] = $"{TempRoot}/Skipped.controller",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result.ToString(), Does.Contain("CLIP_NOT_AN_OBJECT"),
+                "the response must carry the reason the builder recorded");
+        }
+
+        [Test]
         public void SetupController_IdleAndWalk_WritesAControllerWithBothStates()
         {
             var result = SetupController(BuildClips("ctrl", "idle", "walk"));

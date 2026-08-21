@@ -56,7 +56,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }
 
             if (entries.Count == 0)
-                return new ErrorResponse("No valid clips loaded.");
+                // The diagnostics travel in ErrorResponse's data field rather than in a
+                // diagnostics-carrying anonymous object: SpriteFullSetup stops on
+                // `is ErrorResponse`, and CLIP_NOT_AN_OBJECT is a warning, so HasErrors would
+                // not catch it - changing the type here would let a failed controller step
+                // fall through to the scene step again.
+                return new ErrorResponse("No valid clips loaded.", new { diagnostics = diagnostics.Build() });
 
             // The existing controller is only removed once the replacement is known to be
             // buildable: deleting first left a failed rebuild with no controller at all.
