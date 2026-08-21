@@ -203,6 +203,9 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(result["slice_count"],
                 "an absent field also reads as 0, so the field itself has to be there");
             Assert.AreEqual(0, result.Value<int>("slice_count"));
+            // The count alone would pass against a response that reported slices it never
+            // counted; the observable behaviour is that the list is empty too.
+            Assert.AreEqual(0, ((JArray)result["slices"]).Count);
         }
 
         [Test]
@@ -213,6 +216,12 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
             Assert.AreEqual(8, result.Value<int>("slice_count"));
+            // slice_count comes from importer.spritesheet.Length, which is independent of
+            // the projected list - measured 2026-08-21: emptying `slices` entirely left
+            // this test green. A test named for reporting every slice has to read them.
+            var names = ((JArray)result["slices"]).Select(t => t.Value<string>("name")).ToArray();
+            Assert.AreEqual(8, names.Length, "every slice is reported, not just counted");
+            CollectionAssert.AllItemsAreUnique(names);
         }
 
         [Test]
@@ -223,13 +232,15 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
 
-            // The point of the default page size is that a sheet anyone would slice through
-            // this tool never meets paging at all. If this turns red the default shrank.
+            // Eight slices is under the default page, so this sheet arrives whole. That is
+            // NOT true of every sheet slice_sheet can produce - it allows up to 4096 frames
+            // and the default page is 512 - so this asserts the default, not a guarantee.
             Assert.AreEqual(8, ((JArray)result["slices"]).Count);
             // Value<int?>("next_cursor") rather than indexing then reading: an omitted
-            // property indexes to a C# null and would throw here instead of asserting,
-            // and the Python side treats an absent next_cursor as completion. Same rule
-            // as ErrorText above - do not pin the response shape.
+            // property indexes to a C# null and would throw here instead of asserting.
+            // Absent and null both mean "finished" to the caller - that contract is the
+            // documented one, not something the Python bridge implements; it forwards the
+            // response untouched. Same rule as ErrorText above: do not pin the shape.
             Assert.IsNull(result.Value<int?>("next_cursor"),
                 "a finished list has no next cursor");
         }
@@ -250,7 +261,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(3, ((JArray)result["slices"]).Count, "the page is bounded");
             Assert.AreEqual(8, result.Value<int>("slice_count"),
                 "slice_count stays the total, not the size of the page");
-            Assert.AreEqual(3, result["next_cursor"].Value<int?>());
+            Assert.AreEqual(3, result.Value<int?>("next_cursor"));
         }
 
         [Test]
@@ -716,6 +727,10 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.DoesNotThrow(() => result = Slice(path, 4, 0),
                 "a bad grid value must come back as an error, not an exception");
             Assert.IsFalse(result.Value<bool>("success"));
+            // Not just success=false: Newtonsoft reads an absent "success" as false too,
+            // so a response of `{ }` would satisfy that alone and this test is named for
+            // the explanation, not the failure.
+            Assert.That(ErrorText(result), Is.Not.Empty);
         }
 
         [Test]
@@ -783,6 +798,11 @@ namespace MCPForUnityTests.Editor.Tools
                                            ["cols"] = 65536, ["frame_width"] = 65536 });
 
             Assert.IsFalse(result.Value<bool>("success"));
+            // The code, not just the failure. Measured 2026-08-21: with the (long) cast
+            // removed this test stayed GREEN, because the wrapped product slipped past the
+            // bounds check and the request was then refused by the independent frame
+            // ceiling instead. Asserting only "it failed" cannot tell the two apart.
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
         }
 
         [Test]
@@ -1141,6 +1161,10 @@ namespace MCPForUnityTests.Editor.Tools
                 ["controller_path"] = $"{TempRoot}/Hero.controller",
             });
             Assert.IsFalse(result.Value<bool>("success"));
+            // Not just success=false: Newtonsoft reads an absent "success" as false too,
+            // so a response of `{ }` would satisfy that alone and this test is named for
+            // the explanation, not the failure.
+            Assert.That(ErrorText(result), Does.Contain("clips"));
         }
 
         [Test]
@@ -1450,6 +1474,10 @@ namespace MCPForUnityTests.Editor.Tools
             string path = CreateSheet("fullnogrid", 4, 1);
             var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path });
             Assert.IsFalse(result.Value<bool>("success"));
+            // Not just success=false: Newtonsoft reads an absent "success" as false too,
+            // so a response of `{ }` would satisfy that alone and this test is named for
+            // the explanation, not the failure.
+            Assert.That(ErrorText(result), Does.Contain("frame_width"));
         }
 
         [Test]
