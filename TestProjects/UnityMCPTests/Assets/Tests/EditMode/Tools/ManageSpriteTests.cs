@@ -104,16 +104,21 @@ namespace MCPForUnityTests.Editor.Tools
         /// <summary>A flat sheet of an exact pixel size, for grids that do not divide evenly.</summary>
         private static string CreateSheetOfSize(string name, int width, int height)
         {
-            var tex = new Texture2D(width, height);
-            var px = new Color32[width * height];
-            for (int i = 0; i < px.Length; i++) px[i] = new Color32(255, 0, 0, 255);
-            tex.SetPixels32(px);
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            var pixels = new Color32[width * height];
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = new Color32(255, 0, 0, 255);
+            tex.SetPixels32(pixels);
             tex.Apply();
 
             string assetPath = $"{TempRoot}/{name}.png";
-            System.IO.File.WriteAllBytes(
-                System.IO.Path.Combine(Directory.GetParent(Application.dataPath).FullName, assetPath),
-                tex.EncodeToPNG());
+            string sysPath = Path.Combine(
+                Directory.GetParent(Application.dataPath).FullName, assetPath);
+            File.WriteAllBytes(sysPath, tex.EncodeToPNG());
+            // Both sibling helpers destroy their working texture here; this one did not, and
+            // a Texture2D built in an EditMode test is not collected on its own.
+            Object.DestroyImmediate(tex);
+
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
             return assetPath;
         }
