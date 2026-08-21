@@ -53,6 +53,15 @@ namespace MCPForUnityTests.Editor.Tools
             Object.DestroyImmediate(tex);
 
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
+
+            // A fixture that quietly produces less than it claims weakens every test built on
+            // it, so it states what it can: the asset exists. Its dimensions cannot be asserted
+            // here - the texture is still Default-type at this point, and that import rescales a
+            // non-power-of-two sheet (96px is read back as 128px), which is the very behaviour
+            // slice_sheet works around. The frame count after slicing is the real postcondition
+            // and Slice() below asserts it.
+            Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath),
+                $"fixture: {assetPath} did not import");
             return assetPath;
         }
 
@@ -67,13 +76,22 @@ namespace MCPForUnityTests.Editor.Tools
         private static string ErrorText(JObject result) =>
             result.Value<string>("error") ?? result.Value<string>("message") ?? "";
 
-        private static JObject Slice(string path, int cols, int rows) => Run(new JObject
+        private static JObject Slice(string path, int cols, int rows)
         {
-            ["action"] = "slice_sheet",
-            ["path"] = path,
-            ["cols"] = cols,
-            ["rows"] = rows,
-        });
+            var result = Run(new JObject
+            {
+                ["action"] = "slice_sheet",
+                ["path"] = path,
+                ["cols"] = cols,
+                ["rows"] = rows,
+            });
+            // Only assert the postcondition for a call that was meant to succeed; the refusal
+            // tests call this helper too and check the failure themselves.
+            if (result.Value<bool>("success"))
+                Assert.AreEqual(cols * rows, SpritesOf(path).Length,
+                    "fixture: slice_sheet produced fewer frames than the grid asked for");
+            return result;
+        }
 
         /// <summary>The sliced frames, in the natural order their names imply.</summary>
         private static Sprite[] SpritesOf(string path) =>
@@ -113,6 +131,8 @@ namespace MCPForUnityTests.Editor.Tools
         {
             var result = Run(new JObject { ["action"] = "get_info" });
             Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("'path' is required"),
+                "success alone would also be false on the importer-not-found branch");
         }
 
         [Test]
@@ -144,6 +164,8 @@ namespace MCPForUnityTests.Editor.Tools
             string path = CreateSheet("unsliced", 4, 2);
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
 
+            Assert.IsNotNull(result["slice_count"],
+                "an absent field also reads as 0, so the field itself has to be there");
             Assert.AreEqual(0, result.Value<int>("slice_count"));
         }
 
@@ -783,7 +805,19 @@ namespace MCPForUnityTests.Editor.Tools
         {
             var clips = BuildClips("overwrite", "idle", "walk");
             Assert.IsTrue(SetupController(clips).Value<bool>("success"));
+
+            // Mark the first controller so a run that merely reused it is distinguishable
+            // from one that replaced it: two successes alone are true of both.
+            string ctrlPath = $"{TempRoot}/Hero.controller";
+            var first = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+            first.AddParameter("SentinelFromFirstBuild", AnimatorControllerParameterType.Bool);
+            AssetDatabase.SaveAssets();
+
             Assert.IsTrue(SetupController(clips, overwrite: true).Value<bool>("success"));
+
+            var second = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+            Assert.That(second.parameters.Select(p => p.name), Has.No.Member("SentinelFromFirstBuild"),
+                "an authorised overwrite must build a new controller, not reuse the old one");
         }
 
         // =====================================================================
