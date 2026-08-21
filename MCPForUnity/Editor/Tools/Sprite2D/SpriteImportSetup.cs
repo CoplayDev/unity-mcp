@@ -287,6 +287,27 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return new { success = false, diagnostics = diagnostics.Build() };
             }
 
+            // Fitting is not the same as covering. The guard above only refuses a grid that
+            // is too BIG; one that is too small passes and the leftover pixels are dropped
+            // without a word - measured on 6000.4.4f1: a 100x16 sheet asked for 6 columns
+            // produced six 16px sprites covering 96 of 100 pixels, success, no diagnostic.
+            // This warns rather than refusing, because a remainder is not always a mistake:
+            // sheets with a trailing margin or a separator column are ordinary, and a caller
+            // passing frame_width explicitly may want a sub-region on purpose. Refusing would
+            // break those; staying silent is what hid the mistaken ones.
+            int uncoveredW = texW - cols * frameW;
+            int uncoveredH = texH - rows * frameH;
+            if (uncoveredW > 0 || uncoveredH > 0)
+            {
+                diagnostics.AddWarning(
+                    "SLICE_GRID_REMAINDER",
+                    $"The grid covers {cols * frameW}x{rows * frameH} of a {texW}x{texH} texture, leaving {uncoveredW}px on the right and {uncoveredH}px at the bottom unused.",
+                    new { cols, rows, frame_width = frameW, frame_height = frameH, texture_width = texW, texture_height = texH, uncovered_width = uncoveredW, uncovered_height = uncoveredH },
+                    new[] { "Deliberate if the sheet has a margin or a separator", "Otherwise check cols/rows against the texture size with get_info" }
+                );
+            }
+
+
             // A 4096x4096 sheet cut into 1px frames is 16,777,216 entries, and this method
             // allocates and reimports every one of them in one call. That size was not run
             // here - the ceiling is a precaution, not a reproduction - but it sits far above

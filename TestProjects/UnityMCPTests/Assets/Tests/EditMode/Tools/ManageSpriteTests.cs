@@ -101,6 +101,23 @@ namespace MCPForUnityTests.Editor.Tools
             return assetPath;
         }
 
+        /// <summary>A flat sheet of an exact pixel size, for grids that do not divide evenly.</summary>
+        private static string CreateSheetOfSize(string name, int width, int height)
+        {
+            var tex = new Texture2D(width, height);
+            var px = new Color32[width * height];
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(255, 0, 0, 255);
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            string assetPath = $"{TempRoot}/{name}.png";
+            System.IO.File.WriteAllBytes(
+                System.IO.Path.Combine(Directory.GetParent(Application.dataPath).FullName, assetPath),
+                tex.EncodeToPNG());
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
+            return assetPath;
+        }
+
         private static JObject Run(JObject p) => ToJObject(ManageSprite.HandleCommand(p));
 
         /// <summary>
@@ -382,6 +399,39 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_LOOP"));
             Assert.AreEqual(0, result.Value<int>("clip_count"));
+        }
+
+        [Test]
+        public void SliceSheet_GridThatDoesNotCoverTheTexture_SucceedsButSaysSo()
+        {
+            // 100 / 6 = 16, so the grid covers 96px and drops four. Measured before the
+            // warning existed: success, six sprites, and an empty diagnostics list - the
+            // caller had no way to learn that a strip of the sheet was ignored.
+            string path = CreateSheetOfSize("remainder", 100, 16);
+
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 6, ["rows"] = 1 });
+
+            // Still a success: a trailing margin is ordinary and refusing would break it.
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.AreEqual(6, SpritesOf(path).Length);
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_GRID_REMAINDER"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("100"),
+                "the warning has to name the texture size, or it cannot be acted on");
+        }
+
+        [Test]
+        public void SliceSheet_GridThatCoversTheTextureExactly_WarnsAboutNothing()
+        {
+            // The other direction. Without this, a warning that fired on every slice would
+            // look exactly like a warning that fires on the right ones.
+            string path = CreateSheetOfSize("exact", 96, 16);
+
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 6, ["rows"] = 1 });
+
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Not.Contain("SLICE_GRID_REMAINDER"));
         }
 
         [TestCase("cols")]
