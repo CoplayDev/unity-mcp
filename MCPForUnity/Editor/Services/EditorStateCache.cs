@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json;
@@ -22,8 +23,24 @@ namespace MCPForUnity.Editor.Services
         private static long _observedUnixMs;
 
         private static bool _lastIsCompiling;
-        private static long? _lastCompileStartedUnixMs;
-        private static long? _lastCompileFinishedUnixMs;
+
+        // Compile edges live in SessionState, recorded from the CompilationPipeline
+        // events, rather than in statics sampled off the update tick. Two reasons,
+        // both load-bearing:
+        //
+        //  - A successful compile ends in a domain reload that wipes every static in
+        //    this class, including the "was compiling" flag the falling edge was
+        //    derived from. The finish of the very compile a client is waiting on was
+        //    therefore unobservable: both timestamps read null afterwards, so nothing
+        //    downstream could tell "finished" from "never started" (issue #814).
+        //  - The events fire at the true edges. Sampling quantised them to the 1s
+        //    update throttle and dropped any compile shorter than one tick entirely.
+        //
+        // SessionState survives domain reloads and dies with the editor session,
+        // which is exactly the lifetime these values describe.
+        private const string CompileStartedKey = "MCPForUnity.EditorState.CompileStartedUnixMs";
+        private const string CompileFinishedKey = "MCPForUnity.EditorState.CompileFinishedUnixMs";
+        private const string CompileCountKey = "MCPForUnity.EditorState.CompileCount";
 
         private static bool _domainReloadPending;
         private static long? _domainReloadBeforeUnixMs;
@@ -262,8 +279,24 @@ namespace MCPForUnity.Editor.Services
                 // Tracks whether an assembly compilation is actually running, for
                 // GetActualIsCompiling. Statics reset on domain reload and this
                 // [InitializeOnLoad] ctor re-subscribes, so the flag is per-domain.
-                UnityEditor.Compilation.CompilationPipeline.compilationStarted += _ => _pipelineCompilationRunning = true;
-                UnityEditor.Compilation.CompilationPipeline.compilationFinished += _ => _pipelineCompilationRunning = false;
+                // The timestamps beside it are not per-domain — see the SessionState
+                // note on CompileStartedKey.
+                UnityEditor.Compilation.CompilationPipeline.compilationStarted += _ =>
+                {
+                    _pipelineCompilationRunning = true;
+                    SetSessionUnixMs(CompileStartedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                    SessionState.SetInt(CompileCountKey, SessionState.GetInt(CompileCountKey, 0) + 1);
+                    ForceUpdate("compilation_started");
+                };
+                UnityEditor.Compilation.CompilationPipeline.compilationFinished += _ =>
+                {
+                    _pipelineCompilationRunning = false;
+                    // Fires before the domain reload, which is what makes the finish
+                    // observable at all: the write lands while this domain is alive and
+                    // is read back by the next one.
+                    SetSessionUnixMs(CompileFinishedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                    ForceUpdate("compilation_finished");
+                };
 
                 AssemblyReloadEvents.beforeAssemblyReload += () =>
                 {
@@ -378,14 +411,6 @@ namespace MCPForUnity.Editor.Services
             _observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             bool isCompiling = GetActualIsCompiling();
-            if (isCompiling && !_lastIsCompiling)
-            {
-                _lastCompileStartedUnixMs = _observedUnixMs;
-            }
-            else if (!isCompiling && _lastIsCompiling)
-            {
-                _lastCompileFinishedUnixMs = _observedUnixMs;
-            }
             _lastIsCompiling = isCompiling;
 
             var scene = EditorSceneManager.GetActiveScene();
@@ -458,8 +483,8 @@ namespace MCPForUnity.Editor.Services
                 {
                     IsCompiling = isCompiling,
                     IsDomainReloadPending = _domainReloadPending,
-                    LastCompileStartedUnixMs = _lastCompileStartedUnixMs,
-                    LastCompileFinishedUnixMs = _lastCompileFinishedUnixMs,
+                    LastCompileStartedUnixMs = GetSessionUnixMs(CompileStartedKey),
+                    LastCompileFinishedUnixMs = GetSessionUnixMs(CompileFinishedKey),
                     LastDomainReloadBeforeUnixMs = _domainReloadBeforeUnixMs,
                     LastDomainReloadAfterUnixMs = _domainReloadAfterUnixMs
                 },
@@ -534,6 +559,27 @@ namespace MCPForUnity.Editor.Services
                 return clone;
             }
         }
+
+        /// <summary>
+        /// Compilations begun this editor session, surviving domain reloads. Callers
+        /// that trigger a compile snapshot this first, then wait for it to move — the
+        /// only signal that separates "a compile ran" from "one never started", which
+        /// <see cref="GetActualIsCompiling"/> reads as idle either way.
+        /// </summary>
+        internal static int CompileCount => SessionState.GetInt(CompileCountKey, 0);
+
+        private static long? GetSessionUnixMs(string key)
+        {
+            string raw = SessionState.GetString(key, string.Empty);
+            return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value)
+                ? value
+                : (long?)null;
+        }
+
+        // SessionState has no long overload, so these round-trip through an
+        // invariant string rather than losing precision through int or float.
+        private static void SetSessionUnixMs(string key, long value)
+            => SessionState.SetString(key, value.ToString(CultureInfo.InvariantCulture));
 
         // Set/cleared by the CompilationPipeline.compilationStarted/Finished events
         // subscribed in the static ctor. NOTE: CompilationPipeline.isCompiling does not
