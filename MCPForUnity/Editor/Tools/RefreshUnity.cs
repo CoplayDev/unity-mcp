@@ -161,9 +161,25 @@ namespace MCPForUnity.Editor.Tools
         /// the only thing that still sees it;</item>
         /// <item>the grace elapsed with neither.</item>
         /// </list>
+        /// The first two are also tested synchronously on entry, so the case where a
+        /// reload is already imminent never leaves this command queued as a
+        /// continuation — see the note on the fast path below.
         /// </summary>
         private static Task WaitForCompilationToStartAsync(int compileCountBefore, TimeSpan grace)
         {
+            // Synchronous fast path, and the reason it matters: the counter check is
+            // there for a compile that began *and ended* inside AssetDatabase.Refresh
+            // above, and in that state the domain reload is already imminent. Resolving
+            // it from Tick would hand the rest of this command to the synchronization
+            // context as a queued continuation, which the reload discards along with
+            // the rest of the domain — losing the response. An already-completed task
+            // resumes the await inline instead, so nothing is left queued.
+            if (EditorStateCache.CompileCount != compileCountBefore
+                || EditorStateCache.GetActualIsCompiling())
+            {
+                return Task.CompletedTask;
+            }
+
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var start = DateTime.UtcNow;
 
