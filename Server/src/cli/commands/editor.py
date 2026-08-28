@@ -526,3 +526,51 @@ def custom_tool(tool_name: str, params: str):
                     print_info(f'Example: unity-mcp editor custom-tool "{matches[0]}"')
             except UnityConnectionError:
                 pass
+
+
+@editor.command("dialog")
+@click.option("--answer", "-a", default=None, help="Press this button (exact label) to unblock the Editor.")
+@click.option("--expect-title", default=None, help="Refuse the press unless this dialog is the one open.")
+@handle_unity_errors
+def dialog(answer: Optional[str], expect_title: Optional[str]):
+    """Read or answer a modal dialog blocking the Editor.
+
+    \b
+    Examples:
+        unity-mcp editor dialog
+        unity-mcp editor dialog --answer Reload
+        unity-mcp editor dialog --answer Ignore --expect-title "Scene(s) Have Been Modified"
+    """
+    config = get_config()
+
+    def unwrap(payload):
+        """Tool responses arrive wrapped in the transport's {status, result} envelope."""
+        if isinstance(payload, dict) and "success" not in payload and isinstance(payload.get("result"), dict):
+            return payload["result"]
+        return payload if isinstance(payload, dict) else {}
+
+    if answer is None:
+        result = unwrap(run_command("liveness", {}, config))
+        click.echo(format_output(result, config.format))
+        data = result.get("data")
+        modal = (data or {}).get("modal") if isinstance(data, dict) else None
+        if not isinstance(modal, dict) or not modal.get("blocked"):
+            print_info("No modal dialog is open.")
+            return
+        print_info(f"Dialog: {modal.get('title')}")
+        if modal.get("body"):
+            print_info(f"  {modal.get('body')}")
+        print_info(f"  Buttons: {', '.join(modal.get('buttons') or [])}")
+        return
+
+    params: dict[str, Any] = {"button": answer}
+    if expect_title:
+        params["expect_title"] = expect_title
+
+    result = unwrap(run_command("answer_dialog", params, config))
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Answered dialog with '{answer}'")
+    else:
+        print_error(result.get("error") or "Failed to answer dialog")
+        sys.exit(1)

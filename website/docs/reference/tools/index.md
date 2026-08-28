@@ -24,8 +24,9 @@ AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-you
 - **[`import_model`](./asset_gen/import_model.md)** — Import 3D models from the Sketchfab marketplace into the Unity project.
 - **[`import_model_file`](./asset_gen/import_model_file.md)** — Import a local 3D model file that already exists on disk (e.g. an FBX/OBJ/glTF exported from Blender or another DCC tool) into the Unity project.
 
-## `core` &nbsp; (30 tools)
+## `core` &nbsp; (31 tools)
 Essential scene, script, asset & editor tools (always on by default)
+- **[`answer_dialog`](./core/answer_dialog.md)** — Reads or answers a modal dialog blocking the Unity Editor.
 - **[`apply_text_edits`](./core/apply_text_edits.md)** — Apply small text edits to a C# script identified by URI.
 - **[`batch_execute`](./core/batch_execute.md)** — Executes multiple MCP commands in a single batch for dramatically better performance.
 - **[`create_script`](./core/create_script.md)** — Create a new C# script at the given project path.

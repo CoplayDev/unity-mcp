@@ -387,7 +387,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     {
                         continue;
                     }
-                    await HandleMessageAsync(message, token).ConfigureAwait(false);
+
+                    // Handled detached so the loop keeps reading while a command is in flight.
+                    // Awaiting here meant one command waiting on the Unity main thread stopped every
+                    // later frame from even being read — including the liveness probe that exists to
+                    // report the stall, and the server's pings. Command execution itself is still
+                    // ordered by TransportCommandDispatcher's queue, and sends are serialised by
+                    // _sendLock, so only the read side becomes concurrent.
+                    _ = HandleMessageSafeAsync(message, token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -452,6 +459,27 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             finally
             {
                 System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
+        }
+
+        /// <summary>
+        /// Run <see cref="HandleMessageAsync"/> without letting a failure escape onto the detached
+        /// task, where it would surface as an unobserved exception rather than a log line. A single
+        /// bad message must not take down the receive loop.
+        /// </summary>
+        private async Task HandleMessageSafeAsync(string message, CancellationToken token)
+        {
+            try
+            {
+                await HandleMessageAsync(message, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutting down.
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[WebSocket] Message handling failed: {ex.Message}");
             }
         }
 
@@ -619,9 +647,18 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             string responseJson;
             try
             {
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
-                responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                if (OffMainThreadCommands.IsOffMainThreadCommand(commandName))
+                {
+                    // Answered here on the receive loop: these report on (or clear) a blocked main
+                    // thread, so they must not queue behind it.
+                    responseJson = OffMainThreadCommands.Handle(commandName, parameters);
+                }
+                else
+                {
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+                    responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {
