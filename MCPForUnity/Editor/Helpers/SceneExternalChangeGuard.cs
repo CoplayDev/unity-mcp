@@ -19,6 +19,7 @@ namespace MCPForUnity.Editor.Helpers
     /// answering it: the on-disk and in-memory copies are reconciled first, in whichever direction
     /// the caller asked for.
     /// </summary>
+    [InitializeOnLoad]
     internal static class SceneExternalChangeGuard
     {
         internal const string ModeAuto = "auto";
@@ -26,6 +27,17 @@ namespace MCPForUnity.Editor.Helpers
         internal const string ModeKeepEditor = "keep_editor";
 
         private const string BaselineKey = "MCPForUnity.OpenSceneMtimeBaseline";
+
+        static SceneExternalChangeGuard()
+        {
+            // Without a baseline recorded at scene-open time, the first refresh of a session has
+            // nothing to compare against: it would record the already-changed mtime and let the
+            // edit through to AssetDatabase.Refresh, which is where the modal comes from. Recording
+            // on open and save means an external edit is always measured against a known-good point.
+            EditorSceneManager.sceneOpened += (_, __) => RecordBaseline();
+            EditorSceneManager.sceneSaved += _ => RecordBaseline();
+            EditorApplication.delayCall += RecordBaseline;
+        }
 
         internal sealed class Outcome
         {

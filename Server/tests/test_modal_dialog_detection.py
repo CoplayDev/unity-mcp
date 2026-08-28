@@ -12,6 +12,10 @@ import pytest
 from transport.plugin_hub import PluginHub
 
 
+async def _async_none(ctx):
+    return None
+
+
 class _Ctx:
     """Minimal stand-in for a FastMCP context; wait_for_editor_ready only carries it through."""
 
@@ -213,3 +217,28 @@ async def test_wait_for_editor_ready_keeps_waiting_through_a_busy_main_thread(mo
     assert ready is True
     assert blocked is None
     assert polls == 3
+
+
+@pytest.mark.asyncio
+async def test_read_path_reports_answerable_not_platform_support(monkeypatch):
+    """A Unity-drawn modal is inspectable but not pressable; conflating the two invites a
+    press the Editor always refuses."""
+    from services.tools import answer_dialog as mod
+
+    async def fake_send(send_fn, unity_instance, command, params, **kwargs):
+        return {
+            "success": True,
+            "data": _liveness(
+                blocked=True, stall_ms=5000, title="Migration Step 2",
+                kind="editor_window", buttons=[]),
+        }
+
+    monkeypatch.setattr(mod.unity_transport, "send_with_unity_instance", fake_send)
+    monkeypatch.setattr(mod, "get_unity_instance_from_context", _async_none)
+
+    resp = await mod.answer_dialog(_Ctx())
+    data = resp.model_dump() if hasattr(resp, "model_dump") else resp
+
+    assert data["data"]["blocked"] is True
+    assert data["data"]["dialog"]["answerable"] is False
+    assert data["data"]["dialog"]["title"] == "Migration Step 2"

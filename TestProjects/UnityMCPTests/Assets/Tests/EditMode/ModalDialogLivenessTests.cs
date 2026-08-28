@@ -111,23 +111,5 @@ namespace MCPForUnityTests.Editor
             Assert.IsFalse(info.Blocked);
             Assert.AreEqual(Application.platform == RuntimePlatform.WindowsEditor, info.Supported);
         }
-
-        [Test]
-        public void BlockedPayloadDistinguishesTheTwoKindsOfModal()
-        {
-            // EditorUtility.DisplayDialog raises a native dialog whose buttons are OS controls and
-            // can be pressed; EditorWindow.ShowModal blocks the main thread just as hard but paints
-            // its buttons with IMGUI. Reporting the second as merely "busy" would tell the caller to
-            // wait for something that never clears, so both must come back as blocked and only the
-            // first as answerable.
-            var native = new ModalDialogInfo { Blocked = true, Kind = "dialog", Answerable = true };
-            var drawn = new ModalDialogInfo { Blocked = true, Kind = "editor_window", Answerable = false };
-
-            Assert.IsTrue(native.Blocked);
-            Assert.IsTrue(drawn.Blocked);
-            Assert.IsTrue(native.Answerable);
-            Assert.IsFalse(drawn.Answerable,
-                "a Unity-drawn modal has no OS control to press");
-        }
     }
 }

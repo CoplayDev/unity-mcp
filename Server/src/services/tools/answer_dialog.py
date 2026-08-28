@@ -62,7 +62,7 @@ async def answer_dialog(
                     "title": modal.get("title"),
                     "body": modal.get("body"),
                     "buttons": modal.get("buttons") or [],
-                    "answerable": bool(modal.get("supported")),
+                    "answerable": bool(modal.get("answerable")),
                 },
                 "main_thread_stall_ms": (data or {}).get("main_thread_stall_ms"),
             },

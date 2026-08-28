@@ -649,9 +649,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             {
                 if (OffMainThreadCommands.IsOffMainThreadCommand(commandName))
                 {
-                    // Answered here on the receive loop: these report on (or clear) a blocked main
-                    // thread, so they must not queue behind it.
-                    responseJson = OffMainThreadCommands.Handle(commandName, parameters);
+                    // Answered off the main thread: these report on (or clear) a blocked main thread,
+                    // so they must not queue behind it. Run on the pool rather than inline so the
+                    // dialog probe's window scan does not hold the receive loop either.
+                    responseJson = await Task.Run(
+                        () => OffMainThreadCommands.Handle(commandName, parameters),
+                        CancellationToken.None).ConfigureAwait(false);
                 }
                 else
                 {

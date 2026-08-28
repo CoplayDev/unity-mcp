@@ -139,8 +139,14 @@ class PluginHub(WebSocketEndpoint):
     # exactly the situation they are for.
     _OFF_MAIN_THREAD_COMMANDS: set[str] = {"liveness", "answer_dialog"}
 
-    # Seconds to wait for the off-main-thread liveness answer.
+    # Seconds to wait for the off-main-thread liveness answer. It only reads counters and the last
+    # sampler snapshot, so anything slower means the plugin is not answering off-thread at all.
     LIVENESS_TIMEOUT = 2.0
+
+    # answer_dialog needs its own budget: it enumerates the dialog's controls before clicking, and
+    # each read can spend up to the probe's message timeout. Giving up early would report a failure
+    # for a dialog that was in fact answered, since the click is posted, not awaited.
+    ANSWER_DIALOG_TIMEOUT = 10.0
 
     # Main-thread stall (ms) past which a command timeout is reported as a stall rather than a
     # generic "retry". Comfortably above normal editor update jitter when Unity is unfocused.
@@ -306,10 +312,10 @@ class PluginHub(WebSocketEndpoint):
         unity_timeout_s = float(cls.COMMAND_TIMEOUT)
         server_wait_s = float(cls.COMMAND_TIMEOUT)
         if command_type in cls._OFF_MAIN_THREAD_COMMANDS:
-            # Answered on the plugin's receive thread; if it takes longer than this the plugin is
-            # not answering off-thread at all and there is nothing to wait for.
-            unity_timeout_s = float(cls.LIVENESS_TIMEOUT)
-            server_wait_s = float(cls.LIVENESS_TIMEOUT)
+            budget = float(cls.ANSWER_DIALOG_TIMEOUT
+                           if command_type == "answer_dialog" else cls.LIVENESS_TIMEOUT)
+            unity_timeout_s = budget
+            server_wait_s = budget
         elif command_type in cls._FAST_FAIL_COMMANDS:
             fast_timeout = float(cls.FAST_FAIL_TIMEOUT)
             unity_timeout_s = fast_timeout
