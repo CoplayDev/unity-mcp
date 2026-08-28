@@ -47,6 +47,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private Task _keepAliveTask;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
 
+        /// <summary>
+        /// Caps how many dispatcher-bound commands may be in flight at once. The main thread runs
+        /// them one at a time regardless, so this only bounds how much work piles up waiting for it.
+        /// Control commands (liveness, answer_dialog) bypass this gate.
+        /// </summary>
+        private const int MaxConcurrentExecutes = 16;
+        private readonly SemaphoreSlim _executeGate = new(MaxConcurrentExecutes, MaxConcurrentExecutes);
+
         private Uri _endpointUri;
         private string _sessionId;
         private string _projectHash;
@@ -650,17 +658,32 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 if (OffMainThreadCommands.IsOffMainThreadCommand(commandName))
                 {
                     // Answered off the main thread: these report on (or clear) a blocked main thread,
-                    // so they must not queue behind it. Run on the pool rather than inline so the
-                    // dialog probe's window scan does not hold the receive loop either.
+                    // so they must not queue behind it. Deliberately outside _executeGate — a
+                    // saturated gate is one of the states they exist to report on. Run on the pool
+                    // rather than inline so the dialog probe's window scan does not hold the
+                    // receive loop either.
                     responseJson = await Task.Run(
                         () => OffMainThreadCommands.Handle(commandName, parameters),
                         CancellationToken.None).ConfigureAwait(false);
                 }
                 else
                 {
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
-                    responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                    // Detaching the receive loop removed the backpressure that awaiting it used to
+                    // provide, so admission is bounded here instead. Without it a burst queues
+                    // unboundedly into the dispatcher while the main thread works through it one
+                    // command at a time. Waiting rather than rejecting keeps command semantics
+                    // unchanged; the server's own timeout still bounds how long a caller waits.
+                    await _executeGate.WaitAsync(token).ConfigureAwait(false);
+                    try
+                    {
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+                        responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _executeGate.Release();
+                    }
                 }
             }
             catch (OperationCanceledException)

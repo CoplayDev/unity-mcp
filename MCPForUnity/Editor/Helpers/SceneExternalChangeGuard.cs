@@ -30,13 +30,14 @@ namespace MCPForUnity.Editor.Helpers
 
         static SceneExternalChangeGuard()
         {
-            // Without a baseline recorded at scene-open time, the first refresh of a session has
-            // nothing to compare against: it would record the already-changed mtime and let the
-            // edit through to AssetDatabase.Refresh, which is where the modal comes from. Recording
-            // on open and save means an external edit is always measured against a known-good point.
-            EditorSceneManager.sceneOpened += (_, __) => RecordBaseline();
-            EditorSceneManager.sceneSaved += _ => RecordBaseline();
-            EditorApplication.delayCall += RecordBaseline;
+            // Without a baseline from scene-open time the first refresh of a session has nothing to
+            // compare against, so the edit reaches AssetDatabase.Refresh — which is where the modal
+            // comes from. Each callback updates only the scene it names: rewriting the whole map
+            // would stamp the current mtime onto an unrelated open scene that was edited but not yet
+            // reconciled, erasing the change this guard exists to catch.
+            EditorSceneManager.sceneOpened += (scene, _) => UpsertBaseline(scene.path);
+            EditorSceneManager.sceneSaved += scene => UpsertBaseline(scene.path);
+            EditorApplication.delayCall += FillMissingBaselines;
         }
 
         internal sealed class Outcome
@@ -202,6 +203,59 @@ namespace MCPForUnity.Editor.Helpers
             return new Dictionary<string, long>(StringComparer.Ordinal);
         }
 
+        /// <summary>Record one scene's current mtime, leaving every other entry alone.</summary>
+        private static void UpsertBaseline(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                return;
+            }
+
+            var map = LoadBaseline();
+            map[path] = MtimeOf(path);
+            SaveBaseline(map);
+        }
+
+        /// <summary>
+        /// Seed baselines for open scenes that have none, without overwriting the ones already
+        /// recorded — an existing entry may be the only evidence of an unreconciled edit.
+        /// </summary>
+        private static void FillMissingBaselines()
+        {
+            var map = LoadBaseline();
+            bool changed = false;
+            foreach (var scene in OpenScenes())
+            {
+                if (string.IsNullOrEmpty(scene.path) || !File.Exists(scene.path))
+                {
+                    continue;
+                }
+
+                if (!map.ContainsKey(scene.path))
+                {
+                    map[scene.path] = MtimeOf(scene.path);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                SaveBaseline(map);
+            }
+        }
+
+        private static void SaveBaseline(Dictionary<string, long> map)
+        {
+            try
+            {
+                SessionState.SetString(BaselineKey, JsonConvert.SerializeObject(map));
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to record open-scene baseline: {ex.Message}");
+            }
+        }
+
         private static void RecordBaseline(List<Scene> scenes)
         {
             var map = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -213,14 +267,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            try
-            {
-                SessionState.SetString(BaselineKey, JsonConvert.SerializeObject(map));
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"Failed to record open-scene baseline: {ex.Message}");
-            }
+            SaveBaseline(map);
         }
     }
 }

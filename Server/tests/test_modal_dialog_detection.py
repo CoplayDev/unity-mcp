@@ -242,3 +242,30 @@ async def test_read_path_reports_answerable_not_platform_support(monkeypatch):
     assert data["data"]["blocked"] is True
     assert data["data"]["dialog"]["answerable"] is False
     assert data["data"]["dialog"]["title"] == "Migration Step 2"
+
+
+@pytest.mark.asyncio
+async def test_read_path_propagates_transport_failure(monkeypatch):
+    """A failed probe carries no modal; reporting that as "nothing is blocking" would hide the
+    error behind a confident all-clear."""
+    from services.tools import answer_dialog as mod
+
+    failure = {
+        "success": False,
+        "error": "Unity session not available; please retry",
+        "hint": "retry",
+        "data": {"reason": "no_unity_session"},
+    }
+
+    async def fake_send(send_fn, unity_instance, command, params, **kwargs):
+        return failure
+
+    monkeypatch.setattr(mod.unity_transport, "send_with_unity_instance", fake_send)
+    monkeypatch.setattr(mod, "get_unity_instance_from_context", _async_none)
+
+    resp = await mod.answer_dialog(_Ctx())
+    data = resp.model_dump() if hasattr(resp, "model_dump") else resp
+
+    assert data["success"] is False
+    assert data["hint"] == "retry"
+    assert "session not available" in data["error"]

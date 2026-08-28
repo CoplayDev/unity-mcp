@@ -43,6 +43,11 @@ async def answer_dialog(
             {},
             retry_on_reload=False,
         )
+        # A failed probe carries no modal, which would otherwise read as "nothing is blocking" and
+        # hide the transport error behind a confident all-clear.
+        if isinstance(response, dict) and response.get("success") is False:
+            return MCPResponse(**response)
+
         data = response.get("data") if isinstance(response, dict) else None
         modal = (data or {}).get("modal") if isinstance(data, dict) else None
 
