@@ -14,7 +14,24 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         public bool IsConnected => StdioBridgeHost.IsRunning;
         public string TransportName => "stdio";
-        public TransportState State => _state;
+
+        // The bridge host can bind or drop outside StartAsync/StopAsync (editor-idle retry
+        // after a busy-port reload, CI auto-start), so the cached snapshot can go stale in
+        // both directions. Refresh it from the live listener whenever they disagree.
+        public TransportState State
+        {
+            get
+            {
+                bool bridgeRunning = StdioBridgeHost.IsRunning;
+                if (bridgeRunning != _state.IsConnected)
+                {
+                    _state = bridgeRunning
+                        ? TransportState.Connected("stdio", port: StdioBridgeHost.GetCurrentPort())
+                        : TransportState.Disconnected("stdio", "Bridge not running");
+                }
+                return _state;
+            }
+        }
 
         // Bounded window to wait for the bridge to actually bind after StartAutoConnect. Covers the
         // OS port-release delay after a domain reload (the same port can stay held for a few hundred
