@@ -669,15 +669,21 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 else
                 {
                     // Detaching the receive loop removed the backpressure that awaiting it used to
-                    // provide, so admission is bounded here instead. Without it a burst queues
+                    // provide, so admission is bounded here instead: without it a burst queues
                     // unboundedly into the dispatcher while the main thread works through it one
-                    // command at a time. Waiting rather than rejecting keeps command semantics
-                    // unchanged; the server's own timeout still bounds how long a caller waits.
-                    await _executeGate.WaitAsync(token).ConfigureAwait(false);
+                    // command at a time.
+                    //
+                    // The timeout is armed before waiting for admission and covers both, so a
+                    // command cannot sit in the queue past its budget and then execute for a caller
+                    // that already gave up — which would apply side effects nobody is waiting for.
+                    // Expiring here is also what bounds the queue: a waiting handler releases its
+                    // payload at its own deadline rather than accumulating.
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+
+                    await _executeGate.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
                     try
                     {
-                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
                         responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
                     }
                     finally
