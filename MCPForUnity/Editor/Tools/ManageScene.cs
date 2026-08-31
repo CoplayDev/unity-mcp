@@ -1615,14 +1615,29 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
-        /// Existence check that works for both roots. File.Exists is wrong for "Packages/..."
-        /// because embedded packages resolve through Library/PackageCache rather than a path
-        /// under the project root.
+        /// Existence check that works for both roots, accepting either answer.
+        /// The AssetDatabase is the only one that resolves "Packages/..." — embedded packages
+        /// live in Library/PackageCache, not under the project root, so File.Exists misses them
+        /// (ManageAsset.cs carries the same note). File.Exists still covers an Assets/ scene
+        /// written to disk but not yet imported, which the AssetDatabase does not know about
+        /// until a refresh. This guard only exists to produce a clearer error than
+        /// EditorSceneManager.OpenScene would, so erring toward accepting is the safe direction.
         /// </summary>
         internal static bool SceneAssetExists(string projectRelativePath)
         {
             if (string.IsNullOrEmpty(projectRelativePath)) return false;
-            return AssetDatabase.LoadAssetAtPath<SceneAsset>(projectRelativePath) != null;
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(projectRelativePath) != null) return true;
+
+            try
+            {
+                return File.Exists(Path.Combine(GetProjectRoot(), projectRelativePath));
+            }
+            catch (ArgumentException)
+            {
+                // Invalid path characters — treat as not found rather than throwing.
+                return false;
+            }
         }
 
         // ── Multi-scene editing ────────────────────────────────────────────
