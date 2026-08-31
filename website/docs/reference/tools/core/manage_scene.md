@@ -20,7 +20,7 @@ Performs CRUD operations on Unity scenes. Read-only actions: get_hierarchy, get_
 |------|------|----------|-------------|
 | `action` | `Literal['create', 'load', 'save', 'get_hierarchy', 'get_active', 'get_build_settings', 'scene_view_frame', 'close_scene', 'set_active_scene', 'get_loaded_scenes', 'move_to_scene', 'validate']` | yes | Perform CRUD operations on Unity scenes and control the Scene View camera. |
 | `name` | `str \| None` | — | Scene name. |
-| `path` | `str \| None` | — | Scene path, under `Assets/` or `Packages/`. A bare path is treated as relative to `Assets/`. |
+| `path` | `str \| None` | — | Scene path, under Assets/ or Packages/. A bare path is treated as relative to Assets/. |
 | `build_index` | `int \| str \| None` | — | Unity build index (quote as string, e.g., '0'). |
 | `scene_view_target` | `str \| int \| None` | — | GameObject reference for scene_view_frame (name, path, or instance ID). |
 | `parent` | `str \| int \| None` | — | Optional parent GameObject reference (name/path/instanceID) to list direct children. |
