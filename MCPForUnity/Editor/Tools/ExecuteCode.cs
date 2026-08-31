@@ -32,11 +32,32 @@ namespace MCPForUnity.Editor.Tools
         private static string[] _cachedAssemblyPaths;
         private static string[] _cachedCodeDomAssemblyPaths;
 
+        // Every compile emits a fresh in-memory "MCPDynamic" assembly, and Mono cannot unload
+        // one, so recompiling an identical snippet leaks an assembly per call until the next
+        // domain reload (see issue #1351). Cache the compiled output keyed on the wrapped
+        // source so repeated calls reuse one assembly.
+        private const int MaxCompiledCacheEntries = 64;
+        private static readonly Dictionary<string, CompiledSnippet> _compiledCache =
+            new Dictionary<string, CompiledSnippet>(StringComparer.Ordinal);
+
+        private readonly struct CompiledSnippet
+        {
+            public CompiledSnippet(Assembly assembly, string compiler)
+            {
+                Assembly = assembly;
+                Compiler = compiler;
+            }
+
+            public Assembly Assembly { get; }
+            public string Compiler { get; }
+        }
+
         [UnityEditor.InitializeOnLoadMethod]
         private static void OnDomainReload()
         {
             _cachedAssemblyPaths = null;
             _cachedCodeDomAssemblyPaths = null;
+            _compiledCache.Clear();
             RoslynCompiler.ResetCache();
         }
 
@@ -181,6 +202,11 @@ namespace MCPForUnity.Editor.Tools
         private static object CompileAndExecute(string code, string compiler)
         {
             string wrappedSource = WrapUserCode(code);
+
+            string cacheKey = compiler + "\n" + wrappedSource;
+            if (_compiledCache.TryGetValue(cacheKey, out CompiledSnippet cached))
+                return InvokeCompiled(cached.Assembly, cached.Compiler);
+
             string[] assemblyPaths = GetAssemblyPaths();
 
             Assembly compiled;
@@ -221,6 +247,12 @@ namespace MCPForUnity.Editor.Tools
                     }
                     break;
             }
+
+            // Bound the cache so a stream of genuinely distinct snippets cannot itself become
+            // the leak. Clearing wholesale is enough: the entries are only a compile shortcut.
+            if (_compiledCache.Count >= MaxCompiledCacheEntries)
+                _compiledCache.Clear();
+            _compiledCache[cacheKey] = new CompiledSnippet(compiled, usedCompiler);
 
             return InvokeCompiled(compiled, usedCompiler);
         }

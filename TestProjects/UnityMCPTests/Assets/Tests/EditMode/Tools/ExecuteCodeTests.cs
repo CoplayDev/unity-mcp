@@ -546,5 +546,42 @@ namespace MCPForUnityTests.Editor.Tools
             }));
         }
 
+
+        // ──────────────────── Compiled-assembly cache (issue #1351) ────────────────────
+
+        [Test]
+        public void Execute_SameSnippetTwice_DoesNotLoadASecondAssembly()
+        {
+            // Every compile Assembly.Load()s a fresh "MCPDynamic" image that Mono cannot
+            // unload, so an uncached recompile leaks one assembly per call.
+            const string snippet = "return 41 + 1;";
+
+            // Warm the cache: this call is expected to add exactly one assembly.
+            var first = Execute(snippet);
+            Assert.IsTrue(first.Value<bool>("success"), first.ToString());
+
+            int loadedBefore = AppDomain.CurrentDomain.GetAssemblies().Length;
+
+            var second = Execute(snippet);
+            Assert.IsTrue(second.Value<bool>("success"), second.ToString());
+            Assert.AreEqual(42, second["data"]["result"].Value<int>());
+
+            int loadedAfter = AppDomain.CurrentDomain.GetAssemblies().Length;
+            Assert.AreEqual(loadedBefore, loadedAfter,
+                "Re-executing an identical snippet loaded another assembly; the compile cache did not hit.");
+        }
+
+        [Test]
+        public void Execute_DifferentSnippets_StillCompileIndependently()
+        {
+            var a = Execute("return 1;");
+            var b = Execute("return 2;");
+
+            Assert.IsTrue(a.Value<bool>("success"), a.ToString());
+            Assert.IsTrue(b.Value<bool>("success"), b.ToString());
+            Assert.AreEqual(1, a["data"]["result"].Value<int>());
+            Assert.AreEqual(2, b["data"]["result"].Value<int>());
+        }
+
     }
 }
