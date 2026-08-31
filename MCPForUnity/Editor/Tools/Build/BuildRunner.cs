@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.Build;
+using UnityEditor.SceneManagement;
 using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Build
@@ -110,6 +111,7 @@ namespace MCPForUnity.Editor.Tools.Build
 
             try
             {
+                SaveBeforeBuild();
                 BuildReport report = buildFunc();
                 job.CompletedAt = DateTime.UtcNow;
 
@@ -229,6 +231,20 @@ namespace MCPForUnity.Editor.Tools.Build
                 .Where(s => s.enabled)
                 .Select(s => s.path)
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Saves assets and open scenes before building so BuildPipeline does not block on a save dialog.
+        /// </summary>
+        private static void SaveBeforeBuild()
+        {
+            AssetDatabase.SaveAssets();
+            if (!EditorSceneManager.SaveOpenScenes())
+            {
+                McpLog.Warn(
+                    "[MCP Build] Some modified scenes could not be saved (new scenes need a path). " +
+                    "Build may still prompt to save.");
+            }
         }
     }
 }
