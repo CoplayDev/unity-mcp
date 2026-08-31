@@ -42,7 +42,7 @@ async def manage_scene(
         "validate",
     ], "Perform CRUD operations on Unity scenes and control the Scene View camera."],
     name: Annotated[str, "Scene name."] | None = None,
-    path: Annotated[str, "Scene path."] | None = None,
+    path: Annotated[str, "Scene path, under Assets/ or Packages/. A bare path is treated as relative to Assets/."] | None = None,
     build_index: Annotated[int | str,
                            "Unity build index (quote as string, e.g., '0')."] | None = None,
     # --- scene_view_frame params ---
