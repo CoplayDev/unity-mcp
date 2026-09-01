@@ -28,9 +28,18 @@ env:
   UNITY_IMAGE: unityci/editor:ubuntu-2021.3.45f2-linux-il2cpp-3
 
 jobs:
-  e2e-bridge:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
+  license:
+    # Hoisted out of the smoke job so the gate is a JOB-level condition. A step-level `if:`
+    # produces step-conclusion `skipped`, which contributes nothing to the job conclusion,
+    # so this workflow reported a green check having booted no Editor and exercised no tool
+    # call. A job skipped by a job-level `if:` reports "Skipped" in the merge box instead.
+    # Branch protection treats a skipped required check as satisfied, so merges are not blocked.
+    name: Detect Unity license secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      unity_ok: ${{ steps.detect.outputs.unity_ok }}
     steps:
       - name: Detect Unity license secrets
         id: detect
@@ -46,30 +55,34 @@ jobs:
           else
             echo "unity_ok=false" >> "$GITHUB_OUTPUT"
             echo "::warning::E2E bridge smoke SKIPPED - no license secrets in scope (normal for fork PRs). This check is NOT a pass: nothing was booted or exercised."
-            # Every step below is gated on unity_ok, so the job reports a green check
-            # having run nothing at all. Say so plainly on the run page.
+            # The dependent job is gated on this output, so it reports Skipped rather
+            # than a green check. Still say plainly on the run page what did not happen.
             {
               echo "## :warning: E2E bridge smoke was SKIPPED"
               echo
               echo "No Unity license secrets were in scope, so **no Editor was booted and no tool call was exercised**."
-              echo "The green check means the job exited cleanly - **not** that the bridge works."
+              echo "The dependent job reports **Skipped** - it did not pass, it did not run."
               echo
               echo "GitHub withholds repository secrets from workflow runs triggered by a fork's pull request."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+
+  e2e-bridge:
+    runs-on: ubuntu-24.04
+    needs: license
+    if: needs.license.outputs.unity_ok == 'true'
+    timeout-minutes: 40
+    steps:
       - uses: actions/checkout@v4
-        if: steps.detect.outputs.unity_ok == 'true'
         with:
           fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v4
-        if: steps.detect.outputs.unity_ok == 'true'
         with:
           python-version: "3.11"
 
       - name: Install MCP server
-        if: steps.detect.outputs.unity_ok == 'true'
         run: |
           set -eux
           uv venv
@@ -79,7 +92,6 @@ jobs:
 
       # --- License staging (mirrors claude-nl-suite.yml) ---
       - name: Decide license sources
-        if: steps.detect.outputs.unity_ok == 'true'
         id: lic
         shell: bash
         env:
@@ -96,7 +108,7 @@ jobs:
           echo "use_ebl=$use_ebl" >> "$GITHUB_OUTPUT"
 
       - name: Stage Unity .ulf license (from secret)
-        if: steps.detect.outputs.unity_ok == 'true' && steps.lic.outputs.use_ulf == 'true'
+        if: steps.lic.outputs.use_ulf == 'true'
         id: ulf
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -119,7 +131,7 @@ jobs:
           fi
 
       - name: Activate Unity (EBL via container)
-        if: steps.detect.outputs.unity_ok == 'true' && steps.lic.outputs.use_ebl == 'true'
+        if: steps.lic.outputs.use_ebl == 'true'
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
@@ -140,7 +152,6 @@ jobs:
             '
 
       - name: Warm up project (import Library once)
-        if: steps.detect.outputs.unity_ok == 'true'
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
@@ -162,14 +173,12 @@ jobs:
               "${manual_args[@]}" -quit
 
       - name: Clean old MCP status
-        if: steps.detect.outputs.unity_ok == 'true'
         run: |
           set -eux
           mkdir -p "$GITHUB_WORKSPACE/.unity-mcp"
           rm -f "$GITHUB_WORKSPACE/.unity-mcp"/unity-mcp-status-*.json || true
 
       - name: Run headless bridge harness (boot + wait + smoke/editmode/playmode)
-        if: steps.detect.outputs.unity_ok == 'true'
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
@@ -192,11 +201,11 @@ jobs:
             "${license_args[@]}"
 
       - name: Unity logs on failure
-        if: failure() && steps.detect.outputs.unity_ok == 'true'
+        if: failure()
         run: docker logs unity-mcp --tail 200 | sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/Ig' || true
 
       - name: Upload E2E report
-        if: always() && steps.detect.outputs.unity_ok == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-bridge-report

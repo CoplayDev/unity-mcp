@@ -73,10 +73,54 @@ The server accepts the same value formats as `set_active_instance`: `Name@hash`,
 
 ## HTTP vs stdio differences
 
-- **HTTP**: instance state is keyed per-session by `client_id`, so two MCP clients can target different Editors at the same time on the same Python server.
-- **Stdio**: port-number shorthand works because there's a separate Python process per client. HTTP shares one process and uses `Name@hash` exclusively.
+- **HTTP**: instance state is keyed by the MCP session (`MCP-Session-Id`), so two MCP clients can target different Editors at the same time on the same Python server.
+- **Stdio**: port-number shorthand works because there's a separate Python process per client, and the session key is a per-subprocess UUID. HTTP shares one process and uses `Name@hash` exclusively.
+
+The session is the *only* key. It is deliberately not the client id — see the routing contract for why.
+
+## Running several agents against one Editor
+
+Routing decides *which* Editor a call reaches. It says nothing about what happens when several agents
+reach the same one at once, which is the other half of the multi-agent story.
+
+A single Editor executes one command at a time. Unity's receive loop awaits each command to completion
+before reading the next frame off the socket, so concurrent calls queue rather than overlap. Under a
+four-agent write load, cheap reads that normally take ~5 s stretched to ~17 s while another agent was
+churning the hierarchy, and recovered within a cycle or two once it stopped. Batching calls does not
+help: throughput stayed flat at roughly 2–3 seconds per call whether five or ten were issued together.
+
+Expect spurious "instance not found" errors. Resolving an instance runs before the call is dispatched,
+and a domain reload briefly empties the registry while the Editor re-registers, so calls landing in
+that window fail with:
+
+```
+Instance 'MyGame@a1b2c3d4' not found. Available: none.
+Read mcpforunity://instances for current sessions.
+```
+
+`Available: none` is misleading. The Editor is usually alive and serving other calls a second or two
+either side. These failures are clean, because the call never reached Unity — nothing was applied.
+
+**Retrying is not free.** There is no idempotency key, so the server cannot tell a retry from a fresh
+command, and neither can Unity. Whether a failed command is safe to retry depends on how far it got:
+
+| Where the command was when the server gave up | Effect | Safe to retry |
+|---|---|---|
+| Not yet dispatched (instance resolution failed) | None | Yes |
+| Queued, never started (connection torn down) | None | Yes |
+| Already executing in Unity, exceeded the timeout | **Applied** — late result is discarded | No, applies twice |
+
+The last row is the one to watch. The command runs to completion and its result is dropped, so the
+caller is told it failed while the effect landed. It needs a command that exceeds the 30 second budget
+*after* Unity has begun executing it, which ordinary tool calls do not approach — but `execute_code`,
+long imports and test runs can. Treat `hint: "retry"` on those as "check before retrying", not
+"retry blindly".
+
+None of this degraded the Editor itself. Four agents issuing 527 calls over eleven minutes left it
+alive and responsive, with memory growth proportional to the work done and flat thereafter.
 
 ## Related reference
 
 - [`set_active_instance`](/reference/tools/core/set_active_instance) — full tool reference
 - [`unity_instances` resource](/reference/resources) — discovery surface
+- [Instance Routing](/architecture/instance-routing) — the routing contract and its rationale

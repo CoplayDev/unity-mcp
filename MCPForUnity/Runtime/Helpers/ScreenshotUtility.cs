@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace MCPForUnity.Runtime.Helpers
 //The reason for having another Runtime Utilities in additional to Editor Utilities is to avoid Editor-only dependencies in this runtime code.
@@ -579,14 +580,23 @@ namespace MCPForUnity.Runtime.Helpers
             int dstW = Mathf.Max(1, Mathf.RoundToInt(srcW * scale));
             int dstH = Mathf.Max(1, Mathf.RoundToInt(srcH * scale));
 
+            // Match the temporary RT's read/write mode to the source texture rather than the
+            // project default. In a Linear-colorspace project a Default (sRGB) RT applies an
+            // sRGB encode on store while the blit samples a linear-flagged capture without a
+            // matching decode, which washes the image out (see issue #1328).
+            bool srcIsSrgb = GraphicsFormatUtility.IsSRGBFormat(source.graphicsFormat);
+            RenderTextureReadWrite readWrite = srcIsSrgb
+                ? RenderTextureReadWrite.sRGB
+                : RenderTextureReadWrite.Linear;
+
             RenderTexture prevActive = RenderTexture.active;
-            var rt = RenderTexture.GetTemporary(dstW, dstH, 0, RenderTextureFormat.ARGB32);
+            var rt = RenderTexture.GetTemporary(dstW, dstH, 0, RenderTextureFormat.ARGB32, readWrite);
             rt.filterMode = FilterMode.Bilinear;
             try
             {
                 Graphics.Blit(source, rt);
                 RenderTexture.active = rt;
-                var dst = new Texture2D(dstW, dstH, TextureFormat.RGBA32, false);
+                var dst = new Texture2D(dstW, dstH, TextureFormat.RGBA32, false, linear: !srcIsSrgb);
                 dst.ReadPixels(new Rect(0, 0, dstW, dstH), 0, 0);
                 dst.Apply();
                 return dst;

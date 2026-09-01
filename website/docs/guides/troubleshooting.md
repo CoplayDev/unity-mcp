@@ -146,6 +146,42 @@ Unity AI Assistant bundles `System.Collections.Immutable` v10, while MCP for Uni
 
 ---
 
+## Unity 6.5: Editor hangs on load and the bridge never connects
+
+If Unity 6000.5.x spins at ~100% CPU on startup and never opens the Editor window, check `Packages/manifest.json` for `com.unity.ai.assistant` (and `com.unity.ai.inference`, `com.unity.asset-manager-for-unity`).
+
+**Symptoms:**
+- The Editor never finishes loading, so MCP for Unity never arms its bridge — which looks like an MCP connection failure
+- Stack traces sit inside `AssetDatabase::InitialRefresh` → `SourceAssetScanner::Refresh` → `GuidDB::ValidateChangedGUIDs`
+
+**Cause:**
+The pre-release AI packages can livelock `AssetDatabase::InitialRefresh`. This happens before any MCP for Unity assembly is loaded, so no MCP code is involved.
+
+**Fix:** remove those packages from `manifest.json`, **delete `Packages/packages-lock.json`** (it re-resolves them otherwise), then clear `Library/`. Disabling the package is not enough — the AI packages re-add each other.
+
+This is a Unity bug (UUM-132096), not an MCP for Unity one.
+
+*Reported by [@100yenadmin](https://github.com/CoplayDev/unity-mcp/issues/1219).*
+
+---
+
+## Codex: `resources/read failed: unknown MCP server`
+
+The `mcpforunity://` URI names the *resource*, not the server. Some clients take a separate server key on a resource read.
+
+In Codex, tools are exposed as `mcp__unityMCP__*`, but `resources/read` wants the discovery key on its own:
+
+```
+server: "unityMCP"
+uri: "mcpforunity://custom-tools"
+```
+
+If a read fails with an unknown-server error, list resources first and use the key exactly as returned.
+
+*Reported by [@drewclifton](https://github.com/CoplayDev/unity-mcp/issues/1220).*
+
+---
+
 ## "No Unity Instances Found"
 
 :::tip When in doubt, restart your client
