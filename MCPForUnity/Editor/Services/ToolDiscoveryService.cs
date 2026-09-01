@@ -23,28 +23,35 @@ namespace MCPForUnity.Editor.Services
 
             _cachedTools = new Dictionary<string, ToolMetadata>();
 
-            // Primary scan via TypeCache (fast, but can miss project assemblies in some domain-reload states)
-            var toolTypes = TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>();
+            // Primary scan via TypeCache: answers from Unity's prebuilt attribute index instead of
+            // walking every type of every loaded assembly, which the exhaustive scan below did on
+            // every call regardless of what the index already found (issue #1336).
+            TypeCache.TypeCollection toolTypes = TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>();
 
-            // Fallback scan via AppDomain (slower but exhaustive; mirrors CommandRegistry behaviour)
-            var appDomainTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic)
-                .SelectMany(a =>
-                {
-                    try { return a.GetTypes(); }
-                    catch (Exception ex)
+            List<Type> allToolTypes;
+            if (toolTypes.Count > 0)
+            {
+                allToolTypes = toolTypes.ToList();
+            }
+            else
+            {
+                // Fallback scan via AppDomain (slower but exhaustive), reached only when the index
+                // is not usable for this domain yet; mirrors CommandRegistry behaviour.
+                allToolTypes = AppDomain.CurrentDomain.GetAssemblies()
+                    .Where(a => !a.IsDynamic)
+                    .SelectMany(a =>
                     {
-                        McpLog.Warn($"Failed to reflect types from assembly {a.FullName}: {ex.Message}");
-                        return new Type[0];
-                    }
-                })
-                .Where(t => t.GetCustomAttribute<McpForUnityToolAttribute>() != null);
-
-            // Merge both scans, deduplicating by type
-            var allToolTypes = toolTypes
-                .Concat(appDomainTypes)
-                .Distinct()
-                .ToList();
+                        try { return a.GetTypes(); }
+                        catch (Exception ex)
+                        {
+                            McpLog.Warn($"Failed to reflect types from assembly {a.FullName}: {ex.Message}");
+                            return new Type[0];
+                        }
+                    })
+                    .Where(t => t.GetCustomAttribute<McpForUnityToolAttribute>() != null)
+                    .Distinct()
+                    .ToList();
+            }
 
             foreach (var type in allToolTypes)
             {

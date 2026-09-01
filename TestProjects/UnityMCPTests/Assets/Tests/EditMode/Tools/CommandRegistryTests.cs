@@ -24,6 +24,23 @@ namespace MCPForUnityTests.Editor.Tools
             }, "Should throw InvalidOperationException for unknown handler");
         }
 
+        /// <summary>
+        /// The exhaustive assembly walk is a fallback, not the default path: it must be reached
+        /// only when TypeCache produced nothing at all for this domain (issue #1336).
+        /// </summary>
+        [Test]
+        public void ShouldFallBackToExhaustiveScan_OnlyWhenTypeCacheFoundNothing()
+        {
+            Assert.IsTrue(CommandRegistry.ShouldFallBackToExhaustiveScan(0, 0),
+                "an empty index means TypeCache is unusable for this domain");
+            Assert.IsFalse(CommandRegistry.ShouldFallBackToExhaustiveScan(12, 3),
+                "a populated index must not trigger the slow scan");
+            Assert.IsFalse(CommandRegistry.ShouldFallBackToExhaustiveScan(12, 0),
+                "tools found means the index works, even with no resources");
+            Assert.IsFalse(CommandRegistry.ShouldFallBackToExhaustiveScan(0, 3),
+                "resources found means the index works, even with no tools");
+        }
+
         [Test]
         public void AutoDiscovery_RegistersAllBuiltInTools()
         {
