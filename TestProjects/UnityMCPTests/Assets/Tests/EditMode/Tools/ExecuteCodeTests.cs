@@ -537,6 +537,65 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(results.Errors.HasErrors, string.Join("\n", errors));
         }
 
+
+        // ──────────────────── Execute: using directives ────────────────────
+
+        [Test]
+        public void Execute_LeadingUsingDirective_IsHoistedAndCompiles()
+        {
+            var result = Execute("using System.IO;\nreturn Path.GetFileName(\"/a/b.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("b.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingStaticDirective_IsHoisted()
+        {
+            var result = Execute("using static System.Math;\nreturn Max(3, 4);");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(4, result["data"]["result"].Value<int>());
+        }
+
+        [Test]
+        public void Execute_UsingAliasWithGenericTarget_IsHoisted()
+        {
+            var result = Execute("using L = System.Collections.Generic.List<int>;\nreturn new L { 1, 2 }.Count;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(2, result["data"]["result"].Value<int>());
+        }
+
+        [Test]
+        public void Execute_UsingAfterComment_IsStillHoisted()
+        {
+            var result = Execute("// leading comment\nusing System.IO;\nreturn Path.GetFileName(\"/x/y.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("y.txt", result["data"]["result"].Value<string>());
+        }
+
+
+        [Test]
+        public void Execute_RedundantBuiltinUsing_DoesNotDuplicate()
+        {
+            var result = Execute("using System;\nreturn String.Concat(\"a\", \"b\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("ab", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_ErrorLineNumber_CountsFromCallerCodeAfterHoisting()
+        {
+            var result = Execute("using System.IO;\nint ok = 1;\nnope();\nreturn ok;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            var errors = string.Join("\n", (result["data"]["errors"] as JArray).Select(e => e.Value<string>()));
+            StringAssert.Contains("Line 3", errors);
+        }
+
         private static JObject Execute(string code)
         {
             return ToJObject(ExecuteCode.HandleCommand(new JObject

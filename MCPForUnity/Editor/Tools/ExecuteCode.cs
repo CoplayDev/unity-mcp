@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Runtime.Helpers;
 using Microsoft.CSharp;
@@ -19,7 +20,6 @@ namespace MCPForUnity.Editor.Tools
         private const int MaxCodeLength = 50000;
         private const int MaxHistoryEntries = 50;
         private const int MaxHistoryCodePreview = 500;
-        internal const int WrapperLineOffset = 10;
         private const string WrapperClassName = "MCPDynamicCode";
         private const string WrapperMethodName = "Execute";
 
@@ -201,7 +201,7 @@ namespace MCPForUnity.Editor.Tools
 
         private static object CompileAndExecute(string code, string compiler)
         {
-            string wrappedSource = WrapUserCode(code);
+            string wrappedSource = WrapUserCode(code, out int lineOffset);
 
             string cacheKey = compiler + "\n" + wrappedSource;
             if (_compiledCache.TryGetValue(cacheKey, out CompiledSnippet cached))
@@ -217,14 +217,14 @@ namespace MCPForUnity.Editor.Tools
                 case "roslyn":
                     if (!RoslynCompiler.IsAvailable)
                         return new ErrorResponse("Roslyn (Microsoft.CodeAnalysis) is not available. Install it via NuGet or use compiler='codedom'.");
-                    compiled = RoslynCompiler.Compile(wrappedSource, assemblyPaths, out var roslynErrors);
+                    compiled = RoslynCompiler.Compile(wrappedSource, assemblyPaths, lineOffset, out var roslynErrors);
                     if (compiled == null)
                         return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(roslynErrors), compiler = "roslyn" });
                     usedCompiler = "roslyn";
                     break;
 
                 case "codedom":
-                    compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var codedomErrors);
+                    compiled = CodeDomCompile(wrappedSource, assemblyPaths, lineOffset, out var codedomErrors);
                     if (compiled == null)
                         return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(codedomErrors), compiler = "codedom" });
                     usedCompiler = "codedom";
@@ -233,14 +233,14 @@ namespace MCPForUnity.Editor.Tools
                 default: // "auto"
                     if (RoslynCompiler.IsAvailable)
                     {
-                        compiled = RoslynCompiler.Compile(wrappedSource, assemblyPaths, out var autoErrors);
+                        compiled = RoslynCompiler.Compile(wrappedSource, assemblyPaths, lineOffset, out var autoErrors);
                         if (compiled == null)
                             return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(autoErrors), compiler = "roslyn" });
                         usedCompiler = "roslyn";
                     }
                     else
                     {
-                        compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var autoFallbackErrors);
+                        compiled = CodeDomCompile(wrappedSource, assemblyPaths, lineOffset, out var autoFallbackErrors);
                         if (compiled == null)
                             return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(autoFallbackErrors), compiler = "codedom" });
                         usedCompiler = "codedom";
@@ -302,7 +302,7 @@ namespace MCPForUnity.Editor.Tools
 
         // ──────────────────── CodeDom compiler ────────────────────
 
-        private static Assembly CodeDomCompile(string source, string[] assemblyPaths, out List<string> errors)
+        private static Assembly CodeDomCompile(string source, string[] assemblyPaths, int lineOffset, out List<string> errors)
         {
             errors = new List<string>();
 
@@ -360,7 +360,7 @@ namespace MCPForUnity.Editor.Tools
                                 continue;
 
                             hasRealErrors = true;
-                            int userLine = Math.Max(1, error.Line - WrapperLineOffset);
+                            int userLine = Math.Max(1, error.Line - lineOffset);
                             errors.Add($"Line {userLine}: {error.ErrorText}");
                         }
 
@@ -508,22 +508,54 @@ namespace MCPForUnity.Editor.Tools
 
         // ──────────────────── Shared helpers ────────────────────
 
-        private static string WrapUserCode(string code)
+        private static readonly string[] BuiltinUsings =
         {
+            "using System;",
+            "using System.Collections.Generic;",
+            "using System.Linq;",
+            "using System.Reflection;",
+            "using System.Text;",
+            "using UnityEngine;",
+            "using UnityEditor;",
+        };
+
+        private static readonly Regex UsingDirectiveLine = new Regex(
+            @"^\s*using\s+(?:static\s+)?[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*;\s*$", RegexOptions.Compiled);
+
+        // Must not match the C# 8 `using var x = ...` declaration, which has two tokens before the =
+        private static readonly Regex UsingAliasLine = new Regex(
+            @"^\s*using\s+[A-Za-z_]\w*\s*=\s*[A-Za-z_][\w.]*\s*(?:<[^;]*>)?\s*(?:\[\s*\])*\s*;\s*$", RegexOptions.Compiled);
+
+        private static bool IsUsingDirective(string line)
+            => UsingDirectiveLine.IsMatch(line) || UsingAliasLine.IsMatch(line);
+
+        // A using directive is illegal in a method body, so the parser reads it as a using-statement and wants a '('
+        // Hoisted lines are blanked, not removed, so compiler line numbers still map to the caller's.
+        private static string WrapUserCode(string code, out int lineOffset)
+        {
+            var body = code.Replace("\r\n", "\n").Split('\n');
+            var hoisted = new List<string>();
+            for (int i = 0; i < body.Length; i++)
+            {
+                string trimmed = body[i].Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith("//")) continue;
+                if (!IsUsingDirective(body[i])) break;
+                if (!BuiltinUsings.Contains(trimmed) && !hoisted.Contains(trimmed)) hoisted.Add(trimmed);
+                body[i] = string.Empty;
+            }
+
             var sb = new StringBuilder();
-            sb.AppendLine("using System;");
-            sb.AppendLine("using System.Collections.Generic;");
-            sb.AppendLine("using System.Linq;");
-            sb.AppendLine("using System.Reflection;");
-            sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using UnityEditor;");
+            foreach (string u in BuiltinUsings) sb.AppendLine(u);
+            foreach (string u in hoisted) sb.AppendLine(u);
             sb.AppendLine($"public static class {WrapperClassName}");
             sb.AppendLine("{");
             sb.AppendLine($"    public static object {WrapperMethodName}()");
             sb.AppendLine("    {");
-            sb.AppendLine(code);
+            sb.AppendLine(string.Join("\n", body));
             sb.AppendLine("    }");
             sb.AppendLine("}");
+            // 4 = the class line, its brace, the method line, its brace
+            lineOffset = BuiltinUsings.Length + hoisted.Count + 4;
             return sb.ToString();
         }
 
@@ -663,6 +695,7 @@ namespace MCPForUnity.Editor.Tools
             _isAvailable = null;
         }
 
+
         private static bool Initialize()
         {
             try
@@ -752,7 +785,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        public static Assembly Compile(string source, string[] assemblyPaths, out List<string> errors)
+        public static Assembly Compile(string source, string[] assemblyPaths, int lineOffset, out List<string> errors)
         {
             errors = new List<string>();
 
@@ -837,7 +870,7 @@ namespace MCPForUnity.Editor.Tools
                             var msgProp = diag.GetType().GetMethod("GetMessage", new[] { typeof(System.Globalization.CultureInfo) });
                             string msg = (string)msgProp.Invoke(diag, new object[] { null });
 
-                            int userLine = Math.Max(1, line + 1 - ExecuteCode.WrapperLineOffset);
+                            int userLine = Math.Max(1, line + 1 - lineOffset);
                             errors.Add($"Line {userLine}: {msg}");
                         }
                         return null;
