@@ -423,25 +423,44 @@ namespace MCPForUnity.Editor.Tools
 
         // --- Internal Helpers ---
 
-        // Mapping bits from LogEntry.mode. These may vary by Unity version.
+        // Mapping bits from LogEntry.mode, mirroring UnityEditor.ConsoleWindow.Mode.
+        // These values are stable from 2021.3 through 6000.x.
         private const int ModeBitError = 1 << 0;
         private const int ModeBitAssert = 1 << 1;
-        private const int ModeBitWarning = 1 << 2;
-        private const int ModeBitLog = 1 << 3;
-        private const int ModeBitException = 1 << 4; // often combined with Error bits
-        private const int ModeBitScriptingError = 1 << 9;
-        private const int ModeBitScriptingWarning = 1 << 10;
-        private const int ModeBitScriptingLog = 1 << 11;
-        private const int ModeBitScriptingException = 1 << 18;
-        private const int ModeBitScriptingAssertion = 1 << 22;
+        private const int ModeBitLog = 1 << 2;
+        private const int ModeBitFatal = 1 << 4;
+        private const int ModeBitAssetImportError = 1 << 6;
+        private const int ModeBitAssetImportWarning = 1 << 7;
+        private const int ModeBitScriptingError = 1 << 8;
+        private const int ModeBitScriptingWarning = 1 << 9;
+        private const int ModeBitScriptingLog = 1 << 10;
+        private const int ModeBitScriptCompileError = 1 << 11;
+        private const int ModeBitScriptCompileWarning = 1 << 12;
+        private const int ModeBitStickyError = 1 << 13;
+        private const int ModeBitScriptingException = 1 << 17;
+        private const int ModeBitScriptingAssertion = 1 << 21;
+        private const int ModeBitVisualScriptingError = 1 << 22;
 
-        private static LogType GetLogTypeFromMode(int mode)
+        private const int ModeMaskError = ModeBitError
+            | ModeBitFatal
+            | ModeBitAssetImportError
+            | ModeBitScriptingError
+            | ModeBitScriptCompileError
+            | ModeBitStickyError
+            | ModeBitVisualScriptingError;
+
+        private const int ModeMaskWarning = ModeBitAssetImportWarning
+            | ModeBitScriptingWarning
+            | ModeBitScriptCompileWarning;
+
+        internal static LogType GetLogTypeFromMode(int mode)
         {
-            // Preserve Unity's real type (no remapping); bits may vary by version
-            if ((mode & (ModeBitException | ModeBitScriptingException)) != 0) return LogType.Exception;
-            if ((mode & (ModeBitError | ModeBitScriptingError)) != 0) return LogType.Error;
+            // Preserve Unity's real type (no remapping). Order matters: an exception
+            // also carries the Error bit, and an assertion also carries Assert.
+            if ((mode & ModeBitScriptingException) != 0) return LogType.Exception;
             if ((mode & (ModeBitAssert | ModeBitScriptingAssertion)) != 0) return LogType.Assert;
-            if ((mode & (ModeBitWarning | ModeBitScriptingWarning)) != 0) return LogType.Warning;
+            if ((mode & ModeMaskError) != 0) return LogType.Error;
+            if ((mode & ModeMaskWarning) != 0) return LogType.Warning;
             return LogType.Log;
         }
 
