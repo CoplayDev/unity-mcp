@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.IO;
-using System.Reflection;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -91,13 +90,13 @@ namespace MCPForUnityTests.Editor.Services
                 // has to happen before the second connect: a new connection closes stale clients,
                 // and if it wins that race the first frame is never read at all.
                 Thread.Sleep(1500);
-                queuedAfterFirst = ReadQueueDepth();
+                queuedAfterFirst = StdioBridgeHost.QueuedCommandCount;
 
                 // A second connection is what the broker opens after giving up on the first.
                 second = Connect(port);
                 SendFrame(second.GetStream(), command);
                 Thread.Sleep(1500);
-                queuedAfterResend = ReadQueueDepth();
+                queuedAfterResend = StdioBridgeHost.QueuedCommandCount;
             }
             finally
             {
@@ -115,20 +114,6 @@ namespace MCPForUnityTests.Editor.Services
             Assert.AreEqual(1, queuedAfterResend,
                 $"the resend should have attached to the in-flight command, but {queuedAfterResend} "
                 + "entries were queued — the command would run that many times");
-        }
-
-        /// <summary>
-        /// Reads StdioBridgeHost's private command queue by reflection, so this test compiles and
-        /// runs against builds both with and without the suppression fix.
-        /// </summary>
-        private static int ReadQueueDepth()
-        {
-            FieldInfo field = typeof(StdioBridgeHost).GetField(
-                "commandQueue", BindingFlags.NonPublic | BindingFlags.Static);
-            Assert.IsNotNull(field, "StdioBridgeHost.commandQueue not found — was it renamed?");
-            var queue = field.GetValue(null) as ICollection;
-            Assert.IsNotNull(queue, "commandQueue is not a collection");
-            return queue.Count;
         }
 
         private static TcpClient Connect(int port)

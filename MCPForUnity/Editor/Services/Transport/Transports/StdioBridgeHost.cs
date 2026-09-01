@@ -269,6 +269,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         // pin the bridge off: raw EditorApplication.isCompiling stays true for as long as the
         // reload is held, and this gates bridge startup.
         /// <summary>
+        /// Number of commands currently queued, read under the queue lock. Diagnostics only —
+        /// callers must not reason about individual entries, since the queue mutates from both
+        /// the listener tasks and the editor update loop.
+        /// </summary>
+        internal static int QueuedCommandCount
+        {
+            get { lock (lockObj) { return commandQueue.Count; } }
+        }
+
+        /// <summary>
         /// True when an already-queued command is the same payload arriving from a different
         /// connection — the signature of a broker that reconnected and resent. Payload equality
         /// alone is not enough: a single connection handles one command at a time, so two
