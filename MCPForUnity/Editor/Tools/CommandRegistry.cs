@@ -80,15 +80,22 @@ namespace MCPForUnity.Editor.Tools
                 // It also removes the GetCustomAttribute calls that made the AssetImportWorker
                 // crash in issue #1134; the worker guard above stays regardless, since the
                 // registry is unused there either way.
+                // Ordered by FullName because RegisterCommandType lets a duplicate command
+                // name overwrite the previous handler, so registration order decides which
+                // one wins. TypeCache does not document an order, and the assembly scan this
+                // replaces was stable within a build, so without sorting a name collision
+                // could resolve differently between domain reloads.
                 int toolCount = 0;
-                foreach (var type in TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>())
+                foreach (var type in TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>()
+                             .OrderBy(t => t.FullName, StringComparer.Ordinal))
                 {
                     if (RegisterCommandType(type, isResource: false))
                         toolCount++;
                 }
 
                 int resourceCount = 0;
-                foreach (var type in TypeCache.GetTypesWithAttribute<McpForUnityResourceAttribute>())
+                foreach (var type in TypeCache.GetTypesWithAttribute<McpForUnityResourceAttribute>()
+                             .OrderBy(t => t.FullName, StringComparer.Ordinal))
                 {
                     if (RegisterCommandType(type, isResource: true))
                         resourceCount++;
