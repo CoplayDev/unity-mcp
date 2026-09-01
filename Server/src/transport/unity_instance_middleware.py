@@ -5,6 +5,7 @@ This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
 from threading import RLock
+import asyncio
 import logging
 import time
 
@@ -212,34 +213,56 @@ class UnityInstanceMiddleware(Middleware):
             "Read mcpforunity://instances for current sessions."
         )
 
-    async def _drop_stale_pin(self, ctx, active_instance: str) -> str | None:
+    async def _drop_stale_pin(self, ctx, active_instance: str) -> str:
         """
-        Discard a pinned instance that no plugin is registered under.
+        Discard a pin whose editor never came back, and refuse rather than retarget.
 
         A pin outlives the editor it names. Left in place it also suppresses
         auto-select, so every later call fails with no_unity_session and neither
         waiting nor relaunching the editor recovers: the editor re-registers
         under its own name, which is not the name the pin holds.
 
-        An empty registry means a domain reload is in flight and the pin is
-        still good, so only drop it while some other instance is registered.
+        Two things make dropping it safe. The pinned hash gets the same reconnect
+        window `_resolve_session_id` gives it, so a domain reload does not look like
+        a departure. And a departure raises instead of returning None, because
+        falling through to auto-select would land a call pinned to project A in
+        project B, report success, and re-pin B (#1023).
+
+        An empty registry means every editor is mid-reload, so the pin still stands.
         """
         from transport.unity_transport import _is_http_transport
         if not (_is_http_transport() and PluginHub.is_configured()):
             return active_instance
 
-        instances = await self._discover_instances(ctx)
-        ids = [inst.id for inst in instances if getattr(inst, "id", None)]
-        if not ids or active_instance in ids:
-            return active_instance
+        from transport.plugin_hub import _read_bounded_wait_env
+        max_wait_s = _read_bounded_wait_env(
+            "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", default_s=20.0, max_s=120.0)
+        retry_ms = float(getattr(config, "reload_retry_ms", 250))
+        sleep_seconds = max(0.05, min(0.25, retry_ms / 1000.0))
+        deadline = time.monotonic() + max_wait_s
+
+        while True:
+            instances = await self._discover_instances(ctx)
+            ids = [inst.id for inst in instances if getattr(inst, "id", None)]
+            if not ids or active_instance in ids:
+                return active_instance
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(sleep_seconds)
 
         _diag.warning(
-            "Active instance %s is no longer registered; dropping the stale pin. Registered: %s",
+            "Active instance %s did not return within %.1fs; dropping the stale pin. Registered: %s",
             active_instance,
+            max_wait_s,
             ", ".join(ids),
         )
         await self.clear_active_instance(ctx)
-        return None
+        raise ValueError(
+            f"Pinned Unity instance '{active_instance}' is no longer running "
+            f"(waited {max_wait_s:.0f}s). The pin has been cleared. Available: "
+            f"{', '.join(ids) or 'none'}. Pass unity_instance explicitly, or read "
+            "mcpforunity://instances for current sessions."
+        )
 
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
