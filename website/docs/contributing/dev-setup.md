@@ -246,7 +246,21 @@ For compatibility PRs, note the exact editor versions you tested in the PR body.
 
 CI exercises the package across multiple Unity versions to catch breaks in `#if UNITY_*_OR_NEWER` branches. The matrix is configured in `tools/unity-versions.json` and consumed by `.github/workflows/unity-tests.yml`.
 
-**Every PR gets a unity-tests status check on open** (mirrors `python-tests.yml`). For same-repo PRs the default Unity 6 leg actually runs; for fork PRs the workflow appears but skips with a "missing license secrets" notice until a maintainer applies `safe-to-test` (existing secret-safety gate). The full 4-version matrix is opt-in via the `full-matrix` label.
+**Every PR gets a unity-tests status check on open** (mirrors `python-tests.yml`). For same-repo PRs the default Unity 6 leg actually runs. The full 4-version matrix is opt-in via the `full-matrix` label.
+
+### Which checks are real signal on a fork PR
+
+GitHub withholds repository secrets from workflow runs triggered by a fork's pull request, and both Unity workflows need a licence. They report **Skipped**, not a pass:
+
+| Check | On a fork PR |
+|---|---|
+| `Compile MCPForUnity (win/osx/linux)` | **Runs.** Licence-free compile across win/osx/linux — real signal. |
+| `Run Python Tests` | **Runs.** Real signal. |
+| `Check docs reference is fresh` | **Runs.** Real signal. |
+| `Test in editmode on Unity <version>` | **Skipped** — no Editor booted, no C# compiled by this job. |
+| `e2e-bridge` | **Skipped** — no Editor booted, no tool call exercised. |
+
+If you need a real Unity run against fork code, ask a maintainer: once the diff is reviewed, pushing the branch into this repo makes the `push` trigger run the full suite in a trusted context. There is deliberately no `pull_request_target` trigger for the Unity workflows — running fork-authored C# with `UNITY_*` secrets in scope is the classic "pwn request" shape, since an `[InitializeOnLoad]` script in the PR would be enough to read them.
 
 **When the full matrix runs (all 4 versions in parallel):**
 
@@ -254,8 +268,6 @@ CI exercises the package across multiple Unity versions to catch breaks in `#if 
 - `workflow_call` from `beta-release.yml` / `release.yml`.
 - Manual `workflow_dispatch` from the Actions tab.
 - Any PR (in-repo or fork) labeled with **`full-matrix`** — apply when your change touches compat shims, conditional compilation, or anything else version-sensitive. Triggers a full-matrix run on the next `pull_request` or `pull_request_target` event. Cost is ~6-8 min wall clock vs ~3 min for the default leg.
-
-Fork PRs still need `safe-to-test` as the base gate (so secrets are exposed against reviewed-only fork code); `full-matrix` is layered on top for fork-PR full-matrix runs.
 
 **Default (single leg)** — every other path runs only against `defaultVersion` from `tools/unity-versions.json` (currently Unity 6.0 LTS, `6000.0.75f1`). The `floor` role (`2021.3.45f2`) still identifies the package minimum and runs as part of the full matrix; it's no longer the default-leg version.
 

@@ -24,9 +24,9 @@ on:
       - .github/workflows/unity-tests.yml
   # Same-repo PRs get a unity-tests status check on every open / push via this trigger
   # (mirrors python-tests.yml). Fork PRs ALSO fire this trigger but run in the fork's
-  # context without secrets — the detect step downstream writes unity_ok=false and the
-  # job reports a green check having compiled and tested nothing. That skip is stated
-  # loudly in the job's step summary so it is never mistaken for a pass.
+  # context without secrets — the `license` gate job writes unity_ok=false and the test
+  # job is skipped by its job-level `if:`, so the merge box shows "Skipped" rather than a
+  # green check. The reason is also written to the gate job's step summary.
   #
   # There is deliberately no pull_request_target trigger here. Running fork-authored
   # C# through game-ci/unity-test-runner with UNITY_* secrets in scope is the classic
@@ -88,9 +88,56 @@ jobs:
           fi
           echo "versions=$versions" >> "$GITHUB_OUTPUT"
 
+  license:
+    # Hoisted out of testAllModes so the gate is a JOB-level condition. A step-level `if:`
+    # produces step-conclusion `skipped`, which contributes nothing to the job conclusion,
+    # so the whole suite reported a green check having compiled and tested nothing. A job
+    # skipped by a job-level `if:` reports "Skipped" in the merge box instead, which is
+    # what a reviewer actually reads. Branch protection still treats a skipped required
+    # check as satisfied, so this does not block merges.
+    name: Detect Unity license secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      unity_ok: ${{ steps.detect.outputs.unity_ok }}
+    steps:
+      - name: Detect Unity license secrets
+        id: detect
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -e
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
+            echo "unity_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "unity_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain why the Unity suite will not run
+        if: steps.detect.outputs.unity_ok != 'true'
+        run: |
+          echo "::warning::Unity tests will be SKIPPED - no license secrets in scope (normal for fork PRs). Nothing will be compiled or tested."
+          {
+            echo "## :warning: Unity tests will be SKIPPED"
+            echo
+            echo "No Unity license secrets were in scope for this run, so **no C# will be compiled and no test will be executed**."
+            echo "The dependent job reports **Skipped**, not a pass."
+            echo
+            echo "GitHub withholds repository secrets from workflow runs triggered by a fork's pull request."
+            echo "To get real signal, a maintainer must run the suite against this code from a trusted context -"
+            echo "push the reviewed fork branch into this repo and the \`push\` trigger runs the full suite."
+            echo
+            echo "\`Compile MCPForUnity (win/osx/linux)\` and \`Run Python Tests\` DO run on fork PRs and are real signal."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   testAllModes:
     name: Test in ${{ matrix.testMode }} on Unity ${{ matrix.unityVersion }}
-    needs: matrix
+    needs: [matrix, license]
+    if: needs.license.outputs.unity_ok == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -110,39 +157,6 @@ jobs:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
           persist-credentials: false
 
-      - name: Detect Unity license secrets
-        id: detect
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
-        run: |
-          set -e
-          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
-            echo "unity_ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "unity_ok=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # A skipped run and a real pass both report a green check, because step-level
-      # `if:` conditions produce step-conclusion `skipped`, which contributes nothing
-      # to the job conclusion. Make the difference unmissable on the run page so a
-      # reviewer never reads this green check as "the code compiled".
-      - name: Skip Unity tests (missing license secrets)
-        if: steps.detect.outputs.unity_ok != 'true'
-        run: |
-          echo "::warning::Unity tests SKIPPED - no license secrets in scope (normal for fork PRs). This check is NOT a pass: nothing was compiled or tested."
-          {
-            echo "## :warning: Unity tests were SKIPPED"
-            echo
-            echo "No Unity license secrets were in scope for this run, so **no C# was compiled and no test was executed**."
-            echo "The green check means the job exited cleanly - **not** that this code works."
-            echo
-            echo "GitHub withholds repository secrets from workflow runs triggered by a fork's pull request."
-            echo "To get real signal, a maintainer must run the suite against this code from a trusted context."
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - uses: actions/cache@v4
         with:
           path: ${{ matrix.projectPath }}/Library
@@ -153,7 +167,6 @@ jobs:
 
       # Run domain reload tests first (they're [Explicit] so need explicit category)
       - name: Run domain reload tests
-        if: steps.detect.outputs.unity_ok == 'true'
         uses: game-ci/unity-test-runner@v4
         id: domain-tests
         env:
@@ -168,7 +181,6 @@ jobs:
           customParameters: -testCategory domain_reload
 
       - name: Run tests
-        if: steps.detect.outputs.unity_ok == 'true'
         uses: game-ci/unity-test-runner@v4
         id: tests
         continue-on-error: true
@@ -183,7 +195,6 @@ jobs:
           testMode: ${{ matrix.testMode }}
 
       - name: Check test results
-        if: steps.detect.outputs.unity_ok == 'true'
         env:
           ARTIFACTS_PATH: ${{ steps.tests.outputs.artifactsPath }}
         run: |
@@ -238,7 +249,7 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@v4
-        if: always() && steps.detect.outputs.unity_ok == 'true' && steps.tests.outcome != 'skipped'
+        if: always() && steps.tests.outcome != 'skipped'
         with:
           name: Test results for ${{ matrix.testMode }} on Unity ${{ matrix.unityVersion }}
           path: ${{ steps.tests.outputs.artifactsPath }}
