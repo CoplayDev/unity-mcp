@@ -146,6 +146,30 @@ Unity AI Assistant bundles `System.Collections.Immutable` v10, while MCP for Uni
 
 ---
 
+## Editor hangs on load and the bridge never connects (Unity 6.5 + AI packages)
+
+If the Editor never finishes loading on **Unity 6000.5.x**, MCP for Unity can look like the culprit — the bridge never arms because the Editor never gets that far.
+
+*Reported by [@100yenadmin](https://github.com/CoplayDev/unity-mcp/issues/1219).*
+
+**Symptoms:**
+- The Editor launches, gets through licensing and package registration, then spins at ~100% CPU on the main thread forever
+- No Editor window ever appears, and the MCP for Unity bridge never connects
+- Happens on every launch method — Unity Hub, CLI, and `-batchmode`
+- A native stack of the spinning thread sits inside `AssetDatabase::InitialRefresh`
+
+**Cause:**
+Unity's own pre-release `com.unity.ai.assistant` package (with its `com.unity.ai.inference` and `com.unity.asset-manager-for-unity` dependencies) can livelock the AssetDatabase during the initial import. This is a Unity bug, tracked as **UUM-132096** — not an MCP for Unity issue.
+
+**Fix:**
+1. Remove `com.unity.ai.assistant`, `com.unity.ai.inference`, and `com.unity.asset-manager-for-unity` from `Packages/manifest.json`.
+2. Delete `Packages/packages-lock.json`. This step is essential — the lock file re-resolves the packages even after the manifest edit, which makes the problem look intermittent.
+3. Delete the `Library/` folder so the project reimports cleanly.
+
+**Note:** Disabling the package is not enough; the AI packages form an interlocking dependency chain that re-adds itself. See also the [DLL reference mismatch](#dll-reference-mismatch-with-unity-ai-assistant-package) section above, which covers a different problem caused by the same package.
+
+---
+
 ## "No Unity Instances Found"
 
 :::tip When in doubt, restart your client
@@ -181,3 +205,14 @@ A: Start a new chat — the bad chat didn't pick up the MCP server configuration
 
 **Q: My MCP client keeps failing to launch the server even though `uv` is installed.**
 A: Some Windows machines have multiple `uv.exe` locations. Auto-config sometimes picks a less stable path, causing the launch to fail or auto-rewrite on every restart. Use **"Choose UV Install Location"** in the MCP for Unity window and pin the **WinGet Links shim** path (`%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe`) — it's stable across uv upgrades.
+
+## FAQ — Codex
+
+**Q: Reading `mcpforunity://custom-tools` fails with `unknown MCP server 'mcp__unityMCP'`.**
+A: Codex exposes callable tools and readable resources under different names. Tools are namespaced `mcp__unityMCP.*`, but generic resource reads want the bare server key returned by resource discovery — usually `unityMCP`. Call `list_mcp_resources` first and pass the server key it returns verbatim:
+
+```text
+resources/read  server: "unityMCP"  uri: "mcpforunity://custom-tools"
+```
+
+The same applies to `mcpforunity://instances`. This naming split is a client-side convention, so check the discovery output rather than assuming the tool namespace also works for resources.
