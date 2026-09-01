@@ -89,9 +89,15 @@ namespace MCPForUnity.Editor.Tools
                     resourceTypes = allTypes.Where(t => HasAttributeSafe<McpForUnityResourceAttribute>(t));
                 }
 
+                // Ordered by FullName because RegisterCommandType lets a duplicate command
+                // name overwrite the previously registered handler, so registration order
+                // decides which type wins a collision. Neither TypeCache nor the fallback
+                // documents an order, so without sorting a name collision could resolve
+                // differently between domain reloads.
+
                 // Discover tools
                 int toolCount = 0;
-                foreach (var type in toolTypes)
+                foreach (var type in toolTypes.OrderBy(t => t.FullName, StringComparer.Ordinal))
                 {
                     if (RegisterCommandType(type, isResource: false))
                         toolCount++;
@@ -99,7 +105,7 @@ namespace MCPForUnity.Editor.Tools
 
                 // Discover resources
                 int resourceCount = 0;
-                foreach (var type in resourceTypes)
+                foreach (var type in resourceTypes.OrderBy(t => t.FullName, StringComparer.Ordinal))
                 {
                     if (RegisterCommandType(type, isResource: true))
                         resourceCount++;
