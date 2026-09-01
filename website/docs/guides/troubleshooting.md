@@ -159,14 +159,14 @@ If the Editor never finishes loading on **Unity 6000.5.x**, MCP for Unity can lo
 - A native stack of the spinning thread sits inside `AssetDatabase::InitialRefresh`
 
 **Cause:**
-Unity's own pre-release `com.unity.ai.assistant` package (with its `com.unity.ai.inference` and `com.unity.asset-manager-for-unity` dependencies) can livelock the AssetDatabase during the initial import. This is a Unity bug, tracked as **UUM-132096** — not an MCP for Unity issue.
+Unity's own pre-release `com.unity.ai.assistant` package (with its `com.unity.ai.inference` and `com.unity.asset-manager-for-unity` dependencies) can livelock the AssetDatabase during the initial import. This is a Unity-side problem, not an MCP for Unity issue.
 
 **Fix:**
 1. Remove `com.unity.ai.assistant`, `com.unity.ai.inference`, and `com.unity.asset-manager-for-unity` from `Packages/manifest.json`.
 2. Delete `Packages/packages-lock.json`. This step is essential — the lock file re-resolves the packages even after the manifest edit, which makes the problem look intermittent.
 3. Delete the `Library/` folder so the project reimports cleanly.
 
-**Note:** Disabling the package is not enough; the AI packages form an interlocking dependency chain that re-adds itself. See also the [DLL reference mismatch](#dll-reference-mismatch-with-unity-ai-assistant-package) section above, which covers a different problem caused by the same package.
+**Note:** Disabling the package is not enough; the AI packages form an interlocking dependency chain that re-adds itself — behaviour tracked in Unity issue **UUM-132096**. See also the [DLL reference mismatch](#dll-reference-mismatch-with-unity-ai-assistant-package) section above, which covers a different problem caused by the same package.
 
 ---
 
