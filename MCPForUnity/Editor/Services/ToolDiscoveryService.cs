@@ -33,12 +33,9 @@ namespace MCPForUnity.Editor.Services
             // the tool registry in line with it, and with ResourceDiscoveryService, which has
             // always been TypeCache-only.
             //
-            // Ordered by FullName because a duplicate tool name overwrites the previous
-            // registration below, so registration order decides which one wins. TypeCache does
-            // not document an order, so without sorting a name collision could resolve
-            // differently between domain reloads.
-            foreach (var type in TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>()
-                         .OrderBy(t => t.FullName, StringComparer.Ordinal))
+            // Ordered because a duplicate tool name overwrites the previous registration below,
+            // so registration order decides which one wins, and TypeCache documents no order.
+            foreach (var type in InRegistrationOrder(TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>()))
             {
                 McpForUnityToolAttribute toolAttr;
                 try
@@ -70,6 +67,19 @@ namespace MCPForUnity.Editor.Services
 
             McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection", false);
             return _cachedTools.Values.ToList();
+        }
+
+        /// <summary>
+        /// Stable registration order for discovered tool types. FullName alone is not a total
+        /// order: two assemblies can declare the same full type name, and if their tool names
+        /// also collide the later registration wins, so the assembly identity breaks the tie.
+        /// Without both keys a collision could resolve differently between domain reloads.
+        /// </summary>
+        internal static IEnumerable<Type> InRegistrationOrder(IEnumerable<Type> types)
+        {
+            return types
+                .OrderBy(type => type.FullName, StringComparer.Ordinal)
+                .ThenBy(type => type.Assembly.FullName, StringComparer.Ordinal);
         }
 
         public ToolMetadata GetToolMetadata(string toolName)

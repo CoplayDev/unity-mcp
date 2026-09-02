@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
 using NUnit.Framework;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Services;
@@ -158,6 +162,42 @@ namespace MCPForUnity.Editor.Tests.EditMode.Services
 
             CollectionAssert.AreEqual(first, second,
                 "repeated discovery must produce the same registration order");
+        }
+
+        /// <summary>
+        /// FullName alone is not a total order — two assemblies can declare the same full type
+        /// name. If their tool names also collide the later registration wins, so the tie has to
+        /// resolve the same way every reload. Two identically named types cannot coexist in one
+        /// assembly, so this emits them into separate dynamic assemblies to build a real tie.
+        /// </summary>
+        [Test]
+        public void InRegistrationOrder_BreaksFullNameTiesByAssembly()
+        {
+            const string sharedName = "McpTieBreak.Namespace.DuplicateTool";
+            Type fromA = EmitTypeInOwnAssembly("McpTieBreakAssemblyA", sharedName);
+            Type fromB = EmitTypeInOwnAssembly("McpTieBreakAssemblyB", sharedName);
+
+            Assert.AreEqual(fromA.FullName, fromB.FullName,
+                "precondition: the two types must share a full name for this to test a tie");
+            Assert.AreNotEqual(fromA.Assembly.FullName, fromB.Assembly.FullName,
+                "precondition: the two types must live in different assemblies");
+
+            var forward = ToolDiscoveryService.InRegistrationOrder(new[] { fromA, fromB }).ToList();
+            var reversed = ToolDiscoveryService.InRegistrationOrder(new[] { fromB, fromA }).ToList();
+
+            CollectionAssert.AreEqual(forward, reversed,
+                "input order must not decide the winner once full names tie");
+            Assert.AreSame(fromA, forward[0], "assembly A sorts before assembly B");
+            Assert.AreSame(fromB, forward[1], "assembly B registers last, so it would win a name collision");
+        }
+
+        private static Type EmitTypeInOwnAssembly(string assemblyName, string typeFullName)
+        {
+            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
+                new AssemblyName(assemblyName), AssemblyBuilderAccess.Run);
+            ModuleBuilder module = assembly.DefineDynamicModule(assemblyName);
+            TypeBuilder type = module.DefineType(typeFullName, TypeAttributes.Public);
+            return type.CreateType();
         }
 
         [Test]
