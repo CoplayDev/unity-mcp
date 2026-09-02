@@ -1,5 +1,6 @@
 using System.IO;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Services.Blender;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Helpers
@@ -8,7 +9,8 @@ namespace MCPForUnity.Editor.Helpers
     /// Per-user, NON-SECRET configuration for the Blender Bridge (Asset Gen tab): where the
     /// BlenderMCP addon socket listens, where the user's blender-mcp checkout lives, and where
     /// Blender keeps its user addons. Nothing here is required for the bridge to talk to Blender;
-    /// the checkout path only unlocks addon sync and update checks.
+    /// the checkout path only unlocks addon sync and update checks. EditorPrefs is main-thread
+    /// only, so callers capture what they need (e.g. <see cref="Endpoint"/>) before going async.
     /// </summary>
     public static class BlenderBridgePrefs
     {
@@ -27,6 +29,9 @@ namespace MCPForUnity.Editor.Helpers
             get => EditorPrefs.GetInt(EditorPrefKeys.BlenderPort, DefaultPort);
             set => EditorPrefs.SetInt(EditorPrefKeys.BlenderPort, value > 0 && value <= 65535 ? value : DefaultPort);
         }
+
+        /// <summary>Host and port as one value, safe to hand to a background thread.</summary>
+        public static BlenderEndpoint Endpoint => new BlenderEndpoint(Host, Port);
 
         /// <summary>Local checkout of the blender-mcp repository (contains addon.py). Empty = not configured.</summary>
         public static string ForkPath
@@ -49,6 +54,7 @@ namespace MCPForUnity.Editor.Helpers
 
         public static string ForkAddonPath => IsForkConfigured ? ForkPath + "/" + AddonFileName : null;
 
+        /// <summary>The override when set, otherwise the newest detected user addons folder; null if none.</summary>
         public static string ResolveAddonsDir()
         {
             string o = AddonsDirOverride;
@@ -71,11 +77,13 @@ namespace MCPForUnity.Editor.Helpers
             return !string.IsNullOrEmpty(p) && File.Exists(Path.Combine(p, AddonFileName));
         }
 
+        /// <summary>Trims, converts backslashes to slashes and drops a trailing slash.</summary>
         internal static string NormalizePath(string value)
         {
             return (value ?? string.Empty).Trim().Replace('\\', '/').TrimEnd('/');
         }
 
+        /// <summary>Stores a string pref, deleting the key when the value is blank so defaults apply.</summary>
         private static void SetOrDelete(string key, string value)
         {
             if (string.IsNullOrWhiteSpace(value)) EditorPrefs.DeleteKey(key);

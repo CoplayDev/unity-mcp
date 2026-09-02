@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using MCPForUnity.Editor.Services.Blender;
 using Newtonsoft.Json.Linq;
@@ -54,6 +55,23 @@ namespace MCPForUnityTests.Editor.Blender
             var ex = Assert.Throws<BlenderCommandException>(() => BlenderSocketClient.Unwrap(response, "get_scene_info"));
             StringAssert.Contains("boom", ex.Message);
             StringAssert.Contains("get_scene_info", ex.Message);
+        }
+
+        [Test]
+        public void Unwrap_Rejects_UnknownOrMissingStatus()
+        {
+            var unknown = JObject.Parse("{\"status\": \"pending\", \"result\": 1}");
+            var ex = Assert.Throws<InvalidDataException>(() => BlenderSocketClient.Unwrap(unknown, "get_scene_info"));
+            StringAssert.Contains("pending", ex.Message);
+
+            var missing = JObject.Parse("{\"result\": 1}");
+            Assert.Throws<InvalidDataException>(() => BlenderSocketClient.Unwrap(missing, "get_scene_info"));
+        }
+
+        [Test]
+        public void BlenderEndpoint_FormatsAsHostPort()
+        {
+            Assert.AreEqual("127.0.0.1:9876", new BlenderEndpoint("127.0.0.1", 9876).ToString());
         }
     }
 }

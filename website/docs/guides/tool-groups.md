@@ -23,6 +23,7 @@ MCP for Unity ships 47 tools, but exposing all of them to the LLM at once balloo
 | `probuilder` | off | ProBuilder 3D modeling. Requires `com.unity.probuilder` package. |
 | `profiling` | off | Profiler session control, counters, memory snapshots, Frame Debugger. |
 | `docs` | off | Unity API reflection and documentation lookup. |
+| `asset_gen` | off | AI asset generation (3D model, image, audio; bring your own key) and the Blender Bridge. |
 
 ## Enabling a group
 

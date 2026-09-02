@@ -60,7 +60,7 @@ async def blender_bridge(
         list[str], "import_model: Blender objects to export (children included). Omit for selection_only or the whole scene."
     ] | None = None,
     selection_only: Annotated[bool, "import_model: export only what is currently selected in Blender."] | None = None,
-    format: Annotated[Literal["glb", "fbx"], "import_model: export format (default glb)."] | None = None,
+    format: Annotated[Literal["glb", "fbx"], "import_model: export format (default glb)."] | None = None,  # noqa: A002
     name: Annotated[str, "import_model: asset and GameObject name (defaults to the single exported object)."] | None = None,
     target_size: Annotated[float, "import_model: final size in meters of the largest dimension; 0 keeps the imported scale."] | None = None,
     position: Annotated[list[float], "import_model: world position [x, y, z] for the placed instance."] | None = None,
@@ -76,6 +76,7 @@ async def blender_bridge(
     force: Annotated[bool, "sync_addon: overwrite even when the installed addon already matches."] | None = None,
     timeout_seconds: Annotated[int, "Seconds to wait for Blender (default 180; big exports can be slow)."] | None = None,
 ) -> dict[str, Any]:
+    """Forward one Blender Bridge action to the Unity Editor and return its response."""
     unity_instance = await get_unity_instance_from_context(ctx)
 
     params_dict = {

@@ -20,6 +20,7 @@ def blender():
 
 
 def _run(action: str, params: Optional[dict[str, Any]] = None) -> None:
+    """Send one blender_bridge action to Unity (None-valued params dropped) and print the result."""
     config = get_config()
     payload: dict[str, Any] = {"action": action}
     payload.update({k: v for k, v in (params or {}).items() if v is not None})
