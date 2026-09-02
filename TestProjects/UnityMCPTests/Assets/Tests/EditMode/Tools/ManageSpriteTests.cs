@@ -1305,6 +1305,10 @@ namespace MCPForUnityTests.Editor.Tools
             // walk sits below run on the axis, otherwise the character sprints while strolling.
             Assert.AreEqual(new[] { "walk", "run" },
                 tree.children.Select(c => c.motion.name).ToArray());
+            // The values, not just the order: with automatic thresholds left on, Unity
+            // overwrote 1/2 with 0/1 and this line is what notices.
+            Assert.AreEqual(new[] { 1f, 2f },
+                tree.children.Select(c => c.threshold).ToArray());
         }
 
         [Test]

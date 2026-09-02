@@ -142,6 +142,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     // More than one locomotion clip: a 1D blend tree.
                     var blendState = rootSM.AddState("Locomotion");
                     var blendTree  = new BlendTree { name = "LocomotionTree", blendType = BlendTreeType.Simple1D, blendParameter = "Speed" };
+                    // Off, or Unity silently redistributes the thresholds and the BlendValues
+                    // below never reach the asset - measured live: walk/run wrote 1/2, read back 0/1.
+                    blendTree.useAutomaticThresholds = false;
                     AssetDatabase.AddObjectToAsset(blendTree, controllerPath);
 
                     foreach (var pair in locomotionPairs.OrderBy(p => p.entry.BlendValue))
