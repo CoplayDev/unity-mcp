@@ -596,6 +596,62 @@ namespace MCPForUnityTests.Editor.Tools
             StringAssert.Contains("Line 3", errors);
         }
 
+        [Test]
+        public void Execute_UsingWithTrailingComment_IsHoisted()
+        {
+            var result = Execute("using System.IO; // needed for Path\nreturn Path.GetFileName(\"/a/b.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("b.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingAfterBlockComment_IsStillHoisted()
+        {
+            var result = Execute("/* lead\n   in */\nusing System.IO;\nreturn Path.GetFileName(\"/a/c.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("c.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingBehindInlineBlockComment_IsHoisted()
+        {
+            var result = Execute("/* why */ using System.IO;\nreturn Path.GetFileName(\"/a/d.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("d.txt", result["data"]["result"].Value<string>());
+        }
+
+        // ──────────────────── Execute: hoisting must not widen safety_checks ────────────────────
+
+        [Test]
+        public void Execute_HoistedNamespace_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using System.IO;\nFile.Delete(\"/tmp/mcp-does-not-exist\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
+        [Test]
+        public void Execute_AliasedType_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using F = System.IO.File;\nF.Delete(\"/tmp/mcp-does-not-exist\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
+        [Test]
+        public void Execute_UsingStatic_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using static System.Diagnostics.Process;\nStart(\"ls\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
         private static JObject Execute(string code)
         {
             return ToJObject(ExecuteCode.HandleCommand(new JObject

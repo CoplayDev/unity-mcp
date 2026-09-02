@@ -529,20 +529,46 @@ namespace MCPForUnity.Editor.Tools
         private static bool IsUsingDirective(string line)
             => UsingDirectiveLine.IsMatch(line) || UsingAliasLine.IsMatch(line);
 
+        // A directive can carry comments, but the regexes above must see a bare `using ...;`
+        private static string StripComments(string line, ref bool inBlock)
+        {
+            var sb = new StringBuilder();
+            for (int i = 0; i < line.Length; i++)
+            {
+                bool pair = i + 1 < line.Length;
+                if (inBlock)
+                {
+                    if (pair && line[i] == '*' && line[i + 1] == '/') { inBlock = false; i++; }
+                    continue;
+                }
+                if (pair && line[i] == '/' && line[i + 1] == '*') { inBlock = true; i++; continue; }
+                if (pair && line[i] == '/' && line[i + 1] == '/') break;
+                sb.Append(line[i]);
+            }
+            return sb.ToString();
+        }
+
+        // Blanked, not removed, so compiler line numbers still map to the caller's
+        private static List<string> HoistLeadingUsings(string[] body)
+        {
+            var hoisted = new List<string>();
+            bool inBlock = false;
+            for (int i = 0; i < body.Length; i++)
+            {
+                string directive = StripComments(body[i], ref inBlock).Trim();
+                if (directive.Length == 0) continue;
+                if (!IsUsingDirective(directive)) break;
+                if (!BuiltinUsings.Contains(directive) && !hoisted.Contains(directive)) hoisted.Add(directive);
+                body[i] = string.Empty;
+            }
+            return hoisted;
+        }
+
         // A using directive is illegal in a method body, so the parser reads it as a using-statement and wants a '('
-        // Hoisted lines are blanked, not removed, so compiler line numbers still map to the caller's.
         private static string WrapUserCode(string code, out int lineOffset)
         {
             var body = code.Replace("\r\n", "\n").Split('\n');
-            var hoisted = new List<string>();
-            for (int i = 0; i < body.Length; i++)
-            {
-                string trimmed = body[i].Trim();
-                if (trimmed.Length == 0 || trimmed.StartsWith("//")) continue;
-                if (!IsUsingDirective(body[i])) break;
-                if (!BuiltinUsings.Contains(trimmed) && !hoisted.Contains(trimmed)) hoisted.Add(trimmed);
-                body[i] = string.Empty;
-            }
+            var hoisted = HoistLeadingUsings(body);
 
             var sb = new StringBuilder();
             foreach (string u in BuiltinUsings) sb.AppendLine(u);
@@ -591,9 +617,50 @@ namespace MCPForUnity.Editor.Tools
             return result;
         }
 
+        // A hoisted `using System.IO;` puts File.Delete in scope, which no fully-qualified
+        // pattern in _blockedPatterns matches. Derive the short forms the directives create.
+        private static IEnumerable<string> ShortFormsFromUsings(IEnumerable<string> directives)
+        {
+            foreach (string directive in directives)
+            {
+                string target = directive.Substring("using".Length).Trim().TrimEnd(';').Trim();
+                bool isStatic = target.StartsWith("static ", StringComparison.Ordinal);
+                if (isStatic) target = target.Substring("static ".Length).Trim();
+
+                string alias = null;
+                int eq = target.IndexOf('=');
+                if (eq >= 0)
+                {
+                    alias = target.Substring(0, eq).Trim();
+                    target = target.Substring(eq + 1).Trim();
+                }
+
+                int lastDot = target.LastIndexOf('.');
+                string leaf = lastDot >= 0 ? target.Substring(lastDot + 1) : target;
+
+                foreach (string pattern in _blockedPatterns)
+                {
+                    if (pattern.StartsWith(target + ".", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string tail = pattern.Substring(target.Length + 1);
+                        yield return alias == null ? tail : alias + "." + tail;
+                    }
+                    // A blocked pattern already written short, like AssetDatabase.DeleteAsset,
+                    // needs the leaf instead: `using static ...Process;` makes Process.Start bare Start
+                    else if (pattern.StartsWith(leaf + ".", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string tail = pattern.Substring(leaf.Length + 1);
+                        if (isStatic) yield return tail;
+                        else if (alias != null) yield return alias + "." + tail;
+                    }
+                }
+            }
+        }
+
         private static string CheckBlockedPatterns(string code)
         {
-            foreach (var pattern in _blockedPatterns)
+            var directives = HoistLeadingUsings(code.Replace("\r\n", "\n").Split('\n'));
+            foreach (var pattern in _blockedPatterns.Concat(ShortFormsFromUsings(directives)))
             {
                 if (code.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
                     return $"Code contains blocked pattern: '{pattern}'. Disable safety checks with safety_checks=false if this is intentional.";
