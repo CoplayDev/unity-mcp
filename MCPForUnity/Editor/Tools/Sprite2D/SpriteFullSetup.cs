@@ -99,6 +99,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                             UnityEditor.Undo.RecordObject(go, "Add Animator Component");
                             animator = UnityEditor.Undo.AddComponent<UnityEngine.Animator>(go);
                         }
+                        // The clips bind to SpriteRenderer.m_Sprite: without one the Animator
+                        // plays into nothing and the call still reports success.
+                        if (go.GetComponent<UnityEngine.SpriteRenderer>() == null)
+                        {
+                            UnityEditor.Undo.AddComponent<UnityEngine.SpriteRenderer>(go);
+                            diagnostics.AddWarning("SCENE_SPRITE_RENDERER_ADDED",
+                                $"'{sceneTarget}' had no SpriteRenderer, so one was added for the clips to drive.");
+                        }
                         // Recorded and dirtied like the sibling controller_assign path.
                         UnityEditor.Undo.RecordObject(animator, "Assign AnimatorController");
                         animator.runtimeAnimatorController = asset;

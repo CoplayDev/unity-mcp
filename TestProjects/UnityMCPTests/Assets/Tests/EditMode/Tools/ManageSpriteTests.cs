@@ -1282,6 +1282,45 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void FullSetup_SceneTargetWithoutASpriteRenderer_GetsOneAndSaysSo()
+        {
+            string path = CreateSheet("s8", 4, 1);
+            var go = new GameObject("SpriteTest_S8");
+            try
+            {
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S8.controller",
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S8" });
+
+                Assert.IsTrue(result.Value<bool>("success"));
+                Assert.AreEqual(1, go.GetComponents<SpriteRenderer>().Length,
+                    "the clips animate a SpriteRenderer, so the attachment has to leave one behind");
+                Assert.That(result["diagnostics"].ToString(), Does.Contain("SCENE_SPRITE_RENDERER_ADDED"),
+                    "a component added to the caller's object must be reported");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void FullSetup_SceneTargetThatAlreadyHasASpriteRenderer_KeepsTheOneItHas()
+        {
+            string path = CreateSheet("s9", 4, 1);
+            var go = new GameObject("SpriteTest_S9");
+            var existing = go.AddComponent<SpriteRenderer>();
+            try
+            {
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S9.controller",
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S9" });
+
+                Assert.AreEqual(1, go.GetComponents<SpriteRenderer>().Length);
+                Assert.AreSame(existing, go.GetComponent<SpriteRenderer>());
+                Assert.That(result["diagnostics"].ToString(), Does.Not.Contain("SCENE_SPRITE_RENDERER_ADDED"));
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
         public void FullSetup_RefusedClip_IsNotCountedAsCreated()
         {
             string path = CreateSheet("s4", 6, 1);
