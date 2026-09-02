@@ -144,7 +144,7 @@ class TestDiscoverEditorPerOS:
     def test_windows_resolves_hub_layout(self):
         version = "2021.3.45f2"
         env = {"ProgramFiles": r"C:\Program Files"}
-        binary = str(Path(r"C:\Program Files") / "Unity" / "Hub" / "Editor" / version / "Editor" / "Unity.exe")
+        binary = r"C:\Program Files\Unity\Hub\Editor" + f"\\{version}\\Editor\\Unity.exe"
         exists, is_exec, list_dir = _fake_fs({binary})
         spec = resolve_editor_binary(
             version,
@@ -161,7 +161,7 @@ class TestDiscoverEditorPerOS:
     def test_linux_resolves_hub_layout(self):
         version = "6000.0.75f1"
         env = {"HOME": "/home/dev"}
-        binary = str(Path("/home/dev") / "Unity" / "Hub" / "Editor" / version / "Editor" / "Unity")
+        binary = f"/home/dev/Unity/Hub/Editor/{version}/Editor/Unity"
         exists, is_exec, list_dir = _fake_fs({binary})
         spec = resolve_editor_binary(
             version,
@@ -300,7 +300,7 @@ class TestDiscoverEditorMonkeypatchedPlatform:
         version = "6000.0.75f1"
         monkeypatch.setattr(lh.sys, "platform", "linux")
         env = {"HOME": "/home/ci"}
-        binary = str(Path("/home/ci") / "Unity" / "Hub" / "Editor" / version / "Editor" / "Unity")
+        binary = f"/home/ci/Unity/Hub/Editor/{version}/Editor/Unity"
         exists, is_exec, list_dir = _fake_fs({binary})
         spec = resolve_editor_binary(
             version,
@@ -319,7 +319,7 @@ class TestSecondaryInstallPath:
     def test_secondary_root_used_for_candidate(self):
         version = "6000.0.75f1"
         secondary = "/Volumes/Big/UnityEditors"
-        binary = str(Path(secondary) / version / "Unity.app/Contents/MacOS/Unity")
+        binary = f"{secondary}/{version}/Unity.app/Contents/MacOS/Unity"
         exists, is_exec, list_dir = _fake_fs({binary})
 
         def read_text(_p: str) -> str:
