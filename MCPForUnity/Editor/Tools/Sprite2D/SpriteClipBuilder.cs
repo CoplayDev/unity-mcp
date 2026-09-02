@@ -72,12 +72,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             outputDir = outputDir ?? Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "Assets";
 
-            // A refused path comes back null; falling back to the raw value would hand
-            // traversal sequences straight through.
-            outputDir = AssetPathUtility.SanitizeAssetPath(outputDir);
-            if (outputDir == null)
+            if (!SpriteParams.TryReadAssetPath(new JObject { ["output_dir"] = outputDir }, "output_dir", out outputDir, out string dirError))
             {
-                diagnostics.AddError("BAD_PARAM", "'output_dir' must stay under Assets/ and cannot contain '..'.");
+                diagnostics.AddError("BAD_PARAM", dirError);
                 return created;
             }
             if (!AssetDatabase.IsValidFolder(outputDir))
@@ -154,11 +151,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     diagnostics.AddWarning("LOW_FRAME_COUNT", $"Clip '{clipName}' has only {frameSprites.Length} frame(s) — animation may not be visible.");
 
                 // Refusals come before the allocation: a `new AnimationClip` that never becomes
-                // an asset leaks. The delete stays next to CreateAsset for the same reason.
+                // an asset leaks.
                 string clipPath = AssetPathUtility.SanitizeAssetPath($"{outputDir}/{clipName}.anim");
-                if (clipPath == null)
+                if (clipPath == null || !AssetPathUtility.IsValidAssetPath(clipPath))
                 {
-                    diagnostics.AddWarning("CLIP_BAD_NAME", $"Clip '{clipName}': the name cannot be used as a file name - skipped.", "Remove '..' and path separators from the clip name.");
+                    diagnostics.AddWarning("CLIP_BAD_NAME", $"Clip '{clipName}': the name cannot be used as a file name - skipped.", "Remove '..', path separators and characters like : * ? \" < > | from the clip name.");
                     continue;
                 }
 
@@ -197,8 +194,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 settings.loopTime = loop;
                 AnimationUtility.SetAnimationClipSettings(clip, settings);
 
-                if (existing != null) AssetDatabase.DeleteAsset(clipPath);
+                // CreateAsset replaces an existing asset itself; deleting first left nothing at
+                // the path when the replacement failed to be written.
                 AssetDatabase.CreateAsset(clip, clipPath);
+                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) == null)
+                {
+                    diagnostics.AddWarning("CLIP_WRITE_FAILED", $"Clip '{clipName}': Unity did not write '{clipPath}' - skipped.", "Check the Unity console for the AssetDatabase error.");
+                    continue;
+                }
 
                 created.Add(new SpriteClipInfo
                 {

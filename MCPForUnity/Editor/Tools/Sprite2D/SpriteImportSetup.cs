@@ -163,20 +163,28 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // Checked before the conversion below: a refused request used to leave the texture
             // already turned into a Sprite. Sequential rather than chained with ||, because a
             // short-circuited call leaves its out parameter unassigned.
-            int rows = 1, frameW = 0, frameH = 0;
+            int rows = 0, frameW = 0, frameH = 0;
             bool gridOk = SpriteParams.TryReadWholeNumber(@params, "cols", 0, out int cols, out string gridError);
-            if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "rows", 1, out rows, out gridError);
+            if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "rows", 0, out rows, out gridError);
             if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "frame_width", 0, out frameW, out gridError);
             if (gridOk) gridOk = SpriteParams.TryReadWholeNumber(@params, "frame_height", 0, out frameH, out gridError);
             if (!gridOk)
                 return diagnostics.Fail("BAD_PARAM", gridError);
 
-            if (cols <= 0 && frameW <= 0)
-                return diagnostics.Fail("BAD_PARAM", "Either 'cols' or 'frame_width' is required.");
+            if (cols < 0 || rows < 0 || frameW < 0 || frameH < 0)
+                return diagnostics.Fail("BAD_PARAM", "'cols', 'rows', 'frame_width' and 'frame_height' cannot be negative.");
 
-            // An explicit rows=0 would reach the texH / rows division below and throw.
-            if (rows <= 0 && frameH <= 0)
+            if (cols <= 0 && frameW <= 0)
+                return diagnostics.Fail("BAD_PARAM", "Either 'cols' (1 or more) or 'frame_width' is required.");
+
+            // Like cols, rows=0 means "derive it from frame_height"; an explicit 0 with nothing
+            // to derive from would reach the texH / rows division below and throw. An absent
+            // rows means one row unless frame_height is there to derive it from.
+            bool rowsGiven = @params["rows"] != null && @params["rows"].Type != JTokenType.Null;
+            if (rowsGiven && rows == 0 && frameH <= 0)
                 return diagnostics.Fail("BAD_PARAM", "'rows' must be 1 or more; pass 'frame_height' instead if the row count is unknown.");
+            if (!rowsGiven && frameH <= 0)
+                rows = 1;
 
             // Measure only once imported as a sprite sheet: a Default-type import rescales a
             // non-power-of-two sheet (96px to 128px) and the trailing frames then land outside
@@ -184,13 +192,27 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // 96x16 sheet asked for 6 columns gave 4 sprites of 21px. Later refusals restore
             // the previous type: a refused request must not leave a converted texture behind.
             var previousType = importer.textureType;
-            if (importer.textureType != TextureImporterType.Sprite)
+            try
             {
-                importer.textureType = TextureImporterType.Sprite;
-                EditorUtility.SetDirty(importer);
-                importer.SaveAndReimport();
+                if (importer.textureType != TextureImporterType.Sprite)
+                {
+                    importer.textureType = TextureImporterType.Sprite;
+                    EditorUtility.SetDirty(importer);
+                    importer.SaveAndReimport();
+                }
+                return SliceConverted(@params, diagnostics, path, importer, previousType, cols, rows, frameW, frameH);
             }
+            catch
+            {
+                RestoreTextureType(importer, previousType);
+                throw;
+            }
+        }
 
+        private static object SliceConverted(JObject @params, SpriteDiagnosticBuilder diagnostics, string path,
+                                             TextureImporter importer, TextureImporterType previousType,
+                                             int cols, int rows, int frameW, int frameH)
+        {
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
             {

@@ -29,6 +29,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 error = $"'{key}' must stay under Assets/ and cannot contain '..'.";
                 return false;
             }
+            if (path != "Assets" && !AssetPathUtility.IsValidAssetPath(path))
+            {
+                error = $"'{key}' contains a character that is not allowed in an asset path.";
+                return false;
+            }
             return true;
         }
 

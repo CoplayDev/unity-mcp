@@ -617,6 +617,20 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(SpritesOf(path).Select(s => s.name), Is.EquivalentTo(new[] { "hero_0", "hero_1" }));
         }
 
+        [Test]
+        public void SliceSheet_FrameHeightAloneDerivesTheRowCount()
+        {
+            // rows defaulted to 1 even when frame_height was there to derive it from, so the
+            // documented alternative produced a single row and a remainder warning.
+            string path = CreateSheet("derive_rows", 4, 4);
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 4, ["frame_height"] = Cell });
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(4, result.Value<int>("rows"));
+            Assert.AreEqual(16, SpritesOf(path).Length);
+        }
+
         private static IEnumerable<TestCaseData> RefusedGrids()
         {
             TestCaseData Case(int sheetCols, int sheetRows, JObject grid, string code) =>
@@ -641,6 +655,8 @@ namespace MCPForUnityTests.Editor.Tools
             yield return Case(2, 1, new JObject { ["cols"] = 65536, ["frame_width"] = 65536 }, "SLICE_OUT_OF_BOUNDS");
             // 16,384 entries that fit inside the texture: only the frame ceiling stops this.
             yield return Case(8, 8, new JObject { ["cols"] = 128, ["rows"] = 128 }, "SLICE_TOO_MANY_FRAMES");
+            // A negative alternative used to be silently replaced by the value derived from cols.
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["frame_width"] = -1 }, "BAD_PARAM");
         }
 
         [TestCaseSource(nameof(RefusedGrids))]
@@ -837,6 +853,8 @@ namespace MCPForUnityTests.Editor.Tools
             // Forwarded unchanged by the Python surface; the typed cast threw on them.
             yield return Case("entry is a string", new JValue("not_an_object"), "CLIP_NOT_AN_OBJECT");
             yield return Case("entry is a number", new JValue(7), "CLIP_NOT_AN_OBJECT");
+            // Legal in an asset path as far as SanitizeAssetPath is concerned, illegal in a file name.
+            yield return Case("name with a character no file name allows", new JObject { ["name"] = "bad:name", ["start_frame"] = 0, ["end_frame"] = 3 }, "CLIP_BAD_NAME");
         }
 
         [TestCaseSource(nameof(RefusedClips))]
@@ -986,6 +1004,41 @@ namespace MCPForUnityTests.Editor.Tools
             });
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(ErrorText(result), Does.Contain("controller_path"));
+        }
+
+        // 'Assets' passes SanitizeAssetPath, and the suffix then made it 'Assets.controller' at
+        // the project root; 'Assets/' became 'Assets/.controller', a file with no name.
+        [TestCase("Assets", "Assets.controller")]
+        [TestCase("Assets/", "Assets/.controller")]
+        public void SetupController_ControllerPathThatIsOnlyAFolder_IsRefusedBeforeWriting(string controllerPath, string strayRelative)
+        {
+            var clips = BuildClips("folderctrl", "idle", "walk");
+            var result = Run(new JObject
+            {
+                ["action"] = "setup_controller",
+                ["clips"] = clips,
+                ["controller_path"] = controllerPath,
+            });
+
+            string stray = Path.Combine(Directory.GetParent(Application.dataPath).FullName, strayRelative);
+            bool leaked = File.Exists(stray);
+            if (leaked) { File.Delete(stray); File.Delete(stray + ".meta"); }
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(ErrorText(result), Does.Contain("controller_path"));
+            Assert.IsFalse(leaked, $"nothing may be written at {strayRelative}");
+        }
+
+        [Test]
+        public void SetupController_ClipEntryWithoutAName_IsSkippedWithAWarning()
+        {
+            var clips = BuildClips("nonamectrl", "idle", "walk");
+            clips.Add(new JObject { ["path"] = $"{TempRoot}/walk.anim" });
+
+            var result = SetupController(clips);
+
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_NO_NAME"));
         }
 
         [Test]
@@ -1203,6 +1256,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsFalse(result.Value<bool>("success"),
                 "an attachment that was asked for and did not happen is not a success");
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SCENE_TARGET_NOT_FOUND"));
         }
 
         [Test]
@@ -1243,8 +1297,10 @@ namespace MCPForUnityTests.Editor.Tools
             });
 
             int onDisk = AssetDatabase.FindAssets("t:AnimationClip", new[] { TempRoot }).Length;
+            Assert.AreEqual(2, onDisk, "idle and walk are valid, attack is refused");
             Assert.AreEqual(onDisk, result.Value<int>("clip_count"),
                 "clip_count must count the clips that exist, not the ones that were asked for");
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_FPS"));
         }
 
         [Test]

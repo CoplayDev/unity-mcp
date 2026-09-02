@@ -33,10 +33,18 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             foreach (JToken clipToken in clipsToken)
             {
                 // Measured: a non-object clips entry threw InvalidCastException on a typed cast.
-                if (clipToken is JObject cd)
-                    clips.Add((cd["name"]?.ToString() ?? "", cd["path"]?.ToString() ?? ""));
-                else
+                if (!(clipToken is JObject cd))
+                {
                     diagnostics.AddWarning("CLIP_NOT_AN_OBJECT", "A clips entry is not an object - skipped.", "Each clip must be an object with a 'name'.");
+                    continue;
+                }
+                string name = cd["name"]?.ToString();
+                if (string.IsNullOrEmpty(name))
+                {
+                    diagnostics.AddWarning("CLIP_NO_NAME", "A clips entry has no name - skipped.", "Each clip must be an object with a 'name'.");
+                    continue;
+                }
+                clips.Add((name, cd["path"]?.ToString() ?? ""));
             }
 
             var built = BuildController(clips, controllerPath, overwrite, diagnostics);
@@ -65,6 +73,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }
             if (!controllerPath.EndsWith(".controller"))
                 controllerPath += ".controller";
+            // Checked after the suffix: a bare 'Assets' passes SanitizeAssetPath and then
+            // becomes 'Assets.controller', a file at the project root; 'Assets/' becomes
+            // 'Assets/.controller', a file with no name.
+            if (!AssetPathUtility.IsValidAssetPath(controllerPath) || Path.GetFileName(controllerPath) == ".controller")
+            {
+                diagnostics.AddError("BAD_PARAM", "'controller_path' must name a file under Assets/ without characters like : * ? \" < > |.");
+                return default;
+            }
 
             var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
             foreach (var (clipName, clipPath) in clips)
@@ -84,16 +100,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return default;
             }
 
-            // Removed only once the replacement is known to be buildable: deleting first left
-            // a failed rebuild with no controller at all.
-            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
+            // Not deleted here: CreateAnimatorControllerAtPath replaces the asset itself, and
+            // deleting first left a failed rebuild with no controller at all.
+            if (!overwrite && AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
             {
-                if (!overwrite)
-                {
-                    diagnostics.AddError("CONTROLLER_EXISTS", $"Controller already exists at '{controllerPath}'.", "Set overwrite=true to replace it.");
-                    return default;
-                }
-                AssetDatabase.DeleteAsset(controllerPath);
+                diagnostics.AddError("CONTROLLER_EXISTS", $"Controller already exists at '{controllerPath}'.", "Set overwrite=true to replace it.");
+                return default;
             }
 
             string dir = Path.GetDirectoryName(controllerPath)?.Replace('\\', '/');
@@ -221,6 +233,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             AssetDatabase.SaveAssets();
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
+
+            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) == null)
+            {
+                diagnostics.AddError("CONTROLLER_WRITE_FAILED", $"Unity did not write '{controllerPath}'.", "Check the Unity console for the AssetDatabase error.");
+                return default;
+            }
 
             return (controllerPath, rootSM.states.Length);
         }

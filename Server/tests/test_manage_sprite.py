@@ -73,6 +73,13 @@ class TestManageSpriteValidation:
         assert result["success"] is True
         assert mock_unity["calls"] == 1
 
+    def test_explicit_zero_cols_is_forwarded_not_reported_missing(self, mock_unity):
+        # `not cols` read an explicit 0 as an omitted parameter and told the caller to
+        # supply what they had supplied; the C# side is the one that names a bad value.
+        call(action="slice_sheet", path="Assets/hero.png", cols=0)
+        assert mock_unity["calls"] == 1
+        assert mock_unity["params"]["cols"] == 0
+
     def test_setup_controller_requires_controller_path(self):
         result = call(action="setup_controller", clips=[{"name": "walk", "path": "a.anim"}])
         assert result["success"] is False

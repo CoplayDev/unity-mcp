@@ -119,7 +119,7 @@ async def manage_sprite(
     if action_lower in ("get_info", "slice_sheet", "setup_clips", "full_setup") and not path:
         return {"success": False, "message": f"'path' is required for action '{action}'."}
 
-    if action_lower in ("slice_sheet", "full_setup") and not cols and not frame_width:
+    if action_lower in ("slice_sheet", "full_setup") and cols is None and frame_width is None:
         return {"success": False, "message": f"'cols' or 'frame_width' is required for '{action}'. "
                 "Use get_info first to retrieve image_base64, analyze the grid visually, then call full_setup with cols/rows."}
 
