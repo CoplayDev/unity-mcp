@@ -8,6 +8,7 @@ description: "MCP for Unity tools in the asset_gen group."
 
 AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-your-own-key)
 
+- **[`blender_bridge`](./blender_bridge.md)** — Bridge to a running Blender that has the BlenderMCP addon connected (socket, default 127.0.0.1:9876; configured in Window > MCP for Unity > Generative > Blender Bridge).
 - **[`generate_audio`](./generate_audio.md)** — Generate audio (sound effects and background music) with fal.ai models and import them as AudioClips into the Unity project.
 - **[`generate_image`](./generate_image.md)** — Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as textures/sprites into the Unity project.
 - **[`generate_model`](./generate_model.md)** — Generate 3D models with AI providers (Tripo, Meshy) and import them into the Unity project.
