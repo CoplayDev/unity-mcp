@@ -61,6 +61,35 @@ async def wait_for_editor_ready(ctx: Context, timeout_s: float = 30.0) -> tuple[
     return (False, time.monotonic() - start)
 
 
+async def _reread_payload_after_reconnect(unity_instance: str | None) -> dict[str, Any] | None:
+    """Fetch the payload the lost response would have carried.
+
+    The reload closes the connection mid-command, so the original response cannot be
+    reconstructed - ask again once the editor is back. compile stays "none" so the
+    re-read cannot trigger a second reload (#577).
+    """
+    try:
+        response = await unity_transport.send_with_unity_instance(
+            _legacy_conn.async_send_command_with_retry,
+            unity_instance,
+            "refresh_unity",
+            {"mode": "if_dirty", "scope": "all",
+                "compile": "none", "wait_for_ready": True},
+            retry_on_reload=False,
+        )
+    except Exception as e:
+        logger.warning(
+            "refresh_unity: could not re-read state after reconnect: %s", e)
+        return None
+
+    payload = response if isinstance(response, dict) else (
+        response.model_dump() if hasattr(response, "model_dump") else getattr(response, "__dict__", None))
+    if not isinstance(payload, dict) or not payload.get("success"):
+        return None
+    data = payload.get("data")
+    return data if isinstance(data, dict) else None
+
+
 def is_reloading_rejection(resp: Any) -> bool:
     """True when Unity rejected a command because it thinks it is reloading.
 
@@ -264,10 +293,11 @@ async def refresh_unity(
         pass
 
     if recovered_from_disconnect:
+        data = await _reread_payload_after_reconnect(unity_instance) or {}
         return MCPResponse(
             success=True,
             message="Refresh recovered after Unity disconnect/retry; editor is ready.",
-            data={"recovered_from_disconnect": True},
+            data={**data, "recovered_from_disconnect": True},
         )
 
     return MCPResponse(**response_dict) if isinstance(response, dict) else response
