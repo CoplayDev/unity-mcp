@@ -13,6 +13,13 @@
 # Usage (inside unityci/editor, or against a local Hub install):
 #   UNITY_DATA=/opt/unity/Editor/Data UNITY_VERSION=2021.3.45f2 tools/compile-check.sh
 #
+# Windows, from Git Bash against a Hub install (no Docker, no license):
+#   UNITY_DATA="C:/Program Files/Unity/Hub/Editor/2021.3.45f2/Editor/Data" UNITY_VERSION=2021.3.45f2 \
+#   EXTRA_REFS=/c/refs tools/compile-check.sh
+# where /c/refs holds Newtonsoft.Json.dll and nunit.framework.dll, e.g. copied from
+# TestProjects/UnityMCPTests/Library/PackageCache/com.unity.nuget.newtonsoft-json@*/Runtime/ and
+# .../com.unity.ext.nunit@*/net35/unity-custom/. Takes ~1 min per Unity version.
+#
 # Env:
 #   UNITY_DATA     Editor/Data directory                 (default /opt/unity/Editor/Data)
 #   UNITY_VERSION  e.g. 2021.3.45f2                      (required for version defines)
@@ -29,16 +36,20 @@
 # open TestProjects/UnityMCPTests in that Editor, then re-derive from the generated csprojs.
 set -uo pipefail
 
-UNITY_DATA=${UNITY_DATA:-/opt/unity/Editor/Data}
-REPO=${REPO:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}
+die() { echo "::error::$*" >&2; exit 2; }
+
+# Roslyn runs as a Windows process under Git Bash, so every path handed to it must be
+# X:/... form, not the MSYS /x/... form that `pwd` produces there. `pwd -W` is the MSYS
+# spelling; on Linux/macOS it is an invalid option and we fall back to plain `pwd`.
+winpath() { (cd "$1" 2>/dev/null && (pwd -W 2>/dev/null || pwd)) || die "directory not found: $1"; }
+
+UNITY_DATA=$(winpath "${UNITY_DATA:-/opt/unity/Editor/Data}")
+REPO=$(winpath "${REPO:-"$(dirname "${BASH_SOURCE[0]}")/.."}")
 EXTRA_REFS=${EXTRA_REFS:-"$REPO/.compile-refs"}
 PLATFORMS=${PLATFORMS:-"win osx linux"}
 OUT=${OUT:-/tmp/mcp-compile-check}
+mkdir -p "$OUT" && OUT=$(winpath "$OUT")
 LIBCACHE="$UNITY_DATA/Resources/PackageManager/ProjectTemplates/libcache"
-
-die() { echo "::error::$*" >&2; exit 2; }
-
-[ -d "$UNITY_DATA" ] || die "UNITY_DATA not found: $UNITY_DATA"
 CSC="$UNITY_DATA/DotNetSdkRoslyn/csc.dll"
 [ -f "$CSC" ] || die "Roslyn compiler not found: $CSC"
 
@@ -111,10 +122,14 @@ compile() {
     echo "-preferreduilang:en-US"
     echo "-nowarn:CS1701,CS1702"      # benign netstandard facade version unification
     echo "-out:$dir/$name.dll"
-    while read -r d; do [ -n "$d" ] && echo "-define:$d"; done < "$REPO/tools/compile-defines.txt"
+    # ${var%$'\r'} strips the CR a core.autocrlf checkout appends to every line: a CR inside
+    # -define:FOO silently defines the wrong symbol, and inside a LIBCACHE/ name it makes
+    # `find -name` match nothing, so the Editor build fails on TestRunner/UI types.
+    while read -r d; do d=${d%$'\r'}; [ -n "$d" ] && echo "-define:$d"; done < "$REPO/tools/compile-defines.txt"
     version_defines            | while read -r d; do echo "-define:$d"; done
     platform_defines "$platform" | while read -r d; do echo "-define:$d"; done
     while read -r entry; do
+      entry=${entry%$'\r'}
       [ -n "$entry" ] || continue
       local p; p=$(resolve_ref "$entry")
       if [ -n "$p" ] && [ -f "$p" ]; then echo "-r:\"$p\""; nrefs=$((nrefs+1))
