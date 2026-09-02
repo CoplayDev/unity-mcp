@@ -55,12 +55,8 @@ namespace MCPForUnityTests.Editor.Tools
 
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
 
-            // A fixture that quietly produces less than it claims weakens every test built on
-            // it, so it states what it can: the asset exists. Its dimensions cannot be asserted
-            // here - the texture is still Default-type at this point, and that import rescales a
-            // non-power-of-two sheet (96px is read back as 128px), which is the very behaviour
-            // slice_sheet works around. The frame count after slicing is the real postcondition
-            // and Slice() below asserts it.
+            // Only the asset's existence: the texture is still Default-type here, and that
+            // import rescales a non-power-of-two sheet. Slice() asserts the frame count.
             Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath),
                 $"fixture: {assetPath} did not import");
             return assetPath;
@@ -90,10 +86,8 @@ namespace MCPForUnityTests.Editor.Tools
             File.WriteAllBytes(sysPath, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
 
-            // Both callers depend on where this lands relative to the 4 MB ceiling in
-            // SpriteImportSetup, so the fixture asserts the side it was asked for rather
-            // than trusting the compressor. Changing that ceiling breaks these two lines
-            // loudly, which is the intent.
+            // Asserts which side of SpriteImportSetup's 4 MB ceiling this landed on rather
+            // than trusting the compressor; changing that ceiling breaks these lines loudly.
             if (assertOverCeiling)
                 Assert.Greater(new FileInfo(sysPath).Length, 4 * 1024 * 1024,
                     "fixture: the noise sheet must exceed the inline-image ceiling");
@@ -115,8 +109,7 @@ namespace MCPForUnityTests.Editor.Tools
             string sysPath = Path.Combine(
                 Directory.GetParent(Application.dataPath).FullName, assetPath);
             File.WriteAllBytes(sysPath, tex.EncodeToPNG());
-            // Both sibling helpers destroy their working texture here; this one did not, and
-            // a Texture2D built in an EditMode test is not collected on its own.
+            // A Texture2D built in an EditMode test is not collected on its own.
             Object.DestroyImmediate(tex);
 
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
@@ -125,14 +118,7 @@ namespace MCPForUnityTests.Editor.Tools
 
         private static JObject Run(JObject p) => ToJObject(ManageSprite.HandleCommand(p));
 
-        /// <summary>
-        /// The failure text, whichever key it arrived under. ErrorResponse serialises it as
-        /// "error", while anonymous failures elsewhere in the codebase use "message", and
-        /// Server/src/services/tools/__init__.py reads both. Pinning one key here would test
-        /// the response shape rather than the behaviour.
-        /// </summary>
-        private static string ErrorText(JObject result) =>
-            result.Value<string>("error") ?? result.Value<string>("message") ?? "";
+        private static string ErrorText(JObject result) => result.Value<string>("message") ?? "";
 
         private static JObject Slice(string path, int cols, int rows)
         {
@@ -143,8 +129,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["cols"] = cols,
                 ["rows"] = rows,
             });
-            // Only assert the postcondition for a call that was meant to succeed; the refusal
-            // tests call this helper too and check the failure themselves.
+            // The refusal tests call this helper too and check the failure themselves.
             if (result.Value<bool>("success"))
                 Assert.AreEqual(cols * rows, SpritesOf(path).Length,
                     "fixture: slice_sheet produced fewer frames than the grid asked for");
@@ -225,8 +210,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(result["slice_count"],
                 "an absent field also reads as 0, so the field itself has to be there");
             Assert.AreEqual(0, result.Value<int>("slice_count"));
-            // The count alone would pass against a response that reported slices it never
-            // counted; the observable behaviour is that the list is empty too.
+            // The count alone would pass against a response that reported slices it never counted.
             Assert.AreEqual(0, ((JArray)result["slices"]).Count);
         }
 
@@ -238,12 +222,11 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
             Assert.AreEqual(8, result.Value<int>("slice_count"));
-            // slice_count comes from importer.spritesheet.Length, which is independent of
-            // the projected list - measured 2026-08-21: emptying `slices` entirely left
-            // this test green. A test named for reporting every slice has to read them.
+            // slice_count is independent of the projected list - measured 2026-08-21,
+            // emptying `slices` entirely left this test green.
             var names = ((JArray)result["slices"]).Select(t => t.Value<string>("name")).ToArray();
-            Assert.AreEqual(8, names.Length, "every slice is reported, not just counted");
-            CollectionAssert.AllItemsAreUnique(names);
+            Assert.That(names, Is.EquivalentTo(SpritesOf(path).Select(s => s.name)),
+                "every slice is reported, not just counted");
         }
 
         [Test]
@@ -254,15 +237,10 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
 
-            // Eight slices is under the default page, so this sheet arrives whole. That is
-            // NOT true of every sheet slice_sheet can produce - it allows up to 4096 frames
-            // and the default page is 512 - so this asserts the default, not a guarantee.
+            // Under the default page of 512, so this asserts the default, not a guarantee.
             Assert.AreEqual(8, ((JArray)result["slices"]).Count);
-            // Value<int?>("next_cursor") rather than indexing then reading: an omitted
-            // property indexes to a C# null and would throw here instead of asserting.
-            // Absent and null both mean "finished" to the caller - that contract is the
-            // documented one, not something the Python bridge implements; it forwards the
-            // response untouched. Same rule as ErrorText above: do not pin the shape.
+            // Value<int?> rather than indexing: an omitted property would throw instead of
+            // asserting. Absent and null both mean "finished" - do not pin the shape.
             Assert.IsNull(result.Value<int?>("next_cursor"),
                 "a finished list has no next cursor");
         }
@@ -294,8 +272,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             var seen = new List<string>();
             int? cursor = 0;
-            // Bounded so a cursor that never advances fails as a wrong count rather than
-            // hanging the whole EditMode run.
+            // Bounded so a cursor that never advances fails rather than hanging the run.
             for (int page = 0; page < 10 && cursor != null; page++)
             {
                 var result = Run(new JObject
@@ -331,38 +308,16 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(0, ((JArray)result["slices"]).Count);
         }
 
-        [Test]
-        public void GetInfo_NegativeCursor_IsRefusedRatherThanReadAsPageOne()
+        // Skip(-3) yields the whole list, so without the guard a negative cursor answers
+        // with every slice and reports success - a right-looking answer, hence the refusal.
+        [TestCase(-3)]
+        [TestCase(9)]
+        public void GetInfo_CursorOutsideTheList_IsRefused(int cursor)
         {
-            string path = CreateSheet("negcursor", 4, 2);
+            string path = CreateSheet("cursor", 4, 2);
             Slice(path, 4, 2);
 
-            var result = Run(new JObject
-            {
-                ["action"] = "get_info",
-                ["path"] = path,
-                ["cursor"] = -3,
-            });
-
-            // Skip(-3) yields the whole list, so without the guard this call answers with
-            // every slice and reports success - the failure mode is a right-looking answer,
-            // which is why the assertion is on the refusal and not on the count.
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(ErrorText(result), Does.Contain("cursor"));
-        }
-
-        [Test]
-        public void GetInfo_CursorPastTheEnd_IsRefused()
-        {
-            string path = CreateSheet("farcursor", 4, 2);
-            Slice(path, 4, 2);
-
-            var result = Run(new JObject
-            {
-                ["action"] = "get_info",
-                ["path"] = path,
-                ["cursor"] = 9,
-            });
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path, ["cursor"] = cursor });
 
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(ErrorText(result), Does.Contain("cursor"));
@@ -372,9 +327,8 @@ namespace MCPForUnityTests.Editor.Tools
         public void GetInfo_MissingFileOnDisk_DoesNotPutTheAbsolutePathInTheResponse()
         {
             string path = CreateSheet("nofile", 4, 2);
-            // Deleted WITHOUT AssetDatabase.Refresh, so the importer still resolves and the
-            // File.Exists branch is the one that answers. This is the only branch that used
-            // to interpolate the absolute path into a field the caller receives.
+            // Deleted WITHOUT Refresh, so the importer still resolves and the File.Exists
+            // branch answers - the only branch that used to leak the absolute path.
             string full = Path.Combine(
                 Directory.GetParent(Application.dataPath).FullName, path);
             File.Delete(full);
@@ -390,28 +344,10 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void SetupClips_NonBooleanLoop_IsRefusedRatherThanConverted()
-        {
-            string path = CreateSheet("cliploop", 4, 2);
-            Slice(path, 4, 2);
-            var clips = OneClip("walk", 0, 3);
-            ((JObject)clips[0])["loop"] = "maybe";
-
-            // Measured 2026-08-21: this raised an uncaught FormatException out of the tool,
-            // and `loop: 2` was accepted silently. loop is the one flag with no type above
-            // C# - it lives inside the untyped `clips` array.
-            var result = SetupClips(path, clips);
-
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_LOOP"));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-        }
-
-        [Test]
         public void SliceSheet_GridThatDoesNotCoverTheTexture_SucceedsButSaysSo()
         {
             // 100 / 6 = 16, so the grid covers 96px and drops four. Measured before the
-            // warning existed: success, six sprites, and an empty diagnostics list - the
-            // caller had no way to learn that a strip of the sheet was ignored.
+            // warning existed: success, six sprites, empty diagnostics.
             string path = CreateSheetOfSize("remainder", 100, 16);
 
             var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
@@ -428,8 +364,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SliceSheet_GridThatCoversTheTextureExactly_WarnsAboutNothing()
         {
-            // The other direction. Without this, a warning that fired on every slice would
-            // look exactly like a warning that fires on the right ones.
+            // Without this, a warning firing on every slice looks like one firing correctly.
             string path = CreateSheetOfSize("exact", 96, 16);
 
             var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
@@ -451,15 +386,12 @@ namespace MCPForUnityTests.Editor.Tools
             request[key] = 2147483648L;
 
             // Measured 2026-08-21, before the guard: all four raised an uncaught
-            // OverflowException. Nothing between here and the bridge catches, so the tool
-            // failed at the transport instead of answering - reaching the assertions at
-            // all is half of what this test checks.
+            // OverflowException, so reaching the assertions at all is half of this test.
             var result = Run(request);
 
             Assert.IsFalse(result.Value<bool>("success"));
-            // "32-bit", not just the key name: if the conversion wrapped instead of
-            // refusing, cols would land on the "either cols or frame_width" message, which
-            // also contains the key - measured, the weaker assertion passed the mutation.
+            // "32-bit", not just the key name: a wrapped value lands on a different message
+            // that also contains the key - measured, the weaker assertion passed the mutation.
             Assert.That(ErrorText(result), Does.Contain(key).And.Contain("32-bit"));
         }
 
@@ -474,69 +406,6 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(ErrorText(result), Does.Contain("cols"));
         }
 
-        [TestCase("start_frame")]
-        [TestCase("end_frame")]
-        public void SetupClips_FrameIndexTooLargeForAnInt_IsRefusedNotThrown(string key)
-        {
-            string path = CreateSheet($"clipovf{key}", 4, 2);
-            Slice(path, 4, 2);
-            var clip = new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 3 };
-            clip[key] = 2147483648L;
-
-            var result = SetupClips(path, new JArray { clip });
-
-            // The clip is skipped with a named diagnostic rather than taking the whole
-            // call down; before the guard this threw out of the tool entirely.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
-        }
-
-        [Test]
-        public void SetupClips_FractionalStartFrame_IsRefusedRatherThanRounded()
-        {
-            string path = CreateSheet("clipfrac", 4, 2);
-            Slice(path, 4, 2);
-            var clips = OneClip("walk", 0, 5);
-            ((JObject)clips[0])["start_frame"] = 2.7;
-
-            var result = SetupClips(path, clips);
-
-            // Measured before the guard: this rounded to 3 and wrote a clip, reporting
-            // success. A caller asking for a frame index that does not exist got an asset.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-        }
-
-        [Test]
-        public void SetupClips_NaNFps_IsRefusedRatherThanWrittenIntoTheClip()
-        {
-            string path = CreateSheet("clipnan", 4, 2);
-            Slice(path, 4, 2);
-            var clips = OneClip("walk", 0, 5);
-            ((JObject)clips[0])["fps"] = double.NaN;
-
-            var result = SetupClips(path, clips);
-
-            // NaN is not greater than 0 and not less than or equal to 0, so the existing
-            // `fps <= 0f` guard let it through and the clip was written with NaN keyframe
-            // times - measured, and reported as a success.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_FPS"));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-        }
-
-        [Test]
-        public void SetupClips_EndFramePastTheLastSprite_IsRefusedRatherThanTruncated()
-        {
-            string path = CreateSheet("clippast", 4, 2);
-            Slice(path, 4, 2);
-
-            var result = SetupClips(path, OneClip("walk", 0, 99));
-
-            // Skip/Take clamps silently, so this used to produce an eight-frame clip for a
-            // hundred-frame request and call it a success.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-        }
-
         [TestCase("page_size")]
         [TestCase("cursor")]
         public void GetInfo_PagingValueTooLargeForAnInt_IsRefusedNotThrown(string key)
@@ -547,16 +416,13 @@ namespace MCPForUnityTests.Editor.Tools
             var request = new JObject { ["action"] = "get_info", ["path"] = path };
             request[key] = 2147483648L;
 
-            // Measured before the guard: ToObject<int> raised OverflowException here, and
-            // nothing between this and the bridge catches it - the tool failed at the
-            // transport instead of answering. Run() would propagate it, so reaching the
-            // assertions at all is half of what this test checks.
+            // Measured before the guard: ToObject<int> raised an uncaught OverflowException,
+            // so reaching the assertions at all is half of this test.
             var result = Run(request);
 
             Assert.IsFalse(result.Value<bool>("success"));
-            // Same reason as the grid case: a wrapped value is still refused, but by the
-            // 1..4096 range guard, whose message also names the key. Only this phrase
-            // distinguishes the conversion refusing from something downstream refusing.
+            // A wrapped value is still refused, but by the range guard downstream; only this
+            // phrase tells the two apart.
             Assert.That(ErrorText(result), Does.Contain(key).And.Contain("32-bit"));
         }
 
@@ -573,9 +439,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["page_size"] = 2.7,
             });
 
-            // Measured before the guard: this returned three slices and reported success.
-            // Answering a request the tool cannot honour is worse than refusing it, because
-            // the caller has no way to notice.
+            // Measured before the guard: returned three slices and reported success.
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(ErrorText(result), Does.Contain("page_size"));
         }
@@ -629,13 +493,15 @@ namespace MCPForUnityTests.Editor.Tools
         // slice_sheet
         // =====================================================================
 
-        [Test]
-        public void SliceSheet_WithoutColsOrFrameWidth_ReturnsError()
+        [TestCase("slice_sheet")]
+        [TestCase("full_setup")]
+        public void WithoutColsOrFrameWidth_ReturnsError(string action)
         {
             string path = CreateSheet("nogrid", 4, 2);
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path });
+            var result = Run(new JObject { ["action"] = action, ["path"] = path });
 
             Assert.IsFalse(result.Value<bool>("success"));
+            // Not just success=false: Newtonsoft reads an absent "success" as false too.
             Assert.That(ErrorText(result), Does.Contain("frame_width"));
         }
 
@@ -654,9 +520,8 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SliceSheet_FrameZeroIsTheTopLeftCell()
         {
-            // Sprite sheets are read left-to-right, top-to-bottom, but Unity's texture
-            // origin is bottom-left. Getting this backwards silently plays the animation
-            // in the wrong order, which no success flag would reveal.
+            // Sheets read top-to-bottom, but Unity's texture origin is bottom-left; getting
+            // this backwards silently plays the animation in the wrong order.
             string path = CreateSheet("order", 4, 2);
             Slice(path, 4, 2);
 
@@ -692,10 +557,8 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SliceSheet_NonPowerOfTwoSheet_KeepsEveryFrame()
         {
-            // 6 cells of 16px is 96px wide, which is not a power of two. A Default-type
-            // import rescales it to 128, and a grid measured there is 21px per cell - the
-            // last two frames then fall outside the real texture and Unity discards them,
-            // reporting success all the same.
+            // 96px is not a power of two: a Default-type import rescales it to 128, giving
+            // 21px cells whose last two frames fall outside the real texture - success anyway.
             string path = CreateSheet("npot", 6, 1);
             var result = Slice(path, 6, 1);
 
@@ -708,10 +571,8 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SliceSheet_TextureAlreadyConvertedToSprite_KeepsEveryFrame()
         {
-            // The conversion above is skipped when the texture is already a Sprite, so this
-            // pins the other branch. It survives every mutation of the slicing code, because
-            // Unity ignores npotScale on sprite textures - it is a boundary guard, not
-            // evidence for the fix.
+            // Pins the branch where the texture is already a Sprite. A boundary guard, not
+            // evidence for the fix: it survives every mutation of the slicing code.
             string path = CreateSheet("npot_preset", 6, 1);
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             importer.textureType = TextureImporterType.Sprite;
@@ -756,129 +617,51 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(SpritesOf(path).Select(s => s.name), Is.EquivalentTo(new[] { "hero_0", "hero_1" }));
         }
 
-        [Test]
-        public void SliceSheet_FrameWiderThanTheTexture_ReportsSliceEmpty()
+        private static IEnumerable<TestCaseData> RefusedGrids()
         {
-            string path = CreateSheet("toobig", 2, 1);
-            var result = Run(new JObject
-            {
-                ["action"] = "slice_sheet",
-                ["path"] = path,
-                ["frame_width"] = 4096,
-            });
+            TestCaseData Case(int sheetCols, int sheetRows, JObject grid, string code) =>
+                new TestCaseData(sheetCols, sheetRows, grid, code)
+                    .SetName($"{code} from {string.Join(",", grid.Properties().Select(p => p.Name + "=" + p.Value))}");
 
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_EMPTY"));
+            // A frame wider than the sheet derives 0 columns.
+            yield return Case(2, 1, new JObject { ["frame_width"] = 4096 }, "SLICE_EMPTY");
+            // `?? 1` only covers a missing key; an explicit 0 reaches the `texH / rows` division.
+            yield return Case(4, 1, new JObject { ["cols"] = 4, ["rows"] = 0 }, "BAD_PARAM");
+            // Only reachable after the texture is measured, so moving the argument checks
+            // earlier could not close this form of the class; the height axis reaches it too.
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["frame_width"] = 4096 }, "SLICE_OUT_OF_BOUNDS");
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["rows"] = 1, ["frame_height"] = 4096 }, "SLICE_OUT_OF_BOUNDS");
+            // 64 columns across 32 pixels derives a 0-wide frame, whose product passes any
+            // "does it fit" test - 64 degenerate rects, reported as success.
+            yield return Case(2, 1, new JObject { ["cols"] = 64 }, "SLICE_OUT_OF_BOUNDS");
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["rows"] = 32 }, "SLICE_OUT_OF_BOUNDS");
+            // 65536 * 65536 wraps to 0 in 32-bit arithmetic and slipped under the comparison.
+            // The code, not just the failure: measured 2026-08-21, with the (long) cast
+            // removed this stayed GREEN because the frame ceiling refused it instead.
+            yield return Case(2, 1, new JObject { ["cols"] = 65536, ["frame_width"] = 65536 }, "SLICE_OUT_OF_BOUNDS");
+            // 16,384 entries that fit inside the texture: only the frame ceiling stops this.
+            yield return Case(8, 8, new JObject { ["cols"] = 128, ["rows"] = 128 }, "SLICE_TOO_MANY_FRAMES");
         }
 
-        [Test]
-        public void SliceSheet_ZeroRows_FailsWithAMessageInsteadOfThrowing()
+        [TestCaseSource(nameof(RefusedGrids))]
+        public void SliceSheet_GridThatCannotBeCut_IsRefusedAndLeavesTheTextureAlone(
+            int sheetCols, int sheetRows, JObject grid, string code)
         {
-            // rows is read as `?? 1`, which only covers a missing key - an explicit 0
-            // survives and reaches the `texH / rows` division.
-            string path = CreateSheet("zerorows", 4, 1);
-
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Slice(path, 4, 0),
-                "a bad grid value must come back as an error, not an exception");
-            Assert.IsFalse(result.Value<bool>("success"));
-            // Not just success=false: Newtonsoft reads an absent "success" as false too,
-            // so a response of `{ }` would satisfy that alone and this test is named for
-            // the explanation, not the failure.
-            Assert.That(ErrorText(result), Is.Not.Empty);
-        }
-
-        [Test]
-        public void SliceSheet_FrameWiderThanTheTexture_LeavesTheTextureTypeAlone()
-        {
-            // This refusal is only reachable after the texture has been measured, so it is the
-            // form of the class that moving the argument checks earlier could not close.
-            string path = CreateSheet("restore_w", 2, 1);
+            string path = CreateSheet("badgrid", sheetCols, sheetRows);
             var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
 
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path, ["frame_width"] = 4096 });
-            Assert.IsFalse(result.Value<bool>("success"));
+            var request = new JObject { ["action"] = "slice_sheet", ["path"] = path };
+            foreach (var p in grid.Properties())
+                request[p.Name] = p.Value;
+            var result = Run(request);
 
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain(code));
+            Assert.AreEqual(0, SpritesOf(path).Length, "a refused grid must not write any frame");
+            // Every refusal after the Sprite conversion owes a RestoreTextureType call, an
+            // obligation the code cannot enforce; this assertion makes a forgotten one fail.
             Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
                 "a refused request must not leave the texture converted behind it");
-        }
-
-        [Test]
-        public void SliceSheet_FrameTallerThanTheTexture_LeavesTheTextureTypeAlone()
-        {
-            // The second form of the same class: the height axis reaches the same refusal.
-            string path = CreateSheet("restore_h", 2, 1);
-            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
-
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
-                                           ["frame_width"] = Cell, ["frame_height"] = 4096 });
-            Assert.IsFalse(result.Value<bool>("success"));
-
-            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
-                "a refused request must not leave the texture converted behind it");
-        }
-
-        [Test]
-        public void SliceSheet_MoreColumnsThanPixels_IsRefused()
-        {
-            // 64 columns across 32 pixels derives a 0-wide frame. The bounds product is then
-            // 0, which passes any "does it fit" test, and 64 degenerate rects were written
-            // with the call reporting success.
-            string path = CreateSheet("degenerate_w", 2, 1);   // 32x16
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path, ["cols"] = 64 });
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
-            Assert.AreEqual(0, SpritesOf(path).Length, "no degenerate frame may be written");
-        }
-
-        [Test]
-        public void SliceSheet_MoreRowsThanPixels_IsRefused()
-        {
-            string path = CreateSheet("degenerate_h", 2, 1);   // 32x16
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
-                                           ["cols"] = 2, ["rows"] = 32 });
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
-        }
-
-        [Test]
-        public void SliceSheet_GridProductThatOverflowsInt_IsStillRefused()
-        {
-            // 65536 * 65536 wraps to 0 in unchecked 32-bit arithmetic and slipped under the
-            // comparison; the product is computed in long for that reason.
-            string path = CreateSheet("overflow", 2, 1);
-            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
-                                           ["cols"] = 65536, ["frame_width"] = 65536 });
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            // The code, not just the failure. Measured 2026-08-21: with the (long) cast
-            // removed this test stayed GREEN, because the wrapped product slipped past the
-            // bounds check and the request was then refused by the independent frame
-            // ceiling instead. Asserting only "it failed" cannot tell the two apart.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
-        }
-
-        [Test]
-        public void SetupClips_ClipEntryThatIsNotAnObject_IsSkipped()
-        {
-            // The Python surface forwards these unchanged - measured - and the typed foreach
-            // cast threw InvalidCastException on them.
-            string path = CreateSheet("nonobj", 4, 1);
-            Slice(path, 4, 1);
-
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
-            {
-                ["action"] = "setup_clips",
-                ["path"] = path,
-                ["clips"] = new JArray { "not_an_object", 7 },
-                ["output_dir"] = TempRoot,
-            }), "a malformed clips entry must come back as a diagnostic, not an exception");
-
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_NOT_AN_OBJECT"));
         }
 
         [Test]
@@ -982,8 +765,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SetupClips_TenthFrameSortsAfterTheSecond()
         {
-            // A plain string sort puts hero_10 between hero_1 and hero_2, which reorders
-            // the animation without failing anything.
+            // A plain string sort puts hero_10 between hero_1 and hero_2.
             string path = CreateSheet("natural", 11, 1);
             Slice(path, 11, 1);
             SetupClips(path, OneClip("walk", 0, 10));
@@ -1027,31 +809,48 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(AnimationUtility.GetAnimationClipSettings(clip).loopTime);
         }
 
-        [Test]
-        public void SetupClips_RangeBeyondTheSheet_WarnsAndWritesNothing()
+        private static IEnumerable<TestCaseData> RefusedClips()
         {
-            string path = CreateSheet("range", 4, 1);
-            Slice(path, 4, 1);
+            TestCaseData Case(string label, JToken clip, string code) =>
+                new TestCaseData(clip, code).SetName($"{code}: {label}");
 
-            var result = SetupClips(path, OneClip("walk", 90, 99));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            // CLIP_BAD_RANGE, not CLIP_EMPTY: the range is now refused for naming frames
-            // that do not exist, before it can produce an empty selection. The behaviour
-            // this test is named for - warn, write nothing - is unchanged; only the
-            // diagnostic moved from describing the result to naming the wrong input.
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
-            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
+            // Measured 2026-08-21: `loop: "maybe"` raised an uncaught FormatException, and
+            // `loop: 2` was accepted silently. loop is the one flag with no type above C#.
+            yield return Case("loop is not a bool", new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 3, ["loop"] = "maybe" }, "CLIP_BAD_LOOP");
+            // Before the guard these threw OverflowException out of the tool.
+            yield return Case("start_frame overflows int", new JObject { ["name"] = "walk", ["start_frame"] = 2147483648L, ["end_frame"] = 3 }, "CLIP_BAD_RANGE");
+            yield return Case("end_frame overflows int", new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 2147483648L }, "CLIP_BAD_RANGE");
+            // Measured before the guard: rounded to 3, wrote a clip, reported success.
+            yield return Case("fractional start_frame", new JObject { ["name"] = "walk", ["start_frame"] = 2.7, ["end_frame"] = 5 }, "CLIP_BAD_RANGE");
+            // `fps <= 0f` is false for NaN, so the clip was written with NaN keyframe times.
+            yield return Case("NaN fps", new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 5, ["fps"] = double.NaN }, "CLIP_BAD_FPS");
+            yield return Case("zero fps", new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 3, ["fps"] = 0f }, "CLIP_BAD_FPS");
+            // Skip/Take clamps silently: an eight-frame clip for a hundred-frame request.
+            yield return Case("end_frame past the sheet", new JObject { ["name"] = "walk", ["start_frame"] = 0, ["end_frame"] = 99 }, "CLIP_BAD_RANGE");
+            yield return Case("range beyond the sheet", new JObject { ["name"] = "walk", ["start_frame"] = 90, ["end_frame"] = 99 }, "CLIP_BAD_RANGE");
+            // Skip ignores a negative count, so [-2,3] used to select frames 0..5.
+            yield return Case("negative start_frame", new JObject { ["name"] = "walk", ["start_frame"] = -2, ["end_frame"] = 3 }, "CLIP_BAD_RANGE");
+            yield return Case("no name", new JObject { ["start_frame"] = 0, ["end_frame"] = 3 }, "CLIP_NO_NAME");
+            // The name is joined into a file path, so separators would escape output_dir.
+            yield return Case("name escapes output_dir", new JObject { ["name"] = "../../evil", ["start_frame"] = 0, ["end_frame"] = 3 }, "CLIP_BAD_NAME");
+            yield return Case("name with a separator", new JObject { ["name"] = "nested/walk", ["start_frame"] = 0, ["end_frame"] = 3 }, "CLIP_BAD_NAME");
+            // Forwarded unchanged by the Python surface; the typed cast threw on them.
+            yield return Case("entry is a string", new JValue("not_an_object"), "CLIP_NOT_AN_OBJECT");
+            yield return Case("entry is a number", new JValue(7), "CLIP_NOT_AN_OBJECT");
         }
 
-        [Test]
-        public void SetupClips_UnnamedClip_IsSkippedWithAWarning()
+        [TestCaseSource(nameof(RefusedClips))]
+        public void SetupClips_ClipThatCannotBeBuilt_IsSkippedWithACode(JToken clip, string code)
         {
-            string path = CreateSheet("noname", 4, 1);
-            Slice(path, 4, 1);
+            string path = CreateSheet("badclip", 4, 2);
+            Slice(path, 4, 2);
 
-            var result = SetupClips(path, new JArray { new JObject { ["start_frame"] = 0, ["end_frame"] = 3 } });
+            var result = SetupClips(path, new JArray { clip });
+
             Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_NO_NAME"));
+            Assert.That(result["diagnostics"].ToString(), Does.Contain(code));
+            Assert.AreEqual(0, AssetDatabase.FindAssets("t:AnimationClip", new[] { TempRoot }).Length,
+                "a skipped clip must not leave an asset behind");
         }
 
         [Test]
@@ -1073,40 +872,10 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void SetupClips_ClipNameEscapingTheOutputDir_IsSkipped()
-        {
-            // The clip name is joined into a file path, so a name carrying separators would
-            // otherwise write outside the directory the caller asked for.
-            string path = CreateSheet("escapename", 4, 1);
-            Slice(path, 4, 1);
-
-            var result = SetupClips(path, OneClip("../../evil", 0, 3));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_NAME"));
-        }
-
-        [Test]
-        public void SetupClips_ClipNameWithASeparator_IsSkipped()
-        {
-            // A separator is not traversal, so the '..' check lets it through - and the name
-            // then selects a path in a descendant directory instead of a leaf in output_dir.
-            // The tool's own CLIP_BAD_NAME hint already tells callers to remove separators.
-            string path = CreateSheet("sepname", 4, 1);
-            Slice(path, 4, 1);
-
-            var result = SetupClips(path, OneClip("nested/walk", 0, 3));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/nested/walk.anim"),
-                "a clip name must not choose the directory it lands in");
-        }
-
-        [Test]
         public void SetupClips_ExistingClipWithoutOverwrite_IsLeftAlone()
         {
-            // setup_controller refuses an existing controller unless overwrite is set. Clips
-            // took the opposite policy and deleted whatever sat at the composed path, so an
-            // unrelated clip that merely shared a name was destroyed by a request that never
-            // asked for a replacement.
+            // Clips used to delete whatever sat at the composed path, so an unrelated clip
+            // sharing a name was destroyed by a request that never asked for a replacement.
             string path = CreateSheet("existing", 4, 1);
             Slice(path, 4, 1);
 
@@ -1148,22 +917,9 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void SetupClips_ZeroFps_IsSkippedInsteadOfWritingInfiniteKeyTimes()
-        {
-            string path = CreateSheet("zerofps", 4, 1);
-            Slice(path, 4, 1);
-
-            var result = SetupClips(path, OneClip("walk", 0, 3, fps: 0f));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_FPS"));
-            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
-        }
-
-        [Test]
         public void SetupClips_NameThatMerelyContainsAKeyword_IsNotTreatedAsLocomotion()
         {
-            // 'grunt' contains the letters of 'run'. Matching on substrings makes it loop
-            // like a walk cycle.
+            // 'grunt' contains the letters of 'run'; substring matching makes it loop.
             string path = CreateSheet("substr", 4, 1);
             Slice(path, 4, 1);
             SetupClips(path, OneClip("grunt", 0, 3));
@@ -1216,9 +972,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["controller_path"] = $"{TempRoot}/Hero.controller",
             });
             Assert.IsFalse(result.Value<bool>("success"));
-            // Not just success=false: Newtonsoft reads an absent "success" as false too,
-            // so a response of `{ }` would satisfy that alone and this test is named for
-            // the explanation, not the failure.
+            // Not just success=false: Newtonsoft reads an absent "success" as false too.
             Assert.That(ErrorText(result), Does.Contain("clips"));
         }
 
@@ -1242,25 +996,20 @@ namespace MCPForUnityTests.Editor.Tools
                 new JObject { ["name"] = "walk", ["path"] = $"{TempRoot}/missing.anim" },
             });
             Assert.IsFalse(result.Value<bool>("success"));
-            // Not just success=false: Newtonsoft reads an absent "success" as false too,
-            // so a response of `{ }` would satisfy that alone and this test is named for
-            // the explanation, not the failure.
-            Assert.That(ErrorText(result), Is.Not.Empty);
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_NOT_FOUND"));
         }
 
         [Test]
         public void SetupController_EveryEntrySkipped_StillReportsWhy()
         {
-            // The builder records why it skipped each entry, but the all-skipped path returns
-            // a generic error - so the caller was told the clips did not load without being
-            // told that none of them were objects.
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
+            // The all-skipped path returns a generic error, so the caller learned the clips
+            // did not load without learning why.
+            var result = Run(new JObject
             {
                 ["action"] = "setup_controller",
                 ["clips"] = new JArray { 7 },
                 ["controller_path"] = $"{TempRoot}/Skipped.controller",
-            }));
+            });
 
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(result.ToString(), Does.Contain("CLIP_NOT_AN_OBJECT"),
@@ -1311,60 +1060,52 @@ namespace MCPForUnityTests.Editor.Tools
                 tree.children.Select(c => c.threshold).ToArray());
         }
 
-        [Test]
-        public void SetupController_CombatClip_GetsATrigger()
+        [TestCase("attack", "Attack")]
+        // Naming the trigger after the first segment would give 'Hero', not 'Attack'.
+        [TestCase("hero_attack", "Attack", "Hero")]
+        // The letters of 'hit' sit inside 'white', which under substring matching arms
+        // a trigger the clip never asked for.
+        [TestCase("white_flash", null, "Hit", "White")]
+        // Detect used to lowercase before tokenizing, and the tokenizer splits camelCase
+        // on char.IsUpper - so 'heroAttack' became one word and matched no keyword.
+        [TestCase("heroAttack", "Attack")]
+        // 'heroXMLAttack' has no lower-to-upper boundary at the acronym's end, so it
+        // tokenized as 'xmlattack' and lost the trigger its snake_case twin gets.
+        [TestCase("heroXMLAttack", "Attack")]
+        // 'heroATTACK' held already - the break comes from the lowercase 'o' - so it is a
+        // parity tripwire; 'XMLSlash' has no lowercase at the boundary and depends on the fix.
+        [TestCase("heroATTACK", "Attack")]
+        [TestCase("XMLSlash", "Slash")]
+        public void SetupController_TriggerIsNamedAfterTheActionWord(string clipName, string trigger, params string[] absent)
         {
-            var result = SetupController(BuildClips("combat", "idle", "attack"));
+            var result = SetupController(BuildClips("trig", "idle", clipName));
             Assert.IsTrue(result.Value<bool>("success"));
 
             var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var attack = controller.parameters.SingleOrDefault(p => p.name == "Attack");
-            Assert.IsNotNull(attack, "a combat clip needs a trigger to be reachable");
-            Assert.AreEqual(AnimatorControllerParameterType.Trigger, attack.type);
+            var names = controller.parameters.Select(p => p.name).ToArray();
+            if (trigger != null)
+            {
+                var found = controller.parameters.SingleOrDefault(p => p.name == trigger);
+                Assert.IsNotNull(found, $"expected trigger '{trigger}'; parameters present: " + string.Join(", ", names));
+                Assert.AreEqual(AnimatorControllerParameterType.Trigger, found.type);
+            }
+            foreach (string name in absent)
+                Assert.That(names, Has.No.Member(name));
         }
 
         [Test]
         public void SetupController_ControllerPathEscapingAssets_FailsWithAMessage()
         {
             var clips = BuildClips("escapectrl", "idle", "walk");
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
+            var result = Run(new JObject
             {
                 ["action"] = "setup_controller",
                 ["clips"] = clips,
                 ["controller_path"] = $"{TempRoot}/../../../Hero.controller",
-            }), "a refused path must not surface as an exception");
+            });
 
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(ErrorText(result), Does.Contain("controller_path"));
-        }
-
-        [Test]
-        public void SetupController_TriggerIsNamedAfterTheAction()
-        {
-            // 'hero_attack' should arm an Attack trigger. Naming it after the first segment
-            // of the clip name gives 'Hero', which tells the caller nothing.
-            var result = SetupController(BuildClips("trig", "idle", "hero_attack"));
-            Assert.IsTrue(result.Value<bool>("success"));
-
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var names = controller.parameters.Select(p => p.name).ToArray();
-            Assert.That(names, Contains.Item("Attack"));
-            Assert.That(names, Has.No.Member("Hero"));
-        }
-
-        [Test]
-        public void SetupController_NameThatMerelyContainsAKeyword_GetsNoTrigger()
-        {
-            // The letters of 'hit' sit inside 'white'. Under substring matching the clip is
-            // filed as an object animation and picks up a trigger it never asked for.
-            var result = SetupController(BuildClips("wf", "idle", "white_flash"));
-            Assert.IsTrue(result.Value<bool>("success"));
-
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var names = controller.parameters.Select(p => p.name).ToArray();
-            Assert.That(names, Has.No.Member("Hit"));
-            Assert.That(names, Has.No.Member("White"));
         }
 
         [Test]
@@ -1384,8 +1125,7 @@ namespace MCPForUnityTests.Editor.Tools
             var clips = BuildClips("overwrite", "idle", "walk");
             Assert.IsTrue(SetupController(clips).Value<bool>("success"));
 
-            // Mark the first controller so a run that merely reused it is distinguishable
-            // from one that replaced it: two successes alone are true of both.
+            // Marked so reuse is distinguishable from replacement: two successes fit both.
             string ctrlPath = $"{TempRoot}/Hero.controller";
             var first = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
             first.AddParameter("SentinelFromFirstBuild", AnimatorControllerParameterType.Bool);
@@ -1398,13 +1138,8 @@ namespace MCPForUnityTests.Editor.Tools
                 "an authorised overwrite must build a new controller, not reuse the old one");
         }
 
-        // =====================================================================
-        // Audit verification - each of these asserts the behaviour a finding says
-        // is missing. Red here means the finding reproduces.
-        // =====================================================================
-
         [Test]
-        public void AuditS2_OverwriteThatCannotBuildAReplacement_KeepsTheOldController()
+        public void SetupController_OverwriteThatCannotBuildAReplacement_KeepsTheOldController()
         {
             var clips = BuildClips("s2", "idle", "walk");
             Assert.IsTrue(SetupController(clips).Value<bool>("success"));
@@ -1428,8 +1163,12 @@ namespace MCPForUnityTests.Editor.Tools
                 "a failed rebuild must not leave the caller without the controller they had");
         }
 
+        // =====================================================================
+        // full_setup
+        // =====================================================================
+
         [Test]
-        public void AuditS5_ControllerRefusal_StopsBeforeTouchingTheScene()
+        public void FullSetup_ControllerRefusal_StopsBeforeTouchingTheScene()
         {
             string path = CreateSheet("s5", 4, 1);
             var go = new GameObject("SpriteTest_S5");
@@ -1455,7 +1194,7 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void AuditS6_RequestedSceneTargetMissing_IsNotReportedAsSuccess()
+        public void FullSetup_RequestedSceneTargetMissing_IsNotReportedAsSuccess()
         {
             string path = CreateSheet("s6", 4, 1);
             var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
@@ -1467,7 +1206,7 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void AuditS7_ControllerPathWithoutExtension_StillReachesTheSceneObject()
+        public void FullSetup_ControllerPathWithoutExtension_StillReachesTheSceneObject()
         {
             string path = CreateSheet("s7", 4, 1);
             var go = new GameObject("SpriteTest_S7");
@@ -1478,9 +1217,8 @@ namespace MCPForUnityTests.Editor.Tools
                                   ["controller_path"] = $"{TempRoot}/S7",   // no .controller suffix
                                   ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S7" });
 
-                // Count the components rather than null-checking the result of GetComponent:
-                // a missing component compares equal to null but is not a null reference, so
-                // Assert.IsNotNull passes and the next member access throws instead of failing.
+                // Count the components rather than null-checking GetComponent: a missing one
+                // compares equal to null without being a null reference.
                 Assert.AreEqual(1, go.GetComponents<Animator>().Length,
                     "the object should have received an Animator; result was " + result.ToString(Newtonsoft.Json.Formatting.None));
                 Assert.IsTrue(go.GetComponents<Animator>()[0].runtimeAnimatorController != null,
@@ -1490,7 +1228,7 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void AuditS4_RefusedClip_IsNotCountedAsCreated()
+        public void FullSetup_RefusedClip_IsNotCountedAsCreated()
         {
             string path = CreateSheet("s4", 6, 1);
             var result = Run(new JObject
@@ -1507,36 +1245,6 @@ namespace MCPForUnityTests.Editor.Tools
             int onDisk = AssetDatabase.FindAssets("t:AnimationClip", new[] { TempRoot }).Length;
             Assert.AreEqual(onDisk, result.Value<int>("clip_count"),
                 "clip_count must count the clips that exist, not the ones that were asked for");
-        }
-
-        [Test]
-        public void AuditS1_RowsRejected_LeavesTheTextureTypeAlone()
-        {
-            string path = CreateSheet("s1", 4, 1);
-            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
-
-            var result = Slice(path, 4, 0);   // refused: rows must be >= 1
-            Assert.IsFalse(result.Value<bool>("success"));
-
-            var after = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
-            Assert.AreEqual(before, after,
-                "a refused request must not leave the texture converted behind it");
-        }
-
-        // =====================================================================
-        // full_setup
-        // =====================================================================
-
-        [Test]
-        public void FullSetup_WithoutColsOrFrameWidth_ReturnsError()
-        {
-            string path = CreateSheet("fullnogrid", 4, 1);
-            var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path });
-            Assert.IsFalse(result.Value<bool>("success"));
-            // Not just success=false: Newtonsoft reads an absent "success" as false too,
-            // so a response of `{ }` would satisfy that alone and this test is named for
-            // the explanation, not the failure.
-            Assert.That(ErrorText(result), Does.Contain("frame_width"));
         }
 
         [Test]
@@ -1565,7 +1273,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void FullSetup_DefaultsTheClipNameToTheFileName()
         {
             string path = CreateSheet("hero_idle", 4, 1);
-            Run(new JObject
+            var result = Run(new JObject
             {
                 ["action"] = "full_setup",
                 ["path"] = path,
@@ -1574,69 +1282,32 @@ namespace MCPForUnityTests.Editor.Tools
                 ["controller_path"] = $"{TempRoot}/Named.controller",
             });
 
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/hero_idle.anim"));
         }
 
         // =====================================================================
         // Refused paths
         //
-        // SanitizeAssetPath answers a traversal path with null, and null is a value every
-        // AssetDatabase entry point accepts. Each action below used to hand that null on and
-        // then describe the result - "no TextureImporter here", "no sprites found" - which
-        // names a lookup that never happened. These pin the refusal itself.
+        // SanitizeAssetPath answers a traversal path with null, which every AssetDatabase
+        // entry point accepts, so each action used to describe the result of a lookup that
+        // never happened. These pin the refusal itself.
         // =====================================================================
 
-        [Test]
-        public void GetInfo_PathEscapingAssets_RefusesInsteadOfLookingItUp()
+        [TestCase("get_info")]
+        [TestCase("slice_sheet")]
+        [TestCase("setup_clips")]
+        [TestCase("full_setup")]
+        public void PathEscapingAssets_IsRefusedInsteadOfLookedUp(string action)
         {
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
+            var result = Run(new JObject
             {
-                ["action"] = "get_info",
-                ["path"] = $"{TempRoot}/../../../outside.png",
-            }));
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(ErrorText(result), Does.Contain(".."));
-        }
-
-        [Test]
-        public void SliceSheet_PathEscapingAssets_RefusesInsteadOfLookingItUp()
-        {
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
-            {
-                ["action"] = "slice_sheet",
+                ["action"] = action,
                 ["path"] = $"{TempRoot}/../../../outside.png",
                 ["cols"] = 4,
-            }));
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(ErrorText(result), Does.Contain(".."));
-        }
-
-        [Test]
-        public void SetupClips_PathEscapingAssets_RefusesInsteadOfLookingItUp()
-        {
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = SetupClips(
-                $"{TempRoot}/../../../outside.png", OneClip("walk", 0, 3)));
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(ErrorText(result), Does.Contain(".."));
-        }
-
-        [Test]
-        public void FullSetup_PathEscapingAssets_RefusesInsteadOfLookingItUp()
-        {
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = Run(new JObject
-            {
-                ["action"] = "full_setup",
-                ["path"] = $"{TempRoot}/../../../outside.png",
-                ["cols"] = 4,
+                ["clips"] = OneClip("walk", 0, 3),
                 ["output_dir"] = TempRoot,
-            }));
+            });
 
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(ErrorText(result), Does.Contain(".."));
@@ -1652,78 +1323,11 @@ namespace MCPForUnityTests.Editor.Tools
                 ["path"] = $"{TempRoot}/../../../outside.anim",
             });
 
-            JObject result = null;
-            Assert.DoesNotThrow(() => result = SetupController(clips));
+            var result = SetupController(clips);
 
-            // The other two clips are fine, so the controller is still built - but the refused
-            // entry must be reported as refused, not as merely missing.
+            // The refused entry must be reported as refused, not as merely missing.
             Assert.IsTrue(result.Value<bool>("success"));
             Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_PATH"));
-        }
-
-        // =====================================================================
-        // Bounds
-        // =====================================================================
-
-        [Test]
-        public void SetupClips_NegativeStartFrame_IsRefusedRatherThanShiftedToZero()
-        {
-            // Enumerable.Skip ignores a negative count, so [-2,3] used to select frames 0..5
-            // and report success with a clip the caller never asked for.
-            string path = CreateSheet("negrange", 4, 1);
-            Slice(path, 4, 1);
-
-            var result = SetupClips(path, OneClip("walk", -2, 3));
-            Assert.AreEqual(0, result.Value<int>("clip_count"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_RANGE"));
-            Assert.IsNull(AssetDatabase.LoadAssetAtPath<AnimationClip>($"{TempRoot}/walk.anim"));
-        }
-
-        [Test]
-        public void SliceSheet_GridFarBeyondAnyRealSheet_IsRefusedBeforeAllocating()
-        {
-            // 128x128 cut into 1px frames is 16,384 entries. It fits inside the texture, so
-            // every bounds check above passes; what stops it is the frame ceiling.
-            string path = CreateSheet("huge", 8, 8);   // 128x128
-            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
-
-            var result = Run(new JObject
-            {
-                ["action"] = "slice_sheet",
-                ["path"] = path,
-                ["cols"] = 128,
-                ["rows"] = 128,
-            });
-
-            Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_TOO_MANY_FRAMES"));
-            Assert.AreEqual(0, SpritesOf(path).Length, "nothing may be written past the limit");
-            // Every refusal after the Sprite conversion owes a RestoreTextureType call, and
-            // that obligation is carried by whoever adds the next early return rather than by
-            // the code. This assertion is what makes a forgotten one fail loudly.
-            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
-                "a refused request must not leave the texture converted behind it");
-        }
-
-        // =====================================================================
-        // Clip-name shapes
-        // =====================================================================
-
-        [Test]
-        public void SetupController_CamelCaseClipName_StillGetsItsTrigger()
-        {
-            // Detect used to lowercase the name before the tokenizer saw it, and the tokenizer
-            // splits camelCase by testing char.IsUpper - never true on a lowered string. So
-            // 'heroAttack' became one word, matched no keyword, and was filed Generic.
-            var result = SetupController(BuildClips("camel", "idle", "heroAttack"));
-            Assert.IsTrue(result.Value<bool>("success"));
-
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var attack = controller.parameters.SingleOrDefault(p => p.name == "Attack");
-            Assert.IsNotNull(attack,
-                "a camelCase combat clip needs the same trigger a snake_case one gets; " +
-                "parameters present: " + string.Join(", ", controller.parameters.Select(p => p.name)));
-            Assert.AreEqual(AnimatorControllerParameterType.Trigger, attack.type);
         }
 
         // =====================================================================
@@ -1743,11 +1347,9 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void GetInfo_OversizeSheet_DropsTheImageAndSaysWhy()
         {
-            // Two things the fixture has to get right. Noise, not a flat colour: a solid
-            // sheet compresses to a few kilobytes and would never reach the ceiling. And a
-            // power-of-two side: a Default-type import rescales anything else, so a 1200px
-            // sheet reads back as 1024 - measured here first - and the dimensions below
-            // would then be pinning the rescale rather than the file.
+            // Noise, not a flat colour, which would compress below the ceiling; and a
+            // power-of-two side, since a Default-type import rescales anything else
+            // (measured: a 1200px sheet read back as 1024).
             string path = CreateNoiseSheet("oversize", 2048);
             var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
 
@@ -1762,9 +1364,8 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void GetInfo_ImageJustUnderTheSourceLimit_StillDoesNotBlowThePayloadLimit()
         {
-            // The ceiling is checked against the file on disk, but what travels in the
-            // response is base64 - 4 bytes out for every 3 in. A source comfortably under
-            // the limit therefore still produces a payload above it.
+            // The ceiling is checked against the file, but base64 emits 4 bytes for every 3,
+            // so a source under the limit still produces a payload above it.
             string path = CreateNoiseSheet("midsize", 1024, assertOverCeiling: false);
             long sourceBytes = new FileInfo(Path.Combine(
                 Directory.GetParent(Application.dataPath).FullName, path)).Length;
@@ -1783,40 +1384,5 @@ namespace MCPForUnityTests.Editor.Tools
                     "an omitted image must say why");
         }
 
-        [Test]
-        public void SetupController_AcronymInACamelCaseClipName_StillGetsItsTrigger()
-        {
-            // 'heroAttack' splits because a capital follows a lowercase. 'heroXMLAttack' has
-            // no such boundary at the acronym's end, so it used to tokenize as one word
-            // 'xmlattack', match nothing, and lose the trigger its snake_case twin gets.
-            var result = SetupController(BuildClips("acronym", "idle", "heroXMLAttack"));
-            Assert.IsTrue(result.Value<bool>("success"));
-
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var attack = controller.parameters.SingleOrDefault(p => p.name == "Attack");
-            Assert.IsNotNull(attack,
-                "an acronym must not swallow the keyword after it; parameters present: " +
-                string.Join(", ", controller.parameters.Select(p => p.name)));
-        }
-
-        [Test]
-        public void SetupController_TwoOtherAcronymShapes_AlsoKeepTheirTriggers()
-        {
-            // Closing the class rather than the one spelling that was reported, with the two
-            // variants carrying different verdicts - which is the point of naming them.
-            // 'heroATTACK': a trailing all-caps keyword. Measured to hold ALREADY - the break
-            // comes from the lowercase 'o' before the run, so the new rule is not what saves
-            // it. Kept as a parity tripwire, not offered as evidence for the fix.
-            // 'XMLSlash': an acronym followed directly by the keyword, with no lowercase in
-            // between. Nothing in the original rule set sees that boundary, so this one does
-            // depend on the fix - reverting the rule turns this test red.
-            var result = SetupController(BuildClips("acroshapes", "idle", "heroATTACK", "XMLSlash"));
-            Assert.IsTrue(result.Value<bool>("success"));
-
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller");
-            var names = controller.parameters.Select(p => p.name).ToArray();
-            Assert.Contains("Attack", names, "a trailing all-caps keyword still names its trigger");
-            Assert.Contains("Slash", names, "an acronym running straight into the keyword must still split");
-        }
     }
 }
