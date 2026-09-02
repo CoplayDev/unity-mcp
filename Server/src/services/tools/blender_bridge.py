@@ -35,7 +35,13 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "through the shared model pipeline, place it in the open scene at position, and scale it so "
         "its largest dimension equals target_size meters (0 keeps the imported scale). Set "
         "apply_modifiers=false for rigs / shape keys. animation_type applies to FBX only. "
-        "Returns asset_path, asset_guid, game_object, bounds.\n"
+        "auto_animate (default true) creates a looping AnimatorController for imported clips so the "
+        "model actually moves; save_prefab stores the placed instance as a prefab; ensure_bloom adds a "
+        "Bloom volume when the model has emissive materials. "
+        "Returns asset_path, asset_guid, game_object, bounds, and animation / prefab_path / bloom when applicable.\n"
+        "- compare_screenshot(game_object, max_size, output_folder): Blender viewport (left) and a Unity capture "
+        "framed on the placed object (right) composited into one PNG, for eyeballing fidelity.\n"
+        "- setup_bloom: enable post-processing on the main camera and add a Bloom override to the global volume.\n"
         "- check_updates: git fetch the blender-mcp checkout and report how far behind its remotes "
         "it is, plus whether Blender's installed addon.py matches the checkout.\n"
         "- sync_addon(force): copy the checkout's addon.py into Blender's addons folder (backs up "
@@ -52,7 +58,7 @@ async def blender_bridge(
     ctx: Context,
     action: Annotated[
         Literal["status", "scene_info", "object_info", "screenshot", "run_python",
-                "import_model", "check_updates", "sync_addon"],
+                "import_model", "compare_screenshot", "setup_bloom", "check_updates", "sync_addon"],
         "Operation to perform.",
     ],
     object_name: Annotated[str, "object_info: name of the Blender object to inspect."] | None = None,
@@ -71,6 +77,10 @@ async def blender_bridge(
         Literal["none", "generic", "humanoid", "legacy"],
         "import_model, FBX only: rig/animation import mode (FBX imports zero clips unless set).",
     ] | None = None,
+    auto_animate: Annotated[bool, "import_model: create a looping AnimatorController for imported clips (default true)."] | None = None,
+    save_prefab: Annotated[bool, "import_model: save the placed instance as a prefab next to the asset."] | None = None,
+    ensure_bloom: Annotated[bool, "import_model: add a Bloom volume when the model has emissive materials."] | None = None,
+    game_object: Annotated[str, "compare_screenshot: name of the placed GameObject to frame in Unity."] | None = None,
     code: Annotated[str, "run_python: Python source to execute inside Blender."] | None = None,
     max_size: Annotated[int, "screenshot: max pixels on the longest side (default 1000)."] | None = None,
     force: Annotated[bool, "sync_addon: overwrite even when the installed addon already matches."] | None = None,
@@ -92,6 +102,10 @@ async def blender_bridge(
         "applyModifiers": apply_modifiers,
         "outputFolder": output_folder,
         "animationType": animation_type,
+        "autoAnimate": auto_animate,
+        "savePrefab": save_prefab,
+        "ensureBloom": ensure_bloom,
+        "gameObject": game_object,
         "code": code,
         "maxSize": max_size,
         "force": force,

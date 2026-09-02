@@ -97,6 +97,18 @@ class TestBlenderBridgeRouting:
         _, sent = _call_tool(action="screenshot", max_size=800)
         assert _sent_params(sent) == {"action": "screenshot", "maxSize": 800}
 
+    def test_finishing_touch_flags_and_compare_params(self):
+        _, sent = _call_tool(action="import_model", selection_only=True, auto_animate=False,
+                             save_prefab=True, ensure_bloom=True)
+        assert _sent_params(sent) == {"action": "import_model", "selectionOnly": True, "autoAnimate": False,
+                                      "savePrefab": True, "ensureBloom": True}
+
+        _, sent = _call_tool(action="compare_screenshot", game_object="House", max_size=600)
+        assert _sent_params(sent) == {"action": "compare_screenshot", "gameObject": "House", "maxSize": 600}
+
+        _, sent = _call_tool(action="setup_bloom")
+        assert _sent_params(sent) == {"action": "setup_bloom"}
+
     def test_non_dict_result_becomes_error(self):
         ctx = MagicMock()
         with patch.object(mod, "get_unity_instance_from_context", new=AsyncMock(return_value="unity-1")):
@@ -129,6 +141,20 @@ class TestBlenderCli:
             "applyModifiers": False,
             "animationType": "generic",
         }
+
+    def test_import_model_finishing_flags(self, cli_runner):
+        result, mock_run = cli_runner(["import-model", "--selection-only", "--no-animate", "--save-prefab", "--ensure-bloom"])
+        assert result.exit_code == 0, result.output
+        assert mock_run.call_args.args[1] == {"action": "import_model", "selectionOnly": True,
+                                              "autoAnimate": False, "savePrefab": True, "ensureBloom": True}
+
+    def test_compare_and_bloom_commands(self, cli_runner):
+        result, mock_run = cli_runner(["compare-screenshot", "--game-object", "House", "--max-size", "600"])
+        assert result.exit_code == 0, result.output
+        assert mock_run.call_args.args[1] == {"action": "compare_screenshot", "gameObject": "House", "maxSize": 600}
+        result, mock_run = cli_runner(["setup-bloom"])
+        assert result.exit_code == 0, result.output
+        assert mock_run.call_args.args[1] == {"action": "setup_bloom"}
 
     def test_run_python_requires_code_or_file(self, cli_runner):
         result, mock_run = cli_runner(["run-python"])

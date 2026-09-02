@@ -89,6 +89,11 @@ def run_python(code: Optional[str], file_path: Optional[str]):
 @click.option("--output-folder", "output_folder", default=None, help="Destination folder under Assets/.")
 @click.option("--animation-type", "animation_type", default=None,
               type=click.Choice(["none", "generic", "humanoid", "legacy"]), help="FBX only: rig/animation import mode.")
+@click.option("--no-animate", "no_animate", is_flag=True, default=False,
+              help="Do not create a looping AnimatorController for imported clips.")
+@click.option("--save-prefab", "save_prefab", is_flag=True, default=False, help="Save the placed instance as a prefab.")
+@click.option("--ensure-bloom", "ensure_bloom", is_flag=True, default=False,
+              help="Add a Bloom volume when the model has emissive materials.")
 @click.option("--timeout", "timeout_seconds", default=None, type=int, help="Seconds to wait for Blender.")
 @handle_unity_errors
 def import_model(
@@ -102,6 +107,9 @@ def import_model(
     keep_modifiers: bool,
     output_folder: Optional[str],
     animation_type: Optional[str],
+    no_animate: bool,
+    save_prefab: bool,
+    ensure_bloom: bool,
     timeout_seconds: Optional[int],
 ):
     """Export from Blender, import into the project, and place the model in the open scene.
@@ -122,8 +130,28 @@ def import_model(
         "applyModifiers": False if keep_modifiers else None,
         "outputFolder": output_folder,
         "animationType": animation_type,
+        "autoAnimate": False if no_animate else None,
+        "savePrefab": True if save_prefab else None,
+        "ensureBloom": True if ensure_bloom else None,
         "timeoutSeconds": timeout_seconds,
     })
+
+
+@blender.command("compare-screenshot")
+@click.option("--game-object", "game_object", required=True, help="Placed GameObject to frame in Unity.")
+@click.option("--max-size", "max_size", default=None, type=int, help="Max pixels on the longest side of each half.")
+@click.option("--output-folder", "output_folder", default=None, help="Copy the PNG under this Assets/ folder.")
+@handle_unity_errors
+def compare_screenshot(game_object: str, max_size: Optional[int], output_folder: Optional[str]):
+    """Composite Blender's viewport and a Unity capture of the placed object side by side."""
+    _run("compare_screenshot", {"gameObject": game_object, "maxSize": max_size, "outputFolder": output_folder})
+
+
+@blender.command("setup-bloom")
+@handle_unity_errors
+def setup_bloom():
+    """Enable camera post-processing and add a Bloom override to the global volume."""
+    _run("setup_bloom")
 
 
 @blender.command("check-updates")

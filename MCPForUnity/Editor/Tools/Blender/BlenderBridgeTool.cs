@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Tools.Blender
     public static class BlenderBridgeTool
     {
         private static readonly string[] ValidActions =
-            { "status", "scene_info", "object_info", "screenshot", "run_python", "import_model", "check_updates", "sync_addon" };
+            { "status", "scene_info", "object_info", "screenshot", "run_python", "import_model", "compare_screenshot", "setup_bloom", "check_updates", "sync_addon" };
 
         private const string NotConfiguredMessage =
             "The blender-mcp checkout is not set. Open Window > MCP for Unity > Generative > Blender Bridge " +
@@ -73,6 +73,12 @@ namespace MCPForUnity.Editor.Tools.Blender
                         return new SuccessResponse("Executed Python in Blender.", new { stdout });
                     }
                     case "import_model": return await ImportModelAsync(p, timeout);
+                    case "compare_screenshot": return await CompareScreenshotAsync(p, timeout);
+                    case "setup_bloom":
+                    {
+                        JObject bloom = await SetupBloomAsync();
+                        return new SuccessResponse(bloom["message"]?.ToString() ?? "Bloom configured.", bloom);
+                    }
                     case "check_updates": return await CheckUpdatesAsync();
                     case "sync_addon": return SyncAddon(p.GetBool("force", false));
                     default:
@@ -194,6 +200,9 @@ namespace MCPForUnity.Editor.Tools.Blender
             float target = Mathf.Max(0f, p.GetFloat("target_size", 0f) ?? 0f);
             string outputFolder = p.Get("output_folder");
             string animationType = p.Get("animation_type");
+            bool autoAnimate = p.GetBool("auto_animate", true);
+            bool savePrefab = p.GetBool("save_prefab", false);
+            bool ensureBloom = p.GetBool("ensure_bloom", false);
 
             string name = p.Get("name");
             if (string.IsNullOrWhiteSpace(name))
@@ -205,8 +214,7 @@ namespace MCPForUnity.Editor.Tools.Blender
             Directory.CreateDirectory(exportDir);
             string exportPath = Path.Combine(exportDir, $"{name}_{UniqueSuffix()}.{fmt}").Replace('\\', '/');
 
-            string script = BuildExportScript(exportPath, names, selectionOnly, applyModifiers, fmt);
-            string stdout = await BlenderSocketClient.RunPythonAsync(BlenderBridgePrefs.Endpoint, script, timeout);
+            string stdout = await ExportFromBlenderAsync(BlenderBridgePrefs.Endpoint, exportPath, names, selectionOnly, applyModifiers, fmt, timeout);
 
             if (!File.Exists(exportPath))
                 return new ErrorResponse($"Blender did not produce {exportPath}. Blender output: {Truncate(stdout, 800)}");
@@ -239,6 +247,8 @@ namespace MCPForUnity.Editor.Tools.Blender
 
             if (!place || string.IsNullOrEmpty(assetPath))
                 return new SuccessResponse($"Imported {assetPath} (not placed).", data);
+
+            if (fmt == "fbx" && autoAnimate) ConfigureFbxClipLooping(assetPath);
 
             // 3. Place in the open scene and normalize size from measured bounds. Blender exports
             // commonly land far off scale, so measuring the placed instance beats trusting the importer.
@@ -277,11 +287,50 @@ namespace MCPForUnity.Editor.Tools.Blender
                 data["bounds_size"] = new JArray(b1.size.x, b1.size.y, b1.size.z);
                 data["bounds_center"] = new JArray(b1.center.x, b1.center.y, b1.center.z);
             }
+
+            // 4. Optional finishing touches: play imported clips, keep a prefab, make emission glow.
+            if (autoAnimate)
+            {
+                JObject animation = SetupAnimation(go, assetPath, name);
+                if (animation != null) data["animation"] = animation;
+            }
+            if (savePrefab) data["prefab_path"] = SavePrefab(go, assetPath, name);
+            if (ensureBloom && HasEmissiveMaterial(go)) data["bloom"] = await SetupBloomAsync();
+
             return new SuccessResponse($"Imported {assetPath} and placed '{go.name}' in the scene.", data);
         }
 
         /// <summary>
-        /// Builds the Python that Blender runs to export. All caller-controlled values travel inside one
+        /// Asks the addon to export. Prefers its first-class <c>export_scene</c> command (validated
+        /// parameters, no code execution); addons that predate it answer "Unknown command type", in
+        /// which case the equivalent Python is sent through <c>execute_code</c>.
+        /// </summary>
+        private static async Task<string> ExportFromBlenderAsync(BlenderEndpoint endpoint, string exportPath, string[] names,
+            bool selectionOnly, bool applyModifiers, string fmt, int timeout)
+        {
+            var args = new JObject
+            {
+                ["filepath"] = exportPath,
+                ["format"] = fmt,
+                ["object_names"] = names == null ? new JArray() : new JArray(names.Cast<object>().ToArray()),
+                ["selection_only"] = selectionOnly,
+                ["apply_modifiers"] = applyModifiers,
+            };
+            try
+            {
+                JToken result = await BlenderSocketClient.SendAsync(endpoint, "export_scene", args, timeout);
+                if (result?["error"] != null) throw new BlenderCommandException($"Blender export_scene failed: {result["error"]}");
+                return result?.ToString(Formatting.None) ?? string.Empty;
+            }
+            catch (BlenderCommandException e) when (e.Message.Contains("Unknown command type"))
+            {
+                string script = BuildExportScript(exportPath, names, selectionOnly, applyModifiers, fmt);
+                return await BlenderSocketClient.RunPythonAsync(endpoint, script, timeout);
+            }
+        }
+
+        /// <summary>
+        /// Builds the Python that Blender runs to export on addons without <c>export_scene</c>. All caller-controlled values travel inside one
         /// JSON document embedded as a single Python string literal, so names with quotes or
         /// placeholder-looking text can never alter the program.
         /// </summary>
@@ -344,6 +393,273 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
 ";
             int at = template.IndexOf("__CFG__", StringComparison.Ordinal);
             return template.Substring(0, at) + configLiteral + template.Substring(at + "__CFG__".Length);
+        }
+
+        // ---------------------------------------------------------- finishing touches
+
+        /// <summary>Marks every clip in an FBX as looping so the imported animation cycles once a controller drives it.</summary>
+        private static void ConfigureFbxClipLooping(string assetPath)
+        {
+            if (!(AssetImporter.GetAtPath(assetPath) is ModelImporter importer)) return;
+            ModelImporterClipAnimation[] clips = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
+            if (clips.Length == 0) return;
+            foreach (ModelImporterClipAnimation clip in clips) clip.loopTime = true;
+            importer.clipAnimations = clips;
+            importer.SaveAndReimport();
+        }
+
+        /// <summary>
+        /// An imported clip does nothing until an AnimatorController drives it, so the placed model looks frozen.
+        /// Creates a controller next to the asset with one looping state per clip and assigns it to the instance.
+        /// </summary>
+        private static JObject SetupAnimation(GameObject go, string assetPath, string name)
+        {
+            AnimationClip[] clips = AssetDatabase.LoadAllAssetRepresentationsAtPath(assetPath)
+                .OfType<AnimationClip>()
+                .Where(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal))
+                .ToArray();
+            if (clips.Length == 0) return null;
+
+            Animator animator = go.GetComponentInChildren<Animator>(true) ?? go.AddComponent<Animator>();
+            string controllerPath = AssetDatabase.GenerateUniqueAssetPath(
+                Path.Combine(Path.GetDirectoryName(assetPath) ?? "Assets", $"{name}_Controller.controller").Replace('\\', '/'));
+            var controller = UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+            var stateMachine = controller.layers[0].stateMachine;
+            foreach (AnimationClip clip in clips)
+            {
+                AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
+                if (!settings.loopTime)
+                {
+                    settings.loopTime = true;
+                    AnimationUtility.SetAnimationClipSettings(clip, settings);
+                }
+                var state = stateMachine.AddState(clip.name);
+                state.motion = clip;
+                if (stateMachine.defaultState == null) stateMachine.defaultState = state;
+            }
+            animator.runtimeAnimatorController = controller;
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(animator);
+            AssetDatabase.SaveAssets();
+            return new JObject
+            {
+                ["clips"] = new JArray(clips.Select(c => c.name).Cast<object>().ToArray()),
+                ["controller_path"] = controllerPath,
+                ["animator_on"] = animator.gameObject.name,
+                ["loops"] = true,
+            };
+        }
+
+        /// <summary>Saves the placed instance as a prefab under &lt;asset folder&gt;/Prefabs and connects the instance to it.</summary>
+        private static string SavePrefab(GameObject go, string assetPath, string name)
+        {
+            string parent = (Path.GetDirectoryName(assetPath) ?? "Assets").Replace('\\', '/');
+            string dir = $"{parent}/Prefabs";
+            if (!AssetDatabase.IsValidFolder(dir)) AssetDatabase.CreateFolder(parent, "Prefabs");
+            string prefabPath = AssetDatabase.GenerateUniqueAssetPath($"{dir}/{name}.prefab");
+            PrefabUtility.SaveAsPrefabAssetAndConnect(go, prefabPath, InteractionMode.AutomatedAction);
+            return prefabPath;
+        }
+
+        /// <summary>True when any material on the hierarchy has a non-black emission (glTFast or URP Lit naming).</summary>
+        private static bool HasEmissiveMaterial(GameObject go)
+        {
+            foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (Material m in r.sharedMaterials)
+                {
+                    if (m == null) continue;
+                    if (m.HasProperty("emissiveFactor") && m.GetColor("emissiveFactor").maxColorComponent > 0.01f) return true;
+                    if (m.HasProperty("_EmissionColor") && m.IsKeywordEnabled("_EMISSION") && m.GetColor("_EmissionColor").maxColorComponent > 0.01f) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Makes emissive materials actually glow: enables post-processing on the main camera and ensures a
+        /// global Volume with a Bloom override exists (reusing the scene's global volume when it has one).
+        /// Goes through manage_graphics so the Volume/Bloom reflection lives in one place.
+        /// </summary>
+        private static async Task<JObject> SetupBloomAsync()
+        {
+            var result = new JObject();
+            Type volumeType = Type.GetType("UnityEngine.Rendering.Volume, Unity.RenderPipelines.Core.Runtime");
+            if (volumeType == null)
+            {
+                result["message"] = "Volume system (URP/HDRP) not available; nothing to do.";
+                return result;
+            }
+
+            Camera cam = Camera.main;
+            Type camDataType = Type.GetType("UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime");
+            if (cam != null && camDataType != null)
+            {
+                Component camData = cam.GetComponent(camDataType) ?? cam.gameObject.AddComponent(camDataType);
+                System.Reflection.PropertyInfo post = camDataType.GetProperty("renderPostProcessing");
+                if (post != null && !(bool)post.GetValue(camData))
+                {
+                    post.SetValue(camData, true);
+                    EditorUtility.SetDirty(camData);
+                    result["camera_post_processing_enabled"] = cam.name;
+                }
+            }
+
+            System.Reflection.PropertyInfo isGlobal = volumeType.GetProperty("isGlobal");
+            System.Reflection.FieldInfo sharedProfile = volumeType.GetField("sharedProfile");
+            Component globalVolume = null;
+            foreach (UnityEngine.Object v in UnityEngine.Object.FindObjectsByType(volumeType, FindObjectsSortMode.None))
+            {
+                var comp = v as Component;
+                if (comp == null || (isGlobal != null && !(bool)isGlobal.GetValue(comp))) continue;
+                globalVolume ??= comp;
+                object profile = sharedProfile?.GetValue(comp);
+                var components = profile?.GetType().GetField("components")?.GetValue(profile) as System.Collections.IEnumerable;
+                if (components != null && components.Cast<object>().Any(c => c != null && c.GetType().Name == "Bloom"))
+                {
+                    result["volume"] = comp.gameObject.name;
+                    result["message"] = $"Bloom already present on global volume '{comp.gameObject.name}'.";
+                    return result;
+                }
+            }
+
+            JObject graphics;
+            if (globalVolume != null)
+            {
+                graphics = JObject.FromObject(await CommandRegistry.InvokeCommandAsync("manage_graphics", new JObject
+                {
+                    ["action"] = "volume_add_effect", ["target"] = globalVolume.gameObject.name, ["effect"] = "Bloom",
+                }));
+                if (graphics.Value<bool?>("success") ?? false)
+                {
+                    await CommandRegistry.InvokeCommandAsync("manage_graphics", new JObject
+                    {
+                        ["action"] = "volume_set_effect", ["target"] = globalVolume.gameObject.name, ["effect"] = "Bloom",
+                        ["parameters"] = new JObject { ["intensity"] = 1.0f, ["threshold"] = 0.9f },
+                    });
+                }
+                result["volume"] = globalVolume.gameObject.name;
+            }
+            else
+            {
+                graphics = JObject.FromObject(await CommandRegistry.InvokeCommandAsync("manage_graphics", new JObject
+                {
+                    ["action"] = "volume_create", ["name"] = "Global Volume (Blender Bridge)", ["is_global"] = true,
+                    ["effects"] = new JArray(new JObject { ["type"] = "Bloom", ["intensity"] = 1.0f, ["threshold"] = 0.9f }),
+                }));
+                result["volume"] = "Global Volume (Blender Bridge)";
+            }
+            bool ok = graphics.Value<bool?>("success") ?? false;
+            result["message"] = ok ? $"Bloom added to '{result["volume"]}'." : $"Could not add Bloom: {graphics["error"] ?? graphics["message"]}";
+            result["success"] = ok;
+            return result;
+        }
+
+        // -------------------------------------------------------- compare_screenshot
+
+        /// <summary>Puts a Blender viewport capture and a Unity capture of a placed object side by side in one PNG.</summary>
+        private static async Task<object> CompareScreenshotAsync(ToolParams p, int timeout)
+        {
+            string target = p.Get("game_object");
+            if (string.IsNullOrWhiteSpace(target)) return new ErrorResponse("'game_object' is required for compare_screenshot.");
+            if (GameObject.Find(target) == null) return new ErrorResponse($"GameObject '{target}' not found in the open scene.");
+            int maxSize = Math.Max(128, p.GetInt("max_size", 800) ?? 800);
+            string outputFolder = p.Get("output_folder");
+            string assetsRelativeFolder = null;
+            if (!string.IsNullOrWhiteSpace(outputFolder)
+                && !AssetGenPaths.NormalizeOutputFolder(outputFolder, out assetsRelativeFolder, out string folderError))
+                return new ErrorResponse(folderError);
+
+            string dir = Path.Combine(ProjectRoot(), "Library", "BlenderBridge");
+            Directory.CreateDirectory(dir);
+            string blenderPng = Path.Combine(dir, $"compare_blender_{UniqueSuffix()}.png").Replace('\\', '/');
+            await BlenderSocketClient.SendAsync(BlenderBridgePrefs.Endpoint, "get_viewport_screenshot",
+                new JObject { ["max_size"] = maxSize, ["filepath"] = blenderPng, ["format"] = "png" }, timeout);
+            if (!File.Exists(blenderPng)) return new ErrorResponse("Blender did not write a viewport screenshot.");
+
+            JObject shot = JObject.FromObject(await CommandRegistry.InvokeCommandAsync("manage_scene", new JObject
+            {
+                ["action"] = "screenshot", ["view_target"] = target, ["max_resolution"] = maxSize,
+                ["screenshot_file_name"] = $"blender_bridge_compare_{UniqueSuffix()}",
+            }));
+            string unityPng = shot["data"]?["fullPath"]?.ToString();
+            if (!(shot.Value<bool?>("success") ?? false) || string.IsNullOrEmpty(unityPng) || !File.Exists(unityPng))
+                return new ErrorResponse($"Unity screenshot failed: {shot["error"] ?? shot["message"]}");
+
+            string outPath = Path.Combine(dir, $"compare_{UniqueSuffix()}.png").Replace('\\', '/');
+            (int width, int height) = CompositeSideBySide(blenderPng, unityPng, outPath);
+
+            // The Unity capture is written under Assets/ by manage_scene; keep the project clean.
+            string unityAssetPath = shot["data"]?["path"]?.ToString();
+            if (!string.IsNullOrEmpty(unityAssetPath) && unityAssetPath.StartsWith("Assets/", StringComparison.Ordinal))
+                AssetDatabase.DeleteAsset(unityAssetPath);
+
+            string assetPath = null;
+            if (assetsRelativeFolder != null)
+            {
+                string absDir = AssetGenPaths.ToAbsolute(assetsRelativeFolder);
+                Directory.CreateDirectory(absDir);
+                assetPath = $"{assetsRelativeFolder}/{Path.GetFileName(outPath)}";
+                File.Copy(outPath, Path.Combine(absDir, Path.GetFileName(outPath)), true);
+                AssetDatabase.ImportAsset(assetPath);
+            }
+
+            return new SuccessResponse("Composited Blender (left) and Unity (right).", new JObject
+            {
+                ["path"] = outPath, ["asset_path"] = assetPath, ["width"] = width, ["height"] = height,
+                ["blender_path"] = blenderPng, ["game_object"] = target,
+            });
+        }
+
+        /// <summary>Scales both images to the smaller height and writes them side by side. Returns the output size.</summary>
+        internal static (int Width, int Height) CompositeSideBySide(string leftPng, string rightPng, string outPath)
+        {
+            Texture2D left = LoadPng(leftPng), right = LoadPng(rightPng);
+            Texture2D l = null, r = null, outTex = null;
+            try
+            {
+                int h = Math.Min(left.height, right.height);
+                l = ScaleToHeight(left, h);
+                r = ScaleToHeight(right, h);
+                outTex = new Texture2D(l.width + r.width, h, TextureFormat.RGBA32, false);
+                outTex.SetPixels(0, 0, l.width, h, l.GetPixels());
+                outTex.SetPixels(l.width, 0, r.width, h, r.GetPixels());
+                outTex.Apply();
+                File.WriteAllBytes(outPath, outTex.EncodeToPNG());
+                return (outTex.width, h);
+            }
+            finally
+            {
+                foreach (Texture2D t in new[] { outTex, l == left ? null : l, r == right ? null : r, left, right })
+                    if (t != null) UnityEngine.Object.DestroyImmediate(t);
+            }
+        }
+
+        /// <summary>Decodes a PNG from disk into a readable texture.</summary>
+        private static Texture2D LoadPng(string path)
+        {
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!ImageConversion.LoadImage(tex, File.ReadAllBytes(path)))
+            {
+                UnityEngine.Object.DestroyImmediate(tex);
+                throw new IOException($"Could not decode PNG: {path}");
+            }
+            return tex;
+        }
+
+        /// <summary>Bilinear resample to a target height, keeping the aspect ratio. Returns the source when already right.</summary>
+        private static Texture2D ScaleToHeight(Texture2D src, int height)
+        {
+            if (src.height == height) return src;
+            int width = Mathf.Max(1, Mathf.RoundToInt(src.width * (float)height / src.height));
+            var dst = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            var pixels = new Color[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    pixels[y * width + x] = src.GetPixelBilinear((x + 0.5f) / width, (y + 0.5f) / height);
+            dst.SetPixels(pixels);
+            dst.Apply();
+            return dst;
         }
 
         // ----------------------------------------------------------- check_updates
