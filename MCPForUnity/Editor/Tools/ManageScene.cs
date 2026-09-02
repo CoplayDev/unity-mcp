@@ -171,7 +171,9 @@ namespace MCPForUnity.Editor.Tools
             int? buildIndex = cmd.buildIndex;
             // bool loadAdditive = @params["loadAdditive"]?.ToObject<bool>() ?? false; // Example for future extension
 
-            // Ensure path is relative to Assets/, removing any leading "Assets/"
+            // Paths are relative to a project root folder — "Assets" by default, or "Packages"
+            // when the caller addresses a scene shipped inside a package (see issue #1197).
+            string rootFolder = "Assets";
             string relativeDir = path ?? string.Empty;
             if (!string.IsNullOrEmpty(relativeDir))
             {
@@ -179,6 +181,11 @@ namespace MCPForUnity.Editor.Tools
                 if (relativeDir.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                 {
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
+                }
+                else if (relativeDir.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+                {
+                    rootFolder = "Packages";
+                    relativeDir = relativeDir.Substring("Packages/".Length).TrimStart('/');
                 }
                 // If path ends with .unity, it's a full scene path — extract just the directory
                 if (relativeDir.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
@@ -202,15 +209,17 @@ namespace MCPForUnity.Editor.Tools
             }
 
             string sceneFileName = string.IsNullOrEmpty(name) ? null : $"{name}.unity";
-            // Construct full system path correctly: ProjectRoot/Assets/relativeDir/sceneFileName
-            string fullPathDir = Path.Combine(Application.dataPath, relativeDir); // Combine with Assets path (Application.dataPath ends in Assets)
+            // Construct full system path correctly: ProjectRoot/<rootFolder>/relativeDir/sceneFileName
+            string fullPathDir = rootFolder == "Assets"
+                ? Path.Combine(Application.dataPath, relativeDir) // Application.dataPath ends in Assets
+                : Path.Combine(GetProjectRoot(), rootFolder, relativeDir);
             string fullPath = string.IsNullOrEmpty(sceneFileName)
                 ? null
                 : Path.Combine(fullPathDir, sceneFileName);
-            // Ensure relativePath always starts with "Assets/" and uses forward slashes
+            // Ensure relativePath is project-rooted ("Assets/..." or "Packages/...") with forward slashes
             string relativePath = string.IsNullOrEmpty(sceneFileName)
                 ? null
-                : AssetPathUtility.NormalizeSeparators(Path.Combine("Assets", relativeDir, sceneFileName));
+                : AssetPathUtility.NormalizeSeparators(Path.Combine(rootFolder, relativeDir, sceneFileName));
 
             // Ensure directory exists for 'create'
             if (action == "create" && !string.IsNullOrEmpty(fullPathDir))
@@ -245,8 +254,7 @@ namespace MCPForUnity.Editor.Tools
                     string loadPath = relativePath;
                     if (string.IsNullOrEmpty(loadPath) && !string.IsNullOrEmpty(path))
                         loadPath = AssetPathUtility.NormalizeSeparators(
-                            path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
-                                ? path : "Assets/" + path);
+                            IsProjectRooted(path) ? path : "Assets/" + path);
                     if (!string.IsNullOrEmpty(loadPath))
                     {
                         if (cmd.additive == true)
@@ -375,17 +383,7 @@ namespace MCPForUnity.Editor.Tools
 
         private static object LoadScene(string relativePath)
         {
-            if (
-                !File.Exists(
-                    Path.Combine(
-                        Application.dataPath.Substring(
-                            0,
-                            Application.dataPath.Length - "Assets".Length
-                        ),
-                        relativePath
-                    )
-                )
-            )
+            if (!SceneAssetExists(relativePath))
             {
                 return new ErrorResponse($"Scene file not found at '{relativePath}'.");
             }
@@ -1597,12 +1595,56 @@ namespace MCPForUnity.Editor.Tools
         }
 
 
+        // ── Path helpers ───────────────────────────────────────────────────
+
+        private static string GetProjectRoot()
+        {
+            return Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
+        }
+
+        /// <summary>
+        /// True when the path already carries a project root folder that Unity's asset APIs
+        /// understand, so it must not be re-rooted under Assets/.
+        /// </summary>
+        internal static bool IsProjectRooted(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            string normalized = AssetPathUtility.NormalizeSeparators(path).TrimStart('/');
+            return normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Existence check that works for both roots, accepting either answer.
+        /// The AssetDatabase is the only one that resolves "Packages/..." — embedded packages
+        /// live in Library/PackageCache, not under the project root, so File.Exists misses them
+        /// (ManageAsset.cs carries the same note). File.Exists still covers an Assets/ scene
+        /// written to disk but not yet imported, which the AssetDatabase does not know about
+        /// until a refresh. This guard only exists to produce a clearer error than
+        /// EditorSceneManager.OpenScene would, so erring toward accepting is the safe direction.
+        /// </summary>
+        internal static bool SceneAssetExists(string projectRelativePath)
+        {
+            if (string.IsNullOrEmpty(projectRelativePath)) return false;
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(projectRelativePath) != null) return true;
+
+            try
+            {
+                return File.Exists(Path.Combine(GetProjectRoot(), projectRelativePath));
+            }
+            catch (ArgumentException)
+            {
+                // Invalid path characters — treat as not found rather than throwing.
+                return false;
+            }
+        }
+
         // ── Multi-scene editing ────────────────────────────────────────────
 
         private static object LoadSceneAdditive(string scenePath)
         {
-            string projectRoot = Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
-            if (!File.Exists(Path.Combine(projectRoot, scenePath)))
+            if (!SceneAssetExists(scenePath))
                 return new ErrorResponse($"Scene not found: '{scenePath}'");
 
             var existing = SceneManager.GetSceneByPath(scenePath);
