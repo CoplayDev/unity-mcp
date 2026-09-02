@@ -87,6 +87,19 @@ class TestManageSpriteValidation:
 
 
 class TestParameterForwarding:
+    def test_a_bridge_reply_that_is_not_a_dict_becomes_a_failure(self, monkeypatch):
+        async def fake_send(send_fn, unity_instance, tool_name, params):
+            return "connection dropped"
+
+        monkeypatch.setattr(
+            "services.tools.manage_sprite.get_unity_instance_from_context",
+            AsyncMock(return_value=None),
+        )
+        monkeypatch.setattr("services.tools.manage_sprite.send_with_unity_instance", fake_send)
+
+        result = call(action="get_info", path="Assets/hero.png")
+        assert result == {"success": False, "message": "connection dropped"}
+
     def test_only_supplied_parameters_are_forwarded(self, mock_unity):
         """Unset optional arguments must not reach Unity as nulls.
 
