@@ -113,6 +113,33 @@ namespace MCPForUnityTests.Editor.Blender
         }
 
         [Test]
+        public void RedactRemoteUrl_StripsQueryAndFragmentCredentials()
+        {
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://github.com/o/r.git?token=ghp_secret"));
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://github.com/o/r.git#access_token=ghp_secret"));
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://user:pw@github.com/o/r.git?x=1#y"));
+        }
+
+        [Test]
+        public void SetupBloom_FailureReportBecomesAnError()
+        {
+            JObject failed = JObject.Parse("{\"success\": false, \"message\": \"Could not add Bloom: no volume\"}");
+            JObject resp = JObject.Parse(JsonConvert.SerializeObject(BlenderBridgeTool.ToBloomResponse(failed)));
+            Assert.AreEqual(false, (bool)resp["success"]);
+            StringAssert.Contains("Could not add Bloom", (string)resp["error"]);
+
+            JObject ok = JObject.Parse("{\"success\": true, \"message\": \"Bloom added to 'Global Volume'.\"}");
+            JObject okResp = JObject.Parse(JsonConvert.SerializeObject(BlenderBridgeTool.ToBloomResponse(ok)));
+            Assert.AreEqual(true, (bool)okResp["success"]);
+
+            JObject skipped = JObject.Parse("{\"message\": \"Volume system (URP/HDRP) not available; nothing to do.\"}");
+            Assert.AreEqual(true, (bool)JObject.Parse(JsonConvert.SerializeObject(BlenderBridgeTool.ToBloomResponse(skipped)))["success"]);
+        }
+
+        [Test]
         public void ExportScript_WithoutNames_UsesEmptyList()
         {
             string script = BlenderBridgeTool.BuildExportScript("C:/tmp/x.fbx", null, true, false, "fbx");

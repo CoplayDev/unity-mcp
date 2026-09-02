@@ -74,11 +74,7 @@ namespace MCPForUnity.Editor.Tools.Blender
                     }
                     case "import_model": return await ImportModelAsync(p, timeout);
                     case "compare_screenshot": return await CompareScreenshotAsync(p, timeout);
-                    case "setup_bloom":
-                    {
-                        JObject bloom = await SetupBloomAsync();
-                        return new SuccessResponse(bloom["message"]?.ToString() ?? "Bloom configured.", bloom);
-                    }
+                    case "setup_bloom": return ToBloomResponse(await SetupBloomAsync());
                     case "check_updates": return await CheckUpdatesAsync();
                     case "sync_addon": return SyncAddon(p.GetBool("force", false));
                     default:
@@ -555,6 +551,14 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
             return result;
         }
 
+        /// <summary>Maps the Bloom setup report to a tool response: an error when manage_graphics could not add Bloom.</summary>
+        internal static object ToBloomResponse(JObject bloom)
+        {
+            string message = bloom?["message"]?.ToString() ?? "Bloom configured.";
+            bool failed = bloom != null && bloom.Value<bool?>("success") == false;
+            return failed ? new ErrorResponse(message) : new SuccessResponse(message, bloom);
+        }
+
         // -------------------------------------------------------- compare_screenshot
 
         /// <summary>Puts a Blender viewport capture and a Unity capture of a placed object side by side in one PNG.</summary>
@@ -835,18 +839,26 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
             => $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
 
         /// <summary>
-        /// Strips user info (tokens, passwords) from a remote URL so credentials embedded in
-        /// https://user:token@host/... never reach the MCP response or the editor log.
+        /// Strips user info, query and fragment from a remote URL so credentials embedded as
+        /// https://user:token@host/..., ?token=... or #access_token=... never reach the MCP response
+        /// or the editor log. scp-style git@host:path is returned unchanged (no secret there).
         /// </summary>
         internal static string RedactRemoteUrl(string url)
         {
             if (string.IsNullOrEmpty(url)) return url ?? string.Empty;
-            if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri) && !string.IsNullOrEmpty(uri.UserInfo))
-                return new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty }.Uri.ToString();
-            // scp-style git@host:path carries no secret; anything else with "user:secret@" is masked.
-            int at = url.IndexOf('@');
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri) && !string.IsNullOrEmpty(uri.Host))
+            {
+                bool clean = string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
+                if (clean) return url;
+                return new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty, Query = string.Empty, Fragment = string.Empty }
+                    .Uri.ToString();
+            }
+            // Not a parseable absolute URI: drop anything after ? or # and mask a user:secret@ prefix.
+            int cut = url.IndexOfAny(new[] { '?', '#' });
+            if (cut >= 0) url = url.Substring(0, cut);
             int scheme = url.IndexOf("://", StringComparison.Ordinal);
-            if (at > 0 && scheme >= 0 && at > scheme && url.IndexOf(':', scheme + 3) is int colon && colon > 0 && colon < at)
+            int at = url.IndexOf('@');
+            if (scheme >= 0 && at > scheme)
                 return url.Substring(0, scheme + 3) + "***@" + url.Substring(at + 1);
             return url;
         }
