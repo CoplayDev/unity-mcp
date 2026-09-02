@@ -146,7 +146,9 @@ jobs:
             -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
             -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
             "$UNITY_IMAGE" bash -lc '
-              set -euxo pipefail
+              # No -x here: xtrace would echo the expanded -password/-serial arguments into
+              # the job log, and GitHub secret masking is a last line of defence, not a design.
+              set -euo pipefail
               /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
                 -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -serial "$UNITY_SERIAL" -quit || true
             '
