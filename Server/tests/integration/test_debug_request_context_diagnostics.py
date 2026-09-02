@@ -27,4 +27,51 @@ async def test_debug_request_context_includes_server_diagnostics(monkeypatch):
     assert "argv" in server
 
 
+@pytest.mark.asyncio
+async def test_debug_request_context_redacts_secret_argv(monkeypatch):
+    """Any tenant can call this tool on a remote-hosted server, so the service token that
+    the server was started with must not come back in the diagnostics."""
+    import json
+    import services.tools.debug_request_context as mod
+
+    class DummyCtx:
+        request_context = None
+        session_id = None
+        client_id = None
+
+        async def get_state(self, _k):
+            return None
+
+    monkeypatch.setattr(mod, "get_package_version", lambda: "9.9.9-test")
+    monkeypatch.setattr(mod.sys, "argv", [
+        "mcp-for-unity",
+        "--http-remote-hosted",
+        "--api-key-service-token", "s3cret-service-token",
+        "--api-key-validation-url=https://auth.example.com/validate?token=url-embedded",
+        "--api-key-service-token-header", "X-Service-Token",
+        "--http-port", "8080",
+    ])
+
+    res = await mod.debug_request_context(DummyCtx())
+    argv = res["data"]["server"]["argv"]
+    dumped = json.dumps(argv)
+
+    assert "s3cret-service-token" not in dumped
+    assert "url-embedded" not in dumped
+    # Flag names and non-secret values survive so the deployment shape stays debuggable.
+    assert "--api-key-service-token" in argv
+    assert "--http-remote-hosted" in argv
+    assert argv[-2:] == ["--http-port", "8080"]
+
+
+def test_redact_argv_does_not_swallow_a_following_flag():
+    import services.tools.debug_request_context as mod
+
+    # A secret-looking flag used as a bare switch must not hide the flag after it.
+    assert mod._redact_argv(["--token", "--verbose"]) == ["--token", "--verbose"]
+    assert mod._redact_argv(["--token", "abc", "--verbose"]) == ["--token", "***", "--verbose"]
+    assert mod._redact_argv(["--password=hunter2"]) == ["--password=***"]
+    assert mod._redact_argv(["positional", "--port", "1"]) == ["positional", "--port", "1"]
+
+
 

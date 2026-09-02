@@ -454,3 +454,108 @@ class TestServiceToken:
 
         assert captured_headers.get("X-Service-Token") == "test-svc-token-123"
         assert captured_headers.get("Content-Type") == "application/json"
+
+
+# ---------------------------------------------------------------------------
+# Cache bound + log redaction
+# ---------------------------------------------------------------------------
+
+def _patched_client(mock_resp):
+    ctx = patch("httpx.AsyncClient")
+    MockClient = ctx.start()
+    instance = AsyncMock()
+    instance.__aenter__ = AsyncMock(return_value=instance)
+    instance.__aexit__ = AsyncMock(return_value=False)
+    instance.post = AsyncMock(return_value=mock_resp)
+    MockClient.return_value = instance
+    return ctx, instance
+
+
+class TestCacheBound:
+    @pytest.mark.asyncio
+    async def test_negative_results_cannot_grow_cache_past_cap(self, monkeypatch):
+        """Unauthenticated callers choose the key, so every failed guess used to add an
+        entry. The cap must hold no matter how many distinct bad keys arrive."""
+        monkeypatch.setattr(ApiKeyService, "MAX_CACHE_ENTRIES", 5)
+        svc = _make_service()
+        ctx, _ = _patched_client(_mock_response(401))
+        try:
+            for i in range(50):
+                result = await svc.validate(f"bad-key-{i:04d}-padding-to-length")
+                assert result.valid is False
+        finally:
+            ctx.stop()
+        assert len(svc._cache) <= 5
+
+    @pytest.mark.asyncio
+    async def test_valid_key_still_cached_when_cap_is_full_of_negatives(self, monkeypatch):
+        monkeypatch.setattr(ApiKeyService, "MAX_CACHE_ENTRIES", 3)
+        svc = _make_service()
+        ctx, instance = _patched_client(_mock_response(401))
+        try:
+            for i in range(3):
+                await svc.validate(f"bad-key-{i:04d}-padding-to-length")
+            instance.post = AsyncMock(return_value=_mock_response(
+                200, {"valid": True, "user_id": "user-1"}))
+            r1 = await svc.validate("good-key-000-padding-to-length")
+            calls_after_first = instance.post.await_count
+            r2 = await svc.validate("good-key-000-padding-to-length")
+        finally:
+            ctx.stop()
+        assert r1.valid and r2.valid
+        # Second call was served from cache: a validated key evicts a negative entry.
+        assert instance.post.await_count == calls_after_first
+        assert len(svc._cache) <= 3
+        assert "good-key-000-padding-to-length" in svc._cache
+
+    @pytest.mark.asyncio
+    async def test_expired_entries_are_purged_before_evicting_live_ones(self, monkeypatch):
+        monkeypatch.setattr(ApiKeyService, "MAX_CACHE_ENTRIES", 2)
+        svc = _make_service()
+        ctx, _ = _patched_client(_mock_response(200, {"valid": True, "user_id": "u"}))
+        try:
+            await svc.validate("live-key-aaaa-padding-to-length")
+            await svc.validate("stale-key-bbbb-padding-to-length")
+            async with svc._cache_lock:
+                v = svc._cache["stale-key-bbbb-padding-to-length"]
+                svc._cache["stale-key-bbbb-padding-to-length"] = (v[0], v[1], v[2], time.time() - 1)
+            await svc.validate("new-key-cccc-padding-to-length")
+        finally:
+            ctx.stop()
+        assert "live-key-aaaa-padding-to-length" in svc._cache
+        assert "stale-key-bbbb-padding-to-length" not in svc._cache
+        assert "new-key-cccc-padding-to-length" in svc._cache
+
+
+class TestLogRedaction:
+    KEY = "sk-live-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    def test_fingerprint_contains_no_key_characters_and_is_stable(self):
+        fp = ApiKeyService._fingerprint(self.KEY)
+        assert fp.startswith("sha256:")
+        assert self.KEY[:4] not in fp and self.KEY[-4:] not in fp
+        assert fp == ApiKeyService._fingerprint(self.KEY)
+        assert fp != ApiKeyService._fingerprint(self.KEY + "x")
+
+    @pytest.mark.asyncio
+    async def test_warning_on_auth_service_error_does_not_log_key_fragments(self):
+        # Assert on the logger call itself rather than captured text: other test modules
+        # reconfigure the "mcp-for-unity-server" logger, which makes caplog order-dependent.
+        svc = _make_service()
+        ctx, _ = _patched_client(_mock_response(500))
+        with patch("services.api_key_service.logger") as mock_logger:
+            try:
+                result = await svc.validate(self.KEY)
+            finally:
+                ctx.stop()
+        assert result.valid is False
+        assert mock_logger.warning.called
+        rendered = [
+            (call.args[0] % tuple(call.args[1:])) if len(call.args) > 1 else str(call.args[0])
+            for call in mock_logger.warning.call_args_list
+        ]
+        assert any("API key validation returned status 500" in line for line in rendered)
+        for line in rendered:
+            assert self.KEY not in line
+            assert self.KEY[:4] not in line
+            assert self.KEY[-4:] not in line

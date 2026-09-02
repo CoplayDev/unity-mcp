@@ -11,6 +11,34 @@ from services.registry import mcp_for_unity_tool
 from transport.unity_instance_middleware import get_unity_instance_middleware
 from transport.plugin_hub import PluginHub
 
+_SECRET_FLAG_MARKERS = ("token", "secret", "password", "api-key", "api_key", "apikey")
+
+
+def _redact_argv(argv: list[str]) -> list[str]:
+    """Keep flag names for diagnosis, hide the values of secret-bearing ones.
+
+    A remote-hosted server is started with --api-key-service-token on its command line and
+    this tool is callable by every authenticated tenant, so the raw argv handed out the
+    service credential. The flag shape is what helps debug a deployment; the value never is.
+    """
+    out: list[str] = []
+    hide_next = False
+    for arg in argv:
+        if hide_next:
+            hide_next = False
+            if not arg.startswith("-"):
+                out.append("***")
+                continue
+        name, sep, _value = arg.partition("=")
+        lowered = name.lower()
+        secret = name.startswith("-") and any(m in lowered for m in _SECRET_FLAG_MARKERS)
+        if secret and sep:
+            out.append(f"{name}=***")
+        else:
+            out.append(arg)
+            hide_next = secret
+    return out
+
 
 @mcp_for_unity_tool(
     unity_target=None,
@@ -65,7 +93,7 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
             "server": {
                 "version": get_package_version(),
                 "cwd": os.getcwd(),
-                "argv": list(sys.argv),
+                "argv": _redact_argv(sys.argv),
             },
             "request_context": {
                 "client_id": rc_client_id,
