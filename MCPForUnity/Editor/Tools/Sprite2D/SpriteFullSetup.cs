@@ -84,8 +84,17 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }
             else if (addToScene)
             {
-                var go = UnityEngine.GameObject.Find(sceneTarget);
-                if (go != null)
+                // The shared lookup, not GameObject.Find: Find skips inactive objects and
+                // picks one of several with the same name without saying so.
+                var matches = GameObjectLookup.SearchGameObjects("by_name", sceneTarget, includeInactive: true);
+                var go = matches.Count == 1 ? GameObjectLookup.FindById(matches[0]) : null;
+                if (matches.Count > 1)
+                {
+                    diagnostics.AddError("SCENE_TARGET_AMBIGUOUS",
+                        $"{matches.Count} GameObjects are named '{sceneTarget}'; nothing was attached.",
+                        "Rename the target or pick a unique name.");
+                }
+                else if (go != null)
                 {
                     var asset = AssetDatabase.LoadAssetAtPath<UnityEditor.Animations.AnimatorController>(controller.path);
                     if (asset != null)

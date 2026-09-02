@@ -204,7 +204,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }
             catch
             {
-                RestoreTextureType(importer, previousType);
+                // A restore that throws must not replace the exception that caused it.
+                try { RestoreTextureType(importer, previousType); }
+                catch (Exception restoreError) { McpLog.Error($"[ManageSprite] Could not restore the importer type of '{path}': {restoreError.Message}"); }
                 throw;
             }
         }

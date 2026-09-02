@@ -65,10 +65,15 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             IEnumerable<(string name, string path)> clips, string controllerPath, bool overwrite,
             SpriteDiagnosticBuilder diagnostics)
         {
-            controllerPath = AssetPathUtility.SanitizeAssetPath(controllerPath);
+            controllerPath = string.IsNullOrWhiteSpace(controllerPath) ? null : AssetPathUtility.SanitizeAssetPath(controllerPath.Trim());
             if (controllerPath == null)
             {
                 diagnostics.AddError("BAD_PARAM", "'controller_path' must stay under Assets/ and cannot contain '..'.");
+                return default;
+            }
+            if (AssetDatabase.IsValidFolder(controllerPath))
+            {
+                diagnostics.AddError("BAD_PARAM", $"'controller_path' names the folder '{controllerPath}'; give the controller a file name inside it.");
                 return default;
             }
             if (!controllerPath.EndsWith(".controller"))
@@ -113,7 +118,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 SpriteClipBuilder.CreateFolders(dir);
 
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
-            var rootSM     = controller.layers[0].stateMachine;
+            // Reference equality, not a null check: a replacement that failed leaves the old
+            // asset loadable at the same path.
+            if (controller == null || AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != controller)
+            {
+                diagnostics.AddError("CONTROLLER_WRITE_FAILED", $"Unity did not write '{controllerPath}'.", "Check the Unity console for the AssetDatabase error.");
+                return default;
+            }
+            var rootSM = controller.layers[0].stateMachine;
 
             // ── Parameters ──────────────────────────────────────────────────
 
@@ -230,15 +242,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     rootSM.defaultState = state;
             }
 
-            AssetDatabase.SaveAssets();
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
-
-            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) == null)
-            {
-                diagnostics.AddError("CONTROLLER_WRITE_FAILED", $"Unity did not write '{controllerPath}'.", "Check the Unity console for the AssetDatabase error.");
-                return default;
-            }
 
             return (controllerPath, rootSM.states.Length);
         }

@@ -195,10 +195,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 AnimationUtility.SetAnimationClipSettings(clip, settings);
 
                 // CreateAsset replaces an existing asset itself; deleting first left nothing at
-                // the path when the replacement failed to be written.
+                // the path when the replacement failed to be written. Reference equality, not a
+                // null check: a failed replacement leaves the old asset loadable at the path.
                 AssetDatabase.CreateAsset(clip, clipPath);
-                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) == null)
+                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != clip)
                 {
+                    Object.DestroyImmediate(clip);
                     diagnostics.AddWarning("CLIP_WRITE_FAILED", $"Clip '{clipName}': Unity did not write '{clipPath}' - skipped.", "Check the Unity console for the AssetDatabase error.");
                     continue;
                 }

@@ -1010,6 +1010,8 @@ namespace MCPForUnityTests.Editor.Tools
         // the project root; 'Assets/' became 'Assets/.controller', a file with no name.
         [TestCase("Assets", "Assets.controller")]
         [TestCase("Assets/", "Assets/.controller")]
+        [TestCase("   ", "Assets/   .controller")]
+        [TestCase(TempRoot, TempRoot + ".controller")]   // an existing folder, no trailing slash
         public void SetupController_ControllerPathThatIsOnlyAFolder_IsRefusedBeforeWriting(string controllerPath, string strayRelative)
         {
             var clips = BuildClips("folderctrl", "idle", "walk");
@@ -1313,11 +1315,54 @@ namespace MCPForUnityTests.Editor.Tools
                                   ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S9.controller",
                                   ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S9" });
 
+                // The scene step has to have run for the renderer assertions to mean anything.
+                Assert.IsTrue(result.Value<bool>("success"));
+                Assert.AreEqual(1, go.GetComponents<Animator>().Length);
+                Assert.IsTrue(go.GetComponent<Animator>().runtimeAnimatorController != null);
                 Assert.AreEqual(1, go.GetComponents<SpriteRenderer>().Length);
                 Assert.AreSame(existing, go.GetComponent<SpriteRenderer>());
                 Assert.That(result["diagnostics"].ToString(), Does.Not.Contain("SCENE_SPRITE_RENDERER_ADDED"));
             }
             finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void FullSetup_InactiveSceneTarget_StillReceivesTheComponents()
+        {
+            string path = CreateSheet("s10", 4, 1);
+            var go = new GameObject("SpriteTest_S10");
+            go.SetActive(false);
+            try
+            {
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S10.controller",
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S10" });
+
+                Assert.IsTrue(result.Value<bool>("success"),
+                    "an inactive object is still the object the caller named; result was " + result.ToString(Newtonsoft.Json.Formatting.None));
+                Assert.AreEqual(1, go.GetComponents<Animator>().Length);
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void FullSetup_DuplicateSceneTargetNames_AreRefusedBeforeTouchingEither()
+        {
+            string path = CreateSheet("s11", 4, 1);
+            var first  = new GameObject("SpriteTest_S11");
+            var second = new GameObject("SpriteTest_S11");
+            try
+            {
+                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                  ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/S11.controller",
+                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S11" });
+
+                Assert.IsFalse(result.Value<bool>("success"));
+                Assert.That(result["diagnostics"].ToString(), Does.Contain("SCENE_TARGET_AMBIGUOUS"));
+                Assert.AreEqual(0, first.GetComponents<Animator>().Length + second.GetComponents<Animator>().Length,
+                    "with two candidates the tool must not guess which one the caller meant");
+            }
+            finally { Object.DestroyImmediate(first); Object.DestroyImmediate(second); }
         }
 
         [Test]
