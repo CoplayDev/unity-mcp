@@ -105,3 +105,31 @@ async def test_reconnect_still_succeeds_when_the_reread_fails(monkeypatch):
 
     assert payload["success"] is True
     assert payload.get("data", {}).get("recovered_from_disconnect") is True
+
+
+@pytest.mark.asyncio
+async def test_no_reread_when_the_caller_asked_not_to_wait(monkeypatch):
+    """wait_for_ready=False opts out of console_errors, so the re-read must not run."""
+    from services.tools.refresh_unity import refresh_unity
+
+    ctx = DummyContext()
+    await ctx.set_state("unity_instance", "UnityMCPTests@cc8756d4cce0805a")
+
+    seen: list[dict] = []
+
+    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+        if command_type == "refresh_unity":
+            seen.append(params)
+            return {"success": False, "error": "connection closed", "hint": "retry"}
+        raise ValueError(f"Unexpected command: {command_type}")
+
+    import services.tools.refresh_unity as refresh_mod
+    monkeypatch.setattr(refresh_mod.unity_transport,
+                        "send_with_unity_instance", fake_send_with_unity_instance)
+
+    resp = await refresh_unity(ctx, compile="request", wait_for_ready=False)
+    payload = resp.model_dump() if hasattr(resp, "model_dump") else resp
+
+    assert payload["success"] is True
+    assert payload["data"] == {"recovered_from_disconnect": True}
+    assert len(seen) == 1, "the recovery path re-read despite wait_for_ready=False"

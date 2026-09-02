@@ -293,11 +293,13 @@ async def refresh_unity(
         pass
 
     if recovered_from_disconnect:
-        data = await _reread_payload_after_reconnect(unity_instance) or {}
+        # The re-read waits for the editor, so a caller that asked not to wait keeps the
+        # bare response rather than a hidden stall and a console_errors it opted out of
+        data = await _reread_payload_after_reconnect(unity_instance) if wait_for_ready else None
         return MCPResponse(
             success=True,
             message="Refresh recovered after Unity disconnect/retry; editor is ready.",
-            data={**data, "recovered_from_disconnect": True},
+            data={**(data or {}), "recovered_from_disconnect": True},
         )
 
     return MCPResponse(**response_dict) if isinstance(response, dict) else response
