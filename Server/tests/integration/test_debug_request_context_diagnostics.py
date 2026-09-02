@@ -64,11 +64,11 @@ async def test_debug_request_context_redacts_secret_argv(monkeypatch):
     assert argv[-2:] == ["--http-port", "8080"]
 
 
-def test_redact_argv_does_not_swallow_a_following_flag():
+def test_redact_argv_hides_the_value_even_when_it_starts_with_a_dash():
     import services.tools.debug_request_context as mod
 
-    # A secret-looking flag used as a bare switch must not hide the flag after it.
-    assert mod._redact_argv(["--token", "--verbose"]) == ["--token", "--verbose"]
+    # Secret flags always take a value; a value that begins with "-" is still the secret.
+    assert mod._redact_argv(["--token", "-abc123", "--verbose"]) == ["--token", "***", "--verbose"]
     assert mod._redact_argv(["--token", "abc", "--verbose"]) == ["--token", "***", "--verbose"]
     assert mod._redact_argv(["--password=hunter2"]) == ["--password=***"]
     assert mod._redact_argv(["positional", "--port", "1"]) == ["positional", "--port", "1"]

@@ -559,3 +559,22 @@ class TestLogRedaction:
             assert self.KEY not in line
             assert self.KEY[:4] not in line
             assert self.KEY[-4:] not in line
+
+    @pytest.mark.asyncio
+    async def test_new_valid_key_evicts_a_negative_before_any_valid_entry(self, monkeypatch):
+        monkeypatch.setattr(ApiKeyService, "MAX_CACHE_ENTRIES", 3)
+        svc = _make_service()
+        ctx, instance = _patched_client(_mock_response(200, {"valid": True, "user_id": "u"}))
+        try:
+            await svc.validate("valid-key-aaaa-padding-to-length")
+            await svc.validate("valid-key-bbbb-padding-to-length")
+            instance.post = AsyncMock(return_value=_mock_response(401))
+            await svc.validate("bad-key-cccc-padding-to-length")
+            instance.post = AsyncMock(return_value=_mock_response(200, {"valid": True, "user_id": "u"}))
+            await svc.validate("valid-key-dddd-padding-to-length")
+        finally:
+            ctx.stop()
+        assert "bad-key-cccc-padding-to-length" not in svc._cache
+        assert "valid-key-aaaa-padding-to-length" in svc._cache
+        assert "valid-key-bbbb-padding-to-length" in svc._cache
+        assert "valid-key-dddd-padding-to-length" in svc._cache

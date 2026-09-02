@@ -121,9 +121,13 @@ class ApiKeyService:
                 if len(self._cache) >= self.MAX_CACHE_ENTRIES:
                     if not result.valid:
                         # Full of live entries: a negative verdict is not worth evicting
-                        # a validated key for. The caller still gets the answer.
+                        # anything for. The caller still gets the answer.
                         return result
-                    del self._cache[min(self._cache, key=lambda k: self._cache[k][3])]
+                    # Make room for a validated key: drop a negative entry if there is
+                    # one, otherwise the validated key that expires soonest.
+                    negatives = [k for k, v in self._cache.items() if not v[0]]
+                    pool = negatives or list(self._cache)
+                    del self._cache[min(pool, key=lambda k: self._cache[k][3])]
                 self._cache[api_key] = (
                     result.valid,
                     result.user_id,

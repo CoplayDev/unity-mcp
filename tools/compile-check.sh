@@ -46,6 +46,7 @@ winpath() { (cd "$1" 2>/dev/null && (pwd -W 2>/dev/null || pwd)) || die "directo
 UNITY_DATA=$(winpath "${UNITY_DATA:-/opt/unity/Editor/Data}")
 REPO=$(winpath "${REPO:-"$(dirname "${BASH_SOURCE[0]}")/.."}")
 EXTRA_REFS=${EXTRA_REFS:-"$REPO/.compile-refs"}
+[ -d "$EXTRA_REFS" ] && EXTRA_REFS=$(winpath "$EXTRA_REFS")
 PLATFORMS=${PLATFORMS:-"win osx linux"}
 OUT=${OUT:-/tmp/mcp-compile-check}
 mkdir -p "$OUT" && OUT=$(winpath "$OUT")

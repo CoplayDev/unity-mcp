@@ -21,22 +21,19 @@ def _redact_argv(argv: list[str]) -> list[str]:
     this tool is callable by every authenticated tenant, so the raw argv handed out the
     service credential. The flag shape is what helps debug a deployment; the value never is.
     """
+    # Every secret-bearing flag the server accepts takes a value, so the token after a bare
+    # flag is always that value, even when it happens to start with "-".
     out: list[str] = []
     hide_next = False
     for arg in argv:
         if hide_next:
+            out.append("***")
             hide_next = False
-            if not arg.startswith("-"):
-                out.append("***")
-                continue
+            continue
         name, sep, _value = arg.partition("=")
-        lowered = name.lower()
-        secret = name.startswith("-") and any(m in lowered for m in _SECRET_FLAG_MARKERS)
-        if secret and sep:
-            out.append(f"{name}=***")
-        else:
-            out.append(arg)
-            hide_next = secret
+        secret = name.startswith("-") and any(m in name.lower() for m in _SECRET_FLAG_MARKERS)
+        out.append(f"{name}=***" if secret and sep else arg)
+        hide_next = secret and not sep
     return out
 
 
