@@ -99,6 +99,20 @@ namespace MCPForUnityTests.Editor.Blender
         }
 
         [Test]
+        public void RedactRemoteUrl_StripsEmbeddedCredentials()
+        {
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://user:ghp_secret@github.com/o/r.git"));
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://ghp_secret@github.com/o/r.git"));
+            Assert.AreEqual("https://github.com/o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("https://github.com/o/r.git"));
+            Assert.AreEqual("git@github.com:o/r.git",
+                BlenderBridgeTool.RedactRemoteUrl("git@github.com:o/r.git"));
+            Assert.AreEqual(string.Empty, BlenderBridgeTool.RedactRemoteUrl(null));
+        }
+
+        [Test]
         public void ExportScript_WithoutNames_UsesEmptyList()
         {
             string script = BlenderBridgeTool.BuildExportScript("C:/tmp/x.fbx", null, true, false, "fbx");

@@ -151,7 +151,7 @@ namespace MCPForUnity.Editor.Tools.Blender
 
             string dir = Path.Combine(ProjectRoot(), "Library", "BlenderBridge");
             Directory.CreateDirectory(dir);
-            string file = Path.Combine(dir, $"blender_viewport_{DateTime.Now:yyyyMMdd_HHmmss}.png").Replace('\\', '/');
+            string file = Path.Combine(dir, $"blender_viewport_{UniqueSuffix()}.png").Replace('\\', '/');
 
             JToken result = await BlenderSocketClient.SendAsync(BlenderBridgePrefs.Endpoint, "get_viewport_screenshot",
                 new JObject { ["max_size"] = maxSize, ["filepath"] = file, ["format"] = "png" }, timeout);
@@ -203,7 +203,7 @@ namespace MCPForUnity.Editor.Tools.Blender
             // 1. Export from Blender to a temp file (off the editor thread).
             string exportDir = Path.Combine(Path.GetTempPath(), "BlenderBridge");
             Directory.CreateDirectory(exportDir);
-            string exportPath = Path.Combine(exportDir, $"{name}_{DateTime.Now:yyyyMMdd_HHmmss}.{fmt}").Replace('\\', '/');
+            string exportPath = Path.Combine(exportDir, $"{name}_{UniqueSuffix()}.{fmt}").Replace('\\', '/');
 
             string script = BuildExportScript(exportPath, names, selectionOnly, applyModifiers, fmt);
             string stdout = await BlenderSocketClient.RunPythonAsync(BlenderBridgePrefs.Endpoint, script, timeout);
@@ -379,7 +379,7 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
             {
                 var entry = new JObject { ["remote"] = remote };
                 TryGit(fork, $"remote get-url {remote}", out string url, out _);
-                entry["url"] = url.Trim();
+                entry["url"] = RedactRemoteUrl(url.Trim());
 
                 bool fetched = TryGit(fork, $"fetch --quiet {remote}", out _, out string fetchErr, 90000);
                 entry["fetched"] = fetched;
@@ -509,6 +509,30 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
                 stderr = e.Message;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Timestamp plus a random tail for temp file names, so concurrent commands (menu + MCP) started
+        /// in the same second never share a screenshot or export path.
+        /// </summary>
+        private static string UniqueSuffix()
+            => $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+
+        /// <summary>
+        /// Strips user info (tokens, passwords) from a remote URL so credentials embedded in
+        /// https://user:token@host/... never reach the MCP response or the editor log.
+        /// </summary>
+        internal static string RedactRemoteUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url ?? string.Empty;
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri) && !string.IsNullOrEmpty(uri.UserInfo))
+                return new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty }.Uri.ToString();
+            // scp-style git@host:path carries no secret; anything else with "user:secret@" is masked.
+            int at = url.IndexOf('@');
+            int scheme = url.IndexOf("://", StringComparison.Ordinal);
+            if (at > 0 && scheme >= 0 && at > scheme && url.IndexOf(':', scheme + 3) is int colon && colon > 0 && colon < at)
+                return url.Substring(0, scheme + 3) + "***@" + url.Substring(at + 1);
+            return url;
         }
 
         /// <summary>Absolute project folder (parent of Assets/), forward slashes.</summary>
