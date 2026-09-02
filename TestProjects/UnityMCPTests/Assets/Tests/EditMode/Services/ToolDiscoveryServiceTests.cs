@@ -113,6 +113,53 @@ namespace MCPForUnity.Editor.Tests.EditMode.Services
             Assert.IsFalse(result, "Tool state should persist across service instances");
         }
 
+        /// <summary>
+        /// Discovery is TypeCache-only, so the built-in tools must all still surface — this is the
+        /// guard that dropping the exhaustive assembly walk did not lose any of them.
+        /// </summary>
+        [Test]
+        public void DiscoverAllTools_FindsEveryBuiltInTool()
+        {
+            string[] expected =
+            {
+                "manage_asset",
+                "manage_editor",
+                "manage_gameobject",
+                "manage_scene",
+                "manage_script",
+                "manage_shader",
+                "read_console",
+                "execute_menu_item",
+                "manage_prefabs"
+            };
+
+            var service = new ToolDiscoveryService();
+            var discovered = service.DiscoverAllTools().Select(tool => tool.Name).ToList();
+
+            foreach (string name in expected)
+            {
+                CollectionAssert.Contains(discovered, name, $"built-in tool '{name}' should be discovered");
+            }
+        }
+
+        /// <summary>
+        /// A duplicate tool name overwrites the previous registration, so registration order
+        /// decides the winner. TypeCache documents no order, hence the explicit sort — without it
+        /// a name collision could resolve differently from one domain reload to the next.
+        /// </summary>
+        [Test]
+        public void DiscoverAllTools_RegistersInAStableOrder()
+        {
+            var service = new ToolDiscoveryService();
+
+            var first = service.DiscoverAllTools().Select(tool => tool.Name).ToList();
+            service.InvalidateCache();
+            var second = service.DiscoverAllTools().Select(tool => tool.Name).ToList();
+
+            CollectionAssert.AreEqual(first, second,
+                "repeated discovery must produce the same registration order");
+        }
+
         [Test]
         public void DiscoverAllTools_DoesNotOverrideStoredFalse_ForBuiltInAutoRegisterFalseTool()
         {
