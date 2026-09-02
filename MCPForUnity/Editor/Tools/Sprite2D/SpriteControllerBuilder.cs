@@ -21,78 +21,92 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         {
             var clipsToken = @params["clips"] as JArray;
             if (clipsToken == null || clipsToken.Count == 0)
-                return new ErrorResponse("'clips' array is required.");
+                return diagnostics.Fail("BAD_PARAM", "'clips' array is required.");
 
             string controllerPath = @params["controller_path"]?.ToString();
             if (string.IsNullOrEmpty(controllerPath))
-                return new ErrorResponse("'controller_path' is required.");
+                return diagnostics.Fail("BAD_PARAM", "'controller_path' is required.");
 
+            bool overwrite = ParamCoercion.CoerceBool(@params["overwrite"], false);
+
+            var clips = new List<(string name, string path)>();
+            foreach (JToken clipToken in clipsToken)
+            {
+                // Measured: a non-object clips entry threw InvalidCastException on a typed cast.
+                if (clipToken is JObject cd)
+                    clips.Add((cd["name"]?.ToString() ?? "", cd["path"]?.ToString() ?? ""));
+                else
+                    diagnostics.AddWarning("CLIP_NOT_AN_OBJECT", "A clips entry is not an object - skipped.", "Each clip must be an object with a 'name'.");
+            }
+
+            var built = BuildController(clips, controllerPath, overwrite, diagnostics);
+            if (diagnostics.HasErrors)
+                return diagnostics.Fail();
+
+            return new
+            {
+                success         = true,
+                controller_path = built.path,
+                state_count     = built.stateCount,
+                diagnostics     = diagnostics.Build(),
+            };
+        }
+
+        /// <summary>Returns default when refused; the diagnostics say why.</summary>
+        internal static (string path, int stateCount) BuildController(
+            IEnumerable<(string name, string path)> clips, string controllerPath, bool overwrite,
+            SpriteDiagnosticBuilder diagnostics)
+        {
             controllerPath = AssetPathUtility.SanitizeAssetPath(controllerPath);
             if (controllerPath == null)
-                return new ErrorResponse("'controller_path' must stay under Assets/ and cannot contain '..'.");
+            {
+                diagnostics.AddError("BAD_PARAM", "'controller_path' must stay under Assets/ and cannot contain '..'.");
+                return default;
+            }
             if (!controllerPath.EndsWith(".controller"))
                 controllerPath += ".controller";
 
-            bool overwrite = @params["overwrite"]?.ToObject<bool>() ?? false;
-
             var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
-            foreach (JToken clipToken in clipsToken)
+            foreach (var (clipName, clipPath) in clips)
             {
-                // Measured: the Python surface forwards a clips entry that is not an
-                // object, and the typed foreach cast threw InvalidCastException on it.
-                if (!(clipToken is JObject cd))
-                {
-                    diagnostics.AddWarning("CLIP_NOT_AN_OBJECT", "A clips entry is not an object - skipped.", null, new[] { "Each clip must be an object with a 'name'." });
-                    continue;
-                }
-
-                string clipName = cd["name"]?.ToString() ?? "";
-                string clipPath = cd["path"]?.ToString() ?? "";
                 string safeClipPath = AssetPathUtility.SanitizeAssetPath(clipPath);
                 if (safeClipPath == null)
-                { diagnostics.AddWarning("CLIP_BAD_PATH", $"Clip '{clipName}': path '{clipPath}' must stay under Assets/ and cannot contain '..' - skipped.", null, new string[0]); continue; }
+                { diagnostics.AddWarning("CLIP_BAD_PATH", $"Clip '{clipName}': path '{clipPath}' must stay under Assets/ and cannot contain '..' - skipped."); continue; }
                 var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(safeClipPath);
                 if (clip == null)
-                { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped.", null, new string[0]); continue; }
+                { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped."); continue; }
                 entries.Add((SpriteNamingDetector.Detect(clipName), clip));
             }
 
             if (entries.Count == 0)
-                // The diagnostics travel in ErrorResponse's data field rather than in a
-                // diagnostics-carrying anonymous object: SpriteFullSetup stops on
-                // `is ErrorResponse`, and CLIP_NOT_AN_OBJECT is a warning, so HasErrors would
-                // not catch it - changing the type here would let a failed controller step
-                // fall through to the scene step again.
-                return new ErrorResponse("No valid clips loaded.", new { diagnostics = diagnostics.Build() });
+            {
+                diagnostics.AddError("NO_CLIPS", "No valid clips loaded.");
+                return default;
+            }
 
-            // The existing controller is only removed once the replacement is known to be
-            // buildable: deleting first left a failed rebuild with no controller at all.
+            // Removed only once the replacement is known to be buildable: deleting first left
+            // a failed rebuild with no controller at all.
             if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
             {
                 if (!overwrite)
                 {
-                    diagnostics.AddError(
-                        "CONTROLLER_EXISTS",
-                        $"Controller already exists at '{controllerPath}'.",
-                        new { path = controllerPath },
-                        new[] { "Set overwrite=true to replace it." }
-                    );
-                    return new { success = false, diagnostics = diagnostics.Build() };
+                    diagnostics.AddError("CONTROLLER_EXISTS", $"Controller already exists at '{controllerPath}'.", "Set overwrite=true to replace it.");
+                    return default;
                 }
                 AssetDatabase.DeleteAsset(controllerPath);
             }
 
             string dir = Path.GetDirectoryName(controllerPath)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(dir) && !AssetDatabase.IsValidFolder(dir))
-                CreateFolders(dir);
+                SpriteClipBuilder.CreateFolders(dir);
 
-            var complexity = SpriteNamingDetector.DecideComplexity(entries.Select(e => e.entry));
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
             var rootSM     = controller.layers[0].stateMachine;
 
             // ── Parameters ──────────────────────────────────────────────────
 
-            if (complexity == ControllerComplexity.BlendTree1D || complexity == ControllerComplexity.Full)
+            var locomotionPairs = entries.Where(e => e.entry.Category == SpriteAnimCategory.Locomotion).ToList();
+            if (locomotionPairs.Count > 0)
                 controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
 
             var triggerNames = entries
@@ -118,12 +132,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             // ── Locomotion ────────────────────────────────────────────────────
 
-            var locomotionPairs = entries.Where(e => e.entry.Category == SpriteAnimCategory.Locomotion).ToList();
             if (locomotionPairs.Count > 0)
             {
                 if (locomotionPairs.Count == 1)
                 {
-                    // A single locomotion clip: one plain state.
                     var locoState = rootSM.AddState(locomotionPairs[0].entry.ClipName);
                     locoState.motion = locomotionPairs[0].clip;
                     if (rootSM.defaultState == null) rootSM.defaultState = locoState;
@@ -139,7 +151,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 }
                 else
                 {
-                    // More than one locomotion clip: a 1D blend tree.
                     var blendState = rootSM.AddState("Locomotion");
                     var blendTree  = new BlendTree { name = "LocomotionTree", blendType = BlendTreeType.Simple1D, blendParameter = "Speed" };
                     // Off, or Unity silently redistributes the thresholds and the BlendValues
@@ -211,24 +222,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
 
-            return new
-            {
-                success         = true,
-                controller_path = controllerPath,
-                complexity      = complexity.ToString(),
-                state_count     = rootSM.states.Length,
-                diagnostics     = diagnostics.Build(),
-            };
-        }
-
-        private static void CreateFolders(string path)
-        {
-            string parent = Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "Assets";
-            if (!AssetDatabase.IsValidFolder(parent))
-                CreateFolders(parent);
-            string folderName = Path.GetFileName(path);
-            if (!string.IsNullOrEmpty(folderName))
-                AssetDatabase.CreateFolder(parent, folderName);
+            return (controllerPath, rootSM.states.Length);
         }
     }
 }

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 
 namespace MCPForUnity.Editor.Tools.Sprite2D
 {
@@ -11,14 +10,6 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         Combat,       // attack, slash, combo and the like: a trigger state.
         Object,       // open, close, activate: a single state.
         Generic,
-    }
-
-    internal enum ControllerComplexity
-    {
-        Single,       // a lone animation, or an object/generic name: one plain state.
-        BlendTree1D,  // locomotion: a 1D blend tree driven by a Speed float.
-        StateMachine, // combat present: trigger states.
-        Full,         // locomotion + combat: a blend tree plus trigger states.
     }
 
     internal class SpriteAnimEntry
@@ -35,25 +26,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         public static SpriteAnimEntry Detect(string clipName)
         {
             var entry = new SpriteAnimEntry { ClipName = clipName };
-            // The raw name, not a lowercased one: Words splits on camelCase humps by testing
-            // char.IsUpper, which is never true once the string has been lowered. 'heroAttack'
-            // collapsed into the single word 'heroattack', matched nothing, and was filed
-            // Generic with no Attack trigger. Words lowercases each word it emits, so every
-            // comparison downstream is still case-insensitive.
+            // The raw name, not a lowercased one: Words splits camelCase on char.IsUpper, so
+            // 'heroAttack' pre-lowered collapsed to 'heroattack' and lost its Attack trigger.
             Categorize(clipName, entry);
             entry.Loop = AutoDetectLoop(entry.Category);
             return entry;
-        }
-
-        public static ControllerComplexity DecideComplexity(IEnumerable<SpriteAnimEntry> entries)
-        {
-            bool hasLocomotion = entries.Any(e => e.Category == SpriteAnimCategory.Locomotion);
-            bool hasCombat     = entries.Any(e => e.Category == SpriteAnimCategory.Combat);
-
-            if (hasLocomotion && hasCombat) return ControllerComplexity.Full;
-            if (hasLocomotion)              return ControllerComplexity.BlendTree1D;
-            if (hasCombat)                 return ControllerComplexity.StateMachine;
-            return ControllerComplexity.Single;
         }
 
         // ── Private ──────────────────────────────────────────────────────────
@@ -89,9 +66,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
         /// <summary>
         /// The words in a clip name, split on separators, camelCase humps and letter/digit
-        /// boundaries. Matching on raw substrings instead files 'white_flash' under 'hit'
-        /// and 'drunk_walk' under 'run', which then shapes the controller around a category
-        /// the clip never belonged to.
+        /// boundaries. Raw substring matching instead files 'white_flash' under 'hit' and
+        /// 'drunk_walk' under 'run', shaping the controller around the wrong category.
         /// </summary>
         private static HashSet<string> Words(string name)
         {
@@ -103,9 +79,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 char c = name[i];
                 bool breaks = !char.IsLetterOrDigit(c)
                     || (i > 0 && char.IsUpper(c)  && char.IsLower(name[i - 1]))
-                    // The end of an acronym: 'heroXMLAttack' has no lower-to-upper boundary
-                    // at the 'A', so without this the tail read as one word 'xmlattack' and
-                    // lost the keyword its snake_case twin matches on.
+                    // End of an acronym: 'heroXMLAttack' has no lower-to-upper boundary at the
+                    // 'A', so the tail read as 'xmlattack' and lost its keyword.
                     || (i > 0 && i + 1 < name.Length
                         && char.IsUpper(c) && char.IsUpper(name[i - 1]) && char.IsLower(name[i + 1]))
                     || (i > 0 && char.IsDigit(c)  && char.IsLetter(name[i - 1]))
@@ -126,8 +101,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         private static bool Has(HashSet<string> words, params string[] keys) =>
             Match(words, keys) != null;
 
-        /// <summary>The first key the name actually contains, so a trigger is named after the
-        /// action rather than after whatever happened to come first in the clip name.</summary>
+        /// <summary>The first key the name contains, so the trigger is named after the action.</summary>
         private static string Match(HashSet<string> words, params string[] keys)
         {
             foreach (string k in keys)

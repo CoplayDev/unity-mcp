@@ -14,17 +14,17 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
         public static object HandleCommand(JObject @params)
         {
+            var diagnostics = new SpriteDiagnosticBuilder();
+
             string action = @params["action"]?.ToString()?.ToLowerInvariant();
             if (string.IsNullOrEmpty(action))
-                return new ErrorResponse(
+                return diagnostics.Fail("BAD_PARAM",
                     "'action' is required. Valid: " + string.Join(", ", ValidActions));
-
-            var diagnostics = new SpriteDiagnosticBuilder();
 
             switch (action)
             {
                 case "get_info":
-                    return SpriteImportSetup.GetInfo(@params);
+                    return SpriteImportSetup.GetInfo(@params, diagnostics);
 
                 case "slice_sheet":
                     return SpriteImportSetup.SliceSheet(@params, diagnostics);
@@ -36,10 +36,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     return SpriteControllerBuilder.Build(@params, diagnostics);
 
                 case "full_setup":
-                    return SpriteFullSetup.Run(@params);
+                    return SpriteFullSetup.Run(@params, diagnostics);
 
                 default:
-                    return new ErrorResponse(
+                    return diagnostics.Fail("BAD_PARAM",
                         $"Unknown action '{action}'. Valid: " + string.Join(", ", ValidActions));
             }
         }

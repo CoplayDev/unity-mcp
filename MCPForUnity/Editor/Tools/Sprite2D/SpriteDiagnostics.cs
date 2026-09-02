@@ -8,24 +8,35 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
         public string code;
         public string severity;
         public string message;
-        public object detail;
         public string[] fix_options;
     }
 
     internal class SpriteDiagnosticBuilder
     {
         private readonly List<SpriteDiagnostic> _list = new List<SpriteDiagnostic>();
+
         public bool HasErrors => _list.Any(d => d.severity == "error");
 
-        public void AddError(string code, string message, object detail, string[] fixes) =>
-            _list.Add(new SpriteDiagnostic { code = code, severity = "error", message = message, detail = detail, fix_options = fixes });
+        public string FirstError => _list.FirstOrDefault(d => d.severity == "error")?.message;
 
-        public void AddWarning(string code, string message, object detail, string[] fixes) =>
-            _list.Add(new SpriteDiagnostic { code = code, severity = "warning", message = message, detail = detail, fix_options = fixes });
+        public void AddError(string code, string message, params string[] fixes) =>
+            Add(code, "error", message, fixes);
 
-        public void AddInfo(string code, string message, object detail) =>
-            _list.Add(new SpriteDiagnostic { code = code, severity = "info", message = message, detail = detail, fix_options = new string[0] });
+        public void AddWarning(string code, string message, params string[] fixes) =>
+            Add(code, "warning", message, fixes);
+
+        public object Fail(string code, string message, params string[] fixes)
+        {
+            AddError(code, message, fixes);
+            return Fail();
+        }
+
+        public object Fail() =>
+            new { success = false, message = FirstError, diagnostics = Build() };
 
         public List<SpriteDiagnostic> Build() => new List<SpriteDiagnostic>(_list);
+
+        private void Add(string code, string severity, string message, params string[] fixes) =>
+            _list.Add(new SpriteDiagnostic { code = code, severity = severity, message = message, fix_options = fixes });
     }
 }
