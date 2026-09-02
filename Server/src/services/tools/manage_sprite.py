@@ -3,7 +3,7 @@
 Automates: sprite sheet slicing, AnimationClip creation from sliced frames,
 and AnimatorController generation.
 """
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -13,13 +13,9 @@ from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
-VALID_ACTIONS = [
-    "get_info",
-    "slice_sheet",
-    "setup_clips",
-    "setup_controller",
-    "full_setup",
-]
+SpriteAction = Literal["get_info", "slice_sheet", "setup_clips", "setup_controller", "full_setup"]
+
+VALID_ACTIONS: list[str] = list(get_args(SpriteAction))
 
 
 @mcp_for_unity_tool(
@@ -41,10 +37,7 @@ VALID_ACTIONS = [
 )
 async def manage_sprite(
     ctx: Context,
-    action: Annotated[
-        Literal["get_info", "slice_sheet", "setup_clips", "setup_controller", "full_setup"],
-        "Action to perform.",
-    ],
+    action: Annotated[SpriteAction, "Action to perform."],
     path: Annotated[
         str | None,
         "Sprite texture asset path (e.g. 'Assets/Sprites/hero_walk.png'). Required for get_info, slice_sheet, setup_clips, full_setup.",
@@ -130,60 +123,26 @@ async def manage_sprite(
         return {"success": False, "message": f"'cols' or 'frame_width' is required for '{action}'. "
                 "Use get_info first to retrieve image_base64, analyze the grid visually, then call full_setup with cols/rows."}
 
-    # The Unity side is the authority here - it composes the asset path and refuses the
-    # name again. Checking it up front turns a round-trip into an immediate answer, and a
-    # separator in a clip name is wrong under every configuration.
-    for clip in clips or []:
-        name = clip.get("name") if isinstance(clip, dict) else None
-        if name is None:
-            continue
-        # `clips` is typed as list[dict[str, Any]], so a JSON number reaches this check.
-        # Testing membership on one raises TypeError before the tool can answer at all.
-        if not isinstance(name, str):
-            return {"success": False,
-                    "message": f"Clip name must be a string, got {type(name).__name__}."}
-        if "/" in name or "\\" in name:
-            return {"success": False,
-                    "message": f"Clip name '{name}' cannot contain a path separator; "
-                               "use 'output_dir' to choose where clips are written."}
-
     if action_lower == "setup_controller" and not controller_path:
         return {"success": False, "message": "'controller_path' is required for setup_controller (e.g. 'Assets/Animators/Hero.controller')."}
 
     unity_instance = await get_unity_instance_from_context(ctx)
 
-    params: dict[str, Any] = {"action": action_lower}
+    # `or None` on the two flags, so a False is dropped rather than sent: the C# side
+    # reads a missing key as the default, and forwarding every argument buries the real
+    # ones in nulls on the wire.
+    optional = {
+        "path": path, "cols": cols, "rows": rows,
+        "frame_width": frame_width, "frame_height": frame_height,
+        "base_name": base_name, "clips": clips,
+        "animation_name": animation_name, "output_dir": output_dir,
+        "controller_path": controller_path, "page_size": page_size,
+        "cursor": cursor, "scene_target": scene_target,
+        "overwrite": overwrite or None, "add_to_scene": add_to_scene or None,
+    }
 
-    if path is not None:
-        params["path"] = path
-    if cols is not None:
-        params["cols"] = cols
-    if rows is not None:
-        params["rows"] = rows
-    if frame_width is not None:
-        params["frame_width"] = frame_width
-    if frame_height is not None:
-        params["frame_height"] = frame_height
-    if base_name is not None:
-        params["base_name"] = base_name
-    if clips is not None:
-        params["clips"] = clips
-    if animation_name is not None:
-        params["animation_name"] = animation_name
-    if output_dir is not None:
-        params["output_dir"] = output_dir
-    if controller_path is not None:
-        params["controller_path"] = controller_path
-    if page_size is not None:
-        params["page_size"] = page_size
-    if cursor is not None:
-        params["cursor"] = cursor
-    if overwrite:
-        params["overwrite"] = True
-    if add_to_scene:
-        params["add_to_scene"] = True
-    if scene_target is not None:
-        params["scene_target"] = scene_target
+    params: dict[str, Any] = {"action": action_lower}
+    params.update({k: v for k, v in optional.items() if v is not None})
 
     result = await send_with_unity_instance(
         async_send_command_with_retry,
