@@ -59,6 +59,10 @@ namespace MCPForUnityTests.Editor.Helpers
         private string _originalGitOverride;
         private bool _hadHttpTransport;
         private bool _originalHttpTransport;
+        private string _httpTransportKey;
+        private bool _hadHttpTransportScope;
+        private string _originalHttpTransportScope;
+        private string _httpTransportScopeKey;
         private bool _hadDevForceRefresh;
         private bool _originalDevForceRefresh;
         private IPlatformService _originalPlatformService;
@@ -68,8 +72,18 @@ namespace MCPForUnityTests.Editor.Helpers
         {
             _hadGitOverride = EditorPrefs.HasKey(EditorPrefKeys.GitUrlOverride);
             _originalGitOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
-            _hadHttpTransport = EditorPrefs.HasKey(EditorPrefKeys.UseHttpTransport);
-            _originalHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            _httpTransportKey = ProjectScopedEditorPrefs.GetKey(EditorPrefKeys.UseHttpTransport);
+            _hadHttpTransport = EditorPrefs.HasKey(_httpTransportKey);
+            _originalHttpTransport = ProjectScopedEditorPrefs.GetBool(
+                EditorPrefKeys.UseHttpTransport,
+                true,
+                allowLegacyFallback: false);
+            _httpTransportScopeKey = ProjectScopedEditorPrefs.GetKey(EditorPrefKeys.HttpTransportScope);
+            _hadHttpTransportScope = EditorPrefs.HasKey(_httpTransportScopeKey);
+            _originalHttpTransportScope = ProjectScopedEditorPrefs.GetString(
+                EditorPrefKeys.HttpTransportScope,
+                "local",
+                allowLegacyFallback: false);
             _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
             _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _originalPlatformService = MCPServiceLocator.Platform;
@@ -81,7 +95,8 @@ namespace MCPForUnityTests.Editor.Helpers
             // Ensure per-test deterministic Git URL (ignore developer overrides)
             EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
             // Default to stdio mode for existing tests unless specified otherwise
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
+            EditorConfigurationCache.Instance.SetHttpTransportScope("local");
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
             EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
@@ -122,11 +137,20 @@ namespace MCPForUnityTests.Editor.Helpers
 
             if (_hadHttpTransport)
             {
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalHttpTransport);
+                EditorConfigurationCache.Instance.SetUseHttpTransport(_originalHttpTransport);
             }
             else
             {
-                EditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
+                ProjectScopedEditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
+            }
+
+            if (_hadHttpTransportScope)
+            {
+                EditorConfigurationCache.Instance.SetHttpTransportScope(_originalHttpTransportScope);
+            }
+            else
+            {
+                ProjectScopedEditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
             }
 
             if (_hadDevForceRefresh)
@@ -138,6 +162,7 @@ namespace MCPForUnityTests.Editor.Helpers
                 EditorPrefs.DeleteKey(EditorPrefKeys.DevModeForceServerRefresh);
             }
 
+            EditorConfigurationCache.Instance.Refresh(allowLegacyFallback: false);
         }
 
         [Test]
@@ -235,7 +260,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies that Windows-specific environment configuration is included in stdio mode
 
             // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
 
             // Mock Windows platform
             MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: true));
@@ -292,7 +317,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies that non-Windows platforms don't include env configuration in stdio mode
 
             // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
 
             // Mock non-Windows platform (e.g., macOS/Linux)
             MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: false));
@@ -342,7 +367,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // Ensures that upsert operations also include Windows-specific env configuration in stdio mode
 
             // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
 
             // Mock Windows platform
             MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: true, systemRoot: "C:\\Windows"));
@@ -408,7 +433,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies that upsert operations on non-Windows platforms don't include env configuration in stdio mode
 
             // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
 
             // Mock non-Windows platform (e.g., macOS/Linux)
             MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: false));
@@ -466,7 +491,8 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies HTTP transport mode generates url field instead of command/args
 
             // Force HTTP mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(true);
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
 
             string uvPath = "C:\\Program Files\\uv\\uv.exe";
 
@@ -538,7 +564,8 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies HTTP mode upsert generates url field
 
             // Force HTTP mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(true);
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
 
             string existingToml = string.Join("\n", new[]
             {

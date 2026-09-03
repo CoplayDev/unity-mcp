@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Services
@@ -128,15 +129,29 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void Refresh()
         {
-            _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            Refresh(allowLegacyFallback: true);
+        }
+
+        internal void Refresh(bool allowLegacyFallback)
+        {
+            _useHttpTransport = ProjectScopedEditorPrefs.GetBool(
+                EditorPrefKeys.UseHttpTransport,
+                true,
+                allowLegacyFallback: allowLegacyFallback);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
             _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
-            _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _httpBaseUrl = ProjectScopedEditorPrefs.GetString(
+                EditorPrefKeys.HttpBaseUrl,
+                string.Empty,
+                allowLegacyFallback: allowLegacyFallback);
             _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
-            _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+            _httpTransportScope = ProjectScopedEditorPrefs.GetString(
+                EditorPrefKeys.HttpTransportScope,
+                string.Empty,
+                allowLegacyFallback: allowLegacyFallback);
             _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
         }
 
@@ -145,10 +160,19 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void SetUseHttpTransport(bool value)
         {
-            if (_useHttpTransport != value)
+            bool changed = _useHttpTransport != value;
+            if (changed)
             {
                 _useHttpTransport = value;
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, value);
+            }
+
+            if (changed || !ProjectScopedEditorPrefs.HasKey(EditorPrefKeys.UseHttpTransport))
+            {
+                ProjectScopedEditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, value);
+            }
+
+            if (changed)
+            {
                 OnConfigurationChanged?.Invoke(nameof(UseHttpTransport));
             }
         }
@@ -213,10 +237,19 @@ namespace MCPForUnity.Editor.Services
         public void SetHttpBaseUrl(string value)
         {
             value = value ?? string.Empty;
-            if (_httpBaseUrl != value)
+            bool changed = _httpBaseUrl != value;
+            if (changed)
             {
                 _httpBaseUrl = value;
-                EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, value);
+            }
+
+            if (changed || !ProjectScopedEditorPrefs.HasKey(EditorPrefKeys.HttpBaseUrl))
+            {
+                ProjectScopedEditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, value);
+            }
+
+            if (changed)
+            {
                 OnConfigurationChanged?.Invoke(nameof(HttpBaseUrl));
             }
         }
@@ -255,10 +288,19 @@ namespace MCPForUnity.Editor.Services
         public void SetHttpTransportScope(string value)
         {
             value = value ?? string.Empty;
-            if (_httpTransportScope != value)
+            bool changed = _httpTransportScope != value;
+            if (changed)
             {
                 _httpTransportScope = value;
-                EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, value);
+            }
+
+            if (changed || !ProjectScopedEditorPrefs.HasKey(EditorPrefKeys.HttpTransportScope))
+            {
+                ProjectScopedEditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, value);
+            }
+
+            if (changed)
+            {
                 OnConfigurationChanged?.Invoke(nameof(HttpTransportScope));
             }
         }
@@ -285,7 +327,7 @@ namespace MCPForUnity.Editor.Services
             switch (keyName)
             {
                 case nameof(UseHttpTransport):
-                    _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                    _useHttpTransport = ProjectScopedEditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
                     break;
                 case nameof(DebugLogs):
                     _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
@@ -300,7 +342,7 @@ namespace MCPForUnity.Editor.Services
                     _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
                     break;
                 case nameof(HttpBaseUrl):
-                    _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+                    _httpBaseUrl = ProjectScopedEditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
                     break;
                 case nameof(HttpRemoteBaseUrl):
                     _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
@@ -309,7 +351,7 @@ namespace MCPForUnity.Editor.Services
                     _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
                     break;
                 case nameof(HttpTransportScope):
-                    _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+                    _httpTransportScope = ProjectScopedEditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
                     break;
                 case nameof(UnitySocketPort):
                     _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);

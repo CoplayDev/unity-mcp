@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
 using UnityEditor;
@@ -26,12 +27,17 @@ namespace MCPForUnityTests.Editor.Services
         private TransportManager _savedManager;
         private bool _savedResumeFlag;
         private bool _savedUseHttpTransport;
+        private bool _hadUseHttpTransport;
 
         [SetUp]
         public void SetUp()
         {
             _savedResumeFlag = SessionState.GetBool(HttpBridgeReloadHandler.ResumeSessionKey, false);
-            _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            _hadUseHttpTransport = EditorPrefs.HasKey(ProjectScopedEditorPrefs.GetKey(EditorPrefKeys.UseHttpTransport));
+            _savedUseHttpTransport = ProjectScopedEditorPrefs.GetBool(
+                EditorPrefKeys.UseHttpTransport,
+                true,
+                allowLegacyFallback: false);
             _savedManager = MCPServiceLocator.TransportManager;
 
             SessionState.EraseBool(HttpBridgeReloadHandler.ResumeSessionKey);
@@ -41,7 +47,7 @@ namespace MCPForUnityTests.Editor.Services
             _manager.Configure(() => _fakeClient, () => _fakeClient);
             MCPServiceLocator.Register(_manager);
 
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.SetUseHttpTransport(true);
             EditorConfigurationCache.Instance.Refresh();
         }
 
@@ -50,8 +56,11 @@ namespace MCPForUnityTests.Editor.Services
         {
             // Stored-false and absent are indistinguishable: every read uses GetBool(key, false).
             SessionState.SetBool(HttpBridgeReloadHandler.ResumeSessionKey, _savedResumeFlag);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
-            EditorConfigurationCache.Instance.Refresh();
+            if (_hadUseHttpTransport)
+                EditorConfigurationCache.Instance.SetUseHttpTransport(_savedUseHttpTransport);
+            else
+                ProjectScopedEditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
+            EditorConfigurationCache.Instance.Refresh(allowLegacyFallback: false);
             MCPServiceLocator.Register(_savedManager);
         }
 
@@ -105,8 +114,7 @@ namespace MCPForUnityTests.Editor.Services
         public void AfterReloadCore_FlagSetStdioSelected_ClearsFlagAndSkips()
         {
             SessionState.SetBool(HttpBridgeReloadHandler.ResumeSessionKey, true);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorConfigurationCache.Instance.Refresh();
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
 
             Assert.IsFalse(HttpBridgeReloadHandler.OnAfterAssemblyReloadCore());
             Assert.IsFalse(ResumeFlagSet, "switching transports cancels the pending resume");

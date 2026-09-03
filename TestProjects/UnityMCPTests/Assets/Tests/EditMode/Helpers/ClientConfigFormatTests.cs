@@ -23,26 +23,41 @@ namespace MCPForUnityTests.Editor.Helpers
 
         private bool _hadHttpTransport;
         private bool _originalHttpTransport;
+        private bool _hadHttpTransportScope;
+        private string _originalHttpTransportScope;
 
         [SetUp]
         public void SetUp()
         {
-            _hadHttpTransport = EditorPrefs.HasKey(UseHttpTransportPrefKey);
-            _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
+            _hadHttpTransport = EditorPrefs.HasKey(ProjectScopedEditorPrefs.GetKey(UseHttpTransportPrefKey));
+            _originalHttpTransport = ProjectScopedEditorPrefs.GetBool(
+                UseHttpTransportPrefKey,
+                true,
+                allowLegacyFallback: false);
+            _hadHttpTransportScope = EditorPrefs.HasKey(
+                ProjectScopedEditorPrefs.GetKey(EditorPrefKeys.HttpTransportScope));
+            _originalHttpTransportScope = ProjectScopedEditorPrefs.GetString(
+                EditorPrefKeys.HttpTransportScope,
+                "local",
+                allowLegacyFallback: false);
 
             // Force HTTP transport so the remote/streamableHttp branch is exercised.
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
-            EditorConfigCache.Instance.Refresh();
+            EditorConfigCache.Instance.SetUseHttpTransport(true);
+            EditorConfigCache.Instance.SetHttpTransportScope("local");
         }
 
         [TearDown]
         public void TearDown()
         {
             if (_hadHttpTransport)
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, _originalHttpTransport);
+                EditorConfigCache.Instance.SetUseHttpTransport(_originalHttpTransport);
             else
-                EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
-            EditorConfigCache.Instance.Refresh();
+                ProjectScopedEditorPrefs.DeleteKey(UseHttpTransportPrefKey);
+            if (_hadHttpTransportScope)
+                EditorConfigCache.Instance.SetHttpTransportScope(_originalHttpTransportScope);
+            else
+                ProjectScopedEditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            EditorConfigCache.Instance.Refresh(allowLegacyFallback: false);
         }
 
         [Test]

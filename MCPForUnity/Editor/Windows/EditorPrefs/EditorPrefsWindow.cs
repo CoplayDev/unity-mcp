@@ -212,9 +212,12 @@ namespace MCPForUnity.Editor.Windows
                 // Skip Customer UUID but show everything else that's defined
                 if (key != EditorPrefKeys.CustomerUuid)
                 {
+                    string storageKey = ProjectScopedEditorPrefs.ResolveStorageKey(key);
+
                     // Apply search filter using OrdinalIgnoreCase for fewer allocations
                     if (!string.IsNullOrEmpty(filter) &&
-                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        storageKey.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     {
                         continue;
                     }
@@ -244,32 +247,33 @@ namespace MCPForUnity.Editor.Windows
 
         private EditorPrefItem CreateEditorPrefItem(string key)
         {
-            var item = new EditorPrefItem { Key = key, IsKnown = knownMcpKeys.Contains(key) };
+            string storageKey = ProjectScopedEditorPrefs.ResolveStorageKey(key);
+            var item = new EditorPrefItem { Key = storageKey, IsKnown = knownMcpKeys.Contains(key) };
 
             // Check if we know the type of this pref
             if (knownPrefTypes.TryGetValue(key, out var knownType))
             {
                 // Check if the key actually exists
-                item.IsUnset = !EditorPrefs.HasKey(key);
+                item.IsUnset = !EditorPrefs.HasKey(storageKey);
 
                 // Use the known type
                 switch (knownType)
                 {
                     case EditorPrefType.Bool:
                         item.Type = EditorPrefType.Bool;
-                        item.Value = item.IsUnset ? "Unset. Default: False" : EditorPrefs.GetBool(key, false).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: False" : EditorPrefs.GetBool(storageKey, false).ToString();
                         break;
                     case EditorPrefType.Int:
                         item.Type = EditorPrefType.Int;
-                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetInt(key, 0).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetInt(storageKey, 0).ToString();
                         break;
                     case EditorPrefType.Float:
                         item.Type = EditorPrefType.Float;
-                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetFloat(key, 0f).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetFloat(storageKey, 0f).ToString();
                         break;
                     case EditorPrefType.String:
                         item.Type = EditorPrefType.String;
-                        item.Value = item.IsUnset ? "Unset. Default: (empty)" : EditorPrefs.GetString(key, "");
+                        item.Value = item.IsUnset ? "Unset. Default: (empty)" : EditorPrefs.GetString(storageKey, "");
                         break;
                 }
             }
@@ -353,15 +357,16 @@ namespace MCPForUnity.Editor.Windows
 
         private void SaveValue(string key, string value, EditorPrefType type)
         {
+            string storageKey = ProjectScopedEditorPrefs.ResolveStorageKey(key);
             switch (type)
             {
                 case EditorPrefType.String:
-                    EditorPrefs.SetString(key, value);
+                    EditorPrefs.SetString(storageKey, value);
                     break;
                 case EditorPrefType.Int:
                     if (int.TryParse(value, out var intValue))
                     {
-                        EditorPrefs.SetInt(key, intValue);
+                        EditorPrefs.SetInt(storageKey, intValue);
                     }
                     else
                     {
@@ -372,7 +377,7 @@ namespace MCPForUnity.Editor.Windows
                 case EditorPrefType.Float:
                     if (float.TryParse(value, out var floatValue))
                     {
-                        EditorPrefs.SetFloat(key, floatValue);
+                        EditorPrefs.SetFloat(storageKey, floatValue);
                     }
                     else
                     {
@@ -383,7 +388,7 @@ namespace MCPForUnity.Editor.Windows
                 case EditorPrefType.Bool:
                     if (bool.TryParse(value, out var boolValue))
                     {
-                        EditorPrefs.SetBool(key, boolValue);
+                        EditorPrefs.SetBool(storageKey, boolValue);
                     }
                     else
                     {

@@ -21,6 +21,7 @@ namespace MCPForUnity.Editor.Helpers
         private const string RemotePrefKey = EditorPrefKeys.HttpRemoteBaseUrl;
         private const string DefaultLocalBaseUrl = "http://127.0.0.1:8080";
         private const string DefaultRemoteBaseUrl = "";
+        private const string LocalBaseUrlEnvironmentVariable = "UNITY_MCP_HTTP_URL";
 
         /// <summary>
         /// Returns the normalized base URL for the currently active HTTP scope.
@@ -28,6 +29,11 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetBaseUrl()
         {
+            if (TryGetLocalEnvironmentOverride(out string environmentOverride))
+            {
+                return environmentOverride;
+            }
+
             return IsRemoteScope() ? GetRemoteBaseUrl() : GetLocalBaseUrl();
         }
 
@@ -51,7 +57,12 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetLocalBaseUrl()
         {
-            string stored = EditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
+            if (TryGetLocalEnvironmentOverride(out string environmentOverride))
+            {
+                return environmentOverride;
+            }
+
+            string stored = ProjectScopedEditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
         }
 
@@ -61,7 +72,7 @@ namespace MCPForUnity.Editor.Helpers
         public static void SaveLocalBaseUrl(string userValue)
         {
             string normalized = NormalizeBaseUrl(userValue, DefaultLocalBaseUrl, remoteScope: false);
-            EditorPrefs.SetString(LocalPrefKey, normalized);
+            ProjectScopedEditorPrefs.SetString(LocalPrefKey, normalized);
         }
 
         /// <summary>
@@ -131,6 +142,11 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static bool IsRemoteScope()
         {
+            if (TryGetLocalEnvironmentOverride(out _))
+            {
+                return false;
+            }
+
             string scope = EditorConfigurationCache.Instance.HttpTransportScope;
             return string.Equals(scope, "remote", StringComparison.OrdinalIgnoreCase);
         }
@@ -224,6 +240,13 @@ namespace MCPForUnity.Editor.Helpers
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             {
                 error = $"Invalid URL: {url}";
+                return false;
+            }
+
+            if (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+                && !uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"Unsupported URL scheme '{uri.Scheme}'. Use http:// or https://.";
                 return false;
             }
 
@@ -348,6 +371,29 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return trimmed;
+        }
+
+        private static bool TryGetLocalEnvironmentOverride(out string normalized)
+        {
+            string value = Environment.GetEnvironmentVariable(LocalBaseUrlEnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                normalized = null;
+                return false;
+            }
+
+            string candidate = NormalizeBaseUrl(
+                value,
+                DefaultLocalBaseUrl,
+                remoteScope: false);
+            if (!IsHttpLocalUrlAllowedForLaunch(candidate, out _))
+            {
+                normalized = null;
+                return false;
+            }
+
+            normalized = candidate;
+            return true;
         }
 
         private static string AppendPathSegment(string baseUrl, string segment)

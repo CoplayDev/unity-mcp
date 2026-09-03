@@ -1,7 +1,6 @@
 using System;
-using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport.Transports;
-using UnityEditor;
 
 namespace MCPForUnity.Editor
 {
@@ -11,7 +10,7 @@ namespace MCPForUnity.Editor
         {
             try 
             { 
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false); 
+                EditorConfigurationCache.Instance.SetUseHttpTransport(false);
             }
             catch { /* ignore */ }
 
