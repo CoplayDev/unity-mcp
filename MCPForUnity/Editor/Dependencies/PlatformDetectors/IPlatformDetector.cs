@@ -28,6 +28,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         DependencyStatus DetectUv();
 
         /// <summary>
+        /// Detect git on this platform. Optional: only the Package Manager's Git-URL install path needs it.
+        /// </summary>
+        DependencyStatus DetectGit();
+
+        /// <summary>
         /// Get platform-specific installation recommendations
         /// </summary>
         string GetInstallationRecommendations();

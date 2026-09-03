@@ -25,6 +25,9 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement uvIndicator;
         private Label uvVersion;
         private Label uvDetails;
+        private VisualElement gitIndicator;
+        private Label gitVersion;
+        private Label gitDetails;
         private Label statusMessage;
         private VisualElement installationSection;
         private Label installationInstructions;
@@ -88,6 +91,9 @@ namespace MCPForUnity.Editor.Windows
             uvIndicator = rootVisualElement.Q<VisualElement>("uv-indicator");
             uvVersion = rootVisualElement.Q<Label>("uv-version");
             uvDetails = rootVisualElement.Q<Label>("uv-details");
+            gitIndicator = rootVisualElement.Q<VisualElement>("git-indicator");
+            gitVersion = rootVisualElement.Q<Label>("git-version");
+            gitDetails = rootVisualElement.Q<Label>("git-details");
             statusMessage = rootVisualElement.Q<Label>("status-message");
             installationSection = rootVisualElement.Q<VisualElement>("installation-section");
             installationInstructions = rootVisualElement.Q<Label>("installation-instructions");
@@ -328,6 +334,13 @@ namespace MCPForUnity.Editor.Windows
                 UpdateDependencyStatus(uvIndicator, uvVersion, uvDetails, uvDep);
             }
 
+            // Update git status (optional dependency: never blocks readiness)
+            var gitDep = _dependencyResult.Dependencies.Find(d => d.Name == "Git");
+            if (gitDep != null)
+            {
+                UpdateDependencyStatus(gitIndicator, gitVersion, gitDetails, gitDep);
+            }
+
             // Offer the one-click uv installer only when uv is actually missing
             bool uvMissing = uvDep != null && !uvDep.IsAvailable;
             if (installUvButton != null)
@@ -367,8 +380,12 @@ namespace MCPForUnity.Editor.Windows
                 indicator.RemoveFromClassList("valid");
                 indicator.AddToClassList("invalid");
                 versionLabel.text = "Not Found";
-                detailsLabel.text = dep.ErrorMessage ?? "Not available";
-                detailsLabel.style.color = new StyleColor(Color.red);
+                // A missing optional dependency is information, not a blocker: show what it is
+                // for in the neutral colour instead of the red used for required ones.
+                detailsLabel.text = dep.IsRequired
+                    ? dep.ErrorMessage ?? "Not available"
+                    : dep.Details ?? dep.ErrorMessage ?? "Not available";
+                detailsLabel.style.color = new StyleColor(dep.IsRequired ? Color.red : Color.gray);
             }
         }
     }

@@ -64,6 +64,67 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         }
 
 
+        // Git is not needed to run the bridge, only to add or update the package from a Git URL
+        // in the Package Manager, which is the install path most users take (issue #1216). It is
+        // reported as optional so a missing git never blocks setup, but the row tells the user why
+        // "Error when executing git command" appeared and how to clear it.
+        public const string GitInstallUrl = "https://git-scm.com/downloads";
+
+        public virtual DependencyStatus DetectGit()
+        {
+            var status = new DependencyStatus("Git", isRequired: false)
+            {
+                InstallationHint = GitInstallUrl
+            };
+
+            try
+            {
+                if (!TryFindInPath("git", out string gitPath))
+                {
+                    status.ErrorMessage = "git not found";
+                    status.Details = "Only needed to add or update MCP for Unity from a Git URL in the Package Manager.";
+                    return status;
+                }
+
+                if (ExecPath.TryRun(gitPath, "--version", null, out string stdout, out string stderr, 5000)
+                    && TryParseGitVersion(string.IsNullOrWhiteSpace(stdout) ? stderr : stdout, out string version))
+                {
+                    status.IsAvailable = true;
+                    status.Version = version;
+                    status.Path = gitPath;
+                    status.Details = "If the Package Manager still reports 'not in a git directory', git is refusing a folder "
+                        + "owned by another user: run  git config --global --add safe.directory <project folder>";
+                    return status;
+                }
+
+                status.ErrorMessage = "git found but did not report a version";
+                status.Path = gitPath;
+            }
+            catch (Exception ex)
+            {
+                status.ErrorMessage = $"Error detecting git: {ex.Message}";
+            }
+
+            return status;
+        }
+
+        /// <summary>Parses "git version 2.45.1.windows.1" or "git version 2.39.5 (Apple Git-154)" into "2.45.1.windows.1" / "2.39.5".</summary>
+        internal static bool TryParseGitVersion(string output, out string version)
+        {
+            version = null;
+            string line = (output ?? string.Empty).Trim();
+            const string prefix = "git version ";
+            if (!line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string rest = line.Substring(prefix.Length).Trim();
+            int end = rest.IndexOfAny(new[] { ' ', '\r', '\n' });
+            version = end >= 0 ? rest.Substring(0, end) : rest;
+            return version.Length > 0 && char.IsDigit(version[0]);
+        }
+
         protected bool TryParseVersion(string version, out int major, out int minor)
         {
             major = 0;

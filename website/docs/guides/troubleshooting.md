@@ -165,6 +165,23 @@ This is a Unity bug (UUM-132096), not an MCP for Unity one.
 
 ---
 
+## Package Manager: "Error when executing git command" / "not in a git directory"
+
+Adding the package from a Git URL makes the Package Manager shell out to `git`. Two things make that fail:
+
+1. **git is not installed or not on PATH.** Install it from [git-scm.com](https://git-scm.com/downloads) and restart Unity so the Editor picks up the new PATH. The setup window (**Window → MCP for Unity → Local Setup Window**) shows a **Git (optional)** row so you can confirm the Editor sees it.
+2. **git refuses the folder.** Newer git versions decline to run inside a directory owned by a different user account (external drives, shared folders, projects created by another account). The Package Manager surfaces this as `fatal: not in a git directory`. Tell git the folder is yours:
+
+```bash
+git config --global --add safe.directory "/path/to/the/parent/folder"
+```
+
+Trusting the parent folder covers every project inside it. Restart Unity and add the package again.
+
+Git is only needed for this install path; the bridge itself does not use it, so a missing git never blocks setup.
+
+*Reported by [@Cherrymocha](https://github.com/CoplayDev/unity-mcp/issues/1216).*
+
 ## Codex: `resources/read failed: unknown MCP server`
 
 The `mcpforunity://` URI names the *resource*, not the server. Some clients take a separate server key on a resource read.
