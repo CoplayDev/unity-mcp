@@ -133,6 +133,25 @@ class PluginHub(WebSocketEndpoint):
     _FAST_FAIL_COMMANDS: set[str] = {
         "read_console", "get_editor_state", "ping"}
 
+    # Commands the Unity plugin answers on its transport receive thread instead of queueing onto
+    # the Editor main thread. They exist to report on (or clear) a blocked main thread, so they must
+    # skip the main-thread readiness probe — gating them on it would make them unavailable in
+    # exactly the situation they are for.
+    _OFF_MAIN_THREAD_COMMANDS: set[str] = {"liveness", "answer_dialog"}
+
+    # Seconds to wait for the off-main-thread liveness answer. It only reads counters and the last
+    # sampler snapshot, so anything slower means the plugin is not answering off-thread at all.
+    LIVENESS_TIMEOUT = 2.0
+
+    # answer_dialog needs its own budget: it enumerates the dialog's controls before clicking, and
+    # each read can spend up to the probe's message timeout. Giving up early would report a failure
+    # for a dialog that was in fact answered, since the click is posted, not awaited.
+    ANSWER_DIALOG_TIMEOUT = 10.0
+
+    # Main-thread stall (ms) past which a command timeout is reported as a stall rather than a
+    # generic "retry". Comfortably above normal editor update jitter when Unity is unfocused.
+    MAIN_THREAD_STALL_THRESHOLD_MS = 1500
+
     _registry: PluginRegistry | None = None
     _mcp: FastMCP | None = None
     # Index into mcp._transforms where Unity's server-level overrides start.
@@ -292,7 +311,12 @@ class PluginHub(WebSocketEndpoint):
         # - long-running commands: allow caller to request a longer timeout via params
         unity_timeout_s = float(cls.COMMAND_TIMEOUT)
         server_wait_s = float(cls.COMMAND_TIMEOUT)
-        if command_type in cls._FAST_FAIL_COMMANDS:
+        if command_type in cls._OFF_MAIN_THREAD_COMMANDS:
+            budget = float(cls.ANSWER_DIALOG_TIMEOUT
+                           if command_type == "answer_dialog" else cls.LIVENESS_TIMEOUT)
+            unity_timeout_s = budget
+            server_wait_s = budget
+        elif command_type in cls._FAST_FAIL_COMMANDS:
             fast_timeout = float(cls.FAST_FAIL_TIMEOUT)
             unity_timeout_s = fast_timeout
             server_wait_s = fast_timeout
@@ -349,6 +373,9 @@ class PluginHub(WebSocketEndpoint):
             except PluginDisconnectedError as exc:
                 return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
             except asyncio.TimeoutError:
+                stalled = await cls.describe_stall(session_id, command_type)
+                if stalled is not None:
+                    return stalled
                 if command_type in cls._FAST_FAIL_COMMANDS:
                     return MCPResponse(
                         success=False,
@@ -359,6 +386,103 @@ class PluginHub(WebSocketEndpoint):
         finally:
             async with lock:
                 cls._pending.pop(command_id, None)
+
+    @classmethod
+    async def probe_liveness(cls, session_id: str) -> dict[str, Any] | None:
+        """Ask the plugin's receive thread how Unity's main thread is doing.
+
+        Returns the liveness payload, or None when the plugin did not answer off-thread (an older
+        plugin that does not know the command, or a session that is genuinely gone).
+        """
+        try:
+            resp = await cls.send_command(session_id, "liveness", {})
+        except Exception:
+            return None
+
+        if not isinstance(resp, dict):
+            return None
+        result = resp.get("result") if isinstance(resp.get("result"), dict) else resp
+        if not isinstance(result, dict) or not result.get("success"):
+            return None
+        data = result.get("data")
+        return data if isinstance(data, dict) else None
+
+    @classmethod
+    async def describe_stall(cls, session_id: str, command_type: str) -> dict[str, Any] | None:
+        """Classify a command timeout as a main-thread stall, when it is one.
+
+        A blocked main thread and a busy/reloading Unity produce the same timeout, but they need
+        opposite responses from the caller: one is cleared by answering a dialog, the other by
+        waiting. Returns a response dict describing the stall, or None to let the caller fall back
+        to its ordinary timeout handling.
+        """
+        # The liveness probe is itself a command; classifying its timeout would recurse.
+        if command_type in cls._OFF_MAIN_THREAD_COMMANDS:
+            return None
+
+        live = await cls.probe_liveness(session_id)
+        if live is None:
+            return None
+
+        stall_ms = live.get("main_thread_stall_ms") or 0
+        modal = live.get("modal") if isinstance(live.get("modal"), dict) else {}
+        pending = live.get("pending_commands")
+
+        if modal.get("blocked"):
+            title = modal.get("title") or "(untitled dialog)"
+            body = modal.get("body")
+            buttons = modal.get("buttons") or []
+            answerable = bool(modal.get("answerable"))
+            kind = modal.get("kind")
+
+            # hint says what to do and data.dialog carries the buttons, so the message only names
+            # what is blocking and what it asks.
+            what = "modal window" if kind == "editor_window" else "dialog"
+            detail = f"Unity Editor is blocked by {what} {title!r}"
+            if body:
+                detail += f": {body}"
+            if buttons:
+                detail += f" Options: {', '.join(buttons)}."
+
+            hint = "answer_dialog" if answerable else "user_action_required"
+            if not answerable:
+                detail += " Dismiss it in the Editor."
+
+            return MCPResponse(
+                success=False,
+                error=detail,
+                hint=hint,
+                data={
+                    "reason": "modal_dialog",
+                    "command": command_type,
+                    "main_thread_stall_ms": stall_ms,
+                    "pending_commands": pending,
+                    "dialog": {
+                        "title": title,
+                        "body": body,
+                        "buttons": buttons,
+                        "answerable": answerable,
+                    },
+                },
+            ).model_dump()
+
+        if stall_ms >= cls.MAIN_THREAD_STALL_THRESHOLD_MS:
+            return MCPResponse(
+                success=False,
+                error=(
+                    f"Unity's main thread has been busy for {stall_ms / 1000:.1f}s; "
+                    f"'{command_type}' is queued behind it."
+                ),
+                hint="wait",
+                data={
+                    "reason": "main_thread_blocked",
+                    "command": command_type,
+                    "main_thread_stall_ms": stall_ms,
+                    "pending_commands": pending,
+                },
+            ).model_dump()
+
+        return None
 
     @classmethod
     async def get_sessions(cls, user_id: str | None = None) -> SessionList:
@@ -1038,7 +1162,12 @@ class PluginHub(WebSocketEndpoint):
         # the Unity Editor is unfocused). For fast-path commands, we do a bounded readiness probe using
         # a main-thread ping command (handled by TransportCommandDispatcher) rather than waiting on
         # register_tools (which can be delayed by EditorApplication.delayCall).
-        if retry_on_reload and command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
+        if (
+            retry_on_reload
+            and command_type in cls._FAST_FAIL_COMMANDS
+            and command_type != "ping"
+            and command_type not in cls._OFF_MAIN_THREAD_COMMANDS
+        ):
             max_wait_s = _read_bounded_wait_env(
                 "UNITY_MCP_SESSION_READY_WAIT_SECONDS", default_s=6.0, max_s=120.0)
             if max_wait_s > 0:
@@ -1057,7 +1186,12 @@ class PluginHub(WebSocketEndpoint):
                             break
                     await asyncio.sleep(0.1)
                 else:
-                    # Not ready within the bounded window: return retry hint without sending.
+                    # Not ready within the bounded window. A main-thread stall looks identical to a
+                    # reload from here, so ask the plugin's receive thread before falling back to a
+                    # bare retry hint.
+                    stalled = await cls.describe_stall(session_id, command_type)
+                    if stalled is not None:
+                        return stalled
                     return MCPResponse(
                         success=False,
                         error=f"Unity session not ready for '{command_type}' (ping not answered); please retry",

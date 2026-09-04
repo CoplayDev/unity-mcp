@@ -600,6 +600,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 continue;
                             }
 
+                            // Answered on this socket thread for the same reason ping is: they
+                            // report on (or clear) a blocked main thread and must not queue behind it.
+                            if (OffMainThreadCommands.TryHandleRaw(commandText, out string offMainThreadResponse))
+                            {
+                                await WriteFrameAsync(stream, System.Text.Encoding.UTF8.GetBytes(offMainThreadResponse));
+                                continue;
+                            }
+
                             lock (lockObj)
                             {
                                 commandQueue[commandId] = new QueuedCommand
