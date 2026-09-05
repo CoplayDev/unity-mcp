@@ -18,6 +18,8 @@ Three install paths are supported. Pick one. **Git URL** is the fastest if you j
 
 ## Option 1 — Git URL (fastest)
 
+This path needs `git` on your PATH (the Package Manager runs it). If it reports `Error when executing git command`, see [troubleshooting](../guides/troubleshooting.md#package-manager-error-when-executing-git-command--not-in-a-git-directory).
+
 In Unity, open **Window → Package Manager**, click the **`+`** button, choose **Add package from git URL...**, and paste:
 
 ```text
