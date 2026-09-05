@@ -537,6 +537,121 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(results.Errors.HasErrors, string.Join("\n", errors));
         }
 
+
+        // ──────────────────── Execute: using directives ────────────────────
+
+        [Test]
+        public void Execute_LeadingUsingDirective_IsHoistedAndCompiles()
+        {
+            var result = Execute("using System.IO;\nreturn Path.GetFileName(\"/a/b.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("b.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingStaticDirective_IsHoisted()
+        {
+            var result = Execute("using static System.Math;\nreturn Max(3, 4);");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(4, result["data"]["result"].Value<int>());
+        }
+
+        [Test]
+        public void Execute_UsingAliasWithGenericTarget_IsHoisted()
+        {
+            var result = Execute("using L = System.Collections.Generic.List<int>;\nreturn new L { 1, 2 }.Count;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(2, result["data"]["result"].Value<int>());
+        }
+
+        [Test]
+        public void Execute_UsingAfterComment_IsStillHoisted()
+        {
+            var result = Execute("// leading comment\nusing System.IO;\nreturn Path.GetFileName(\"/x/y.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("y.txt", result["data"]["result"].Value<string>());
+        }
+
+
+        [Test]
+        public void Execute_RedundantBuiltinUsing_DoesNotDuplicate()
+        {
+            var result = Execute("using System;\nreturn String.Concat(\"a\", \"b\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("ab", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_ErrorLineNumber_CountsFromCallerCodeAfterHoisting()
+        {
+            var result = Execute("using System.IO;\nint ok = 1;\nnope();\nreturn ok;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            var errors = string.Join("\n", (result["data"]["errors"] as JArray).Select(e => e.Value<string>()));
+            StringAssert.Contains("Line 3", errors);
+        }
+
+        [Test]
+        public void Execute_UsingWithTrailingComment_IsHoisted()
+        {
+            var result = Execute("using System.IO; // needed for Path\nreturn Path.GetFileName(\"/a/b.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("b.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingAfterBlockComment_IsStillHoisted()
+        {
+            var result = Execute("/* lead\n   in */\nusing System.IO;\nreturn Path.GetFileName(\"/a/c.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("c.txt", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_UsingBehindInlineBlockComment_IsHoisted()
+        {
+            var result = Execute("/* why */ using System.IO;\nreturn Path.GetFileName(\"/a/d.txt\");");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("d.txt", result["data"]["result"].Value<string>());
+        }
+
+        // ──────────────────── Execute: hoisting must not widen safety_checks ────────────────────
+
+        [Test]
+        public void Execute_HoistedNamespace_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using System.IO;\nFile.Delete(\"/tmp/mcp-does-not-exist\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
+        [Test]
+        public void Execute_AliasedType_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using F = System.IO.File;\nF.Delete(\"/tmp/mcp-does-not-exist\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
+        [Test]
+        public void Execute_UsingStatic_DoesNotBypassSafetyChecks()
+        {
+            var result = Execute("using static System.Diagnostics.Process;\nStart(\"ls\");\nreturn 1;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
         private static JObject Execute(string code)
         {
             return ToJObject(ExecuteCode.HandleCommand(new JObject
