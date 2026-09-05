@@ -663,10 +663,32 @@ namespace MCPForUnity.Editor.Tools
             _isAvailable = null;
         }
 
+        // Unity's script updater ships a Mono-loadable Roslyn, so roslyn needs nothing installed
+        // The DotNetSdkRoslyn copy beside it is .NET Core and BadImageFormats in the editor domain
+        private static void TryLoadUnityRoslyn()
+        {
+            try
+            {
+                string dir = Path.Combine(UnityEditor.EditorApplication.applicationContentsPath, "Tools", "ScriptUpdater");
+                foreach (string name in new[] { "Microsoft.CodeAnalysis.dll", "Microsoft.CodeAnalysis.CSharp.dll" })
+                {
+                    string path = Path.Combine(dir, name);
+                    if (File.Exists(path)) Assembly.LoadFrom(path);
+                }
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn($"[ExecuteCode] Could not load Unity's Roslyn: {e.Message}");
+            }
+        }
+
         private static bool Initialize()
         {
             try
             {
+                if (Type.GetType("Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree, Microsoft.CodeAnalysis.CSharp") == null)
+                    TryLoadUnityRoslyn();
+
                 _syntaxTreeType = Type.GetType("Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree, Microsoft.CodeAnalysis.CSharp");
                 _compilationType = Type.GetType("Microsoft.CodeAnalysis.CSharp.CSharpCompilation, Microsoft.CodeAnalysis.CSharp");
                 _compilationOptionsType = Type.GetType("Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions, Microsoft.CodeAnalysis.CSharp");
