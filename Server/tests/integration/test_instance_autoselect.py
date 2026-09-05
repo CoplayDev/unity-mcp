@@ -26,6 +26,7 @@ async def test_auto_selects_single_instance_via_pluginhub(monkeypatch):
             raise AssertionError("get_sessions should be stubbed in test")
 
     plugin_hub.PluginHub = PluginHub
+    plugin_hub._read_bounded_wait_env = lambda name, default_s, max_s: 0.0
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
@@ -73,6 +74,7 @@ async def test_auto_selects_single_instance_via_stdio(monkeypatch):
             return False
 
     plugin_hub.PluginHub = PluginHub
+    plugin_hub._read_bounded_wait_env = lambda name, default_s, max_s: 0.0
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
@@ -115,6 +117,7 @@ async def test_auto_select_handles_stdio_errors(monkeypatch):
             return False
 
     plugin_hub.PluginHub = PluginHub
+    plugin_hub._read_bounded_wait_env = lambda name, default_s, max_s: 0.0
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
