@@ -439,6 +439,7 @@ class UnityConnection:
 
                 # Re-discover the port for this specific instance
                 try:
+                    stdio_port_registry.get_instances(force_refresh=True)
                     new_port: int | None = None
                     if self.instance_id:
                         # Try to rediscover the specific instance via shared registry
