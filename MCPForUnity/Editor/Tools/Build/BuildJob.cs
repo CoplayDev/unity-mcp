@@ -74,7 +74,7 @@ namespace MCPForUnity.Editor.Tools.Build
     {
         public string JobId { get; }
         public BuildJobState State { get; set; } = BuildJobState.Pending;
-        public List<BuildJob> Children { get; } = new();
+        public List<BuildJob> Children { get; } = new List<BuildJob>();
         public int CurrentIndex { get; set; } = -1;
 
         public BatchJob(string jobId)
@@ -120,8 +120,8 @@ namespace MCPForUnity.Editor.Tools.Build
     /// </summary>
     public static class BuildJobStore
     {
-        private static readonly Dictionary<string, BuildJob> _buildJobs = new();
-        private static readonly Dictionary<string, BatchJob> _batchJobs = new();
+        private static readonly Dictionary<string, BuildJob> _buildJobs = new Dictionary<string, BuildJob>();
+        private static readonly Dictionary<string, BatchJob> _batchJobs = new Dictionary<string, BatchJob>();
         private static BuildJob _lastCompletedJob;
 
         public static string CreateJobId() => $"build-{Guid.NewGuid():N}".Substring(0, 16);

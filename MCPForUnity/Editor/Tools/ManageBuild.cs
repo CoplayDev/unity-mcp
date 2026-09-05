@@ -215,7 +215,11 @@ namespace MCPForUnity.Editor.Tools
                     target = EditorUserBuildSettings.activeBuildTarget.ToString(),
                     target_group = BuildTargetMapping.GetTargetGroup(
                         EditorUserBuildSettings.activeBuildTarget).ToString(),
+#if UNITY_2021_2_OR_NEWER
                     subtarget = EditorUserBuildSettings.standaloneBuildSubtarget.ToString()
+#else
+                    subtarget = "player"
+#endif
                 });
             }
 
@@ -228,6 +232,26 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse(
                     $"Platform '{target}' is not installed. Install it via Unity Hub.");
 
+            // Process subtarget before the active-target short-circuit so a "server"
+            // request on Unity < 2021.2 errors out even when the platform is already active.
+            string subtargetStr = p.Get("subtarget");
+            if (!string.IsNullOrEmpty(subtargetStr))
+            {
+#if UNITY_2021_2_OR_NEWER
+                string subtargetLower = subtargetStr.ToLowerInvariant();
+                if (subtargetLower == "server")
+                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
+                else if (subtargetLower == "player")
+                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
+#else
+                // Unity 2020.3 has no server subtarget; fail loudly instead of silently
+                // building the player variant.
+                string subtargetLower = subtargetStr.ToLowerInvariant();
+                if (subtargetLower == "server")
+                    return new ErrorResponse("subtarget 'server' requires Unity 2021.2 or newer (StandaloneBuildSubtarget API).");
+#endif
+            }
+
             if (EditorUserBuildSettings.activeBuildTarget == target)
                 return new SuccessResponse("Already on this platform.", new
                 {
@@ -236,16 +260,6 @@ namespace MCPForUnity.Editor.Tools
 
             // Capture previous target before switching
             string previousTarget = EditorUserBuildSettings.activeBuildTarget.ToString();
-
-            string subtargetStr = p.Get("subtarget");
-            if (!string.IsNullOrEmpty(subtargetStr))
-            {
-                string subtargetLower = subtargetStr.ToLowerInvariant();
-                if (subtargetLower == "server")
-                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
-                else if (subtargetLower == "player")
-                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
-            }
 
             // SwitchActiveBuildTarget is synchronous — blocks until reimport completes
             EditorUserBuildSettings.SwitchActiveBuildTarget(group, target);
@@ -477,7 +491,11 @@ namespace MCPForUnity.Editor.Tools
                     if (EditorUserBuildSettings.activeBuildTarget != child.Target)
                         EditorUserBuildSettings.SwitchActiveBuildTarget(group, child.Target);
 
+                    #if UNITY_2021_2_OR_NEWER
                     int subtarget = (int)StandaloneBuildSubtarget.Player;
+#else
+                    int subtarget = 0;
+#endif
                     var options = BuildRunner.CreateBuildOptions(
                         child.Target, child.OutputPath, null, buildOpts, subtarget);
                     BuildRunner.ScheduleBuild(child, options);

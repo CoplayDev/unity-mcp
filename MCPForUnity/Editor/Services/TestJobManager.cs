@@ -60,8 +60,8 @@ namespace MCPForUnity.Editor.Services
         private const string SessionKeyJobs = "MCPForUnity.TestJobsV1";
         private const string SessionKeyCurrentJobId = "MCPForUnity.CurrentTestJobIdV1";
 
-        private static readonly object LockObj = new();
-        private static readonly Dictionary<string, TestJob> Jobs = new();
+        private static readonly object LockObj = new object();
+        private static readonly Dictionary<string, TestJob> Jobs = new Dictionary<string, TestJob>();
         private static string _currentJobId;
         private static long _lastPersistUnixMs;
 

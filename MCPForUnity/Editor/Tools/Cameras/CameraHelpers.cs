@@ -247,7 +247,8 @@ namespace MCPForUnity.Editor.Tools.Cameras
         {
             return action switch
             {
-                "set_body" or "set_aim" => "Use 'set_lens' and 'set_target' for basic camera configuration.",
+                "set_body" => "Use 'set_lens' and 'set_target' for basic camera configuration.",
+                "set_aim" => "Use 'set_lens' and 'set_target' for basic camera configuration.",
                 "set_blend" => "Without Cinemachine, switch cameras by enabling/disabling Camera components.",
                 "set_noise" => "Camera shake without Cinemachine requires a custom script.",
                 "ensure_brain" => "CinemachineBrain requires the Cinemachine package. Basic Camera does not need a Brain.",
@@ -260,7 +261,11 @@ namespace MCPForUnity.Editor.Tools.Cameras
         {
             if (go == null) return;
             EditorUtility.SetDirty(go);
+#if UNITY_2021_2_OR_NEWER
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+#else
+            var prefabStage = UnityEditor.Experimental.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+#endif
             if (prefabStage != null)
                 UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(prefabStage.scene);
             else

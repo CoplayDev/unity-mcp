@@ -144,7 +144,7 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             string jobId = p.Get("job_id");
             if (string.IsNullOrEmpty(jobId)) return new ErrorResponse("'job_id' is required for cancel.");
             return AssetGenJobManager.Cancel(jobId)
-                ? new SuccessResponse($"Cancel requested for job '{jobId}'.")
+                ? (IMcpResponse)new SuccessResponse($"Cancel requested for job '{jobId}'.")
                 : new ErrorResponse($"No cancelable job found with ID '{jobId}'.");
         }
 

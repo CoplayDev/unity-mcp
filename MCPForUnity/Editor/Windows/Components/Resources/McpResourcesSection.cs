@@ -15,14 +15,14 @@ namespace MCPForUnity.Editor.Windows.Components.Resources
     /// </summary>
     public class McpResourcesSection
     {
-        private readonly Dictionary<string, Toggle> resourceToggleMap = new();
+        private readonly Dictionary<string, Toggle> resourceToggleMap = new Dictionary<string, Toggle>();
         private Label summaryLabel;
         private Label noteLabel;
         private Button enableAllButton;
         private Button disableAllButton;
         private Button rescanButton;
         private VisualElement categoryContainer;
-        private List<ResourceMetadata> allResources = new();
+        private List<ResourceMetadata> allResources = new List<ResourceMetadata>();
 
         public VisualElement Root { get; }
 

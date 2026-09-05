@@ -11,7 +11,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
 {
     internal static class SkyboxOps
     {
-        static Texture CustomReflectionTexture
+        static Cubemap CustomReflectionTexture
         {
             get =>
 #if UNITY_2022_1_OR_NEWER
@@ -316,7 +316,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             string cubemapPath = p.Get("path") ?? p.Get("cubemap_path");
             if (!string.IsNullOrEmpty(cubemapPath))
             {
-                var cubemap = AssetDatabase.LoadAssetAtPath<Texture>(cubemapPath);
+                var cubemap = AssetDatabase.LoadAssetAtPath<Cubemap>(cubemapPath);
                 if (cubemap != null)
                     CustomReflectionTexture = cubemap;
                 else
@@ -417,8 +417,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 case ShaderPropertyType.Float:
                 case ShaderPropertyType.Range:
                     return mat.GetFloat(propName);
+#if UNITY_2021_2_OR_NEWER
                 case ShaderPropertyType.Int:
                     return mat.GetInt(propName);
+#endif
                 case ShaderPropertyType.Vector:
                     var v = mat.GetVector(propName);
                     return new[] { v.x, v.y, v.z, v.w };
@@ -453,9 +455,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
                     case ShaderPropertyType.Range:
                         mat.SetFloat(propName, (float)value);
                         return true;
+#if UNITY_2021_2_OR_NEWER
                     case ShaderPropertyType.Int:
                         mat.SetInt(propName, (int)value);
                         return true;
+#endif
                     case ShaderPropertyType.Vector:
                         if (value is JArray vecArr && vecArr.Count >= 2)
                         {

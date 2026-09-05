@@ -281,7 +281,7 @@ namespace MCPForUnity.Editor.Services
                 return AssetPathUtility.IsPreReleaseVersion();
             }
 
-            return version.IndexOf('-', StringComparison.Ordinal) >= 0;
+            return version.IndexOf("-", StringComparison.Ordinal) >= 0;
         }
 
         /// <inheritdoc/>

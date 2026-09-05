@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Security
 {
@@ -49,7 +50,7 @@ namespace MCPForUnity.Editor.Security
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                 };
-                foreach (string a in args) psi.ArgumentList.Add(a);
+                foreach (string a in args) psi.AddArg(a);
                 using (var p = Process.Start(psi))
                 {
                     string outp = p.StandardOutput.ReadToEnd();

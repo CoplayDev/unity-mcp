@@ -271,7 +271,7 @@ namespace MCPForUnity.Editor.Tools
                         }).ToArray();
 
                         var result = new { diagnostics = diags };
-                        return ok ? new SuccessResponse("Validation completed.", result)
+                        return ok ? (IMcpResponse)new SuccessResponse("Validation completed.", result)
                                    : new ErrorResponse("Validation failed.", result);
                     }
                 case "edit":

@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Security
 {
@@ -92,6 +93,7 @@ namespace MCPForUnity.Editor.Security
             byte[] master = LoadOrCreate(Path.Combine(_dir, "secret.bin"), 32);
             byte[] salt = LoadOrCreate(Path.Combine(_dir, "salt.bin"), 16);
             string password = Convert.ToBase64String(master) + "|" + MachineId();
+#if UNITY_2021_2_OR_NEWER
             using (var kdf = new Rfc2898DeriveBytes(password, salt, Iterations, HashAlgorithmName.SHA256))
             {
                 byte[] material = kdf.GetBytes(64);
@@ -100,7 +102,55 @@ namespace MCPForUnity.Editor.Security
                 Buffer.BlockCopy(material, 0, encKey, 0, 32);
                 Buffer.BlockCopy(material, 32, macKey, 0, 32);
             }
+#else
+            // Unity 2020.3 (netstandard2.0 profile) has no 4-arg Rfc2898DeriveBytes overload, so
+            // implement PBKDF2-HMAC-SHA256 (RFC 2898) manually to keep key derivation
+            // byte-identical with the 2021.2+ path (a 3-arg SHA1 derivation would make
+            // existing ciphertext fail MAC validation).
+            byte[] material = Pbkdf2Sha256(password, salt, Iterations, 64);
+            encKey = new byte[32];
+            macKey = new byte[32];
+            Buffer.BlockCopy(material, 0, encKey, 0, 32);
+            Buffer.BlockCopy(material, 32, macKey, 0, 32);
+#endif
         }
+
+#if !UNITY_2021_2_OR_NEWER
+        /// <summary>PBKDF2 with HMAC-SHA256 (RFC 2898), matching the .NET 4-arg Rfc2898DeriveBytes output.</summary>
+        private static byte[] Pbkdf2Sha256(string password, byte[] salt, int iterations, int numBytes)
+        {
+            var prf = new System.Security.Cryptography.HMACSHA256(
+                System.Text.Encoding.UTF8.GetBytes(password));
+            int hLen = prf.HashSize / 8;
+            int blocks = (numBytes + hLen - 1) / hLen;
+
+            var output = new byte[blocks * hLen];
+            var saltPlusOne = new byte[salt.Length + 4];
+
+            for (int block = 1; block <= blocks; block++)
+            {
+                Buffer.BlockCopy(salt, 0, saltPlusOne, 0, salt.Length);
+                saltPlusOne[salt.Length] = (byte)((block >> 24) & 0xFF);
+                saltPlusOne[salt.Length + 1] = (byte)((block >> 16) & 0xFF);
+                saltPlusOne[salt.Length + 2] = (byte)((block >> 8) & 0xFF);
+                saltPlusOne[salt.Length + 3] = (byte)(block & 0xFF);
+
+                byte[] u = prf.ComputeHash(saltPlusOne);
+                byte[] t = (byte[])u.Clone();
+                for (int i = 1; i < iterations; i++)
+                {
+                    u = prf.ComputeHash(u);
+                    for (int j = 0; j < hLen; j++) t[j] ^= u[j];
+                }
+                Buffer.BlockCopy(t, 0, output, (block - 1) * hLen, hLen);
+            }
+
+            prf.Dispose();
+            var result = new byte[numBytes];
+            Buffer.BlockCopy(output, 0, result, 0, numBytes);
+            return result;
+        }
+#endif
 
         private byte[] Encrypt(byte[] plaintext)
         {
@@ -210,8 +260,8 @@ namespace MCPForUnity.Editor.Security
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                 };
-                psi.ArgumentList.Add(mode);
-                psi.ArgumentList.Add(path);
+                psi.AddArg(mode);
+                psi.AddArg(path);
                 using (var p = System.Diagnostics.Process.Start(psi)) p?.WaitForExit(2000);
             }
             catch { /* hardening is best-effort */ }

@@ -8,6 +8,7 @@ using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using MCPForUnity.Editor.Windows.Components;
 
 namespace MCPForUnity.Editor.Windows
 {
@@ -325,7 +326,7 @@ namespace MCPForUnity.Editor.Windows
             var valueField = itemElement.Q<TextField>("value-field");
             valueField.value = item.Value;
 
-            var typeDropdown = itemElement.Q<DropdownField>("type-dropdown");
+            var typeDropdown = itemElement.Q<CompatDropdownField>("type-dropdown");
             typeDropdown.index = (int)item.Type;
 
             // Buttons

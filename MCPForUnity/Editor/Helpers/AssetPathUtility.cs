@@ -266,7 +266,7 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             // If it looks like a PyPI package reference (no path separators), skip
-            if (!path.Contains('/') && !path.Contains('\\') && !path.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            if (!path.Contains("/") && !path.Contains("\\") && !path.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             {
                 return path;
             }
@@ -658,11 +658,11 @@ namespace MCPForUnity.Editor.Helpers
 
             // Common semver prerelease indicators:
             // e.g., "9.3.0-beta.1", "9.3.0-alpha", "9.3.0-rc.2", "9.3.0-preview"
-            return version.Contains("-beta", StringComparison.OrdinalIgnoreCase) ||
-                   version.Contains("-alpha", StringComparison.OrdinalIgnoreCase) ||
-                   version.Contains("-rc", StringComparison.OrdinalIgnoreCase) ||
-                   version.Contains("-preview", StringComparison.OrdinalIgnoreCase) ||
-                   version.Contains("-pre", StringComparison.OrdinalIgnoreCase);
+            return version.IndexOf("-beta", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   version.IndexOf("-alpha", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   version.IndexOf("-rc", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   version.IndexOf("-preview", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   version.IndexOf("-pre", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

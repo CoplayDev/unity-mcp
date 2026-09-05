@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 using MCPForUnity.Editor.Constants;
 using Newtonsoft.Json;
@@ -15,7 +16,7 @@ namespace MCPForUnity.Editor.Helpers
         private static readonly string ErrorLogPath = Path.Combine(LogDir, "mcpError.log");
         private const long MaxLogSizeBytes = 1024 * 1024; // 1 MB
         private static bool _sessionStarted;
-        private static readonly object _logLock = new();
+        private static readonly object _logLock = new object();
         private static volatile bool _isEnabledCached;
 
         [InitializeOnLoadMethod]
@@ -106,7 +107,7 @@ namespace MCPForUnity.Editor.Helpers
 
                 var lines = File.ReadAllLines(path);
                 var half = lines.Length / 2;
-                File.WriteAllLines(path, lines[half..]);
+                File.WriteAllLines(path, new ArraySegment<string>(lines, half, lines.Length - half).ToArray());
             }
             catch
             {
