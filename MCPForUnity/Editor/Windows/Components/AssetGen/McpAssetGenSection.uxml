@@ -12,6 +12,46 @@
                 <ui:Label name="assetgen-refresh-status" class="help-text" />
             </ui:VisualElement>
             <ui:VisualElement name="assetgen-providers-container" style="margin-top: 8px;" />
+            <ui:VisualElement name="blender-bridge-panel" style="background-color: rgba(0, 0, 0, 0.2); padding: 8px; margin-bottom: 10px; border-radius: 4px;">
+                <ui:VisualElement class="override-row" style="margin-top: 0;">
+                    <ui:Label text="Blender Bridge" class="config-label" style="margin-top: 0;" />
+                    <ui:VisualElement name="blender-status-dot" class="status-indicator-small" />
+                    <ui:Label name="blender-status-label" class="help-text" style="margin-left: 6px; margin-bottom: 0; flex-grow: 1;" />
+                </ui:VisualElement>
+                <ui:Label class="help-text" style="white-space: normal;" text="Talks directly to the BlenderMCP addon socket in a running Blender (N panel &#8594; Connect to MCP server). Powers the blender_bridge tool and Window &#8594; MCP for Unity &#8594; Blender Bridge. No API keys involved." />
+                <ui:VisualElement name="blender-not-configured" class="warning-banner">
+                    <ui:Label class="warning-banner-text" text="Pick your blender-mcp checkout below to enable Sync Addon and Check Updates. Import and screenshot work without it." />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Addon Socket:" class="setting-label" />
+                    <ui:TextField name="blender-host" style="width: 140px;" />
+                    <ui:IntegerField name="blender-port" style="width: 70px; margin-left: 4px;" />
+                    <ui:Button name="blender-test-button" text="Test Connection" class="icon-button" style="margin-left: 8px;" />
+                </ui:VisualElement>
+                <ui:VisualElement class="override-row">
+                    <ui:Label text="blender-mcp Checkout:" class="override-label" />
+                </ui:VisualElement>
+                <ui:VisualElement class="path-override-controls">
+                    <ui:TextField name="blender-fork-path" placeholder-text="/path/to/blender-mcp (contains addon.py)" class="override-field" />
+                    <ui:Button name="blender-fork-select-button" text="Select" class="icon-button" />
+                    <ui:Button name="blender-fork-clear-button" text="Clear" class="icon-button" />
+                </ui:VisualElement>
+                <ui:VisualElement class="override-row">
+                    <ui:Label text="Blender Addons Dir:" class="override-label" />
+                </ui:VisualElement>
+                <ui:VisualElement class="path-override-controls">
+                    <ui:TextField name="blender-addons-dir" placeholder-text="auto-detect newest Blender user addons folder" class="override-field" />
+                    <ui:Button name="blender-addons-select-button" text="Select" class="icon-button" />
+                    <ui:Button name="blender-addons-clear-button" text="Clear" class="icon-button" />
+                </ui:VisualElement>
+                <ui:Label name="blender-addons-resolved" class="help-text" style="white-space: normal;" />
+                <ui:VisualElement class="path-override-controls" style="margin-top: 4px; margin-bottom: 4px;">
+                    <ui:Button name="blender-sync-button" text="Sync Addon" class="icon-button" />
+                    <ui:Button name="blender-updates-button" text="Check Updates" class="icon-button" />
+                    <ui:Button name="blender-import-button" text="Import Selection (GLB)" class="icon-button" />
+                </ui:VisualElement>
+                <ui:Label name="blender-action-status" class="help-text" style="white-space: normal;" />
+            </ui:VisualElement>
             <ui:Label text="Preferences" class="config-label" />
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Default 3D Format:" class="setting-label" />

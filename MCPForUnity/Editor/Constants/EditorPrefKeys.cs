@@ -86,5 +86,12 @@ namespace MCPForUnity.Editor.Constants
         internal const string AssetGenOutputRoot = "MCPForUnity.AssetGen.OutputRoot";
         internal const string AssetGenAutoNormalize = "MCPForUnity.AssetGen.AutoNormalize";
         internal const string AssetGenProviderEnabledPrefix = "MCPForUnity.AssetGen.Enabled.";
+
+        // Blender Bridge (Asset Gen tab). Machine-specific, non-secret. An empty ForkPath means the
+        // addon sync / update-check features are not configured; import and screenshot still work.
+        internal const string BlenderHost = "MCPForUnity.Blender.Host";
+        internal const string BlenderPort = "MCPForUnity.Blender.Port";
+        internal const string BlenderForkPath = "MCPForUnity.Blender.ForkPath";
+        internal const string BlenderAddonsDir = "MCPForUnity.Blender.AddonsDir";
     }
 }
