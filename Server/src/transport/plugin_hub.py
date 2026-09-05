@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import time
@@ -10,6 +12,7 @@ import uuid
 import weakref
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import anyio
 from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket, WebSocketState
 
@@ -60,25 +63,57 @@ def _read_bounded_wait_env(name: str, default_s: float, max_s: float) -> float:
 # session so we can send ``tools/list_changed`` notifications later.
 _active_mcp_sessions: weakref.WeakSet = weakref.WeakSet()
 _session_tracking_installed = False
+_SESSION_TRACKING_STATE_ATTRIBUTE = "_mcpforunity_active_sessions"
+
+
+def _track_mcp_session(session: Any) -> None:
+    _active_mcp_sessions.add(session)
+
+
+def _untrack_mcp_session(session: Any) -> None:
+    _active_mcp_sessions.discard(session)
 
 
 def _install_session_tracking() -> None:
     """Patch *MiddlewareServerSession* to track active MCP client sessions."""
-    global _session_tracking_installed
-    if _session_tracking_installed:
-        return
-    _session_tracking_installed = True
+    global _active_mcp_sessions, _session_tracking_installed
 
     from fastmcp.server.low_level import MiddlewareServerSession
 
+    existing_sessions = getattr(
+        MiddlewareServerSession,
+        _SESSION_TRACKING_STATE_ATTRIBUTE,
+        None,
+    )
+    if isinstance(existing_sessions, weakref.WeakSet):
+        _active_mcp_sessions = existing_sessions
+        _session_tracking_installed = True
+        return
+    if _session_tracking_installed:
+        return
+
     _original_aenter = MiddlewareServerSession.__aenter__
+    _original_aexit = MiddlewareServerSession.__aexit__
 
     async def _tracking_aenter(self):  # type: ignore[override]
         result = await _original_aenter(self)
-        _active_mcp_sessions.add(self)
+        _track_mcp_session(self)
         return result
 
+    async def _tracking_aexit(self, exc_type, exc_value, traceback):  # type: ignore[override]
+        try:
+            return await _original_aexit(self, exc_type, exc_value, traceback)
+        finally:
+            _untrack_mcp_session(self)
+
     MiddlewareServerSession.__aenter__ = _tracking_aenter  # type: ignore[assignment]
+    MiddlewareServerSession.__aexit__ = _tracking_aexit  # type: ignore[assignment]
+    setattr(
+        MiddlewareServerSession,
+        _SESSION_TRACKING_STATE_ATTRIBUTE,
+        _active_mcp_sessions,
+    )
+    _session_tracking_installed = True
 
 
 class PluginDisconnectedError(RuntimeError):
@@ -147,6 +182,9 @@ class PluginHub(WebSocketEndpoint):
     _last_pong: ClassVar[dict[str, float]] = {}
     # session_id -> ping task
     _ping_tasks: ClassVar[dict[str, asyncio.Task]] = {}
+    _published_tool_fingerprint: ClassVar[str | None] = None
+    _pending_tool_list_notifications: ClassVar[weakref.WeakSet] = weakref.WeakSet()
+    _TOOL_LIST_NOTIFY_TIMEOUT_SECONDS = 1.0
 
     @classmethod
     def configure(
@@ -160,6 +198,8 @@ class PluginHub(WebSocketEndpoint):
         cls._loop = loop or asyncio.get_running_loop()
         # Ensure coordination primitives are bound to the configured loop
         cls._lock = asyncio.Lock()
+        cls._published_tool_fingerprint = None
+        cls._pending_tool_list_notifications.clear()
         # Start tracking MCP client sessions for tool-change notifications
         if mcp is not None:
             _install_session_tracking()
@@ -534,10 +574,6 @@ class PluginHub(WebSocketEndpoint):
         # (e.g. new Claude Code conversations) see the correct tool set.
         self._sync_server_tool_visibility(payload.tools)
 
-        # Notify any already-connected MCP clients (e.g. CC over stdio) that
-        # the tool list has changed so they re-fetch.
-        await cls._notify_mcp_tool_list_changed()
-
         try:
             from services.custom_tool_service import CustomToolService
 
@@ -555,8 +591,104 @@ class PluginHub(WebSocketEndpoint):
                 exc_info=exc,
             )
 
+        await cls._record_and_notify_tool_list_change(payload.tools)
+
     @classmethod
-    def _sync_server_tool_visibility(cls, registered_tools: list) -> None:
+    def _tool_fingerprint(cls, tools: list) -> str:
+        serialized: list[str] = []
+        for tool in tools:
+            if hasattr(tool, "to_mcp_tool"):
+                tool = tool.to_mcp_tool()
+
+            if isinstance(tool, dict):
+                payload = tool
+            elif hasattr(tool, "model_dump"):
+                try:
+                    payload = tool.model_dump(mode="json")
+                except TypeError:
+                    payload = tool.model_dump()
+            else:
+                payload = vars(tool)
+
+            serialized.append(
+                json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                )
+            )
+
+        return hashlib.sha256(
+            "\n".join(sorted(serialized)).encode("utf-8")
+        ).hexdigest()
+
+    @classmethod
+    async def _record_published_tool_list(cls, registered_tools: list) -> bool:
+        """Record a stable fingerprint after the publication transaction succeeds."""
+        published_tools = registered_tools
+        if cls._mcp is not None:
+            try:
+                published_tools = list(await cls._mcp.list_tools())
+            except Exception:
+                logger.warning(
+                    "Failed to inspect the published FastMCP tool list; "
+                    "leaving its fingerprint unchanged for retry",
+                    exc_info=True,
+                )
+                return False
+
+        try:
+            digest = cls._tool_fingerprint(published_tools)
+        except Exception:
+            logger.warning(
+                "Failed to fingerprint the published FastMCP tool list; "
+                "leaving its fingerprint unchanged for retry",
+                exc_info=True,
+            )
+            return False
+        if digest == cls._published_tool_fingerprint:
+            return False
+
+        cls._published_tool_fingerprint = digest
+        return True
+
+    @classmethod
+    async def _record_and_notify_tool_list_change(
+        cls,
+        registered_tools: list,
+        notify: bool = True,
+    ) -> bool:
+        changed = await cls._record_published_tool_list(registered_tools)
+        if not notify:
+            return changed
+
+        if changed:
+            cls._pending_tool_list_notifications.update(
+                list(_active_mcp_sessions)
+            )
+
+        if cls._pending_tool_list_notifications:
+            # Retry only sessions that have not yet observed the latest
+            # published schema, avoiding duplicate notifications to peers that
+            # already succeeded.
+            await cls._notify_mcp_tool_list_changed(
+                list(cls._pending_tool_list_notifications)
+            )
+        elif changed:
+            logger.debug(
+                "Published tool schema changed but no MCP sessions are active; "
+                "skipping tools/list_changed"
+            )
+        else:
+            logger.debug(
+                "Published tool schema unchanged; skipping tools/list_changed"
+            )
+
+        return changed
+
+    @classmethod
+    def _sync_server_tool_visibility(cls, registered_tools: list) -> bool:
         """Sync FastMCP server-level tool group visibility to match Unity's state.
 
         When Unity sends ``register_tools``, some groups may have been toggled
@@ -573,7 +705,7 @@ class PluginHub(WebSocketEndpoint):
         """
         mcp = cls._mcp
         if mcp is None:
-            return
+            return True
 
         try:
             from services.registry import get_group_tool_names, TOOL_GROUPS
@@ -621,14 +753,19 @@ class PluginHub(WebSocketEndpoint):
                     len(mcp._transforms),
                     cls._unity_transform_start or 0,
                 )
+            return True
         except Exception:
             logger.debug(
                 "Failed to sync server-level tool visibility",
                 exc_info=True,
             )
+            return False
 
     @classmethod
-    async def _notify_mcp_tool_list_changed(cls) -> None:
+    async def _notify_mcp_tool_list_changed(
+        cls,
+        sessions: list[Any] | None = None,
+    ) -> None:
         """Send ``tools/list_changed`` to every connected MCP client session.
 
         After server-level tool visibility is updated (e.g. when Unity reports
@@ -638,20 +775,46 @@ class PluginHub(WebSocketEndpoint):
         transforms but do **not** push notifications to already-connected
         sessions — we do that here.
         """
-        sessions = list(_active_mcp_sessions)
+        sessions = list(_active_mcp_sessions) if sessions is None else sessions
         if not sessions:
             return
-        for session in sessions:
+
+        async def notify_session(session: Any) -> bool:
             try:
-                await session.send_tool_list_changed()
-            except Exception:
+                await asyncio.wait_for(
+                    session.send_tool_list_changed(),
+                    timeout=cls._TOOL_LIST_NOTIFY_TIMEOUT_SECONDS,
+                )
+                cls._pending_tool_list_notifications.discard(session)
+                return True
+            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+                _untrack_mcp_session(session)
+                cls._pending_tool_list_notifications.discard(session)
                 logger.debug(
-                    "Failed to notify MCP session of tool list change",
+                    "Failed to notify MCP session of tool list change; removed stale session",
                     exc_info=True,
                 )
+            except asyncio.TimeoutError:
+                cls._pending_tool_list_notifications.add(session)
+                logger.debug(
+                    "Timed out notifying MCP session of tool list change; "
+                    "keeping session for the next publication",
+                    exc_info=True,
+                )
+            except Exception:
+                cls._pending_tool_list_notifications.add(session)
+                logger.debug(
+                    "Failed to notify MCP session of tool list change; "
+                    "keeping session because closure was not confirmed",
+                    exc_info=True,
+                )
+            return False
+
+        notified = sum(await asyncio.gather(*(notify_session(session) for session in sessions)))
         logger.info(
-            "Sent tools/list_changed notification to %d MCP session(s)",
-            len(sessions),
+            "Sent tools/list_changed notification to %d MCP session(s); %d active",
+            notified,
+            len(_active_mcp_sessions),
         )
 
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
