@@ -312,6 +312,18 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             EditorUtility.SetDirty(importer);
             importer.SaveAndReimport();
 
+            // Unity can accept every SpriteMetaData entry and still emit no sprite for it, and
+            // it says so in the console rather than throwing. NPOT scaling was one such path
+            // and is closed above; an import that fails for any other reason would report the
+            // same success over an empty asset. Counting what is actually on the asset is the
+            // only answer that does not depend on knowing the causes in advance.
+            int generated = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Sprite>().Count();
+            if (generated != totalFrames)
+                return diagnostics.Fail("SLICE_NOT_GENERATED",
+                    $"Unity accepted a {cols}x{rows} grid but generated {generated} of {totalFrames} sprites for '{path}'.",
+                    "Check the Unity console for the import error",
+                    "Confirm the texture's import settings allow sprite generation");
+
             return new
             {
                 success      = true,
