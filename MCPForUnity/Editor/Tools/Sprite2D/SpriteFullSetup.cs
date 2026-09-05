@@ -136,9 +136,27 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 }
             }
 
+            // Shaped like the other three steps' refusals rather than like a success with the
+            // flag flipped: a step-4 failure used to be the one refusal in the tool carrying
+            // neither 'step' nor 'message', leaving the reason only inside the diagnostics
+            // array. The asset fields stay on it, because by this point steps 1-3 have written
+            // and the caller needs to know what is already on disk.
+            if (diagnostics.HasErrors)
+                return new
+                {
+                    success           = false,
+                    step              = "add_to_scene",
+                    message           = diagnostics.FirstError,
+                    sprite_path       = path,
+                    controller_path   = controller.path,
+                    state_count       = controller.stateCount,
+                    clip_count        = clips.Count,
+                    diagnostics       = diagnostics.Build(),
+                };
+
             return new
             {
-                success               = !diagnostics.HasErrors,
+                success               = true,
                 sprite_path           = path,
                 controller_path       = controller.path,
                 state_count           = controller.stateCount,

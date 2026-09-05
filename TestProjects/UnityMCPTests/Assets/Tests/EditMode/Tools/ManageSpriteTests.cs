@@ -1261,6 +1261,10 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(result.Value<bool>("success"),
                 "an attachment that was asked for and did not happen is not a success");
             Assert.That(result["diagnostics"].ToString(), Does.Contain("SCENE_TARGET_NOT_FOUND"));
+            // Asserted on the message rather than only the diagnostics array, because reading
+            // the array was what let this refusal keep a shape no other refusal in the tool has.
+            Assert.AreEqual("add_to_scene", result.Value<string>("step"));
+            Assert.That(ErrorText(result), Does.Contain("NoSuchObject"));
         }
 
         [Test]
