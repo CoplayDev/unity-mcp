@@ -30,6 +30,19 @@ namespace MCPForUnity.Editor.Tools
         private static FieldInfo _messageField;
         private static FieldInfo _fileField;
         private static FieldInfo _lineField;
+
+        // Optional reflection members: used to neutralize the Console window's own filters
+        // while reading. Absent members degrade to the previous (filter-inheriting) behavior.
+        private static PropertyInfo _consoleFlagsProperty;
+        private static MethodInfo _setFilteringTextMethod;
+        private static MethodInfo _getFilteringTextMethod;
+
+        // Severity bits from the internal UnityEditor.ConsoleWindow.ConsoleFlags enum.
+        private const int ConsoleFlagLogLevelLog = 1 << 7;
+        private const int ConsoleFlagLogLevelWarning = 1 << 8;
+        private const int ConsoleFlagLogLevelError = 1 << 9;
+        private const int ConsoleFlagLogLevelMask =
+            ConsoleFlagLogLevelLog | ConsoleFlagLogLevelWarning | ConsoleFlagLogLevelError;
     
         // Static constructor for reflection setup
         static ReadConsole()
@@ -99,6 +112,13 @@ namespace MCPForUnity.Editor.Tools
                 if (_lineField == null)
                     throw new Exception("Failed to reflect LogEntry.line");
 
+                // Console window UI state. Present on every Unity version this package
+                // supports, but reflected optionally so a future rename degrades to the old
+                // behavior rather than disabling console reads outright.
+                _consoleFlagsProperty = logEntriesType.GetProperty("consoleFlags", staticFlags);
+                _setFilteringTextMethod = logEntriesType.GetMethod("SetFilteringText", staticFlags);
+                _getFilteringTextMethod = logEntriesType.GetMethod("GetFilteringText", staticFlags);
+
                 // (Calibration removed)
 
             }
@@ -115,6 +135,8 @@ namespace MCPForUnity.Editor.Tools
                     _getEntryMethod =
                         null;
                 _modeField = _messageField = _fileField = _lineField = null;
+                _consoleFlagsProperty = null;
+                _setFilteringTextMethod = _getFilteringTextMethod = null;
             }
         }
 
@@ -202,6 +224,99 @@ namespace MCPForUnity.Editor.Tools
 
         // --- Action Implementations ---
 
+        /// <summary>
+        /// Forces the Console window's Log/Warning/Error severity bits on so that
+        /// StartGettingEntries reports every entry regardless of the toolbar toggles.
+        /// </summary>
+        /// <param name="savedConsoleFlags">The flags as they were, for restoration.</param>
+        /// <returns>True when the flags were changed and must be restored.</returns>
+        private static bool TryForceLogLevelFlags(out int savedConsoleFlags)
+        {
+            savedConsoleFlags = 0;
+            if (_consoleFlagsProperty == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                savedConsoleFlags = (int)_consoleFlagsProperty.GetValue(null);
+                int forcedFlags = savedConsoleFlags | ConsoleFlagLogLevelMask;
+                if (forcedFlags == savedConsoleFlags)
+                {
+                    return false; // Nothing is hidden; leave the property untouched.
+                }
+
+                _consoleFlagsProperty.SetValue(null, forcedFlags);
+                return true;
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn(
+                    $"[ReadConsole] Could not override console severity flags; entries hidden by the Console window may be missing: {e.Message}"
+                );
+                return false;
+            }
+        }
+
+        private static void RestoreConsoleFlags(int savedConsoleFlags)
+        {
+            try
+            {
+                _consoleFlagsProperty.SetValue(null, savedConsoleFlags);
+            }
+            catch (Exception e)
+            {
+                McpLog.Error($"[ReadConsole] Failed to restore console severity flags: {e}");
+            }
+        }
+
+        /// <summary>
+        /// Clears the Console window's search query for the duration of a read. Only clears it
+        /// when it can also be read back, so a user's search is never silently discarded.
+        /// </summary>
+        /// <param name="savedFilteringText">The query as it was, for restoration.</param>
+        /// <returns>True when the query was cleared and must be restored.</returns>
+        private static bool TryClearFilteringText(out string savedFilteringText)
+        {
+            savedFilteringText = null;
+            if (_setFilteringTextMethod == null || _getFilteringTextMethod == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                savedFilteringText = _getFilteringTextMethod.Invoke(null, null) as string;
+                if (string.IsNullOrEmpty(savedFilteringText))
+                {
+                    return false; // No search query active; nothing to neutralize.
+                }
+
+                _setFilteringTextMethod.Invoke(null, new object[] { string.Empty });
+                return true;
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn(
+                    $"[ReadConsole] Could not clear the console search filter; entries hidden by it may be missing: {e.Message}"
+                );
+                return false;
+            }
+        }
+
+        private static void RestoreFilteringText(string savedFilteringText)
+        {
+            try
+            {
+                _setFilteringTextMethod.Invoke(null, new object[] { savedFilteringText });
+            }
+            catch (Exception e)
+            {
+                McpLog.Error($"[ReadConsole] Failed to restore the console search filter: {e}");
+            }
+        }
+
         private static object ClearConsole()
         {
             try
@@ -246,8 +361,20 @@ namespace MCPForUnity.Editor.Tools
             int resolvedCursor = Mathf.Max(0, cursor ?? 0);
             int pageEndExclusive = resolvedCursor + resolvedPageSize;
 
+            // LogEntries filtering state is global and shared with the Console window, so a
+            // severity toggle switched off or a leftover search query in the toolbar silently
+            // starves this tool of entries. Neutralize both for the duration of the read; the
+            // tool applies its own 'types' and 'filterText' arguments instead.
+            int savedConsoleFlags = 0;
+            bool consoleFlagsOverridden = false;
+            string savedFilteringText = null;
+            bool filteringTextOverridden = false;
+
             try
             {
+                consoleFlagsOverridden = TryForceLogLevelFlags(out savedConsoleFlags);
+                filteringTextOverridden = TryClearFilteringText(out savedFilteringText);
+
                 // LogEntries requires calling Start/Stop around GetEntries/GetEntryInternal.
                 // StartGettingEntries() returns the entry count — use it instead of GetCount()
                 // which may return stale values within an active iteration session.
@@ -391,6 +518,18 @@ namespace MCPForUnity.Editor.Tools
                 {
                     McpLog.Error($"[ReadConsole] Failed to call EndGettingEntries: {e}");
                     // Don't return error here as we might have valid data, but log it.
+                }
+
+                // Restore the Console window's filters once the iteration session is closed,
+                // so the user's view is left exactly as they had it.
+                if (filteringTextOverridden)
+                {
+                    RestoreFilteringText(savedFilteringText);
+                }
+
+                if (consoleFlagsOverridden)
+                {
+                    RestoreConsoleFlags(savedConsoleFlags);
                 }
             }
 

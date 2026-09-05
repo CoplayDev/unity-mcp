@@ -1,6 +1,8 @@
 using System;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
 using static MCPForUnityTests.Editor.TestUtilities;
@@ -152,5 +154,114 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(LogType.Log, ReadConsole.GetLogTypeFromMode(1 << 14));
         }
 
+        // The Console window's severity toggles and search box live on the shared internal
+        // UnityEditor.LogEntries state, so they leak into every StartGettingEntries caller.
+        // read_console must neutralize them for the duration of a read and restore them after.
+
+        private const int ConsoleFlagLogLevelLog = 1 << 7;
+        private const int ConsoleFlagLogLevelWarning = 1 << 8;
+
+        private static Type LogEntriesType =>
+            typeof(EditorApplication).Assembly.GetType("UnityEditor.LogEntries");
+
+        private static PropertyInfo ConsoleFlagsProperty => LogEntriesType.GetProperty(
+            "consoleFlags", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        private static MethodInfo SetFilteringTextMethod => LogEntriesType.GetMethod(
+            "SetFilteringText", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        private static MethodInfo GetFilteringTextMethod => LogEntriesType.GetMethod(
+            "GetFilteringText", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        private static int ConsoleFlags
+        {
+            get => (int)ConsoleFlagsProperty.GetValue(null);
+            set => ConsoleFlagsProperty.SetValue(null, value);
+        }
+
+        private static string FilteringText
+        {
+            get => (string)GetFilteringTextMethod.Invoke(null, null);
+            set => SetFilteringTextMethod.Invoke(null, new object[] { value });
+        }
+
+        private static JArray GetAllEntries()
+        {
+            var result = ToJObject(ReadConsole.HandleCommand(new JObject
+            {
+                ["action"] = "get",
+                ["types"] = new JArray { "error", "warning", "log" },
+                ["format"] = "detailed",
+                ["count"] = 1000
+            }));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            return result["data"] as JArray;
+        }
+
+        private static bool ContainsMessage(JArray entries, string needle)
+        {
+            if (entries == null) return false;
+            foreach (var entry in entries)
+            {
+                if (entry["message"]?.ToString().Contains(needle) == true) return true;
+            }
+            return false;
+        }
+
+        [Test]
+        public void HandleCommand_Get_IgnoresConsoleSearchFilter()
+        {
+            string uniqueMessage = $"Search filter probe {Guid.NewGuid()}";
+            string unrelatedQuery = $"no-entry-matches-{Guid.NewGuid()}";
+            string originalFilter = FilteringText;
+
+            try
+            {
+                Debug.Log(uniqueMessage);
+                FilteringText = unrelatedQuery;
+
+                var entries = GetAllEntries();
+
+                Assert.IsTrue(
+                    ContainsMessage(entries, uniqueMessage),
+                    "read_console must return entries hidden by the Console window's search query.");
+                Assert.AreEqual(
+                    unrelatedQuery,
+                    FilteringText,
+                    "read_console must leave the user's console search query untouched.");
+            }
+            finally
+            {
+                FilteringText = originalFilter ?? string.Empty;
+            }
+        }
+
+        [Test]
+        public void HandleCommand_Get_IgnoresConsoleSeverityToggles()
+        {
+            string uniqueMessage = $"Severity toggle probe {Guid.NewGuid()}";
+            int originalFlags = ConsoleFlags;
+            int hiddenFlags = originalFlags & ~(ConsoleFlagLogLevelLog | ConsoleFlagLogLevelWarning);
+
+            try
+            {
+                Debug.Log(uniqueMessage);
+                ConsoleFlags = hiddenFlags;
+
+                var entries = GetAllEntries();
+
+                Assert.IsTrue(
+                    ContainsMessage(entries, uniqueMessage),
+                    "read_console must return entries hidden by the Console window's severity toggles.");
+                Assert.AreEqual(
+                    hiddenFlags,
+                    ConsoleFlags,
+                    "read_console must restore the Console window's severity toggles.");
+            }
+            finally
+            {
+                ConsoleFlags = originalFlags;
+            }
+        }
     }
 }
