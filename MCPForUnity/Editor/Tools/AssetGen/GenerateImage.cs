@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools.AssetGen
 {
     /// <summary>
-    /// 2D image generation via an aggregator (fal.ai / OpenRouter). Triggered here (never from the
+    /// 2D image generation via an aggregator (fal.ai / OpenRouter / MiniMax). Triggered here (never from the
     /// GUI); the C# side reads the provider key from the secure store and runs the job. Returns a
     /// job_id immediately; the client polls the `status` action. Status / cancel / list_providers are
     /// shared across the generate_* tools via <see cref="AssetGenToolHelpers"/>.

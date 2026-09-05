@@ -53,6 +53,10 @@ namespace MCPForUnity.Editor.Services.AssetGen
             // Image — openrouter
             new ModelEntry { Id = OpenRouterAdapter.DefaultModel, Label = "Gemini 2.5 Flash Image", Provider = "openrouter", Kind = "image", UseCase = "General image" },
 
+            // Image — minimax (MiniMaxImageAdapter.DefaultModel is first => the default)
+            new ModelEntry { Id = MiniMaxImageAdapter.DefaultModel, Label = "MiniMax image-01", Provider = "minimax", Kind = "image", UseCase = "General image" },
+            new ModelEntry { Id = "image-01-live", Label = "MiniMax image-01-live", Provider = "minimax", Kind = "image", UseCase = "Live image" },
+
             // 3D — tripo / meshy (defaults reference the adapter constants)
             new ModelEntry { Id = TripoAdapter.ModelVersion, Label = "Tripo v3.1", Provider = "tripo", Kind = "model", UseCase = "Text / image -> 3D" },
             new ModelEntry { Id = "P1-20260311", Label = "Tripo P1 (premium)", Provider = "tripo", Kind = "model", UseCase = "Premium 3D" },

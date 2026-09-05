@@ -38,6 +38,14 @@ genuine provider keys and an interactive Editor before shipping.
 - [ ] `generate_image(provider=openrouter, prompt="...")`.
 - [ ] Confirm the inline-image path works (image bytes decode and import as a sprite).
 
+## MiniMax (2D image)
+
+- [ ] Enter the MiniMax key.
+- [ ] `generate_image(provider=minimax, prompt="...")`.
+- [ ] Confirm the returned image URL downloads and imports as a sprite.
+- [ ] `generate_image(provider=minimax, mode=image, image_url=..., prompt="...")`
+      → confirm the subject reference influences the result.
+
 ## Sketchfab (3D import)
 
 - [ ] Enter the Sketchfab token.
