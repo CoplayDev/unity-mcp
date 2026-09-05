@@ -61,19 +61,19 @@ namespace MCPForUnity.Editor.Services
             return _processDetector.NormalizeForMatch(s);
         }
 
-        private void ClearLocalServerPidTracking()
+        private void ClearLocalServerPidTracking(int port)
         {
-            _pidFileManager.ClearTracking();
+            _pidFileManager.ClearTracking(port);
         }
 
-        private void StoreLocalHttpServerHandshake(string pidFilePath, string instanceToken)
+        private void StoreLocalHttpServerHandshake(int port, string pidFilePath, string instanceToken)
         {
-            _pidFileManager.StoreHandshake(pidFilePath, instanceToken);
+            _pidFileManager.StoreHandshake(port, pidFilePath, instanceToken);
         }
 
-        private bool TryGetLocalHttpServerHandshake(out string pidFilePath, out string instanceToken)
+        private bool TryGetLocalHttpServerHandshake(int port, out string pidFilePath, out string instanceToken)
         {
-            return _pidFileManager.TryGetHandshake(out pidFilePath, out instanceToken);
+            return _pidFileManager.TryGetHandshake(port, out pidFilePath, out instanceToken);
         }
 
         private string GetLocalHttpServerPidFilePath(int port)
@@ -130,9 +130,9 @@ namespace MCPForUnity.Editor.Services
             return _pidFileManager.TryGetStoredPid(expectedPort, out pid);
         }
 
-        private string GetStoredArgsHash()
+        private string GetStoredArgsHash(int port)
         {
-            return _pidFileManager.GetStoredArgsHash();
+            return _pidFileManager.GetStoredArgsHash(port);
         }
 
         /// <summary>
@@ -315,8 +315,11 @@ namespace MCPForUnity.Editor.Services
 
             try
             {
-                // Clear any stale handshake state from prior launches.
-                ClearLocalServerPidTracking();
+                // Clear any stale handshake state from prior launches on this port.
+                if (portForPid > 0)
+                {
+                    ClearLocalServerPidTracking(portForPid);
+                }
                 _lastLaunchedProcess = null;
 
                 // Best-effort: delete stale pidfile if it exists.
@@ -362,7 +365,7 @@ namespace MCPForUnity.Editor.Services
                 _lastLaunchedProcess = System.Diagnostics.Process.Start(startInfo);
                 if (!string.IsNullOrEmpty(pidFilePath))
                 {
-                    StoreLocalHttpServerHandshake(pidFilePath, instanceToken);
+                    StoreLocalHttpServerHandshake(portForPid, pidFilePath, instanceToken);
                 }
                 return true;
             }
@@ -388,31 +391,129 @@ namespace MCPForUnity.Editor.Services
             return StopLocalHttpServerInternal(quiet: false);
         }
 
+        public bool TryGetLaunchedLocalHttpServerPort(out int port)
+        {
+            return _pidFileManager.TryGetLaunchedPort(out port);
+        }
+
         public bool StopManagedLocalHttpServer()
         {
-            if (!TryGetLocalHttpServerHandshake(out var pidFilePath, out _))
-            {
-                return false;
-            }
-
-            int port = 0;
-            if (!TryGetPortFromPidFilePath(pidFilePath, out port) || port <= 0)
-            {
-                string baseUrl = HttpEndpointUtility.GetLocalBaseUrl();
-                if (IsLocalUrl(baseUrl)
-                    && Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
-                    && uri.Port > 0)
-                {
-                    port = uri.Port;
-                }
-            }
-
-            if (port <= 0)
+            // The SessionState launch marker is per editor process, so a server launched by another
+            // editor (or externally) has no marker here and is left alone.
+            if (!TryGetLaunchedLocalHttpServerPort(out int port))
             {
                 return false;
             }
 
             return StopLocalHttpServerInternal(quiet: true, portOverride: port, allowNonLocalUrl: true);
+        }
+
+        public bool TryCountOtherConnectedUnityInstances(int port, int timeoutMs, out int otherInstances)
+        {
+            otherInstances = 0;
+            if (port <= 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                string baseUrl = HttpEndpointUtility.GetLocalBaseUrl();
+                if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+                {
+                    return false;
+                }
+
+                string ownProjectHash = ProjectIdentityUtility.GetProjectHash();
+
+                // Same shared budget across candidate hosts as TryConnectToLocalPort: this runs on quit.
+                var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                foreach (string host in BuildLocalProbeHosts(uri.Host))
+                {
+                    int remainingMs = timeoutMs - (int)elapsed.ElapsedMilliseconds;
+                    if (remainingMs <= 0)
+                    {
+                        break;
+                    }
+
+                    string url = new UriBuilder(uri.Scheme, host, port, "/api/instances").Uri.ToString();
+                    string json = TryHttpGet(url, remainingMs);
+                    if (json != null)
+                    {
+                        return TryCountOtherInstances(json, ownProjectHash, out otherInstances);
+                    }
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Counts the instances in a GET /api/instances response whose project hash is not ours.
+        /// Our own session may still be listed while the hub processes our WebSocket close, so it is
+        /// filtered by hash rather than assumed gone. Returns false for anything that is not a
+        /// well-formed success response, so callers fail toward leaving the server running.
+        /// </summary>
+        internal static bool TryCountOtherInstances(string json, string ownProjectHash, out int otherInstances)
+        {
+            otherInstances = 0;
+            try
+            {
+                var root = Newtonsoft.Json.Linq.JObject.Parse(json);
+                if (root.Value<bool?>("success") != true)
+                {
+                    return false;
+                }
+
+                if (!(root["instances"] is Newtonsoft.Json.Linq.JArray instances))
+                {
+                    return false;
+                }
+
+                foreach (var instance in instances)
+                {
+                    string hash = (instance as Newtonsoft.Json.Linq.JObject)?.Value<string>("hash");
+                    if (!string.Equals(hash, ownProjectHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        otherInstances++;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                otherInstances = 0;
+                return false;
+            }
+        }
+
+        private static string TryHttpGet(string url, int timeoutMs)
+        {
+            try
+            {
+                using (var client = new System.Net.Http.HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMilliseconds(timeoutMs);
+                    var task = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        using (var response = await client.GetAsync(url).ConfigureAwait(false))
+                        {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                return null;
+                            }
+                            return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        }
+                    });
+                    return task.Wait(timeoutMs) ? task.Result : null;
+                }
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public bool IsLocalHttpServerRunning()
@@ -433,7 +534,7 @@ namespace MCPForUnity.Editor.Services
                 int port = uri.Port;
 
                 // Handshake path: if we have a pidfile+token and the PID is still the listener, treat as running.
-                if (TryGetLocalHttpServerHandshake(out var pidFilePath, out var instanceToken)
+                if (TryGetLocalHttpServerHandshake(port, out var pidFilePath, out var instanceToken)
                     && TryReadPidFromPidFile(pidFilePath, out var pidFromFile)
                     && pidFromFile > 0)
                 {
@@ -636,7 +737,7 @@ namespace MCPForUnity.Editor.Services
 
                 // Preferred deterministic stop path: if we have a pidfile+token from a Unity-managed launch,
                 // validate and terminate exactly that PID.
-                if (TryGetLocalHttpServerHandshake(out var pidFilePath, out var instanceToken))
+                if (TryGetLocalHttpServerHandshake(port, out var pidFilePath, out var instanceToken))
                 {
                     // Prefer deterministic stop when Unity started the server (pidfile+token).
                     // If the pidfile isn't available yet (fast quit after start), we can optionally fall back
@@ -675,7 +776,7 @@ namespace MCPForUnity.Editor.Services
                             {
                                 // Nothing is listening anymore; clear stale handshake state.
                                 try { DeletePidFile(pidFilePath); } catch { }
-                                ClearLocalServerPidTracking();
+                                ClearLocalServerPidTracking(port);
                                 if (!quiet)
                                 {
                                     McpLog.Info($"No process found listening on port {port}");
@@ -702,7 +803,7 @@ namespace MCPForUnity.Editor.Services
                                 {
                                     stoppedAny = true;
                                     try { DeletePidFile(pidFilePath); } catch { }
-                                    ClearLocalServerPidTracking();
+                                    ClearLocalServerPidTracking(port);
                                     if (!quiet)
                                     {
                                         McpLog.Info($"Stopped local HTTP server on port {port} (PID: {pidFromFile})");
@@ -727,7 +828,7 @@ namespace MCPForUnity.Editor.Services
                                         $"(tokenMatch={tokenMatches}, tokenQueryOk={tokenQueryOk}). Falling back to guarded port heuristics.");
                                 }
                                 try { DeletePidFile(pidFilePath); } catch { }
-                                ClearLocalServerPidTracking();
+                                ClearLocalServerPidTracking(port);
                             }
                             else
                             {
@@ -755,7 +856,7 @@ namespace MCPForUnity.Editor.Services
                         {
                             McpLog.Info($"Stopped local HTTP server on port {port}");
                         }
-                        ClearLocalServerPidTracking();
+                        ClearLocalServerPidTracking(port);
                         return true;
                     }
 
@@ -763,7 +864,7 @@ namespace MCPForUnity.Editor.Services
                     {
                         McpLog.Info($"No process found listening on port {port}");
                     }
-                    ClearLocalServerPidTracking();
+                    ClearLocalServerPidTracking(port);
                     return false;
                 }
 
@@ -773,7 +874,7 @@ namespace MCPForUnity.Editor.Services
                     if (pids.Contains(storedPid))
                     {
                         string expectedHash = string.Empty;
-                        expectedHash = GetStoredArgsHash();
+                        expectedHash = GetStoredArgsHash(port);
 
                         // Prefer a fingerprint match (reduces PID reuse risk). If missing (older installs),
                         // fall back to a looser check to avoid leaving orphaned servers after domain reload.
@@ -819,7 +920,7 @@ namespace MCPForUnity.Editor.Services
                                         McpLog.Info($"Stopped local HTTP server on port {port} (PID: {storedPid})");
                                     }
                                     stoppedAny = true;
-                                    ClearLocalServerPidTracking();
+                                    ClearLocalServerPidTracking(port);
                                     // Refresh the PID list to avoid double-work.
                                     pids = GetListeningProcessIdsForPort(port);
                                 }
@@ -833,7 +934,7 @@ namespace MCPForUnity.Editor.Services
                     else
                     {
                         // Stale PID (no longer listening). Clear.
-                        ClearLocalServerPidTracking();
+                        ClearLocalServerPidTracking(port);
                     }
                 }
 
@@ -874,7 +975,7 @@ namespace MCPForUnity.Editor.Services
 
                 if (stoppedAny)
                 {
-                    ClearLocalServerPidTracking();
+                    ClearLocalServerPidTracking(port);
                 }
                 return stoppedAny;
             }
@@ -891,11 +992,6 @@ namespace MCPForUnity.Editor.Services
         private bool TryGetUnixProcessArgs(int pid, out string argsLower)
         {
             return _processDetector.TryGetProcessCommandLine(pid, out argsLower);
-        }
-
-        private bool TryGetPortFromPidFilePath(string pidFilePath, out int port)
-        {
-            return _pidFileManager.TryGetPortFromPidFilePath(pidFilePath, out port);
         }
 
         private void DeletePidFile(string pidFilePath)
