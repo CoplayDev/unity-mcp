@@ -1,3 +1,8 @@
 # Shell scripts must keep LF: tools/compile-check.sh runs inside a Linux container,
 # where CRLF would fail with "bad interpreter".
 *.sh text eol=lf
+
+# compile-check.sh reads these line by line; a CR from a core.autocrlf checkout would
+# become part of every -define: symbol and reference name.
+tools/compile-defines.txt text eol=lf
+tools/compile-refs/*.txt text eol=lf
