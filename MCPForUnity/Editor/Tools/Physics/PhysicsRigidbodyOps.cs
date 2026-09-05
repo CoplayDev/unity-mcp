@@ -37,8 +37,16 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (go == null)
                 return new ErrorResponse($"GameObject not found: '{targetToken}'.");
 
+#if MCP_HAS_PHYSICS
             bool has3D = go.GetComponent<Rigidbody>() != null;
+#else
+            bool has3D = false;
+#endif
+#if MCP_HAS_PHYSICS_2D
             bool has2D = go.GetComponent<Rigidbody2D>() != null;
+#else
+            bool has2D = false;
+#endif
 
             if (!has3D && !has2D)
                 return new ErrorResponse($"No Rigidbody or Rigidbody2D found on '{go.name}'.");
@@ -52,11 +60,22 @@ namespace MCPForUnity.Editor.Tools.Physics
                 is2D = has2D && !has3D;
 
             if (is2D)
+            {
+#if MCP_HAS_PHYSICS_2D
                 return GetRigidbody2D(go);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
+#if MCP_HAS_PHYSICS
             return GetRigidbody3D(go);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object GetRigidbody3D(GameObject go)
         {
             var rb = go.GetComponent<Rigidbody>();
@@ -104,7 +123,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object GetRigidbody2D(GameObject go)
         {
             var rb2d = go.GetComponent<Rigidbody2D>();
@@ -149,6 +170,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data
             };
         }
+#endif
 
         public static object ConfigureRigidbody(JObject @params)
         {
@@ -169,8 +191,16 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (go == null)
                 return new ErrorResponse($"GameObject not found: '{targetToken}'.");
 
+#if MCP_HAS_PHYSICS
             bool has3D = go.GetComponent<Rigidbody>() != null;
+#else
+            bool has3D = false;
+#endif
+#if MCP_HAS_PHYSICS_2D
             bool has2D = go.GetComponent<Rigidbody2D>() != null;
+#else
+            bool has2D = false;
+#endif
             bool is2D;
 
             if (dimensionParam == "2d")
@@ -181,11 +211,22 @@ namespace MCPForUnity.Editor.Tools.Physics
                 is2D = has2D && !has3D;
 
             if (is2D)
+            {
+#if MCP_HAS_PHYSICS_2D
                 return ConfigureRigidbody2D(go, properties);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
+#if MCP_HAS_PHYSICS
             return ConfigureRigidbody3D(go, properties);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object ConfigureRigidbody3D(GameObject go, JObject properties)
         {
             var rb = go.GetComponent<Rigidbody>();
@@ -309,7 +350,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { target = go.name, dimension = "3d", changed }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object ConfigureRigidbody2D(GameObject go, JObject properties)
         {
             var rb2d = go.GetComponent<Rigidbody2D>();
@@ -433,5 +476,6 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { target = go.name, dimension = "2d", changed }
             };
         }
+#endif
     }
 }

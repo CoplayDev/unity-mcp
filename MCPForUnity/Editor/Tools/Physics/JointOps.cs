@@ -13,15 +13,18 @@ namespace MCPForUnity.Editor.Tools.Physics
     {
         private static readonly Dictionary<string, Type> JointTypes3D = new Dictionary<string, Type>
         {
+#if MCP_HAS_PHYSICS
             { "fixed", typeof(FixedJoint) },
             { "hinge", typeof(HingeJoint) },
             { "spring", typeof(SpringJoint) },
             { "character", typeof(CharacterJoint) },
             { "configurable", typeof(ConfigurableJoint) }
+#endif
         };
 
         private static readonly Dictionary<string, Type> JointTypes2D = new Dictionary<string, Type>
         {
+#if MCP_HAS_PHYSICS_2D
             { "distance", typeof(DistanceJoint2D) },
             { "fixed", typeof(FixedJoint2D) },
             { "friction", typeof(FrictionJoint2D) },
@@ -31,6 +34,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             { "spring", typeof(SpringJoint2D) },
             { "target", typeof(TargetJoint2D) },
             { "wheel", typeof(WheelJoint2D) }
+#endif
         };
 
         public static object AddJoint(JObject @params)
@@ -52,8 +56,16 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"Target GameObject '{targetStr}' not found.");
 
             string dimensionParam = p.Get("dimension")?.ToLowerInvariant();
+#if MCP_HAS_PHYSICS
             bool is3D = go.GetComponent<Rigidbody>() != null;
+#else
+            bool is3D = false;
+#endif
+#if MCP_HAS_PHYSICS_2D
             bool has2DRb = go.GetComponent<Rigidbody2D>() != null;
+#else
+            bool has2DRb = false;
+#endif
             bool is2D;
 
             if (dimensionParam == "2d")
@@ -102,13 +114,21 @@ namespace MCPForUnity.Editor.Tools.Physics
 
                 if (is2D)
                 {
+#if MCP_HAS_PHYSICS_2D
                     if (connectedGo.GetComponent<Rigidbody2D>() == null)
                         return new ErrorResponse($"Connected body '{connectedGo.name}' has no Rigidbody2D.");
+#else
+                    return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
                 }
                 else
                 {
+#if MCP_HAS_PHYSICS
                     if (connectedGo.GetComponent<Rigidbody>() == null)
                         return new ErrorResponse($"Connected body '{connectedGo.name}' has no Rigidbody.");
+#else
+                    return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
                 }
             }
 
@@ -120,9 +140,17 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (connectedGo != null)
             {
                 if (is2D)
+                {
+#if MCP_HAS_PHYSICS_2D
                     ((Joint2D)joint).connectedBody = connectedGo.GetComponent<Rigidbody2D>();
+#endif
+                }
                 else
+                {
+#if MCP_HAS_PHYSICS
                     ((Joint)joint).connectedBody = connectedGo.GetComponent<Rigidbody>();
+#endif
+                }
             }
 
             // Set properties via reflection if provided
@@ -177,9 +205,15 @@ namespace MCPForUnity.Editor.Tools.Physics
                     return new ErrorResponse($"No joint of type '{jointTypeStr}' found on '{go.name}'.");
 
                 // Check if multiple joints exist to give a better error
+                int total = 0;
+#if MCP_HAS_PHYSICS
                 var joints3D = go.GetComponents<Joint>();
+                total += joints3D.Length;
+#endif
+#if MCP_HAS_PHYSICS_2D
                 var joints2D = go.GetComponents<Joint2D>();
-                int total = joints3D.Length + joints2D.Length;
+                total += joints2D.Length;
+#endif
                 if (total > 1)
                     return new ErrorResponse($"Multiple joints found on '{go.name}' ({total} total). Specify 'joint_type' to target a specific joint.");
 
@@ -194,6 +228,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             var motorToken = p.GetRaw("motor") as JObject;
             if (motorToken != null)
             {
+#if MCP_HAS_PHYSICS
                 if (joint is HingeJoint hingeForMotor)
                 {
                     var motor = hingeForMotor.motor;
@@ -211,12 +246,16 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     return new ErrorResponse($"Motor configuration is only supported on HingeJoint, not {joint.GetType().Name}.");
                 }
+#else
+                return new ErrorResponse($"Motor configuration is only supported on HingeJoint, not {joint.GetType().Name}.");
+#endif
             }
 
             // Limits configuration (HingeJoint)
             var limitsToken = p.GetRaw("limits") as JObject;
             if (limitsToken != null)
             {
+#if MCP_HAS_PHYSICS
                 if (joint is HingeJoint hingeForLimits)
                 {
                     var limits = hingeForLimits.limits;
@@ -234,12 +273,16 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     return new ErrorResponse($"Limits configuration is only supported on HingeJoint, not {joint.GetType().Name}.");
                 }
+#else
+                return new ErrorResponse($"Limits configuration is only supported on HingeJoint, not {joint.GetType().Name}.");
+#endif
             }
 
             // Spring configuration (HingeJoint / SpringJoint)
             var springToken = p.GetRaw("spring") as JObject;
             if (springToken != null)
             {
+#if MCP_HAS_PHYSICS
                 if (joint is HingeJoint hingeForSpring)
                 {
                     var spring = hingeForSpring.spring;
@@ -267,12 +310,16 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     return new ErrorResponse($"Spring configuration is only supported on HingeJoint/SpringJoint, not {joint.GetType().Name}.");
                 }
+#else
+                return new ErrorResponse($"Spring configuration is only supported on HingeJoint/SpringJoint, not {joint.GetType().Name}.");
+#endif
             }
 
             // Drive configuration (ConfigurableJoint)
             var driveToken = p.GetRaw("drive") as JObject;
             if (driveToken != null)
             {
+#if MCP_HAS_PHYSICS
                 if (joint is ConfigurableJoint configJoint)
                 {
                     var xDriveToken = driveToken["xDrive"] as JObject;
@@ -293,6 +340,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     return new ErrorResponse($"Drive configuration is only supported on ConfigurableJoint, not {joint.GetType().Name}.");
                 }
+#else
+                return new ErrorResponse($"Drive configuration is only supported on ConfigurableJoint, not {joint.GetType().Name}.");
+#endif
             }
 
             // Direct property setting
@@ -343,7 +393,11 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (!string.IsNullOrEmpty(jointTypeStr))
             {
                 // Remove specific joint type
+#if MCP_HAS_PHYSICS_2D
                 bool is2D = go.GetComponent<Rigidbody2D>() != null;
+#else
+                bool is2D = false;
+#endif
                 var typeMap = is2D ? JointTypes2D : JointTypes3D;
                 string key = jointTypeStr.ToLowerInvariant();
 
@@ -370,10 +424,14 @@ namespace MCPForUnity.Editor.Tools.Physics
             else
             {
                 // Remove ALL joints (both 3D and 2D)
+#if MCP_HAS_PHYSICS
                 var joints3D = go.GetComponents<Joint>();
-                var joints2D = go.GetComponents<Joint2D>();
                 jointsToRemove.AddRange(joints3D);
+#endif
+#if MCP_HAS_PHYSICS_2D
+                var joints2D = go.GetComponents<Joint2D>();
                 jointsToRemove.AddRange(joints2D);
+#endif
             }
 
             if (jointsToRemove.Count == 0)
@@ -431,7 +489,11 @@ namespace MCPForUnity.Editor.Tools.Physics
             foundCount = -1;
             if (!string.IsNullOrEmpty(jointTypeStr))
             {
+#if MCP_HAS_PHYSICS_2D
                 bool is2D = go.GetComponent<Rigidbody2D>() != null;
+#else
+                bool is2D = false;
+#endif
                 var typeMap = is2D ? JointTypes2D : JointTypes3D;
                 string key = jointTypeStr.ToLowerInvariant();
 
@@ -452,8 +514,16 @@ namespace MCPForUnity.Editor.Tools.Physics
             }
 
             // Auto-detect: find the single joint on the GO
+#if MCP_HAS_PHYSICS
             var joints3D = go.GetComponents<Joint>();
+#else
+            var joints3D = Array.Empty<Component>();
+#endif
+#if MCP_HAS_PHYSICS_2D
             var joints2D = go.GetComponents<Joint2D>();
+#else
+            var joints2D = Array.Empty<Component>();
+#endif
 
             int totalCount = joints3D.Length + joints2D.Length;
             if (totalCount == 1)

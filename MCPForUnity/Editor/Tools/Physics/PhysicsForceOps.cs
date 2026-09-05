@@ -24,8 +24,16 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             // Detect dimension
             string dimensionParam = p.Get("dimension")?.ToLowerInvariant();
+#if MCP_HAS_PHYSICS
             bool has3DRb = go.GetComponent<Rigidbody>() != null;
+#else
+            bool has3DRb = false;
+#endif
+#if MCP_HAS_PHYSICS_2D
             bool has2DRb = go.GetComponent<Rigidbody2D>() != null;
+#else
+            bool has2DRb = false;
+#endif
             bool is2D;
 
             if (dimensionParam == "2d")
@@ -44,15 +52,19 @@ namespace MCPForUnity.Editor.Tools.Physics
             // Validate not kinematic
             if (is2D)
             {
+#if MCP_HAS_PHYSICS_2D
                 var rb2d = go.GetComponent<Rigidbody2D>();
                 if (rb2d.bodyType == RigidbodyType2D.Kinematic)
                     return new ErrorResponse($"Cannot apply force to kinematic Rigidbody on '{go.name}'.");
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 var rb = go.GetComponent<Rigidbody>();
                 if (rb.isKinematic)
                     return new ErrorResponse($"Cannot apply force to kinematic Rigidbody on '{go.name}'.");
+#endif
             }
 
             string forceType = (p.Get("force_type") ?? "normal").ToLowerInvariant();
@@ -87,6 +99,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (is2D)
             {
+#if MCP_HAS_PHYSICS_2D
                 ForceMode2D mode2d = ForceMode2D.Force;
                 if (!string.IsNullOrEmpty(modeStr))
                 {
@@ -131,9 +144,13 @@ namespace MCPForUnity.Editor.Tools.Physics
                     responseData["torque"] = torqueFloat;
                     applied.Add("torque");
                 }
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 ForceMode mode = ForceMode.Force;
                 if (!string.IsNullOrEmpty(modeStr))
                 {
@@ -188,6 +205,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     responseData["torque"] = new[] { torqueVec.x, torqueVec.y, torqueVec.z };
                     applied.Add("torque");
                 }
+#else
+                return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
             }
 
             string appliedStr = string.Join(" and ", applied);
@@ -203,7 +223,7 @@ namespace MCPForUnity.Editor.Tools.Physics
         {
             if (is2D)
                 return new ErrorResponse("Explosion force is only available for 3D physics.");
-
+#if MCP_HAS_PHYSICS
             float? explosionForce = p.GetFloat("explosion_force");
             if (explosionForce == null)
                 return new ErrorResponse("'explosion_force' is required for explosion force type.");
@@ -250,6 +270,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     upwards_modifier = upwardsModifier
                 }
             };
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
         private static GameObject FindTarget(JToken targetToken, string searchMethod)

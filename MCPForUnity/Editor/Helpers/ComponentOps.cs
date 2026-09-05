@@ -376,6 +376,9 @@ namespace MCPForUnity.Editor.Helpers
 
         private static string CheckPhysicsConflict(GameObject target, Type componentType)
         {
+            // A 2D-vs-3D conflict is only possible when both physics modules are installed;
+            // if either is absent, its component types can't exist, so there's nothing to check.
+#if MCP_HAS_PHYSICS && MCP_HAS_PHYSICS_2D
             bool isAdding2DPhysics =
                 typeof(Rigidbody2D).IsAssignableFrom(componentType) ||
                 typeof(Collider2D).IsAssignableFrom(componentType);
@@ -398,6 +401,7 @@ namespace MCPForUnity.Editor.Helpers
                     return $"Cannot add 3D physics component '{componentType.Name}' because the GameObject '{target.name}' already has a 2D Rigidbody or Collider.";
                 }
             }
+#endif
 
             return null;
         }

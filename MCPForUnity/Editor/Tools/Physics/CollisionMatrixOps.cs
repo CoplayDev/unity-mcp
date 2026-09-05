@@ -16,6 +16,19 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (dimension != "3d" && dimension != "2d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+            if (dimension == "2d")
+            {
+#if !MCP_HAS_PHYSICS_2D
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
+            else
+            {
+#if !MCP_HAS_PHYSICS
+                return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
+            }
+
             var layers = new List<object>();
             var populatedIndices = new List<int>();
 
@@ -38,9 +51,23 @@ namespace MCPForUnity.Editor.Tools.Physics
                 {
                     if (j > i) continue;
                     string nameB = LayerMask.LayerToName(j);
-                    bool collides = dimension == "2d"
-                        ? !Physics2D.GetIgnoreLayerCollision(i, j)
-                        : !UnityEngine.Physics.GetIgnoreLayerCollision(i, j);
+                    bool collides;
+                    if (dimension == "2d")
+                    {
+#if MCP_HAS_PHYSICS_2D
+                        collides = !Physics2D.GetIgnoreLayerCollision(i, j);
+#else
+                        return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+                    }
+                    else
+                    {
+#if MCP_HAS_PHYSICS
+                        collides = !UnityEngine.Physics.GetIgnoreLayerCollision(i, j);
+#else
+                        return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
+                    }
                     row[nameB] = collides;
                 }
 
@@ -83,13 +110,21 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
+#if MCP_HAS_PHYSICS_2D
                 Physics2D.IgnoreLayerCollision(layerA, layerB, !collide);
                 MarkSettingsDirty("ProjectSettings/Physics2DSettings.asset");
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
             }
             else
             {
+#if MCP_HAS_PHYSICS
                 UnityEngine.Physics.IgnoreLayerCollision(layerA, layerB, !collide);
                 MarkSettingsDirty("ProjectSettings/DynamicsManager.asset");
+#else
+                return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
             }
 
             string nameA = LayerMask.LayerToName(layerA);

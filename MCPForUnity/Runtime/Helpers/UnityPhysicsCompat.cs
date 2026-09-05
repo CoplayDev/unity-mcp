@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using UnityEngine;
 
 namespace MCPForUnity.Runtime.Helpers
 {
@@ -34,6 +33,16 @@ namespace MCPForUnity.Runtime.Helpers
             Unknown,
         }
 
+        // Resolve the engine physics types by name so this shim compiles even when the
+        // Physics / Physics2D built-in modules are removed from the project. When a type
+        // is null the probes below return null/Unknown, matching the obsolete-property path.
+        private static readonly Type PhysicsType =
+            Type.GetType("UnityEngine.Physics, UnityEngine.PhysicsModule")
+            ?? Type.GetType("UnityEngine.Physics, UnityEngine.CoreModule");
+        private static readonly Type Physics2DType =
+            Type.GetType("UnityEngine.Physics2D, UnityEngine.Physics2DModule")
+            ?? Type.GetType("UnityEngine.Physics2D, UnityEngine.CoreModule");
+
         // ---------- Physics2D ----------
 
         private static PropertyInfo _physics2DAutoSync;
@@ -46,7 +55,7 @@ namespace MCPForUnity.Runtime.Helpers
                 if (!_physics2DProbed)
                 {
                     _physics2DProbed = true;
-                    _physics2DAutoSync = typeof(Physics2D).GetProperty(
+                    _physics2DAutoSync = Physics2DType?.GetProperty(
                         "autoSyncTransforms",
                         BindingFlags.Public | BindingFlags.Static);
                 }
@@ -98,7 +107,7 @@ namespace MCPForUnity.Runtime.Helpers
                 if (!_physicsProbed)
                 {
                     _physicsProbed = true;
-                    _physicsAutoSync = typeof(Physics).GetProperty(
+                    _physicsAutoSync = PhysicsType?.GetProperty(
                         "autoSyncTransforms",
                         BindingFlags.Public | BindingFlags.Static);
                 }
@@ -154,7 +163,7 @@ namespace MCPForUnity.Runtime.Helpers
                 if (!_physicsSimulationModeProbed)
                 {
                     _physicsSimulationModeProbed = true;
-                    _physicsSimulationMode = typeof(Physics).GetProperty(
+                    _physicsSimulationMode = PhysicsType?.GetProperty(
                         "simulationMode",
                         BindingFlags.Public | BindingFlags.Static);
                 }
@@ -169,7 +178,7 @@ namespace MCPForUnity.Runtime.Helpers
                 if (!_physicsAutoSimulationProbed)
                 {
                     _physicsAutoSimulationProbed = true;
-                    _physicsAutoSimulation = typeof(Physics).GetProperty(
+                    _physicsAutoSimulation = PhysicsType?.GetProperty(
                         "autoSimulation",
                         BindingFlags.Public | BindingFlags.Static);
                 }

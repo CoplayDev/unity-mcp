@@ -41,7 +41,7 @@ CAMERA CONTROL:
 - list_cameras: List all cameras with status
 
 CAPTURE:
-- screenshot: Capture a screenshot. By default (no camera specified) uses ScreenCapture API, which captures all render layers including Screen Space - Overlay UI canvases. Specifying a camera uses direct camera rendering, which EXCLUDES Screen Space - Overlay canvases (use only when you need a specific viewpoint without UI). Supports include_image=true for inline base64 PNG, batch='surround' for 6-angle contact sheet, batch='orbit' for configurable grid, view_target/view_position for positioned capture, and capture_source='scene_view' to capture the active Unity Scene View viewport.
+- screenshot: Capture a screenshot. By default (no camera specified) uses ScreenCapture API, which captures all render layers including Screen Space - Overlay UI canvases. The ScreenCapture path needs Unity's built-in Screen Capture module (com.unity.modules.screencapture), which is optional and NOT forced as a dependency; if it is absent the capture falls back to camera rendering (a Camera must exist in the scene), so Screen Space - Overlay UI will be missing from the image. Specifying a camera uses direct camera rendering, which EXCLUDES Screen Space - Overlay canvases (use only when you need a specific viewpoint without UI). Supports include_image=true for inline base64 PNG, batch='surround' for 6-angle contact sheet, batch='orbit' for configurable grid, view_target/view_position for positioned capture, and capture_source='scene_view' to capture the active Unity Scene View viewport.
 - screenshot_multiview: Shorthand for screenshot with batch='surround' and include_image=true.
 
 ## Parameters
