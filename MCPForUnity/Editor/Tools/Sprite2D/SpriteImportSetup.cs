@@ -194,9 +194,18 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             var previousType = importer.textureType;
             try
             {
-                if (importer.textureType != TextureImporterType.Sprite)
+                // npotScale as well as the type: Unity refuses sprite generation outright on a
+                // non-power-of-two texture that carries NPOT scaling ("Sprites can not be
+                // generated from textures with NPOT scaling"), and the refusal is a console
+                // message, not an exception - measured on 2021.3.45f2, a sheet already typed
+                // Sprite skipped this block entirely, wrote its metadata, and reported six
+                // frames with nothing on the asset. Sprite-mode textures cannot use NPOT
+                // scaling at all, so clearing it takes nothing away.
+                if (importer.textureType != TextureImporterType.Sprite
+                    || importer.npotScale != TextureImporterNPOTScale.None)
                 {
                     importer.textureType = TextureImporterType.Sprite;
+                    importer.npotScale = TextureImporterNPOTScale.None;
                     EditorUtility.SetDirty(importer);
                     importer.SaveAndReimport();
                 }

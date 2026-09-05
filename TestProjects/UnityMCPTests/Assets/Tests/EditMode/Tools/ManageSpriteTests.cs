@@ -571,8 +571,10 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SliceSheet_TextureAlreadyConvertedToSprite_KeepsEveryFrame()
         {
-            // Pins the branch where the texture is already a Sprite. A boundary guard, not
-            // evidence for the fix: it survives every mutation of the slicing code.
+            // Pins the branch where the texture is already a Sprite, which used to skip the
+            // conversion block and so never normalised npotScale. On 2021.3.45f2 that made
+            // Unity refuse sprite generation and slice_sheet report six frames over an empty
+            // asset; reverting the npotScale line turns this case red there.
             string path = CreateSheet("npot_preset", 6, 1);
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             importer.textureType = TextureImporterType.Sprite;
