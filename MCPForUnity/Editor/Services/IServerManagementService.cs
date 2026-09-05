@@ -49,10 +49,24 @@ namespace MCPForUnity.Editor.Services
         bool StopLocalHttpServer();
 
         /// <summary>
-        /// Stop the Unity-managed local HTTP server if a handshake/pidfile exists,
-        /// even if the current transport selection has changed.
+        /// Port of the local HTTP server this editor process launched, from the SessionState launch
+        /// marker. False for servers launched by another editor, by an earlier run of this editor,
+        /// or externally.
+        /// </summary>
+        bool TryGetLaunchedLocalHttpServerPort(out int port);
+
+        /// <summary>
+        /// Stop the local HTTP server this editor process launched, even if the current transport
+        /// selection has changed. No-op when this process did not launch one.
         /// </summary>
         bool StopManagedLocalHttpServer();
+
+        /// <summary>
+        /// Asks the server on <paramref name="port"/> how many Unity instances other than this
+        /// project are connected (GET /api/instances). Bounded by <paramref name="timeoutMs"/>;
+        /// returns false when the server did not answer with a well-formed response in time.
+        /// </summary>
+        bool TryCountOtherConnectedUnityInstances(int port, int timeoutMs, out int otherInstances);
 
         /// <summary>
         /// Best-effort detection: returns true if a local MCP HTTP server appears to be running
