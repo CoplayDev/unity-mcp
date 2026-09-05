@@ -443,7 +443,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         // RCE. Anything outside these sets is rejected. Mirrors ModelImportPipeline's allowlist style.
         private static readonly HashSet<string> AudioAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            "wav", "mp3", "ogg", "aiff", "aif", "flac",
+            "wav", "mp3", "pcm", "ogg", "aiff", "aif", "flac",
         };
         private static readonly HashSet<string> ImageAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
