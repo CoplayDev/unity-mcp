@@ -173,10 +173,14 @@ Adding the package from a Git URL makes the Package Manager shell out to `git`. 
 2. **git refuses the folder.** Newer git versions decline to run inside a directory owned by a different user account (external drives, shared folders, projects created by another account). The Package Manager surfaces this as `fatal: not in a git directory`. Tell git the folder is yours:
 
 ```bash
-git config --global --add safe.directory "/path/to/the/parent/folder"
+# trust this one project
+git config --global --add safe.directory "/path/to/the/unity/project"
+
+# or trust every repository under a folder — the trailing /* is required
+git config --global --add safe.directory "/path/to/the/parent/folder/*"
 ```
 
-Trusting the parent folder covers every project inside it. Restart Unity and add the package again.
+A plain directory path only trusts that exact repository; the `/*` suffix is what extends it to the repositories underneath. Restart Unity and add the package again.
 
 Git is only needed for this install path; the bridge itself does not use it, so a missing git never blocks setup.
 

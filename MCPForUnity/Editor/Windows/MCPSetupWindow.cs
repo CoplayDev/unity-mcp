@@ -365,7 +365,7 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private void UpdateDependencyStatus(VisualElement indicator, Label versionLabel, Label detailsLabel, DependencyStatus dep)
+        internal static void UpdateDependencyStatus(VisualElement indicator, Label versionLabel, Label detailsLabel, DependencyStatus dep)
         {
             if (dep.IsAvailable)
             {
@@ -375,17 +375,24 @@ namespace MCPForUnity.Editor.Windows
                 detailsLabel.text = dep.Details ?? "Available";
                 detailsLabel.style.color = new StyleColor(Color.gray);
             }
-            else
+            else if (dep.IsRequired)
             {
                 indicator.RemoveFromClassList("valid");
                 indicator.AddToClassList("invalid");
                 versionLabel.text = "Not Found";
-                // A missing optional dependency is information, not a blocker: show what it is
-                // for in the neutral colour instead of the red used for required ones.
-                detailsLabel.text = dep.IsRequired
-                    ? dep.ErrorMessage ?? "Not available"
-                    : dep.Details ?? dep.ErrorMessage ?? "Not available";
-                detailsLabel.style.color = new StyleColor(dep.IsRequired ? Color.red : Color.gray);
+                detailsLabel.text = dep.ErrorMessage ?? "Not available";
+                detailsLabel.style.color = new StyleColor(Color.red);
+            }
+            else
+            {
+                // A missing optional dependency is information, not a blocker. Drop both state
+                // classes so the dot keeps the neutral grey of .status-indicator-small instead of
+                // the red .invalid reserved for required ones, and say what it is for.
+                indicator.RemoveFromClassList("valid");
+                indicator.RemoveFromClassList("invalid");
+                versionLabel.text = "Not Found";
+                detailsLabel.text = dep.Details ?? dep.ErrorMessage ?? "Not available";
+                detailsLabel.style.color = new StyleColor(Color.gray);
             }
         }
     }

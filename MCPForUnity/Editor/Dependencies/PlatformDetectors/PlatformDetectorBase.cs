@@ -93,7 +93,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     status.Version = version;
                     status.Path = gitPath;
                     status.Details = "If the Package Manager still reports 'not in a git directory', git is refusing a folder "
-                        + "owned by another user: run  git config --global --add safe.directory <project folder>";
+                        + "owned by another user: run git config --global --add safe.directory \"<your Unity project folder>\"";
                     return status;
                 }
 
