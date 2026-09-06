@@ -19,9 +19,15 @@ namespace MCPForUnity.Editor.Tools
         private const int DefaultWaitTimeoutSeconds = 60;
 
         /// <summary>Backstop on the wait for compilation to begin. Not the normal
-        /// exit — RequestScriptCompilation always runs a pass, so the start edge
-        /// arrives within a tick or two; this only bounds the wait if the pipeline
-        /// never starts at all.</summary>
+        /// exit: RequestScriptCompilation records a pending request that the
+        /// editor drains into a pipeline run on a later tick whether or not any
+        /// source changed — "recompiles those scripts which require it" in the docs
+        /// describes per-assembly skipping inside that run, not a run that is skipped.
+        /// With nothing changed, 6000.3 still raises compilationStarted/Finished
+        /// (~100 ms, cached) and reloads the domain. The grace only bounds the cases
+        /// where the run never begins: the pipeline refusing to start on a setup
+        /// error, or play mode with "Recompile After Finished Playing" deferring it
+        /// until exit. Both are reported as <c>compile_started = false</c>.</summary>
         private const int CompileStartGraceSeconds = 10;
 
         public static async Task<object> HandleCommand(JObject @params)
@@ -95,9 +101,19 @@ namespace MCPForUnity.Editor.Tools
             // Unlike WaitForUnityReadyAsync this cannot span a domain reload: it
             // resolves the moment compilation *starts*, long before assemblies swap.
             // That is why it is safe on Unity 6+ where waiting for readiness is not.
-            if (compileRequested)
+            //
+            // Gated on wait_for_ready: that flag is documented as the non-blocking
+            // switch, and this wait is a wait — cheap when the pipeline starts on the
+            // next tick, but a full grace when it never does. A caller who opted out
+            // of waiting gets the immediate return and the poll hint.
+            //
+            // compile_started is null when nothing was waited for (no compile
+            // requested, or wait_for_ready=false), so "not observed" never reads as
+            // "did not start".
+            bool? compileStarted = null;
+            if (compileRequested && waitForReady)
             {
-                await WaitForCompilationToStartAsync(
+                compileStarted = await WaitForCompilationToStartAsync(
                     compileCountBefore,
                     TimeSpan.FromSeconds(CompileStartGraceSeconds)).ConfigureAwait(true);
             }
@@ -125,6 +141,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         refresh_triggered = refreshTriggered,
                         compile_requested = compileRequested,
+                        compile_started = compileStarted,
                         resulting_state = "unknown",
                     });
                 }
@@ -142,6 +159,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 refresh_triggered = refreshTriggered,
                 compile_requested = compileRequested,
+                compile_started = compileStarted,
                 resulting_state = resultingState,
                 hint = shouldWaitForReady
                     ? "Unity refresh completed; editor should be ready."
@@ -150,22 +168,22 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
-        /// Resolves once a compilation is under way — or once it provably will not
-        /// start. Three exits, none of them a fault, because "nothing needed
-        /// compiling" is a normal outcome rather than a timeout:
+        /// Resolves <c>true</c> once a compilation is under way, or <c>false</c> once
+        /// the grace elapsed without one. Two of the three exits are a start:
         /// <list type="bullet">
         /// <item>the pipeline is running;</item>
         /// <item><see cref="EditorStateCache.CompileCount"/> moved past
         /// <paramref name="compileCountBefore"/> — a short compile can begin and end
         /// inside AssetDatabase.Refresh, before this is even armed, and the counter is
         /// the only thing that still sees it;</item>
-        /// <item>the grace elapsed with neither.</item>
+        /// <item>the grace elapsed with neither — the pipeline declined or deferred
+        /// the request (see <see cref="CompileStartGraceSeconds"/>).</item>
         /// </list>
         /// The first two are also tested synchronously on entry, so the case where a
         /// reload is already imminent never leaves this command queued as a
         /// continuation — see the note on the fast path below.
         /// </summary>
-        private static Task WaitForCompilationToStartAsync(int compileCountBefore, TimeSpan grace)
+        internal static Task<bool> WaitForCompilationToStartAsync(int compileCountBefore, TimeSpan grace)
         {
             // Synchronous fast path, and the reason it matters: the counter check is
             // there for a compile that began *and ended* inside AssetDatabase.Refresh
@@ -177,7 +195,7 @@ namespace MCPForUnity.Editor.Tools
             if (EditorStateCache.CompileCount != compileCountBefore
                 || EditorStateCache.GetActualIsCompiling())
             {
-                return Task.CompletedTask;
+                return Task.FromResult(true);
             }
 
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

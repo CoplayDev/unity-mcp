@@ -568,7 +568,7 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         internal static int CompileCount => SessionState.GetInt(CompileCountKey, 0);
 
-        private static long? GetSessionUnixMs(string key)
+        internal static long? GetSessionUnixMs(string key)
         {
             string raw = SessionState.GetString(key, string.Empty);
             return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value)
@@ -578,7 +578,7 @@ namespace MCPForUnity.Editor.Services
 
         // SessionState has no long overload, so these round-trip through an
         // invariant string rather than losing precision through int or float.
-        private static void SetSessionUnixMs(string key, long value)
+        internal static void SetSessionUnixMs(string key, long value)
             => SessionState.SetString(key, value.ToString(CultureInfo.InvariantCulture));
 
         // Set/cleared by the CompilationPipeline.compilationStarted/Finished events
