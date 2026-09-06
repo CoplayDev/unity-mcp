@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine.TestTools;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Tools;
 using static MCPForUnityTests.Editor.TestUtilities;
@@ -55,6 +58,30 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsTrue(task.IsCompleted, "counter already moved must resolve without a tick");
             Assert.IsTrue(task.Result, "a moved counter is a start, not a grace expiry");
+        }
+
+        [UnityTest]
+        public IEnumerator WaitForCompilationToStart_GraceElapsed_ResolvesFalse()
+        {
+            // No compile is requested here, so with the counter current the only way
+            // out is the grace. A zero grace expires on the first update tick.
+            var task = RefreshUnity.WaitForCompilationToStartAsync(
+                EditorStateCache.CompileCount,
+                TimeSpan.Zero);
+
+            Assert.IsFalse(task.IsCompleted, "nothing has started, so the wait must actually wait");
+
+            double deadline = EditorApplication.timeSinceStartup + 5.0;
+            while (!task.IsCompleted)
+            {
+                if (EditorApplication.timeSinceStartup > deadline)
+                {
+                    Assert.Fail("grace expiry never resolved the wait");
+                }
+                yield return null;
+            }
+
+            Assert.IsFalse(task.Result, "grace expiry must report that no compile started");
         }
     }
 }

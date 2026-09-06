@@ -181,58 +181,73 @@ namespace MCPForUnity.Editor.Tools
         /// </list>
         /// The first two are also tested synchronously on entry, so the case where a
         /// reload is already imminent never leaves this command queued as a
-        /// continuation — see the note on the fast path below.
+        /// continuation — see the note on the fast path below. The running case is
+        /// observed from <see cref="CompilationPipeline.compilationStarted"/> and
+        /// completed so that the caller's continuations run inline in that handler,
+        /// for the reason given at the completion source.
         /// </summary>
         internal static Task<bool> WaitForCompilationToStartAsync(int compileCountBefore, TimeSpan grace)
         {
             // Synchronous fast path, and the reason it matters: the counter check is
             // there for a compile that began *and ended* inside AssetDatabase.Refresh
             // above, and in that state the domain reload is already imminent. Resolving
-            // it from Tick would hand the rest of this command to the synchronization
-            // context as a queued continuation, which the reload discards along with
-            // the rest of the domain — losing the response. An already-completed task
-            // resumes the await inline instead, so nothing is left queued.
+            // it from a later tick would hand the rest of this command to the
+            // synchronization context as a queued continuation, which the reload
+            // discards along with the rest of the domain — losing the response. An
+            // already-completed task resumes the await inline instead, so nothing is
+            // left queued.
             if (EditorStateCache.CompileCount != compileCountBefore
                 || EditorStateCache.GetActualIsCompiling())
             {
                 return Task.FromResult(true);
             }
 
-            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Resolved from the compilationStarted event itself, not from a poll, and
+            // deliberately *without* RunContinuationsAsynchronously. Both matter for
+            // the same reason: the response has to be on the wire before the compile
+            // finishes, because the domain reload follows compilationFinished directly
+            // and a cached no-change compile lasts ~110 ms. Every await between here
+            // and the socket captures Unity's synchronization context; a continuation
+            // posted to it runs one editor frame later, and there are three of them
+            // (this method's caller, the CommandRegistry async wrapper, its
+            // AwaitHandler). Completing the task on the main thread with inlining
+            // allowed lets the awaiter see the captured context as the current one and
+            // run all three inline, inside this event handler, so the only hop left
+            // is the dispatcher's thread-pool send. A poll would also quantise the
+            // edge to the update tick, which in an unfocused Editor is most of that
+            // window on its own.
+            //
+            // EditorStateCache subscribed to the same event at domain load, so its
+            // handler has already flipped GetActualIsCompiling() by the time this one
+            // runs; the caller reads resulting_state = "compiling" inline.
+            var tcs = new TaskCompletionSource<bool>();
             var start = DateTime.UtcNow;
+            Action<object> onStarted = null;
+            EditorApplication.CallbackFunction tick = null;
 
-            void Tick()
+            onStarted = _ =>
             {
-                try
+                CompilationPipeline.compilationStarted -= onStarted;
+                EditorApplication.update -= tick;
+                tcs.TrySetResult(true);
+            };
+
+            // The update hook only carries the grace: the pipeline declined or deferred
+            // the request, so no reload is coming and inlining is harmless there too.
+            tick = () =>
+            {
+                if ((DateTime.UtcNow - start) <= grace)
                 {
-                    if (tcs.Task.IsCompleted)
-                    {
-                        EditorApplication.update -= Tick;
-                        return;
-                    }
-
-                    if (EditorStateCache.GetActualIsCompiling()
-                        || EditorStateCache.CompileCount != compileCountBefore)
-                    {
-                        EditorApplication.update -= Tick;
-                        tcs.TrySetResult(true);
-                        return;
-                    }
-
-                    if ((DateTime.UtcNow - start) > grace)
-                    {
-                        EditorApplication.update -= Tick;
-                        tcs.TrySetResult(false);
-                    }
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    EditorApplication.update -= Tick;
-                    tcs.TrySetException(ex);
-                }
-            }
 
-            EditorApplication.update += Tick;
+                CompilationPipeline.compilationStarted -= onStarted;
+                EditorApplication.update -= tick;
+                tcs.TrySetResult(false);
+            };
+
+            CompilationPipeline.compilationStarted += onStarted;
+            EditorApplication.update += tick;
             // Nudge Unity to pump once in case update is throttled.
             try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
             return tcs.Task;
