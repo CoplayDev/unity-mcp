@@ -10,7 +10,7 @@ from overseer import EventLedger
 
 @pytest.fixture
 def ledger():
-    return EventLedger(sqlite3.connect(":memory:"))
+    return EventLedger(sqlite3.connect(":memory:", check_same_thread=False))
 
 
 def test_records_activity_and_summarizes_revenue_cost_and_profit(ledger):
@@ -44,6 +44,34 @@ def test_records_activity_and_summarizes_revenue_cost_and_profit(ledger):
     assert summary.costs == 125
     assert summary.profit == 375
     assert summary.activity_count == 3
+
+
+def test_uses_supplied_unnamed_memory_connection():
+    connection = sqlite3.connect(":memory:")
+    ledger = EventLedger(connection)
+
+    ledger.record(
+        category="activity",
+        event_type="ledger-write",
+        team_id="support",
+        agent_id="agent",
+    )
+    connection.execute(
+        """
+        INSERT INTO ledger_events
+        (id, category, event_type, team_id, agent_id, amount, currency,
+         requires_approval, metadata_json, created_at)
+        VALUES ('external', 'activity', 'external-write', 'support', 'agent',
+                '0', 'USD', 0, '{}', '2025-01-01T00:00:00+00:00')
+        """
+    )
+    connection.commit()
+
+    assert {event.event_type for event in ledger.list_events()} == {
+        "ledger-write",
+        "external-write",
+    }
+    assert connection.execute("SELECT COUNT(*) FROM ledger_events").fetchone()[0] == 2
 
 
 def test_exact_money_is_currency_aware_and_pending_amounts_are_excluded(ledger):

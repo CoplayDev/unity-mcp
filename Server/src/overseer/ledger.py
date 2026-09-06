@@ -57,8 +57,7 @@ class EventLedger:
         if database_path:
             self._connection = sqlite3.connect(database_path, check_same_thread=False)
         else:
-            self._connection = sqlite3.connect(":memory:", check_same_thread=False)
-            connection.backup(self._connection)
+            self._connection = connection
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
         self._connection.executescript(
