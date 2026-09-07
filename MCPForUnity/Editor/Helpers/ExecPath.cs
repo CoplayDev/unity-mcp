@@ -166,6 +166,27 @@ namespace MCPForUnity.Editor.Helpers
             catch { }
         }
 
+        /// <summary>
+        /// Assigns PATH on a ProcessStartInfo using the spelling the inherited environment already
+        /// uses. Mono - the runtime the Editor runs on - backs EnvironmentVariables with a
+        /// case-SENSITIVE dictionary, so writing "PATH" when Windows handed us "Path" adds a second,
+        /// separate entry and the child process keeps reading the original one. That silently made
+        /// every extraPathPrepend on Windows a no-op.
+        /// </summary>
+        private static void SetPathVariable(ProcessStartInfo psi, string value)
+        {
+            string key = "PATH";
+            foreach (string existing in psi.EnvironmentVariables.Keys)
+            {
+                if (string.Equals(existing, "PATH", StringComparison.OrdinalIgnoreCase))
+                {
+                    key = existing;
+                    break;
+                }
+            }
+            psi.EnvironmentVariables[key] = value;
+        }
+
         internal static bool TryRun(
             string file,
             string args,
@@ -179,16 +200,41 @@ namespace MCPForUnity.Editor.Helpers
             stderr = string.Empty;
             try
             {
+                bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
                 // Handle PowerShell scripts on Windows by invoking through powershell.exe
-                bool isPs1 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
-                             file.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
+                bool isPs1 = isWindows && file.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
+
+                // Handle batch shims (pyenv-win, npm .cmd wrappers, ...) on Windows: CreateProcess
+                // cannot launch .bat/.cmd directly while UseShellExecute is false, so route them
+                // through cmd.exe instead of failing with a Win32Exception.
+                bool isBatch = isWindows &&
+                               (file.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) ||
+                                file.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase));
+
+                string fileName;
+                string arguments;
+                if (isPs1)
+                {
+                    fileName = "powershell.exe";
+                    arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{file}\" {args}".Trim();
+                }
+                else if (isBatch)
+                {
+                    fileName = "cmd.exe";
+                    // /s /c plus an outer pair of quotes keeps paths containing spaces intact
+                    arguments = $"/s /c \"\"{file}\" {args}\"";
+                }
+                else
+                {
+                    fileName = file;
+                    arguments = args;
+                }
 
                 var psi = new ProcessStartInfo
                 {
-                    FileName = isPs1 ? "powershell.exe" : file,
-                    Arguments = isPs1
-                        ? $"-NoProfile -ExecutionPolicy Bypass -File \"{file}\" {args}".Trim()
-                        : args,
+                    FileName = fileName,
+                    Arguments = arguments,
                     WorkingDirectory = string.IsNullOrEmpty(workingDir) ? Environment.CurrentDirectory : workingDir,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -198,9 +244,9 @@ namespace MCPForUnity.Editor.Helpers
                 if (!string.IsNullOrEmpty(extraPathPrepend))
                 {
                     string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-                    psi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(currentPath)
+                    SetPathVariable(psi, string.IsNullOrEmpty(currentPath)
                         ? extraPathPrepend
-                        : (extraPathPrepend + System.IO.Path.PathSeparator + currentPath);
+                        : (extraPathPrepend + System.IO.Path.PathSeparator + currentPath));
                 }
 
                 using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
@@ -249,6 +295,22 @@ namespace MCPForUnity.Editor.Helpers
 #endif
         }
 
+        /// <summary>
+        /// Like <see cref="FindInPath"/>, but returns every match in PATH order instead of only the
+        /// first one. On Windows a single name can resolve to several entries (App Execution Alias
+        /// stubs, pyenv-win .bat shims, real interpreters); callers that validate the candidate need
+        /// to be able to skip the ones that turn out to be non-functional.
+        /// </summary>
+        internal static string[] FindAllInPath(string executable, string extraPathPrepend = null)
+        {
+#if UNITY_EDITOR_WIN
+            return FindAllInPathWindows(executable, extraPathPrepend);
+#else
+            string single = FindInPath(executable, extraPathPrepend);
+            return string.IsNullOrEmpty(single) ? Array.Empty<string>() : new[] { single };
+#endif
+        }
+
 #if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
         private static string Which(string exe, string prependPath)
         {
@@ -261,7 +323,7 @@ namespace MCPForUnity.Editor.Helpers
                     CreateNoWindow = true,
                 };
                 string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-                psi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(path) ? prependPath : (prependPath + Path.PathSeparator + path);
+                SetPathVariable(psi, string.IsNullOrEmpty(path) ? prependPath : (prependPath + Path.PathSeparator + path));
 
                 using var p = Process.Start(psi);
                 if (p == null) return null;
@@ -287,6 +349,11 @@ namespace MCPForUnity.Editor.Helpers
 #if UNITY_EDITOR_WIN
         internal static string FindInPathWindows(string exe, string extraPathPrepend = null)
         {
+            return FindAllInPathWindows(exe, extraPathPrepend).FirstOrDefault();
+        }
+
+        private static string[] FindAllInPathWindows(string exe, string extraPathPrepend = null)
+        {
             try
             {
                 string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
@@ -303,11 +370,11 @@ namespace MCPForUnity.Editor.Helpers
                 };
                 if (!string.IsNullOrEmpty(effectivePath))
                 {
-                    psi.EnvironmentVariables["PATH"] = effectivePath;
+                    SetPathVariable(psi, effectivePath);
                 }
 
                 using var p = Process.Start(psi);
-                if (p == null) return null;
+                if (p == null) return Array.Empty<string>();
 
                 var so = new StringBuilder();
                 p.OutputDataReceived += (_, e) => { if (e.Data != null) so.AppendLine(e.Data); };
@@ -316,16 +383,17 @@ namespace MCPForUnity.Editor.Helpers
                 if (!p.WaitForExit(1500))
                 {
                     try { p.Kill(); } catch { }
-                    return null;
+                    return Array.Empty<string>();
                 }
 
                 p.WaitForExit();
-                string first = so.ToString()
+                return so.ToString()
                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .FirstOrDefault();
-                return (!string.IsNullOrEmpty(first) && File.Exists(first)) ? first : null;
+                    .Select(line => line.Trim())
+                    .Where(line => line.Length > 0 && File.Exists(line))
+                    .ToArray();
             }
-            catch { return null; }
+            catch { return Array.Empty<string>(); }
         }
 #endif
     }
