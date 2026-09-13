@@ -31,6 +31,7 @@ namespace MCPForUnityTests.Editor.Services
         public void TearDown()
         {
             // Restore original values
+            EditorConfigurationCache.Instance.UnpinStdioForSession();
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalUseHttpTransport);
             EditorPrefs.SetBool(EditorPrefKeys.DebugLogs, _originalDebugLogs);
             EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, _originalUvxPath);
@@ -257,6 +258,62 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsFalse(EditorConfigurationCache.Instance.UseHttpTransport);
             Assert.IsTrue(EditorConfigurationCache.Instance.DebugLogs);
             Assert.AreEqual("/refreshed/path", EditorConfigurationCache.Instance.UvxPathOverride);
+        }
+
+        #endregion
+
+        #region Session Pin Tests
+
+        [Test]
+        public void PinStdioForSession_OverridesHttpPreference_WithoutWritingEditorPrefs()
+        {
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.Refresh();
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
+
+            EditorConfigurationCache.Instance.PinStdioForSession();
+
+            Assert.IsFalse(EditorConfigurationCache.Instance.UseHttpTransport);
+            Assert.IsTrue(EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, false),
+                "The pin must not rewrite the developer's persisted transport preference");
+        }
+
+        [Test]
+        public void PinStdioForSession_SurvivesRefresh()
+        {
+            // Refresh() is what a fresh cache instance runs after a domain reload; the pin lives
+            // in SessionState precisely so it survives that.
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.PinStdioForSession();
+
+            EditorConfigurationCache.Instance.Refresh();
+
+            Assert.IsTrue(SessionState.GetBool(EditorConfigurationCache.SessionKeyForceStdio, false));
+            Assert.IsFalse(EditorConfigurationCache.Instance.UseHttpTransport);
+        }
+
+        [Test]
+        public void UnpinStdioForSession_RestoresPreferenceAndNotifies()
+        {
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorConfigurationCache.Instance.Refresh();
+            EditorConfigurationCache.Instance.PinStdioForSession();
+
+            string changedKey = null;
+            void Handler(string key) => changedKey = key;
+            EditorConfigurationCache.Instance.OnConfigurationChanged += Handler;
+            try
+            {
+                EditorConfigurationCache.Instance.UnpinStdioForSession();
+            }
+            finally
+            {
+                EditorConfigurationCache.Instance.OnConfigurationChanged -= Handler;
+            }
+
+            Assert.AreEqual(nameof(EditorConfigurationCache.UseHttpTransport), changedKey);
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
+            Assert.IsFalse(SessionState.GetBool(EditorConfigurationCache.SessionKeyForceStdio, false));
         }
 
         #endregion

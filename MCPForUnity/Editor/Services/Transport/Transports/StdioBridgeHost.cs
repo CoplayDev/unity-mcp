@@ -27,6 +27,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public TaskCompletionSource<string> Tcs;
         public bool IsExecuting;
         public long EnqueuedAtMs;
+
+        /// <summary>
+        /// Connection that queued this command, used to tell a broker resend apart from a
+        /// genuinely new request. Never dereferenced — identity only.
+        /// </summary>
+        public object Owner;
     }
 
     [InitializeOnLoad]
@@ -58,10 +64,32 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024;
-        private const int FrameIOTimeoutMs = 30000;
+        // Command/frame I/O timeout for the stdio bridge TCP hop. Previously a
+        // hardcoded 30s const, which cut off long-running tool calls mid-execution
+        // (the client would then reconnect and re-send, causing the bridge to
+        // restart on a new port). Now defaults to 5 minutes and is overridable via
+        // the UNITY_MCP_STDIO_COMMAND_TIMEOUT_MS environment variable.
+        private const int DefaultFrameIOTimeoutMs = 300000;
+        private static readonly int FrameIOTimeoutMs = ResolveFrameIOTimeoutMs();
         private static readonly Stopwatch _uptime = Stopwatch.StartNew();
         private static volatile int _consecutiveTimeouts = 0;
         private static bool _processCommandsHooked = false;
+
+        private static int ResolveFrameIOTimeoutMs()
+        {
+            try
+            {
+                string raw = Environment.GetEnvironmentVariable("UNITY_MCP_STDIO_COMMAND_TIMEOUT_MS");
+                if (!string.IsNullOrWhiteSpace(raw)
+                    && int.TryParse(raw.Trim(), out int ms)
+                    && ms > 0)
+                {
+                    return ms;
+                }
+            }
+            catch { /* fall through to default */ }
+            return DefaultFrameIOTimeoutMs;
+        }
 
         private static void IoInfo(string s) { McpLog.Info(s, always: false); }
 
@@ -237,24 +265,50 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private static bool IsCompiling()
+        // Routed through EditorStateCache so a deferred domain reload (issue #1276) does not
+        // pin the bridge off: raw EditorApplication.isCompiling stays true for as long as the
+        // reload is held, and this gates bridge startup.
+        /// <summary>
+        /// Number of commands currently queued, read under the queue lock. Diagnostics only —
+        /// callers must not reason about individual entries, since the queue mutates from both
+        /// the listener tasks and the editor update loop.
+        /// </summary>
+        internal static int QueuedCommandCount
         {
-            if (EditorApplication.isCompiling)
+            get { lock (lockObj) { return commandQueue.Count; } }
+        }
+
+        /// <summary>
+        /// True when an already-queued command is the same payload arriving from a different
+        /// connection — the signature of a broker that reconnected and resent. Payload equality
+        /// alone is not enough: a single connection handles one command at a time, so two
+        /// identical payloads on the same connection are sequential and genuinely distinct.
+        /// </summary>
+        internal static bool IsBrokerResend(
+            string queuedCommandJson, object queuedOwner, string incomingCommandJson, object incomingOwner)
+        {
+            if (queuedOwner == null || incomingOwner == null) return false;
+            if (ReferenceEquals(queuedOwner, incomingOwner)) return false;
+            return string.Equals(queuedCommandJson, incomingCommandJson, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Finds an in-flight command that <paramref name="incomingOwner"/> is resending.
+        /// Callers must hold <see cref="lockObj"/>.
+        /// </summary>
+        private static QueuedCommand FindBrokerResendTarget(string commandText, object incomingOwner)
+        {
+            foreach (var kvp in commandQueue)
             {
-                return true;
-            }
-            try
-            {
-                Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                var prop = pipeline?.GetProperty("isCompiling", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (prop != null)
+                if (IsBrokerResend(kvp.Value.CommandJson, kvp.Value.Owner, commandText, incomingOwner))
                 {
-                    return (bool)prop.GetValue(null);
+                    return kvp.Value;
                 }
             }
-            catch { }
-            return false;
+            return null;
         }
+
+        private static bool IsCompiling() => EditorStateCache.GetActualIsCompiling();
 
         public static void Start()
         {
@@ -479,7 +533,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         true
                     );
 
-                    client.ReceiveTimeout = 60000;
+                    // Keep the socket receive timeout at least as long as the command
+                    // timeout so it never fires before a long-running tool call completes.
+                    client.ReceiveTimeout = Math.Max(60000, FrameIOTimeoutMs);
 
                     _ = Task.Run(() => HandleClientAsync(client, token), token);
                 }
@@ -590,15 +646,31 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 continue;
                             }
 
+                            // A command already in flight from a different connection means the
+                            // broker gave up waiting, reconnected and resent it. Running it a
+                            // second time would duplicate side effects (issue #1130), so attach
+                            // to the original instead of queueing a copy.
+                            TaskCompletionSource<string> pending = tcs;
                             lock (lockObj)
                             {
-                                commandQueue[commandId] = new QueuedCommand
+                                QueuedCommand inFlight = FindBrokerResendTarget(commandText, client);
+                                if (inFlight != null)
                                 {
-                                    CommandJson = commandText,
-                                    Tcs = tcs,
-                                    IsExecuting = false,
-                                    EnqueuedAtMs = _uptime.ElapsedMilliseconds
-                                };
+                                    pending = inFlight.Tcs;
+                                    McpLog.Warn("Suppressed duplicate command resent on a new connection; "
+                                                + "awaiting the in-flight result instead of running it twice.");
+                                }
+                                else
+                                {
+                                    commandQueue[commandId] = new QueuedCommand
+                                    {
+                                        CommandJson = commandText,
+                                        Tcs = tcs,
+                                        IsExecuting = false,
+                                        EnqueuedAtMs = _uptime.ElapsedMilliseconds,
+                                        Owner = client
+                                    };
+                                }
                             }
 
                             // Force Unity's main loop to iterate even when backgrounded,
@@ -610,11 +682,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                             try
                             {
                                 using var respCts = new CancellationTokenSource(FrameIOTimeoutMs);
-                                var completed = await Task.WhenAny(tcs.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
-                                if (completed == tcs.Task)
+                                var completed = await Task.WhenAny(pending.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
+                                if (completed == pending.Task)
                                 {
                                     respCts.Cancel();
-                                    response = tcs.Task.Result;
+                                    response = pending.Task.Result;
                                     Interlocked.Exchange(ref _consecutiveTimeouts, 0);
                                 }
                                 else
@@ -839,7 +911,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                     // Evict commands stuck with IsExecuting=true for too long (e.g. from pre-reload state).
                     long nowMs = _uptime.ElapsedMilliseconds;
-                    const long staleThresholdMs = 2L * FrameIOTimeoutMs; // 60s
+                    long staleThresholdMs = 2L * FrameIOTimeoutMs; // 2x the command timeout
                     List<string> staleIds = null;
                     foreach (var kvp in commandQueue)
                     {

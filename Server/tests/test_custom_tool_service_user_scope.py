@@ -17,6 +17,29 @@ class _DummyMcp:
         return _decorator
 
 
+class _RecordingMcp(_DummyMcp):
+    def __init__(self):
+        self.routes: list[str] = []
+
+    def custom_route(self, path, methods=None):  # noqa: ARG002
+        self.routes.append(path)
+        return super().custom_route(path, methods)
+
+
+def test_register_tools_route_is_not_exposed_in_remote_hosted_mode(monkeypatch):
+    """The REST route has no API-key check; the plugin registers tools over the hub
+    WebSocket instead, so a hosted server must not offer it to unauthenticated callers."""
+    monkeypatch.setattr(config, "http_remote_hosted", True)
+    hosted = _RecordingMcp()
+    CustomToolService(hosted)
+    assert "/register-tools" not in hosted.routes
+
+    monkeypatch.setattr(config, "http_remote_hosted", False)
+    local = _RecordingMcp()
+    CustomToolService(local)
+    assert local.routes == ["/register-tools"]
+
+
 @pytest.mark.asyncio
 async def test_list_registered_tools_threads_user_id_to_plugin_hub():
     service = CustomToolService(_DummyMcp())

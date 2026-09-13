@@ -129,7 +129,7 @@ read_console(
 )
 ```
 
-### 5. Always Check `editor_state` Before Complex Operations
+### 5. Always Check `mcpforunity://editor/state` Before Complex Operations
 
 ```python
 # Read mcpforunity://editor/state to check:
@@ -268,7 +268,7 @@ set_active_instance(instance="MyProject@abc123")
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
-| Tools return "busy" | Compilation in progress | Wait, check `editor_state` |
+| Tools return "busy" | Compilation in progress | Wait, check `mcpforunity://editor/state` |
 | "stale_file" error | File changed since SHA | Re-fetch SHA with `get_sha`, retry |
 | Connection lost | Domain reload | Wait ~5s, reconnect |
 | Commands fail silently | Wrong instance | Check `set_active_instance` |

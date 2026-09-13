@@ -170,11 +170,28 @@ async def run_tests(
     init_timeout: Annotated[int | None,
                             "Initialization timeout in milliseconds. PlayMode tests may need longer "
                             "due to domain reload (default: 15000). Recommended: 120000 for PlayMode."] = None,
+    clear_stuck: Annotated[bool,
+                           "Clear an orphaned running job instead of starting a run. Use when a job "
+                           "was lost to a domain reload and is blocking every subsequent run."] = False,
 ) -> RunTestsStartResponse | MCPResponse:
+    unity_instance = await get_unity_instance_from_context(ctx)
+
+    # Runs before both the init_timeout check and preflight on purpose: neither is relevant to
+    # clearing, and requires_no_tests would reject the very call that exists to clear the
+    # orphaned job blocking it.
+    if clear_stuck:
+        response = await unity_transport.send_with_unity_instance(
+            async_send_command_with_retry,
+            unity_instance,
+            "run_tests",
+            {"clear_stuck": True},
+        )
+        if isinstance(response, dict):
+            return MCPResponse(**response)
+        return MCPResponse(success=False, error=str(response))
+
     if init_timeout is not None and init_timeout <= 0:
         return MCPResponse(success=False, error="init_timeout must be a positive integer (milliseconds) or None")
-
-    unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
     if isinstance(gate, MCPResponse):
@@ -226,6 +243,9 @@ async def run_tests(
     annotations=ToolAnnotations(
         title="Get Test Job",
         readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def get_test_job(

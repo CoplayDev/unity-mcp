@@ -73,3 +73,6 @@ tools/.unity-check-logs/
 # Superpowers skill working artifacts (specs, plans, SDD ledger)
 docs/superpowers/
 .superpowers/
+
+# Reference DLLs fetched by tools/compile-check.sh (not redistributable)
+.compile-refs/

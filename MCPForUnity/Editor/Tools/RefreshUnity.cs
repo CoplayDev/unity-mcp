@@ -109,7 +109,7 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-            string resultingState = EditorApplication.isCompiling
+            string resultingState = EditorStateCache.GetActualIsCompiling()
                 ? "compiling"
                 : (EditorApplication.isUpdating ? "asset_import" : "idle");
 
@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Tools
                 resulting_state = resultingState,
                 hint = shouldWaitForReady
                     ? "Unity refresh completed; editor should be ready."
-                    : "If Unity enters compilation/domain reload, poll editor_state until ready_for_tools is true."
+                    : "If Unity enters compilation/domain reload, poll the mcpforunity://editor/state resource until data.advice.ready_for_tools is true."
             });
         }
 
@@ -146,7 +146,7 @@ namespace MCPForUnity.Editor.Tools
                         return;
                     }
 
-                    if (!EditorApplication.isCompiling
+                    if (!EditorStateCache.GetActualIsCompiling()
                         && !EditorApplication.isUpdating
                         && !TestRunStatus.IsRunning
                         && !EditorApplication.isPlayingOrWillChangePlaymode)

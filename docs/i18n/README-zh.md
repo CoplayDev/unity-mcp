@@ -182,7 +182,7 @@ MCP for Unity 支持同时开多个 Unity 编辑器实例。想把操作定向�
 
 ## Star 历史
 
-[![Star History Chart](https://api.star-history.com/svg?repos=CoplayDev/unity-mcp&type=Date)](https://www.star-history.com/#CoplayDev/unity-mcp&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=CoplayDev/unity-mcp&type=Date)](https://star-history.dera.page/#CoplayDev/unity-mcp&Date)
 
 <details>
 <summary><strong>论文引用</strong></summary>

@@ -227,6 +227,55 @@ public class Foo : MonoBehaviour
                 "Overloads with different param types but same count should not be flagged");
         }
 
+        [Test]
+        public void DuplicateDetection_ExplicitInterfaceImplementation_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public interface IThing { void Notify(); }
+public class Foo : MonoBehaviour, IThing
+{
+    void IThing.Notify()
+    {
+        Ping();
+    }
+
+    private void Ping() { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "A call as the first statement of an explicit interface implementation is not a declaration");
+        }
+
+        [Test]
+        public void DuplicateDetection_ExpressionBodiedCall_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public int Total => Count();
+
+    private int Count() => 0;
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "A call inside an expression-bodied member is not a declaration");
+        }
+
+        [Test]
+        public void DuplicateDetection_FieldInitializerCall_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    private static bool _enabled = ReadPref();
+
+    private static bool ReadPref() { return false; }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "A call in a field initializer is not a declaration");
+        }
+
         // --- Duplicate method detection: true positive tests ---
 
         [Test]

@@ -433,6 +433,128 @@ namespace MCPForUnityTests.Editor.Tools
 
         #endregion
 
+        #region Component Add and Property Tests
+        // Regression coverage for https://github.com/CoplayDev/unity-mcp/issues/1297:
+        // 'create' had no reachable way to set component properties. componentProperties
+        // was accepted but never consumed by the create path, and the {typeName, properties}
+        // shape componentsToAdd already reads was rejected by the Python schema before it
+        // ever reached here (see Server/tests/test_manage_gameobject.py for that half).
+
+        [Test]
+        public void Create_WithComponentProperties_AppliesPropertiesToAddedComponent()
+        {
+            var p = new JObject
+            {
+                ["action"] = "create",
+                ["name"] = "TestComponentProperties",
+                ["componentsToAdd"] = new JArray { "BoxCollider" },
+                ["componentProperties"] = new JObject
+                {
+                    ["BoxCollider"] = new JObject { ["size"] = new JArray(2, 2, 2) }
+                }
+            };
+
+            var result = ManageGameObject.HandleCommand(p);
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+
+            Assert.IsTrue(resultObj.Value<bool>("success"), resultObj.ToString());
+
+            var created = FindAndTrack("TestComponentProperties");
+            Assert.IsNotNull(created);
+            var collider = created.GetComponent<BoxCollider>();
+            Assert.IsNotNull(collider, "BoxCollider should have been added");
+            Assert.AreEqual(new Vector3(2f, 2f, 2f), collider.size,
+                "componentProperties should be applied at create time, not silently ignored");
+        }
+
+        [Test]
+        public void Create_WithComponentsToAddObjectEntry_AppliesPropertiesInSameEntry()
+        {
+            // The alternate shape the create path has always read directly out of
+            // componentsToAdd entries (typeName + properties), now reachable through
+            // the Python schema too.
+            var p = new JObject
+            {
+                ["action"] = "create",
+                ["name"] = "TestComponentsToAddObjectEntry",
+                ["componentsToAdd"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["typeName"] = "BoxCollider",
+                        ["properties"] = new JObject { ["size"] = new JArray(3, 3, 3) }
+                    }
+                }
+            };
+
+            var result = ManageGameObject.HandleCommand(p);
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+
+            Assert.IsTrue(resultObj.Value<bool>("success"), resultObj.ToString());
+
+            var created = FindAndTrack("TestComponentsToAddObjectEntry");
+            Assert.IsNotNull(created);
+            var collider = created.GetComponent<BoxCollider>();
+            Assert.IsNotNull(collider, "BoxCollider should have been added");
+            Assert.AreEqual(new Vector3(3f, 3f, 3f), collider.size);
+        }
+
+        [Test]
+        public void Create_WithComponentPropertiesForComponentNotAdded_ReturnsErrorAndDestroysObject()
+        {
+            var p = new JObject
+            {
+                ["action"] = "create",
+                ["name"] = "TestComponentPropertiesMissingComponent",
+                ["componentProperties"] = new JObject
+                {
+                    ["BoxCollider"] = new JObject { ["size"] = new JArray(2, 2, 2) }
+                }
+            };
+
+            var result = ManageGameObject.HandleCommand(p);
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+
+            Assert.IsFalse(resultObj.Value<bool>("success"),
+                "Setting properties on a component that was never added should fail, not silently succeed");
+
+            var created = GameObject.Find("TestComponentPropertiesMissingComponent");
+            Assert.IsNull(created, "The partially-created GameObject should have been cleaned up");
+        }
+
+        [Test]
+        public void Create_WithMixedStringAndObjectComponentEntries_AddsAllAndAppliesProperties()
+        {
+            var p = new JObject
+            {
+                ["action"] = "create",
+                ["name"] = "TestMixedComponentEntries",
+                ["componentsToAdd"] = new JArray
+                {
+                    "Rigidbody",
+                    new JObject
+                    {
+                        ["typeName"] = "BoxCollider",
+                        ["properties"] = new JObject { ["size"] = new JArray(4, 4, 4) }
+                    }
+                }
+            };
+
+            var result = ManageGameObject.HandleCommand(p);
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+
+            Assert.IsTrue(resultObj.Value<bool>("success"), resultObj.ToString());
+
+            var created = FindAndTrack("TestMixedComponentEntries");
+            Assert.IsNotNull(created);
+            Assert.IsNotNull(created.GetComponent<Rigidbody>(), "Rigidbody should have been added");
+            var collider = created.GetComponent<BoxCollider>();
+            Assert.IsNotNull(collider, "BoxCollider should have been added");
+            Assert.AreEqual(new Vector3(4f, 4f, 4f), collider.size);
+        }
+
+        #endregion
+
         #region Response Structure Tests
 
         [Test]

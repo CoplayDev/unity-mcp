@@ -42,10 +42,13 @@ namespace MCPForUnity.Editor.Services.Server
             }
 
 #if UNITY_EDITOR_WIN
-            // cmd.exe /c "<command> >> "<log>" 2>&1"
+            // cmd.exe /c "<command> < NUL >> "<log>" 2>&1"
             // The whole payload after /c is wrapped in one outer pair of quotes; cmd strips the
             // outermost quotes, so inner quotes around the log path survive for paths with spaces.
-            string winRedirect = $"{command} >> \"{logFilePath}\" 2>&1";
+            // stdin is redirected from NUL because the Editor is a console-less GUI process: with
+            // CreateNoWindow and no console handle, uvx.exe would inherit an invalid stdin and die
+            // with "The handle is invalid. (os error 6)" before launching the server.
+            string winRedirect = $"{command} < NUL >> \"{logFilePath}\" 2>&1";
             return new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "cmd.exe",

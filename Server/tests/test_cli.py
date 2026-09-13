@@ -470,11 +470,29 @@ class TestCameraCommands:
             ])
             assert result.exit_code == 0
             mock_run.assert_called_once()
-            params = mock_run.call_args[0][2]
+            assert mock_run.call_args[0][0] == "manage_camera"
+            params = mock_run.call_args[0][1]
             assert params["captureSource"] == "scene_view"
             assert params["viewTarget"] == "Canvas"
             assert params["includeImage"] is True
 
+    def test_camera_ping_prints_output(self, runner, mock_unity_response):
+        """The camera group must actually emit its result.
+
+        Asserting only on run_command's arguments is what let the group ship
+        while formatting to a discarded string and printing nothing at all.
+        """
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["camera", "ping"])
+            assert result.exit_code == 0
+            assert result.output.strip() != ""
+
+    def test_camera_respects_json_format(self, runner, mock_unity_response):
+        """--format json must reach format_output, not be swallowed by a config object."""
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["--format", "json", "camera", "ping"])
+            assert result.exit_code == 0
+            json.loads(result.output)
 
 
 # =============================================================================

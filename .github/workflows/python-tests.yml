@@ -47,8 +47,11 @@ jobs:
       - name: Install dependencies
         run: |
           cd Server
-          uv sync
-          uv pip install -e ".[dev]"
+          # --locked fails if uv.lock disagrees with pyproject.toml instead of silently
+          # re-resolving, so a dependency or version bump that forgot `uv lock` shows up here.
+          # The dev extra is resolved in the lock too, so pytest runs against pinned versions
+          # instead of whatever `uv pip install` would fetch today.
+          uv sync --locked --extra dev
 
       - name: Run tests with coverage
         run: |

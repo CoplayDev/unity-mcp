@@ -1,6 +1,5 @@
 #nullable disable
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -223,61 +222,15 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 }
             }
 
-            var componentErrors = new List<object>();
-            if (@params["componentProperties"] is JObject componentPropertiesObj)
+            var componentPropertiesError = GameObjectComponentHelpers.ApplyComponentProperties(
+                targetGo, @params["componentProperties"] as JObject, out bool componentPropertiesModified);
+            if (componentPropertiesError != null)
             {
-                foreach (var prop in componentPropertiesObj.Properties())
-                {
-                    string compName = prop.Name;
-                    JObject propertiesToSet = prop.Value as JObject;
-                    if (propertiesToSet != null)
-                    {
-                        var setResult = GameObjectComponentHelpers.SetComponentPropertiesInternal(targetGo, compName, propertiesToSet);
-                        if (setResult != null)
-                        {
-                            componentErrors.Add(setResult);
-                        }
-                        else
-                        {
-                            modified = true;
-                        }
-                    }
-                }
+                return componentPropertiesError;
             }
-
-            if (componentErrors.Count > 0)
+            if (componentPropertiesModified)
             {
-                var aggregatedErrors = new List<string>();
-                foreach (var errorObj in componentErrors)
-                {
-                    try
-                    {
-                        var dataProp = errorObj?.GetType().GetProperty("data");
-                        var dataVal = dataProp?.GetValue(errorObj);
-                        if (dataVal != null)
-                        {
-                            var errorsProp = dataVal.GetType().GetProperty("errors");
-                            var errorsEnum = errorsProp?.GetValue(dataVal) as System.Collections.IEnumerable;
-                            if (errorsEnum != null)
-                            {
-                                foreach (var item in errorsEnum)
-                                {
-                                    var s = item?.ToString();
-                                    if (!string.IsNullOrEmpty(s)) aggregatedErrors.Add(s);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        McpLog.Warn($"[GameObjectModify] Error aggregating component errors: {ex.Message}");
-                    }
-                }
-
-                return new ErrorResponse(
-                    $"One or more component property operations failed on '{targetGo.name}'.",
-                    new { componentErrors = componentErrors, errors = aggregatedErrors }
-                );
+                modified = true;
             }
 
             if (!modified)
