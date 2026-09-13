@@ -36,6 +36,58 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+### Check a class before writing code against it
+
+> Does `Rigidbody` have `linearVelocity` in this Unity version?
+
+```json
+{
+  "action": "get_type",
+  "class_name": "Rigidbody"
+}
+```
+
+Returns member names only — a cheap way to confirm an API exists in the editor that is actually open, instead of trusting what the model remembers.
+
+### Get the exact signature of one member
+
+> Show every overload of `Physics.Raycast`.
+
+```json
+{
+  "action": "get_member",
+  "class_name": "Physics",
+  "member_name": "Raycast"
+}
+```
+
+Methods come back with `overload_count` and one entry per overload. If the name is not a method, property or field of the type, extension methods are tried last.
+
+### Resolve an ambiguous short name
+
+> Which `Button` types are loaded?
+
+```json
+{
+  "action": "get_type",
+  "class_name": "Button"
+}
+```
+
+When several loaded types share the short name, the response has `ambiguous: true` and a `matches` list of full names. Call again with one of them, e.g. `"class_name": "UnityEngine.UI.Button"`.
+
+### Find a type by partial name
+
+> Find my project's inventory classes.
+
+```json
+{
+  "action": "search",
+  "query": "Inventory",
+  "scope": "project"
+}
+```
+
+`scope` defaults to `unity` (UnityEngine / UnityEditor / Unity.* assemblies). `project` covers only the `Assembly-CSharp*` assemblies, so types in your own `.asmdef` assemblies need `packages` or `all`.
 <!-- examples:end -->
 
