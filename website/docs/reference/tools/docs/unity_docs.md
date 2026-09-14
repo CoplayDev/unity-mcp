@@ -44,16 +44,16 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 <!-- examples:start -->
 ### Look up several APIs in one call
 
-> Before writing the controller, pull the docs for raycasts, NavMeshAgent and 2D lights.
+> Before writing the controller, pull the docs for raycasts, NavMeshAgent and script execution order.
 
 ```json
 {
   "action": "lookup",
-  "queries": "Physics.Raycast,NavMeshAgent,Light2D"
+  "queries": "Physics.Raycast,NavMeshAgent,execution-order"
 }
 ```
 
-Searches ScriptReference, the Manual and package docs in parallel and returns one `results` entry per query.
+Searches ScriptReference and the Manual in parallel and returns one `results` entry per query, each with its `hits`. Package docs are only searched when `package` and `pkg_version` are also given; the query is then tried as a page slug of that package (e.g. `2d-index` with `com.unity.render-pipelines.universal` / `17.0`).
 
 ### Read one member's reference page
 
