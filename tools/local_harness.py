@@ -69,7 +69,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
@@ -230,6 +230,16 @@ def editor_relpath(platform: str | None = None) -> str:
     return "Editor/Unity"  # linux + everything else
 
 
+def _pure_path(platform: str) -> type[PurePath]:
+    """Path flavour for the *target* platform, not the host.
+
+    Discovery is parameterised by platform so it can be unit-tested for every OS
+    from any OS. `Path` would silently use the host's separator, which turns
+    "/home/dev/Unity" into "\\home\\dev\\Unity" when the tests run on Windows.
+    """
+    return PureWindowsPath if platform.startswith("win") else PurePosixPath
+
+
 def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None) -> list[str]:
     """Per-OS Hub Editor install roots (the directory that holds <version>/ dirs).
 
@@ -239,6 +249,7 @@ def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     home = env.get("HOME") or env.get("USERPROFILE") or str(Path.home())
+    P = _pure_path(plat)
     if plat == "darwin":
         return ["/Applications/Unity/Hub/Editor"]
     if plat.startswith("win"):
@@ -246,12 +257,12 @@ def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None
         for var in ("ProgramFiles", "ProgramFiles(x86)"):
             base = env.get(var)
             if base:
-                roots.append(str(Path(base) / "Unity" / "Hub" / "Editor"))
+                roots.append(str(P(base) / "Unity" / "Hub" / "Editor"))
         if not roots:
             roots.append(r"C:\Program Files\Unity\Hub\Editor")
         return roots
     # linux + everything else
-    return [str(Path(home) / "Unity" / "Hub" / "Editor")]
+    return [str(P(home) / "Unity" / "Hub" / "Editor")]
 
 
 def read_secondary_install_path(platform: str | None = None,
@@ -268,14 +279,15 @@ def read_secondary_install_path(platform: str | None = None,
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     home = env.get("HOME") or env.get("USERPROFILE") or str(Path.home())
+    P = _pure_path(plat)
     if plat == "darwin":
-        cfg = Path(home) / "Library" / "Application Support" / "UnityHub" / "secondaryInstallPath.json"
+        cfg = P(home) / "Library" / "Application Support" / "UnityHub" / "secondaryInstallPath.json"
     elif plat.startswith("win"):
-        appdata = env.get("APPDATA") or str(Path(home) / "AppData" / "Roaming")
-        cfg = Path(appdata) / "UnityHub" / "secondaryInstallPath.json"
+        appdata = env.get("APPDATA") or str(P(home) / "AppData" / "Roaming")
+        cfg = P(appdata) / "UnityHub" / "secondaryInstallPath.json"
     else:
-        xdg = env.get("XDG_CONFIG_HOME") or str(Path(home) / ".config")
-        cfg = Path(xdg) / "UnityHub" / "secondaryInstallPath.json"
+        xdg = env.get("XDG_CONFIG_HOME") or str(P(home) / ".config")
+        cfg = P(xdg) / "UnityHub" / "secondaryInstallPath.json"
 
     reader = read_text or (lambda p: Path(p).read_text(encoding="utf-8"))
     try:
@@ -310,6 +322,7 @@ def candidate_editor_paths(version: str,
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     relpath = editor_relpath(plat)
+    P = _pure_path(plat)
     out: list[str] = []
 
     if explicit_editor:
@@ -320,11 +333,11 @@ def candidate_editor_paths(version: str,
         out.append(env_editor)
 
     for root in hub_roots(plat, env):
-        out.append(str(Path(root) / version / relpath))
+        out.append(str(P(root) / version / relpath))
 
     sec = read_secondary_install_path(plat, env, read_text)
     if sec:
-        out.append(str(Path(sec) / version / relpath))
+        out.append(str(P(sec) / version / relpath))
 
     return out
 
@@ -392,7 +405,7 @@ def discover_editor(version: str,
             pv = parse_version(name)
             if (pv[0], pv[1]) != (target[0], target[1]):
                 continue
-            binary = str(Path(root) / name / relpath)
+            binary = str(_pure_path(plat)(root) / name / relpath)
             searched.append(binary)
             if not (_exists(binary) and _is_exec(binary)):
                 continue

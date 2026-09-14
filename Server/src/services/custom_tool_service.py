@@ -79,6 +79,13 @@ class CustomToolService:
 
     # --- HTTP Routes -----------------------------------------------------
     def _register_http_routes(self) -> None:
+        # The plugin registers custom tools over the hub WebSocket (register_tools message),
+        # so this REST route only serves local tooling. A remote-hosted server must not expose
+        # it: it carries no API-key check, so any caller could replace tool definitions for
+        # every tenant. Mirrors the /api/command gate in main.py.
+        if config.http_remote_hosted:
+            return
+
         @self._mcp.custom_route("/register-tools", methods=["POST"])
         async def register_tools(request: Request) -> JSONResponse:
             try:

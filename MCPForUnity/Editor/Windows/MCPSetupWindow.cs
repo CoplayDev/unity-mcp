@@ -25,6 +25,9 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement uvIndicator;
         private Label uvVersion;
         private Label uvDetails;
+        private VisualElement gitIndicator;
+        private Label gitVersion;
+        private Label gitDetails;
         private Label statusMessage;
         private VisualElement installationSection;
         private Label installationInstructions;
@@ -88,6 +91,9 @@ namespace MCPForUnity.Editor.Windows
             uvIndicator = rootVisualElement.Q<VisualElement>("uv-indicator");
             uvVersion = rootVisualElement.Q<Label>("uv-version");
             uvDetails = rootVisualElement.Q<Label>("uv-details");
+            gitIndicator = rootVisualElement.Q<VisualElement>("git-indicator");
+            gitVersion = rootVisualElement.Q<Label>("git-version");
+            gitDetails = rootVisualElement.Q<Label>("git-details");
             statusMessage = rootVisualElement.Q<Label>("status-message");
             installationSection = rootVisualElement.Q<VisualElement>("installation-section");
             installationInstructions = rootVisualElement.Q<Label>("installation-instructions");
@@ -328,6 +334,13 @@ namespace MCPForUnity.Editor.Windows
                 UpdateDependencyStatus(uvIndicator, uvVersion, uvDetails, uvDep);
             }
 
+            // Update git status (optional dependency: never blocks readiness)
+            var gitDep = _dependencyResult.Dependencies.Find(d => d.Name == "Git");
+            if (gitDep != null)
+            {
+                UpdateDependencyStatus(gitIndicator, gitVersion, gitDetails, gitDep);
+            }
+
             // Offer the one-click uv installer only when uv is actually missing
             bool uvMissing = uvDep != null && !uvDep.IsAvailable;
             if (installUvButton != null)
@@ -352,7 +365,7 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private void UpdateDependencyStatus(VisualElement indicator, Label versionLabel, Label detailsLabel, DependencyStatus dep)
+        internal static void UpdateDependencyStatus(VisualElement indicator, Label versionLabel, Label detailsLabel, DependencyStatus dep)
         {
             if (dep.IsAvailable)
             {
@@ -362,13 +375,24 @@ namespace MCPForUnity.Editor.Windows
                 detailsLabel.text = dep.Details ?? "Available";
                 detailsLabel.style.color = new StyleColor(Color.gray);
             }
-            else
+            else if (dep.IsRequired)
             {
                 indicator.RemoveFromClassList("valid");
                 indicator.AddToClassList("invalid");
                 versionLabel.text = "Not Found";
                 detailsLabel.text = dep.ErrorMessage ?? "Not available";
                 detailsLabel.style.color = new StyleColor(Color.red);
+            }
+            else
+            {
+                // A missing optional dependency is information, not a blocker. Drop both state
+                // classes so the dot keeps the neutral grey of .status-indicator-small instead of
+                // the red .invalid reserved for required ones, and say what it is for.
+                indicator.RemoveFromClassList("valid");
+                indicator.RemoveFromClassList("invalid");
+                versionLabel.text = "Not Found";
+                detailsLabel.text = dep.Details ?? dep.ErrorMessage ?? "Not available";
+                detailsLabel.style.color = new StyleColor(Color.gray);
             }
         }
     }

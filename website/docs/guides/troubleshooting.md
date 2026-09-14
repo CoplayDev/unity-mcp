@@ -146,6 +146,63 @@ Unity AI Assistant bundles `System.Collections.Immutable` v10, while MCP for Uni
 
 ---
 
+## Unity 6.5: Editor hangs on load and the bridge never connects
+
+If Unity 6000.5.x spins at ~100% CPU on startup and never opens the Editor window, check `Packages/manifest.json` for `com.unity.ai.assistant` (and `com.unity.ai.inference`, `com.unity.asset-manager-for-unity`).
+
+**Symptoms:**
+- The Editor never finishes loading, so MCP for Unity never arms its bridge — which looks like an MCP connection failure
+- Stack traces sit inside `AssetDatabase::InitialRefresh` → `SourceAssetScanner::Refresh` → `GuidDB::ValidateChangedGUIDs`
+
+**Cause:**
+The pre-release AI packages can livelock `AssetDatabase::InitialRefresh`. This happens before any MCP for Unity assembly is loaded, so no MCP code is involved.
+
+**Fix:** remove those packages from `manifest.json`, **delete `Packages/packages-lock.json`** (it re-resolves them otherwise), then clear `Library/`. Disabling the package is not enough — the AI packages re-add each other.
+
+This is a Unity bug (UUM-132096), not an MCP for Unity one.
+
+*Reported by [@100yenadmin](https://github.com/CoplayDev/unity-mcp/issues/1219).*
+
+---
+
+## Package Manager: "Error when executing git command" / "not in a git directory"
+
+Adding the package from a Git URL makes the Package Manager shell out to `git`. Two things make that fail:
+
+1. **git is not installed or not on PATH.** Install it from [git-scm.com](https://git-scm.com/downloads) and restart Unity so the Editor picks up the new PATH. The setup window (**Window → MCP for Unity → Local Setup Window**) shows a **Git (optional)** row so you can confirm the Editor sees it.
+2. **git refuses the folder.** Newer git versions decline to run inside a directory owned by a different user account (external drives, shared folders, projects created by another account). The Package Manager surfaces this as `fatal: not in a git directory`. Tell git the folder is yours:
+
+```bash
+# trust this one project
+git config --global --add safe.directory "/path/to/the/unity/project"
+
+# or trust every repository under a folder — the trailing /* is required
+git config --global --add safe.directory "/path/to/the/parent/folder/*"
+```
+
+A plain directory path only trusts that exact repository; the `/*` suffix is what extends it to the repositories underneath. Restart Unity and add the package again.
+
+Git is only needed for this install path; the bridge itself does not use it, so a missing git never blocks setup.
+
+*Reported by [@Cherrymocha](https://github.com/CoplayDev/unity-mcp/issues/1216).*
+
+## Codex: `resources/read failed: unknown MCP server`
+
+The `mcpforunity://` URI names the *resource*, not the server. Some clients take a separate server key on a resource read.
+
+In Codex, tools are exposed as `mcp__unityMCP__*`, but `resources/read` wants the discovery key on its own:
+
+```
+server: "unityMCP"
+uri: "mcpforunity://custom-tools"
+```
+
+If a read fails with an unknown-server error, list resources first and use the key exactly as returned.
+
+*Reported by [@drewclifton](https://github.com/CoplayDev/unity-mcp/issues/1220).*
+
+---
+
 ## "No Unity Instances Found"
 
 :::tip When in doubt, restart your client

@@ -45,7 +45,14 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public event Action<string> OnConfigurationChanged;
 
+        // A headless CI/harness editor (McpCiBoot) must run stdio no matter what the machine-wide
+        // EditorPrefs say: on Windows those prefs are per-user, so a developer who uses HTTP would
+        // otherwise have HttpAutoStartHandler stop the stdio bridge the harness is talking to.
+        // SessionState lives exactly as long as that editor process and survives its domain reloads.
+        internal const string SessionKeyForceStdio = "MCPForUnity.ForceStdioForSession";
+
         // Cached values - most frequently read
+        private bool _forceStdioForSession;
         private bool _useHttpTransport;
         private bool _debugLogs;
         private bool _devModeForceServerRefresh;
@@ -59,9 +66,9 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// Whether to use HTTP transport (true) or Stdio transport (false).
-        /// Default: true
+        /// Default: true. Always false while <see cref="PinStdioForSession"/> is in effect.
         /// </summary>
-        public bool UseHttpTransport => _useHttpTransport;
+        public bool UseHttpTransport => !_forceStdioForSession && _useHttpTransport;
 
         /// <summary>
         /// Whether debug logging is enabled.
@@ -128,6 +135,7 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void Refresh()
         {
+            _forceStdioForSession = SessionState.GetBool(SessionKeyForceStdio, false);
             _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
@@ -138,6 +146,31 @@ namespace MCPForUnity.Editor.Services
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
             _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
             _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
+        }
+
+        /// <summary>
+        /// Force stdio transport for the rest of this editor session without touching EditorPrefs.
+        /// Every UseHttpTransport consumer (auto-start, reload handlers, BridgeControlService,
+        /// client configurators) sees stdio until <see cref="UnpinStdioForSession"/> or editor exit.
+        /// </summary>
+        public void PinStdioForSession()
+        {
+            SessionState.SetBool(SessionKeyForceStdio, true);
+            if (!_forceStdioForSession)
+            {
+                _forceStdioForSession = true;
+                OnConfigurationChanged?.Invoke(nameof(UseHttpTransport));
+            }
+        }
+
+        public void UnpinStdioForSession()
+        {
+            SessionState.EraseBool(SessionKeyForceStdio);
+            if (_forceStdioForSession)
+            {
+                _forceStdioForSession = false;
+                OnConfigurationChanged?.Invoke(nameof(UseHttpTransport));
+            }
         }
 
         /// <summary>

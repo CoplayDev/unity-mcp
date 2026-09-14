@@ -654,20 +654,43 @@ class TestTelemetryDuration:
 class TestServerConfigDefaults:
     """Tests for ServerConfig default values."""
 
-    def test_config_default_values(self):
+    def test_config_default_values(self, monkeypatch):
         """Verify ServerConfig has expected default values."""
+        # Clear env overrides so the defaults aren't masked by the ambient env.
+        monkeypatch.delenv("UNITY_MCP_CONNECTION_TIMEOUT", raising=False)
+        monkeypatch.delenv("UNITY_MCP_COMMAND_TOTAL_TIMEOUT", raising=False)
         config = ServerConfig()
 
         assert config.unity_host == "127.0.0.1"
         assert config.unity_port == 6400
         assert config.mcp_port == 6500
-        assert config.connection_timeout == 30.0
+        assert config.connection_timeout == 300.0
+        assert config.command_total_timeout == 600.0
         assert config.buffer_size == 16 * 1024 * 1024
         assert config.require_framing is True
         assert config.handshake_timeout == 1.0
         assert config.framed_receive_timeout == 2.0
         assert config.max_heartbeat_frames == 16
         assert config.heartbeat_timeout == 2.0
+
+    def test_timeout_env_overrides_are_honored(self, monkeypatch):
+        """Valid env overrides for the stdio timeouts are applied."""
+        monkeypatch.setenv("UNITY_MCP_CONNECTION_TIMEOUT", "120.5")
+        monkeypatch.setenv("UNITY_MCP_COMMAND_TOTAL_TIMEOUT", "240")
+        config = ServerConfig()
+
+        assert config.connection_timeout == 120.5
+        assert config.command_total_timeout == 240.0
+
+    @pytest.mark.parametrize("bad_value", ["0", "-5", "abc", "", "inf", "Infinity", "1e309", "nan"])
+    def test_timeout_env_invalid_values_fall_back(self, monkeypatch, bad_value):
+        """Invalid, non-positive, or non-finite overrides preserve the defaults."""
+        monkeypatch.setenv("UNITY_MCP_CONNECTION_TIMEOUT", bad_value)
+        monkeypatch.setenv("UNITY_MCP_COMMAND_TOTAL_TIMEOUT", bad_value)
+        config = ServerConfig()
+
+        assert config.connection_timeout == 300.0
+        assert config.command_total_timeout == 600.0
 
     def test_config_logging_defaults(self):
         """Verify logging configuration defaults."""

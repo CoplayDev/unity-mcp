@@ -1,0 +1,113 @@
+name: Compile Check (no license)
+
+# Real semantic compile verification for EVERY pull request, including forks.
+#
+# unity-tests.yml needs Unity license secrets, and GitHub withholds secrets from runs
+# triggered by a fork's pull request -- so it skips and reports a green check having
+# compiled nothing. Since practically every PR to this repo comes from a fork, that has
+# meant no PR was ever compile-verified.
+#
+# This job never launches the Unity Editor, so it needs no license and no secrets. It
+# pulls the PUBLIC unityci/editor image purely to read reference assemblies out of it,
+# and drives Roslyn (Unity's own bundled csc) directly. See tools/compile-check.sh.
+#
+# It does NOT replace unity-tests.yml: this compiles, it does not run tests.
+
+on:
+  push:
+    branches-ignore: [beta, main]
+    paths: &paths
+      - MCPForUnity/Editor/**
+      - MCPForUnity/Runtime/**
+      - tools/compile-check.sh
+      - tools/compile-defines.txt
+      - tools/compile-refs/**
+      - tools/unity-versions.json
+      - .github/workflows/compile-check.yml
+  pull_request:
+    branches: [main, beta]
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compile-check-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Transitive package deps of the Editor asmdef. Not listed in the project manifest --
+  # these are the versions Unity resolves into Library/PackageCache. Bump alongside
+  # tools/compile-refs/*.txt when the pinned Unity version changes.
+  NEWTONSOFT_VERSION: "3.2.1"
+  NUNIT_VERSION: "1.0.6"
+
+jobs:
+  compile:
+    name: Compile MCPForUnity (win/osx/linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve pinned Unity version
+        id: unity
+        run: |
+          set -euo pipefail
+          version=$(jq -r '.defaultVersion' tools/unity-versions.json)
+          [ -n "$version" ] && [ "$version" != "null" ] || { echo "::error::defaultVersion missing"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=unityci/editor:ubuntu-$version-base-3" >> "$GITHUB_OUTPUT"
+          echo "Unity $version"
+
+      - name: Fetch package reference DLLs
+        run: |
+          set -euo pipefail
+          mkdir -p .compile-refs
+          # packages.unity.com is a public registry -- no credentials, no Unity account.
+          fetch() {
+            local pkg="$1" ver="$2" inner="$3"
+            echo "fetching $pkg@$ver"
+            curl -fsSL "https://packages.unity.com/$pkg/-/$pkg-$ver.tgz" -o /tmp/$pkg.tgz
+            tar -xzf /tmp/$pkg.tgz -C /tmp "package/$inner"
+            cp "/tmp/package/$inner" .compile-refs/
+          }
+          fetch com.unity.nuget.newtonsoft-json "$NEWTONSOFT_VERSION" Runtime/Newtonsoft.Json.dll
+          fetch com.unity.ext.nunit            "$NUNIT_VERSION"       net35/unity-custom/nunit.framework.dll
+          ls -la .compile-refs/
+
+      - name: Compile
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/repo" -w /repo \
+            -e UNITY_VERSION="${{ steps.unity.outputs.version }}" \
+            -e UNITY_DATA=/opt/unity/Editor/Data \
+            -e REPO=/repo \
+            -e EXTRA_REFS=/repo/.compile-refs \
+            "${{ steps.unity.outputs.image }}" \
+            bash /repo/tools/compile-check.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            {
+              echo "## Compile check passed"
+              echo
+              echo "\`MCPForUnity.Runtime\` and \`MCPForUnity.Editor\` compiled against Unity"
+              echo "\`${{ steps.unity.outputs.version }}\` reference assemblies for **win, osx and linux**."
+              echo
+              echo "No Unity license was used, so this runs on fork PRs too."
+              echo "Note: this compiles the code, it does not run the test suite."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Compile check FAILED"
+              echo
+              echo "The C# does not compile against Unity \`${{ steps.unity.outputs.version }}\`."
+              echo "See the Compile step log for the exact errors and the platform each belongs to."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -4,6 +4,8 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.Build;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Build
@@ -110,6 +112,7 @@ namespace MCPForUnity.Editor.Tools.Build
 
             try
             {
+                SaveBeforeBuild();
                 BuildReport report = buildFunc();
                 job.CompletedAt = DateTime.UtcNow;
 
@@ -229,6 +232,43 @@ namespace MCPForUnity.Editor.Tools.Build
                 .Where(s => s.enabled)
                 .Select(s => s.path)
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Saves assets and dirty open scenes before building so BuildPipeline does not block on
+        /// a save dialog. Scenes that have never been saved carry an empty path, and handing one
+        /// to Unity's save API opens the modal "Save Scene" file panel — the exact block this is
+        /// meant to prevent — so those are skipped with a warning instead. Mirrors the guard in
+        /// TestRunnerService.SaveDirtyScenes.
+        /// </summary>
+        internal static void SaveBeforeBuild()
+        {
+            AssetDatabase.SaveAssets();
+
+            int sceneCount = SceneManager.sceneCount;
+            for (int i = 0; i < sceneCount; i++)
+            {
+                Scene scene = SceneManager.GetSceneAt(i);
+                if (!scene.isDirty) continue;
+
+                if (string.IsNullOrEmpty(scene.path))
+                {
+                    McpLog.Warn(
+                        $"[MCP Build] Skipping unsaved scene '{scene.name}': it has never been saved, " +
+                        "so saving it would open a modal file dialog. Save it manually, or the build " +
+                        "will use the last saved state of the build-settings scenes.");
+                    continue;
+                }
+
+                try
+                {
+                    EditorSceneManager.SaveScene(scene);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[MCP Build] Failed to save dirty scene '{scene.name}': {ex.Message}");
+                }
+            }
         }
     }
 }

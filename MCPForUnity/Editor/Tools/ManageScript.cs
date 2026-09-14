@@ -2758,6 +2758,14 @@ namespace MCPForUnity.Editor.Tools
                 string returnType = sm.Groups[1].Value;
                 string methodName = sm.Groups[2].Value;
                 if (string.Equals(returnType, "new", StringComparison.Ordinal)) continue; // constructor invocation, not a method declaration
+                // A punctuation "return type" means this match is a CALL, not a declaration:
+                // the opening brace of a method body ("{ Foo();") or an expression-bodied
+                // member ("=> Foo();"). Both sit at class-member depth, so the brace-depth
+                // guard below cannot reject them.
+                if (returnType.Length == 0) continue;
+                char returnTypeStart = returnType[0];
+                if (!char.IsLetter(returnTypeStart) && returnTypeStart != '_'
+                    && returnTypeStart != '@' && returnTypeStart != '(') continue;
                 if (IsCSharpKeyword(methodName)) continue;
                 int paramCount = CountTopLevelParams(sm.Groups[3].Value);
                 string paramTypes = ExtractParamTypes(sm.Groups[3].Value);

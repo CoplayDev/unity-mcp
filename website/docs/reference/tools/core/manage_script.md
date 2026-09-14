@@ -84,6 +84,6 @@ Returns the full file. For just a SHA (to detect drift between reads and writes)
 
 ### After every create / delete
 
-Unity needs a domain reload to compile the new file (or notice the old one is gone). Poll the `editor_state` resource's `isCompiling` field until it flips back to `false`, then run [`read_console`](./read_console) to catch any compile errors before relying on the new types.
+Unity needs a domain reload to compile the new file (or notice the old one is gone). Poll the `mcpforunity://editor/state` resource until `data.compilation.is_compiling` flips back to `false`, then run [`read_console`](./read_console) to catch any compile errors before relying on the new types.
 <!-- examples:end -->
 

@@ -114,14 +114,8 @@ namespace MCPForUnity.Editor.Services
             }
 
             // If the editor is not compiling, attempt an immediate restart without relying on editor focus.
-            bool isCompiling = EditorApplication.isCompiling;
-            try
-            {
-                var pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                var prop = pipeline?.GetProperty("isCompiling", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (prop != null) isCompiling |= (bool)prop.GetValue(null);
-            }
-            catch { }
+            // Routed through EditorStateCache so a deferred reload (issue #1276) does not block resume.
+            bool isCompiling = EditorStateCache.GetActualIsCompiling();
 
             if (!isCompiling)
             {

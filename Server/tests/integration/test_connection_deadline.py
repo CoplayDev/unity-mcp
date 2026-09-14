@@ -11,6 +11,8 @@ import pytest
 
 from core.config import config
 import transport.legacy.unity_connection as uc
+from models.models import UnityInstanceInfo
+from transport.legacy.stdio_port_registry import StdioPortRegistry
 from transport.legacy.unity_connection import UnityConnection
 
 
@@ -108,3 +110,50 @@ def test_reload_signal_drops_socket_for_fresh_reconnect(silent_bridge, tmp_path)
     response = conn.send_command("get_editor_state", {})
     assert conn.sock is None
     assert uc._extract_response_reason(response) == "reloading"
+
+
+def test_connection_failure_refreshes_cached_port_before_backoff(monkeypatch) -> None:
+    instance_id = "Repro@deadbeef"
+    discovered_port = 6400
+
+    def discover_instances() -> list[UnityInstanceInfo]:
+        return [
+            UnityInstanceInfo(
+                id=instance_id,
+                name="Repro",
+                path="/tmp/Repro/Assets",
+                hash="deadbeef",
+                port=discovered_port,
+                status="running",
+            )
+        ]
+
+    registry = StdioPortRegistry()
+    monkeypatch.setattr(
+        "transport.legacy.stdio_port_registry.PortDiscovery.discover_all_unity_instances",
+        discover_instances,
+    )
+    monkeypatch.setattr(config, "port_registry_ttl", 60.0)
+
+    assert registry.get_port(instance_id) == 6400
+    discovered_port = 6401
+
+    monkeypatch.setattr(uc, "stdio_port_registry", registry)
+    conn = UnityConnection(port=6400, instance_id=instance_id)
+    attempted_ports: list[int] = []
+    ports_before_backoff: list[int] = []
+
+    def fail_connect(connect_timeout: float | None = None) -> bool:
+        attempted_ports.append(conn.port)
+        return False
+
+    monkeypatch.setattr(conn, "connect", fail_connect)
+    monkeypatch.setattr(
+        uc.time, "sleep", lambda _seconds: ports_before_backoff.append(conn.port)
+    )
+
+    with pytest.raises(ConnectionError, match="Could not connect to Unity"):
+        conn.send_command("get_editor_state", {}, max_attempts=1)
+
+    assert attempted_ports == [6400, 6401]
+    assert ports_before_backoff == [6401]

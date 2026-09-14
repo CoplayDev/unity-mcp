@@ -136,9 +136,33 @@ namespace MCPForUnity.Editor.Services.Transport
             return mode switch
             {
                 TransportMode.Http => _httpState,
-                TransportMode.Stdio => _stdioState,
+                TransportMode.Stdio => ReconciledStdioState(),
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
             };
+        }
+
+        /// <summary>
+        /// The stdio bridge can start or stop outside this manager: after a domain reload the
+        /// listener resumes through StdioBridgeHost's editor-idle retry once the OS releases
+        /// the port, bypassing StartAsync entirely (CI auto-start does the same). Without
+        /// reconciling, the cached snapshot stays "Disconnected" and the editor window reports
+        /// a dead bridge while it is actually serving requests — until a manual Verify. A
+        /// stop/start cycle between two reads can also rebind to a different port while both
+        /// snapshots stay "connected", so the bound port is reconciled too.
+        /// </summary>
+        private TransportState ReconciledStdioState()
+        {
+            IMcpTransportClient client = GetOrCreateClient(TransportMode.Stdio);
+            TransportState live = client.State;
+            bool connectivityChanged = client.IsConnected != _stdioState.IsConnected;
+            bool portChanged = client.IsConnected && live?.Port != _stdioState.Port;
+            if (connectivityChanged || portChanged)
+            {
+                _stdioState = live ?? (client.IsConnected
+                    ? TransportState.Connected(client.TransportName)
+                    : TransportState.Disconnected(client.TransportName));
+            }
+            return _stdioState;
         }
 
         public bool IsRunning(TransportMode mode) => GetState(mode).IsConnected;

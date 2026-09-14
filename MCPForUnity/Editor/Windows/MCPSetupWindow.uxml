@@ -11,7 +11,7 @@
             <ui:VisualElement class="section">
                 <ui:Label text="System Requirements" class="section-title" />
                 <ui:VisualElement class="section-content">
-                    <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function." class="help-text description-text" />
+                    <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function. Git is only needed to install or update the package from a Git URL." class="help-text description-text" />
 
                     <!-- Dependency Status -->
                     <ui:VisualElement name="dependency-list">
@@ -33,6 +33,16 @@
                                 <ui:VisualElement name="uv-indicator" class="status-indicator-small" />
                             </ui:VisualElement>
                             <ui:Label name="uv-details" class="help-text dependency-details" />
+                        </ui:VisualElement>
+
+                        <!-- Git Status (optional) -->
+                        <ui:VisualElement class="dependency-item">
+                            <ui:VisualElement class="dependency-row">
+                                <ui:Label text="Git (optional)" class="dependency-name" />
+                                <ui:Label name="git-version" text="..." class="setting-value" />
+                                <ui:VisualElement name="git-indicator" class="status-indicator-small" />
+                            </ui:VisualElement>
+                            <ui:Label name="git-details" class="help-text dependency-details" />
                         </ui:VisualElement>
                     </ui:VisualElement>
 

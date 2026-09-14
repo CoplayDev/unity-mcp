@@ -48,6 +48,103 @@ namespace MCPForUnityTests.Editor.Services
             client.Pending.SetResult(true); // let the shared attempt finish
         }
 
+        /// <summary>
+        /// Stdio fake whose connectivity is flipped by the test without going through
+        /// StartAsync/StopAsync — mirrors StdioBridgeHost binding via its editor-idle
+        /// retry after a busy-port domain reload, which bypasses TransportManager.
+        /// </summary>
+        private sealed class ExternallyControlledStdioClient : IMcpTransportClient
+        {
+            public bool Connected;
+            public int Port = 6400;
+
+            public bool IsConnected => Connected;
+            public string TransportName => "stdio";
+            public TransportState State => Connected
+                ? TransportState.Connected("stdio", port: Port)
+                : TransportState.Disconnected("stdio", "Bridge not running");
+
+            public Task<bool> StartAsync()
+            {
+                Connected = true;
+                return Task.FromResult(true);
+            }
+
+            public Task StopAsync()
+            {
+                Connected = false;
+                return Task.CompletedTask;
+            }
+
+            public Task<bool> VerifyAsync() => Task.FromResult(Connected);
+            public Task ReregisterToolsAsync() => Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// The bridge binding via its editor-idle retry (no StartAsync) must surface as
+        /// connected through GetState/IsRunning, port included.
+        /// </summary>
+        [Test]
+        public void GetState_Stdio_ReconcilesWhenBridgeStartsOutsideManager()
+        {
+            var client = new ExternallyControlledStdioClient();
+            var manager = new TransportManager();
+            manager.Configure(() => client, () => client);
+
+            Assert.IsFalse(manager.IsRunning(TransportMode.Stdio), "sanity: starts disconnected");
+
+            client.Connected = true; // bridge bound via editor-idle retry, no StartAsync involved
+
+            Assert.IsTrue(manager.IsRunning(TransportMode.Stdio),
+                "manager must report the live bridge even when it started outside StartAsync");
+            TransportState state = manager.GetState(TransportMode.Stdio);
+            Assert.IsTrue(state.IsConnected);
+            Assert.AreEqual(6400, state.Port, "reconciled state comes from the client, port included");
+        }
+
+        /// <summary>
+        /// A listener that died without StopAsync (e.g. socket teardown on reload) must stop
+        /// being reported as connected.
+        /// </summary>
+        [Test]
+        public void GetState_Stdio_ReconcilesWhenBridgeStopsOutsideManager()
+        {
+            var client = new ExternallyControlledStdioClient();
+            var manager = new TransportManager();
+            manager.Configure(() => client, () => client);
+
+            Task<bool> started = manager.StartAsync(TransportMode.Stdio);
+            Assert.IsTrue(started.IsCompleted && started.Result, "fake start completes synchronously");
+            Assert.IsTrue(manager.IsRunning(TransportMode.Stdio));
+
+            client.Connected = false; // listener died without StopAsync (e.g. socket teardown on reload)
+
+            Assert.IsFalse(manager.IsRunning(TransportMode.Stdio),
+                "manager must not report a bridge that is no longer listening");
+        }
+
+        /// <summary>
+        /// A stop/start cycle between two reads can rebind to a different port while both
+        /// snapshots stay "connected" (the 6400↔6401 busy-port fallback); GetState must
+        /// surface the new port, not the stale one.
+        /// </summary>
+        [Test]
+        public void GetState_Stdio_ReconcilesWhenBridgePortChangesWhileConnected()
+        {
+            var client = new ExternallyControlledStdioClient();
+            var manager = new TransportManager();
+            manager.Configure(() => client, () => client);
+
+            client.Connected = true;
+            Assert.AreEqual(6400, manager.GetState(TransportMode.Stdio).Port, "sanity: initial port");
+
+            client.Port = 6401; // bridge restarted onto the fallback port between reads
+
+            TransportState state = manager.GetState(TransportMode.Stdio);
+            Assert.IsTrue(state.IsConnected);
+            Assert.AreEqual(6401, state.Port, "a rebind while connected must refresh the reported port");
+        }
+
         [Test]
         public void StartAsync_AfterCompletedStart_StartsFresh()
         {

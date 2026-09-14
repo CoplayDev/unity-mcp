@@ -43,10 +43,17 @@ def _tool_modules() -> list[str]:
     return mods
 
 
+# Registry-wide guards name many tools at once to assert one cross-cutting
+# property. That is not coverage of any individual tool, so they don't count
+# here -- otherwise one such file would silently satisfy this guard for every
+# tool it happens to mention.
+NOT_COVERAGE = {"test_tool_test_symmetry.py", "test_tool_annotations.py"}
+
+
 def _is_referenced(stem: str) -> bool:
     pattern = re.compile(rf"\b{re.escape(stem)}\b")
     for test_file in TESTS_DIR.rglob("test_*.py"):
-        if test_file.resolve() == Path(__file__).resolve():
+        if test_file.name in NOT_COVERAGE:
             continue
         if pattern.search(test_file.read_text(encoding="utf-8")):
             return True
