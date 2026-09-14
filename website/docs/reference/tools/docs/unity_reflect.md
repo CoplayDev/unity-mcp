@@ -47,7 +47,7 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 }
 ```
 
-Returns member names only — a cheap way to confirm an API exists in the editor that is actually open, instead of trusting what the model remembers.
+Returns type metadata (namespace, assembly, base class, interfaces) plus the names of its methods, properties, fields and events, its extension methods and any obsolete members — no signatures. A cheap way to confirm an API exists in the editor that is actually open, instead of trusting what the model remembers.
 
 ### Get the exact signature of one member
 
