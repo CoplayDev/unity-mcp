@@ -39,6 +39,43 @@ namespace MCPForUnityTests.Editor.Setup
                 + string.Join(", ", missing));
         }
 
+        /// <summary>
+        /// RoslynInstaller ships the compiler layer only (Microsoft.CodeAnalysis + CSharp). The
+        /// Workspaces layer (AdhocWorkspace, Formatter, Microsoft.CodeAnalysis.Formatting) lives in
+        /// Microsoft.CodeAnalysis.Workspaces.dll / Microsoft.CodeAnalysis.CSharp.Workspaces.dll, which
+        /// the installer does not download and the asmdef does not reference. Any use of it under
+        /// USE_ROSLYN turns into CS0234 the moment the define is enabled (issue #1391).
+        /// </summary>
+        [Test]
+        public void EditorSources_DoNotUseRoslynWorkspacesLayer()
+        {
+            string[] workspacesApis =
+            {
+                "Microsoft.CodeAnalysis.Formatting",
+                "Microsoft.CodeAnalysis.Workspaces",
+                "AdhocWorkspace",
+            };
+
+            string editorRoot = Path.GetDirectoryName(ReadEditorAsmdefPath());
+            List<string> offenders = new List<string>();
+            foreach (string file in Directory.GetFiles(editorRoot, "*.cs", SearchOption.AllDirectories))
+            {
+                string source = File.ReadAllText(file);
+                foreach (string api in workspacesApis)
+                {
+                    if (source.IndexOf(api, StringComparison.Ordinal) >= 0)
+                    {
+                        offenders.Add($"{Path.GetFileName(file)} uses {api}");
+                    }
+                }
+            }
+
+            CollectionAssert.IsEmpty(offenders,
+                "MCPForUnity.Editor must only use the Roslyn compiler layer that RoslynInstaller installs; "
+                + "the Workspaces layer is not shipped or referenced, so USE_ROSLYN would fail to compile. Found: "
+                + string.Join(", ", offenders));
+        }
+
         private static List<string> GetInstallerDllNames()
         {
             FieldInfo field = typeof(RoslynInstaller).GetField(
@@ -58,10 +95,15 @@ namespace MCPForUnityTests.Editor.Setup
 
         private static string ReadEditorAsmdefJson()
         {
+            return File.ReadAllText(ReadEditorAsmdefPath());
+        }
+
+        private static string ReadEditorAsmdefPath()
+        {
             string path = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName("MCPForUnity.Editor");
             Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate MCPForUnity.Editor.asmdef");
             Assert.IsTrue(File.Exists(path), $"asmdef path does not exist: {path}");
-            return File.ReadAllText(path);
+            return path;
         }
     }
 }
