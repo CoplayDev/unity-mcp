@@ -16,6 +16,10 @@ namespace MCPForUnityTests.Editor.Setup
     /// </summary>
     public class RoslynAsmdefReferenceTests
     {
+        /// <summary>
+        /// Every DLL name RoslynInstaller downloads must appear in MCPForUnity.Editor.asmdef's
+        /// precompiledReferences, otherwise USE_ROSLYN cannot resolve the compiler assemblies.
+        /// </summary>
         [Test]
         public void EditorAsmdef_ReferencesEveryDllRoslynInstallerInstalls()
         {
@@ -76,6 +80,10 @@ namespace MCPForUnityTests.Editor.Setup
                 + string.Join(", ", offenders));
         }
 
+        /// <summary>
+        /// Reads the DLL file names from RoslynInstaller's private NuGetEntries table via reflection,
+        /// so the test tracks the installer's real download list instead of a hard-coded copy.
+        /// </summary>
         private static List<string> GetInstallerDllNames()
         {
             FieldInfo field = typeof(RoslynInstaller).GetField(
@@ -93,11 +101,18 @@ namespace MCPForUnityTests.Editor.Setup
             return names;
         }
 
+        /// <summary>
+        /// Returns the raw JSON of MCPForUnity.Editor.asmdef.
+        /// </summary>
         private static string ReadEditorAsmdefJson()
         {
             return File.ReadAllText(ReadEditorAsmdefPath());
         }
 
+        /// <summary>
+        /// Resolves MCPForUnity.Editor.asmdef on disk through the compilation pipeline and fails the
+        /// test if it cannot be found.
+        /// </summary>
         private static string ReadEditorAsmdefPath()
         {
             string path = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName("MCPForUnity.Editor");
