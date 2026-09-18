@@ -30,7 +30,7 @@ Before applying a template:
 **If a tool you need is not in your tool list, it is not necessarily missing.** Check these before troubleshooting the connection:
 
 - **Project custom tools** (C# `[McpForUnityTool]`): with project-scoped tools enabled on the server, they are *not* callable by name. List them via `mcpforunity://custom-tools` and run them with `execute_custom_tool(tool_name="...", parameters={...})`. With it disabled, they are registered as ordinary tools and appear in your list.
-- **Disabled tool groups**: only the `core` group is enabled by default. `manage_tools(action="list_groups")` shows the groups, `manage_tools(action="activate", group="...")` enables one.
+- **Disabled tool groups**: over HTTP, a session starts with only the `core` group enabled. Over stdio, all groups start enabled and are then synced to the tool toggles in the Unity editor, so a tool can still be hidden. `manage_tools(action="list_groups")` shows the groups, `manage_tools(action="activate", group="...")` enables one.
 
 ## Critical Best Practices
 
