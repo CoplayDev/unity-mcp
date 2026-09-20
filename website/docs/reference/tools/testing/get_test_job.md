@@ -30,6 +30,43 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+### Wait for a run to finish
+
+> Wait for the test job I just started and show the failures.
+
+```json
+{
+  "job_id": "<job_id from run_tests>",
+  "wait_timeout": 60,
+  "include_failed_tests": true
+}
+```
+
+With `wait_timeout`, the server polls Unity every 2 seconds and returns as soon as `status` is `succeeded`, `failed` or `cancelled` — or after 60 s with the current progress, in which case call it again. This avoids a tight client-side polling loop.
+
+### Check progress without waiting
+
+> How far along is the test run?
+
+```json
+{
+  "job_id": "<job_id from run_tests>"
+}
+```
+
+Returns straight away. `data.progress` has `completed` / `total`, the test currently running, and `failures_so_far`; `data.result.summary` appears once the job has finished.
+
+### Get details for every test
+
+> Show me the result of every test, not just the failures.
+
+```json
+{
+  "job_id": "<job_id from run_tests>",
+  "include_details": true
+}
+```
+
+`include_details` returns all tests; `include_failed_tests` returns only failed and skipped ones, which keeps the response small on large suites.
 <!-- examples:end -->
 
