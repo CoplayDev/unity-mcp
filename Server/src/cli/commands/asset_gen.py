@@ -146,7 +146,7 @@ def import_model_file(source_path, name, output_folder, target_size, animation_t
 
 
 @asset_gen.command("generate-image")
-@click.option("--provider", default=None, help="Provider id (fal, openrouter).")
+@click.option("--provider", default=None, help="Provider id (fal, openrouter, minimax).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")
 @click.option("--prompt", default=None, help="Text prompt for text->image.")
 @click.option("--image-path", default=None, help="Source image path for image->image.")

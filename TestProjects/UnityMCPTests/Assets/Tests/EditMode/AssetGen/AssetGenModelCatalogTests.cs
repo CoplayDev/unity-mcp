@@ -67,6 +67,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual("fal-ai/stable-audio-25/text-to-audio", AssetGenModelCatalog.DefaultModelId("fal", "audio"));
             Assert.AreEqual("v3.1-20260211", AssetGenModelCatalog.DefaultModelId("tripo", "model"));
             Assert.AreEqual("meshy-6", AssetGenModelCatalog.DefaultModelId("meshy", "model"));
+            Assert.AreEqual("image-01", AssetGenModelCatalog.DefaultModelId("minimax", "image"));
             Assert.IsNull(AssetGenModelCatalog.DefaultModelId("nope", "audio"), "unknown provider => null, not a throw");
         }
 
@@ -79,6 +80,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(TripoAdapter.ModelVersion, AssetGenModelCatalog.DefaultModelId("tripo", "model"));
             Assert.AreEqual(MeshyAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("meshy", "model"));
             Assert.AreEqual(FalAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "image"));
+            Assert.AreEqual(MiniMaxImageAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("minimax", "image"));
             Assert.AreEqual(FalAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "audio"));
         }
 
