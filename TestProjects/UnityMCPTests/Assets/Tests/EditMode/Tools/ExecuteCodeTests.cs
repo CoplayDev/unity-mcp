@@ -537,6 +537,29 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(results.Errors.HasErrors, string.Join("\n", errors));
         }
 
+
+        // ──────────────────── Execute: compiler selection ────────────────────
+
+        [Test]
+        public void Execute_Auto_UsesRoslynLoadedFromUnity()
+        {
+            var result = Execute("return 1;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("roslyn", result["data"]["compiler"].Value<string>(),
+                "auto fell back to CodeDom, so execute_code is silently limited to C# 6");
+        }
+
+        [Test]
+        public void Execute_UsingDeclaration_CompilesUnderRoslyn()
+        {
+            // C# 8: unavailable on the CodeDom fallback, so this also pins the language version
+            var result = Execute("using var s = new System.IO.MemoryStream();\nreturn s.CanRead;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.IsTrue(result["data"]["result"].Value<bool>());
+        }
+
         private static JObject Execute(string code)
         {
             return ToJObject(ExecuteCode.HandleCommand(new JObject
