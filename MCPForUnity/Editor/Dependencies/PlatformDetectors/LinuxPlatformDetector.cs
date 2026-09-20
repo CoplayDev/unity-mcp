@@ -190,6 +190,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
             var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             return new[]
             {
+                Path.Combine(homeDir, ".pyenv", "shims"), // pyenv: Python/uv when Unity is launched from a desktop entry
                 "/usr/local/bin",
                 "/usr/bin",
                 "/bin",
