@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:mcpx="MCPForUnity.Editor.Windows.Components" editor-extension-mode="True">
     <Style src="../Common.uss" />
     <ui:VisualElement name="assetgen-section" class="section">
         <ui:Label text="AI Asset Generation" class="section-title" />
@@ -15,7 +15,7 @@
             <ui:Label text="Preferences" class="config-label" />
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Default 3D Format:" class="setting-label" />
-                <ui:DropdownField name="assetgen-format-dropdown" class="setting-dropdown-inline" />
+                <mcpx:CompatDropdownField name="assetgen-format-dropdown" class="setting-dropdown-inline" />
             </ui:VisualElement>
             <ui:VisualElement class="override-row" style="margin-top: 8px;">
                 <ui:Label text="Output Root:" class="override-label" />

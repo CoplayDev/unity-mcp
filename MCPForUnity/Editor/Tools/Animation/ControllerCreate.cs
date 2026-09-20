@@ -180,7 +180,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             {
                 foreach (var condItem in conditionsArray)
                 {
-                    if (condItem is not JObject condObj) continue;
+                    if (!(condItem is JObject condObj)) continue;
 
                     string paramName = condObj["parameter"]?.ToString();
                     if (string.IsNullOrEmpty(paramName)) continue;

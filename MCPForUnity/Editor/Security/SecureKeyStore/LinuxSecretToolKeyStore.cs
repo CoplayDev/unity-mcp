@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Security
 {
@@ -17,7 +18,7 @@ namespace MCPForUnity.Editor.Security
             try
             {
                 var psi = NewPsi();
-                psi.ArgumentList.Add("--version");
+                psi.AddArg("--version");
                 using (var p = Process.Start(psi))
                 {
                     p.WaitForExit(2000);
@@ -36,9 +37,9 @@ namespace MCPForUnity.Editor.Security
             try
             {
                 var psi = NewPsi();
-                psi.ArgumentList.Add("lookup");
-                psi.ArgumentList.Add("service"); psi.ArgumentList.Add(Service);
-                psi.ArgumentList.Add("account"); psi.ArgumentList.Add(providerId);
+                psi.AddArg("lookup");
+                psi.AddArg("service"); psi.AddArg(Service);
+                psi.AddArg("account"); psi.AddArg(providerId);
                 using (var p = Process.Start(psi))
                 {
                     string outp = p.StandardOutput.ReadToEnd();
@@ -58,10 +59,10 @@ namespace MCPForUnity.Editor.Security
             try
             {
                 var psi = NewPsi(redirectIn: true);
-                psi.ArgumentList.Add("store");
-                psi.ArgumentList.Add("--label=MCPForUnity AssetGen");
-                psi.ArgumentList.Add("service"); psi.ArgumentList.Add(Service);
-                psi.ArgumentList.Add("account"); psi.ArgumentList.Add(providerId);
+                psi.AddArg("store");
+                psi.AddArg("--label=MCPForUnity AssetGen");
+                psi.AddArg("service"); psi.AddArg(Service);
+                psi.AddArg("account"); psi.AddArg(providerId);
                 using (var p = Process.Start(psi))
                 {
                     p.StandardInput.Write(apiKey);
@@ -78,9 +79,9 @@ namespace MCPForUnity.Editor.Security
             try
             {
                 var psi = NewPsi();
-                psi.ArgumentList.Add("clear");
-                psi.ArgumentList.Add("service"); psi.ArgumentList.Add(Service);
-                psi.ArgumentList.Add("account"); psi.ArgumentList.Add(providerId);
+                psi.AddArg("clear");
+                psi.AddArg("service"); psi.AddArg(Service);
+                psi.AddArg("account"); psi.AddArg(providerId);
                 using (var p = Process.Start(psi)) p.WaitForExit(5000);
             }
             catch { /* best effort */ }
@@ -96,7 +97,7 @@ namespace MCPForUnity.Editor.Security
                 RedirectStandardError = true,
                 RedirectStandardInput = redirectIn,
             };
-            psi.ArgumentList.Add("secret-tool");
+            psi.AddArg("secret-tool");
             return psi;
         }
     }

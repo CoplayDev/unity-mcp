@@ -71,7 +71,9 @@ namespace MCPForUnity.Editor.Tools.Build
                 || target == BuildTarget.StandaloneOSX
                 || target == BuildTarget.StandaloneLinux64)
             {
+#if UNITY_2021_2_OR_NEWER
                 options.subtarget = subtarget;
+#endif
             }
 
             return options;
@@ -89,7 +91,11 @@ namespace MCPForUnity.Editor.Tools.Build
             {
                 switch (name.ToLowerInvariant())
                 {
-                    case "clean_build": opts |= BuildOptions.CleanBuildCache; break;
+                    case "clean_build":
+#if UNITY_2021_2_OR_NEWER
+                        opts |= BuildOptions.CleanBuildCache;
+#endif
+                        break;
                     case "auto_run": opts |= BuildOptions.AutoRunPlayer; break;
                     case "deep_profiling": opts |= BuildOptions.EnableDeepProfilingSupport; break;
                     case "compress_lz4": opts |= BuildOptions.CompressWithLz4; break;

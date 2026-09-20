@@ -11,7 +11,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
 {
     internal static class CameraCreate
     {
-        private static readonly Dictionary<string, (string body, string aim)> Presets = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, (string body, string aim)> Presets = new Dictionary<string, (string body, string aim)>(StringComparer.OrdinalIgnoreCase)
         {
             ["follow"]        = ("CinemachineFollow",              "CinemachineRotationComposer"),
             ["third_person"]  = ("CinemachineThirdPersonFollow",   "CinemachineRotationComposer"),

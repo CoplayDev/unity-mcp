@@ -46,7 +46,7 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement clientsList;
         private Button skipClientsButton;
         private Button configureSelectedButton;
-        private readonly List<(IMcpClientConfigurator client, Toggle toggle)> clientToggles = new();
+        private readonly List<(IMcpClientConfigurator client, Toggle toggle)> clientToggles = new List<(IMcpClientConfigurator client, Toggle toggle)>();
 
         private DependencyCheckResult _dependencyResult;
 

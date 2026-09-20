@@ -693,7 +693,7 @@ namespace MCPForUnity.Editor.Tools
                     (
                         trimmedLine.Length > 0
                         && char.IsUpper(trimmedLine[0])
-                        && trimmedLine.Contains('.')
+                        && trimmedLine.Contains(".")
                     )
                 )
                 {

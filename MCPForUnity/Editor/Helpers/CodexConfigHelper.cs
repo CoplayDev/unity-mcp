@@ -236,7 +236,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (root == null) return;
 
-            if (!root.TryGetNode("features", out var featuresNode) || featuresNode is not TomlTable features)
+            if (!root.TryGetNode("features", out var featuresNode) || !(featuresNode is TomlTable features))
             {
                 features = new TomlTable();
                 root["features"] = features;

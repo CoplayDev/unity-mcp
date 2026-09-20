@@ -72,7 +72,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static readonly Dictionary<string, List<string>> PropertySuggestionCache = new();
+        private static readonly Dictionary<string, List<string>> PropertySuggestionCache = new Dictionary<string, List<string>>();
 
         /// <summary>
         /// Rule-based suggestions that mimic AI behavior for property matching.

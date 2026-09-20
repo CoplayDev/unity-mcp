@@ -6,6 +6,9 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+#if !UNITY_2021_2_OR_NEWER
+using UnityEditor.Experimental.SceneManagement;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using MCPForUnity.Runtime.Helpers;
@@ -419,9 +422,24 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string[] colorProps = { "_BaseColor", "_Color" };
             foreach (string prop in colorProps)
             {
-                if (mat.HasProperty(prop) && block.HasColor(prop))
+                if (mat.HasProperty(prop))
                 {
-                    mat.SetColor(prop, block.GetColor(prop));
+#if UNITY_2021_2_OR_NEWER
+                    if (block.HasColor(prop))
+                    {
+                        mat.SetColor(prop, block.GetColor(prop));
+                    }
+#else
+                    try
+                    {
+                        Color c = block.GetColor(prop);
+                        mat.SetColor(prop, c);
+                    }
+                    catch
+                    {
+                        // Property exists on material but not present in this block.
+                    }
+#endif
                 }
             }
         }
@@ -958,7 +976,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         continue;
                     }
 
-                    if (entry.Value is not JObject props || !props.HasValues)
+                    if (!(entry.Value is JObject props) || !props.HasValues)
                     {
                         continue;
                     }
@@ -1311,10 +1329,18 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     return new ErrorResponse($"Prefab asset not found at '{sanitizedPath}'.");
                 }
 
+#if UNITY_2021_2_OR_NEWER
                 var prefabStage = PrefabStageUtility.OpenPrefab(sanitizedPath);
                 bool enteredStage = prefabStage != null
                     && string.Equals(prefabStage.assetPath, sanitizedPath, StringComparison.OrdinalIgnoreCase)
                     && prefabStage.prefabContentsRoot != null;
+#else
+                AssetDatabase.OpenAsset(prefabAsset);
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                bool enteredStage = prefabStage != null
+                    && string.Equals(prefabStage.assetPath, sanitizedPath, StringComparison.OrdinalIgnoreCase)
+                    && prefabStage.prefabContentsRoot != null;
+#endif
 
                 if (!enteredStage)
                 {

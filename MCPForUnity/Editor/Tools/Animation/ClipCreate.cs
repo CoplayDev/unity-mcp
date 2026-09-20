@@ -251,7 +251,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             string relativePath = @params["relativePath"]?.ToString() ?? "";
 
             JToken keysToken = @params["keys"];
-            if (keysToken == null || keysToken is not JArray keysArray || keysArray.Count == 0)
+            if (keysToken == null || !(keysToken is JArray keysArray) || keysArray.Count == 0)
                 return new { success = false, message = "'keys' is required. Use [{\"time\":0,\"value\":[0,1,0]},...]" };
 
             // Map property group to axis suffixes
@@ -281,12 +281,12 @@ namespace MCPForUnity.Editor.Tools.Animation
 
             foreach (var item in keysArray)
             {
-                if (item is not JObject keyObj)
+                if (!(item is JObject keyObj))
                     return new { success = false, message = "Each key must be an object with 'time' and 'value' (Vector3 array)" };
 
                 float time = keyObj["time"]?.ToObject<float>() ?? 0f;
                 JToken valueToken = keyObj["value"];
-                if (valueToken is not JArray valArray || valArray.Count < 3)
+                if (!(valueToken is JArray valArray) || valArray.Count < 3)
                     return new { success = false, message = $"Key at time {time}: 'value' must be a 3-element array [x, y, z]" };
 
                 float vx = valArray[0].ToObject<float>();
