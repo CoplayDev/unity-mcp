@@ -42,6 +42,76 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+### Look up several APIs in one call
+
+> Before writing the controller, pull the docs for raycasts, NavMeshAgent and script execution order.
+
+```json
+{
+  "action": "lookup",
+  "queries": "Physics.Raycast,NavMeshAgent,execution-order"
+}
+```
+
+Searches ScriptReference and the Manual in parallel and returns one `results` entry per query, each with its `hits`. Package docs are only searched when `package` and `pkg_version` are also given; the query is then tried as a page slug of that package (e.g. `2d-index` with `com.unity.render-pipelines.universal` / `17.0`).
+
+### Read one member's reference page
+
+> What are the parameters of `Physics.Raycast`?
+
+```json
+{
+  "action": "get_doc",
+  "class_name": "Physics",
+  "member_name": "Raycast"
+}
+```
+
+Returns the description, `signatures`, `parameters` and code `examples` from docs.unity3d.com. Properties work too (`"member_name": "linearVelocity"` on `Rigidbody`) — if the method URL 404s, the property URL is tried.
+
+### Pin the docs to your Unity version
+
+> Get the 6000.0 page for `Rigidbody.linearVelocity`.
+
+```json
+{
+  "action": "get_doc",
+  "class_name": "Rigidbody",
+  "member_name": "linearVelocity",
+  "version": "6000.0.38f1"
+}
+```
+
+A full editor version is accepted and reduced to `6000.0`; without `version` the latest docs are used.
+
+### Read a Manual page
+
+> How does Unity order `Awake`, `OnEnable` and `Start`?
+
+```json
+{
+  "action": "get_manual",
+  "slug": "execution-order"
+}
+```
+
+The slug is the page name from the Manual URL (`docs.unity3d.com/Manual/execution-order.html`).
+
+### Read package documentation
+
+> Show the URP 2D lighting overview.
+
+```json
+{
+  "action": "get_package_doc",
+  "package": "com.unity.render-pipelines.universal",
+  "page": "2d-index",
+  "pkg_version": "17.0"
+}
+```
+
+All three parameters are required. `pkg_version` is `major.minor` of the package, not the editor version.
+
+Pair it with [`unity_reflect`](./unity_reflect.md): reflect confirms the API exists in the open editor, docs explain how to use it.
 <!-- examples:end -->
 
