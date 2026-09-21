@@ -63,16 +63,25 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     }
 
     /// <summary>
-    /// Request to generate an audio clip (fal.ai for v1). <see cref="Model"/> selects the fal
-    /// endpoint (stable-audio-25 / cassetteai/* / lyria2). <see cref="Duration"/> is a per-gen
-    /// input; 0 => provider default. Never carries a key; never persisted (transient request only).
+    /// Request to generate an audio clip. Cover-capable providers can consume reference audio as
+    /// a URL or base64 payload plus optional cover metadata. Never carries a key and is never
+    /// persisted (transient request only).
     /// </summary>
     public sealed class AudioGenRequest
     {
-        public string Provider; // "fal" for v1
-        public string Model; // fal model id, e.g. fal-ai/stable-audio-25/text-to-audio
+        public string Provider;
+        public string Model;
         public string Prompt;
         public float Duration; // seconds; 0 => per-model default. Soft-clamped per model in the adapter.
+        public string Lyrics;
+        public bool? LyricsOptimizer;
+        public bool? IsInstrumental;
+        public string AudioUrl;
+        public string AudioBase64;
+        public string CoverFeatureId;
+        public string OutputFormat;
+        public string AudioFormat;
+        public bool? AigcWatermark;
         public string Name;
         public string OutputFolder;
     }
