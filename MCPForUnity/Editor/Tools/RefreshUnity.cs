@@ -18,6 +18,18 @@ namespace MCPForUnity.Editor.Tools
     {
         private const int DefaultWaitTimeoutSeconds = 60;
 
+        /// <summary>Backstop on the wait for compilation to begin. Not the normal
+        /// exit: RequestScriptCompilation records a pending request that the
+        /// editor drains into a pipeline run on a later tick whether or not any
+        /// source changed — "recompiles those scripts which require it" in the docs
+        /// describes per-assembly skipping inside that run, not a run that is skipped.
+        /// With nothing changed, 6000.3 still raises compilationStarted/Finished
+        /// (~100 ms, cached) and reloads the domain. The grace only bounds the cases
+        /// where the run never begins: the pipeline refusing to start on a setup
+        /// error, or play mode with "Recompile After Finished Playing" deferring it
+        /// until exit. Both are reported as <c>compile_started = false</c>.</summary>
+        private const int CompileStartGraceSeconds = 10;
+
         public static async Task<object> HandleCommand(JObject @params)
         {
             string mode = @params?["mode"]?.ToString() ?? "if_dirty";
@@ -36,6 +48,7 @@ namespace MCPForUnity.Editor.Tools
 
             bool refreshTriggered = false;
             bool compileRequested = false;
+            int compileCountBefore = EditorStateCache.CompileCount;
 
             try
             {
@@ -77,6 +90,34 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"refresh_failed: {ex.Message}");
             }
 
+            // RequestScriptCompilation only queues; the pipeline starts on a later
+            // editor tick. Sampling the state here therefore reported "idle" for a
+            // compile that was about to run, and the caller's readiness poll — which
+            // begins the moment this returns — saw a ready editor and returned
+            // immediately, so wait_for_ready silently did nothing for exactly the call
+            // it exists for (issue #814). Waiting for the start edge first makes
+            // resulting_state, and every readiness decision downstream of it, truthful.
+            //
+            // Unlike WaitForUnityReadyAsync this cannot span a domain reload: it
+            // resolves the moment compilation *starts*, long before assemblies swap.
+            // That is why it is safe on Unity 6+ where waiting for readiness is not.
+            //
+            // Gated on wait_for_ready: that flag is documented as the non-blocking
+            // switch, and this wait is a wait — cheap when the pipeline starts on the
+            // next tick, but a full grace when it never does. A caller who opted out
+            // of waiting gets the immediate return and the poll hint.
+            //
+            // compile_started is null when nothing was waited for (no compile
+            // requested, or wait_for_ready=false), so "not observed" never reads as
+            // "did not start".
+            bool? compileStarted = null;
+            if (compileRequested && waitForReady)
+            {
+                compileStarted = await WaitForCompilationToStartAsync(
+                    compileCountBefore,
+                    TimeSpan.FromSeconds(CompileStartGraceSeconds)).ConfigureAwait(true);
+            }
+
             // Unity 6+ fix: Skip wait_for_ready when compile was requested.
             // The EditorApplication.update polling in WaitForUnityReadyAsync doesn't survive
             // domain reloads properly in Unity 6+, causing infinite compilation loops.
@@ -100,6 +141,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         refresh_triggered = refreshTriggered,
                         compile_requested = compileRequested,
+                        compile_started = compileStarted,
                         resulting_state = "unknown",
                     });
                 }
@@ -117,11 +159,98 @@ namespace MCPForUnity.Editor.Tools
             {
                 refresh_triggered = refreshTriggered,
                 compile_requested = compileRequested,
+                compile_started = compileStarted,
                 resulting_state = resultingState,
                 hint = shouldWaitForReady
                     ? "Unity refresh completed; editor should be ready."
                     : "If Unity enters compilation/domain reload, poll the mcpforunity://editor/state resource until data.advice.ready_for_tools is true."
             });
+        }
+
+        /// <summary>
+        /// Resolves <c>true</c> once a compilation is under way, or <c>false</c> once
+        /// the grace elapsed without one. Two of the three exits are a start:
+        /// <list type="bullet">
+        /// <item>the pipeline is running;</item>
+        /// <item><see cref="EditorStateCache.CompileCount"/> moved past
+        /// <paramref name="compileCountBefore"/> — a short compile can begin and end
+        /// inside AssetDatabase.Refresh, before this is even armed, and the counter is
+        /// the only thing that still sees it;</item>
+        /// <item>the grace elapsed with neither — the pipeline declined or deferred
+        /// the request (see <see cref="CompileStartGraceSeconds"/>).</item>
+        /// </list>
+        /// The first two are also tested synchronously on entry, so the case where a
+        /// reload is already imminent never leaves this command queued as a
+        /// continuation — see the note on the fast path below. The running case is
+        /// observed from <see cref="CompilationPipeline.compilationStarted"/> and
+        /// completed so that the caller's continuations run inline in that handler,
+        /// for the reason given at the completion source.
+        /// </summary>
+        internal static Task<bool> WaitForCompilationToStartAsync(int compileCountBefore, TimeSpan grace)
+        {
+            // Synchronous fast path, and the reason it matters: the counter check is
+            // there for a compile that began *and ended* inside AssetDatabase.Refresh
+            // above, and in that state the domain reload is already imminent. Resolving
+            // it from a later tick would hand the rest of this command to the
+            // synchronization context as a queued continuation, which the reload
+            // discards along with the rest of the domain — losing the response. An
+            // already-completed task resumes the await inline instead, so nothing is
+            // left queued.
+            if (EditorStateCache.CompileCount != compileCountBefore
+                || EditorStateCache.GetActualIsCompiling())
+            {
+                return Task.FromResult(true);
+            }
+
+            // Resolved from the compilationStarted event itself, not from a poll, and
+            // deliberately *without* RunContinuationsAsynchronously. Both matter for
+            // the same reason: the response has to be on the wire before the compile
+            // finishes, because the domain reload follows compilationFinished directly
+            // and a cached no-change compile lasts ~110 ms. Every await between here
+            // and the socket captures Unity's synchronization context; a continuation
+            // posted to it runs one editor frame later, and there are three of them
+            // (this method's caller, the CommandRegistry async wrapper, its
+            // AwaitHandler). Completing the task on the main thread with inlining
+            // allowed lets the awaiter see the captured context as the current one and
+            // run all three inline, inside this event handler, so the only hop left
+            // is the dispatcher's thread-pool send. A poll would also quantise the
+            // edge to the update tick, which in an unfocused Editor is most of that
+            // window on its own.
+            //
+            // EditorStateCache subscribed to the same event at domain load, so its
+            // handler has already flipped GetActualIsCompiling() by the time this one
+            // runs; the caller reads resulting_state = "compiling" inline.
+            var tcs = new TaskCompletionSource<bool>();
+            var start = DateTime.UtcNow;
+            Action<object> onStarted = null;
+            EditorApplication.CallbackFunction tick = null;
+
+            onStarted = _ =>
+            {
+                CompilationPipeline.compilationStarted -= onStarted;
+                EditorApplication.update -= tick;
+                tcs.TrySetResult(true);
+            };
+
+            // The update hook only carries the grace: the pipeline declined or deferred
+            // the request, so no reload is coming and inlining is harmless there too.
+            tick = () =>
+            {
+                if ((DateTime.UtcNow - start) <= grace)
+                {
+                    return;
+                }
+
+                CompilationPipeline.compilationStarted -= onStarted;
+                EditorApplication.update -= tick;
+                tcs.TrySetResult(false);
+            };
+
+            CompilationPipeline.compilationStarted += onStarted;
+            EditorApplication.update += tick;
+            // Nudge Unity to pump once in case update is throttled.
+            try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
+            return tcs.Task;
         }
 
         private static Task WaitForUnityReadyAsync(TimeSpan timeout)
