@@ -186,6 +186,32 @@ class TestAnimatorCLICommands:
                 # stateName goes into properties (non-top-level key)
                 assert params["properties"]["stateName"] == "Walk"
 
+    def test_animator_play_reports_the_object_the_tool_resolved(self, runner, mock_config):
+        """The Animator may live on a descendant of the named target, and only the tool
+        knows which object played. Echoing the CLI's own `target` back would contradict
+        the result it just printed."""
+        resolved = {
+            "success": True,
+            "message": "Playing state 'Walk' on 'Rig' (resolved from 'Wrapper')",
+            "data": {},
+        }
+        with patch("cli.commands.animation.get_config", return_value=mock_config):
+            with patch("cli.commands.animation.run_command", return_value=resolved):
+                result = runner.invoke(animation, ["animator", "play", "Wrapper", "Walk"])
+
+                assert "Rig" in result.output
+                assert "Playing state 'Walk' on Wrapper" not in result.output
+
+    def test_animator_play_fallback_names_no_object(self, runner, mock_config):
+        """With no message the CLI cannot know whether the target or a descendant played,
+        so the fallback must not claim one."""
+        with patch("cli.commands.animation.get_config", return_value=mock_config):
+            with patch("cli.commands.animation.run_command", return_value={"success": True, "data": {}}):
+                result = runner.invoke(animation, ["animator", "play", "Wrapper", "Walk"])
+
+                assert "Playing state 'Walk'" in result.output
+                assert "on Wrapper" not in result.output
+
     def test_animator_play_with_layer(self, runner, mock_config, mock_success):
         with patch("cli.commands.animation.get_config", return_value=mock_config):
             with patch("cli.commands.animation.run_command", return_value=mock_success) as mock_run:
