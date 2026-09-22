@@ -179,6 +179,9 @@ jobs:
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
           customParameters: -testCategory domain_reload
+          # Results are gated locally; this read-only job cannot publish Checks API results.
+          githubToken: ""
+          artifactsPath: artifacts/domain-reload
 
       - name: Run tests
         uses: game-ci/unity-test-runner@v4
@@ -193,6 +196,9 @@ jobs:
           projectPath: ${{ matrix.projectPath }}
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
+          githubToken: ""
+          # Keep the preceding domain-reload XML out of the regular suite's result gate.
+          artifactsPath: artifacts/editmode
 
       - name: Check test results
         env:
@@ -249,7 +255,7 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@v4
-        if: always() && steps.tests.outcome != 'skipped'
+        if: always() && steps.domain-tests.outcome != 'skipped'
         with:
           name: Test results for ${{ matrix.testMode }} on Unity ${{ matrix.unityVersion }}
-          path: ${{ steps.tests.outputs.artifactsPath }}
+          path: artifacts/
