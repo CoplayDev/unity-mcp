@@ -266,6 +266,31 @@ namespace MCPForUnity.Runtime.Serialization
         }
     }
 
+    /// <summary>
+    /// Safe pass-by converter for UnityEngine.TransformHandle (Unity 6+). Reflection-based
+    /// serialization of a handle enumerates its direct children, which throws
+    /// NullReferenceException the moment the underlying object is destroyed (a common race
+    /// when reading component data during play mode while scripts Destroy() objects), and on
+    /// live objects would walk entire child hierarchies of handles. A handle carries no
+    /// serializable identity of its own, so it is written as null. The type is matched by
+    /// name because it does not exist on all Unity versions this package supports.
+    /// Intentionally internal for the same converter-scanner reason as
+    /// UnityEngineObjectConverter below (see issue #1138).
+    /// </summary>
+    internal class TransformHandleConverter : JsonConverter
+    {
+        public override bool CanRead => false;
+
+        public override bool CanConvert(Type objectType)
+            => objectType?.FullName == "UnityEngine.TransformHandle";
+
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            => writer.WriteNull();
+
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            => throw new NotSupportedException("TransformHandleConverter is write-only.");
+    }
+
     // Converter for UnityEngine.Object references (GameObjects, Components, Materials, Textures, etc.)
     // Intentionally internal: this converter is meant for MCP-internal serialization only.
     // Leaving it public lets third-party Newtonsoft converter scanners (e.g. jillejr's
