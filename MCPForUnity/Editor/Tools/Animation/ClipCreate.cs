@@ -143,6 +143,92 @@ namespace MCPForUnity.Editor.Tools.Animation
             };
         }
 
+        // Samples a clip's ROOT MOTION trajectory over time and returns the path plus
+        // summary metrics (net displacement, path length). Resolves the clip BY REFERENCE
+        // via clipInstanceId (string handle) so it works on FBX sub-asset clips that an
+        // asset-path load cannot reach. Root motion is read from the importer-baked
+        // 'RootT.x/y/z' (position) and 'RootQ.x/y/z/w' (rotation) editor curves; if those
+        // bindings are absent the clip has no baked root motion and we say so.
+        // Params: { clipInstanceId (string), samples? (int, default 30) }.
+        public static object GetRootMotion(JObject @params)
+        {
+            string clipId = @params["clipInstanceId"]?.ToString();
+            if (string.IsNullOrEmpty(clipId))
+                return new { success = false, message = "'clipInstanceId' is required (string handle from a state's motionInstanceId)" };
+
+            var clip = UnityObjectIdCompat.InstanceIDFromString(clipId) as AnimationClip;
+            if (clip == null)
+                return new { success = false, message = $"AnimationClip not resolved from clipInstanceId '{clipId}'" };
+
+            int samples = @params["samples"]?.ToObject<int>() ?? 30;
+            if (samples < 2) samples = 2;
+            if (samples > 240) samples = 240;
+
+            // Build name->curve map for the root-motion bindings only.
+            var rootCurves = new Dictionary<string, AnimationCurve>();
+            foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (binding.propertyName.StartsWith("RootT.") || binding.propertyName.StartsWith("RootQ."))
+                    rootCurves[binding.propertyName] = AnimationUtility.GetEditorCurve(clip, binding);
+            }
+
+            bool hasRootT = rootCurves.ContainsKey("RootT.x") || rootCurves.ContainsKey("RootT.y") || rootCurves.ContainsKey("RootT.z");
+            if (!hasRootT)
+            {
+                return new
+                {
+                    success = true,
+                    data = new
+                    {
+                        name = clip.name,
+                        clipInstanceId = clipId,
+                        length = clip.length,
+                        frameRate = clip.frameRate,
+                        isLooping = AnimationUtility.GetAnimationClipSettings(clip).loopTime,
+                        hasRootMotion = false,
+                        message = "No baked RootT curves — clip carries no root translation (in-place / no root motion)."
+                    }
+                };
+            }
+
+            float Eval(string key, float t) => rootCurves.TryGetValue(key, out var c) && c != null && c.length > 0 ? c.Evaluate(t) : 0f;
+
+            var path = new List<object>();
+            float len = clip.length;
+            Vector3 prev = Vector3.zero;
+            Vector3 first = Vector3.zero, last = Vector3.zero;
+            float pathLength = 0f;
+            for (int i = 0; i < samples; i++)
+            {
+                float t = len * i / (samples - 1);
+                var p = new Vector3(Eval("RootT.x", t), Eval("RootT.y", t), Eval("RootT.z", t));
+                if (i == 0) { first = p; }
+                else { pathLength += Vector3.Distance(prev, p); }
+                prev = p;
+                last = p;
+                path.Add(new { t, x = p.x, y = p.y, z = p.z });
+            }
+
+            Vector3 net = last - first;
+            return new
+            {
+                success = true,
+                data = new
+                {
+                    name = clip.name,
+                    clipInstanceId = clipId,
+                    length = len,
+                    frameRate = clip.frameRate,
+                    isLooping = AnimationUtility.GetAnimationClipSettings(clip).loopTime,
+                    hasRootMotion = true,
+                    samples,
+                    netDisplacement = new { x = net.x, y = net.y, z = net.z, magnitude = net.magnitude },
+                    pathLength,
+                    path
+                }
+            };
+        }
+
         public static object AddCurve(JObject @params)
         {
             return SetOrAddCurve(@params, append: true);
