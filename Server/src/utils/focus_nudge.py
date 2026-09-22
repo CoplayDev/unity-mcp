@@ -660,7 +660,7 @@ async def nudge_unity_focus(
 
     # Rate limit nudges using exponential backoff
     now = time.monotonic()
-    current_interval = _get_current_nudge_interval()
+    current_interval = 0.0 if force else _get_current_nudge_interval()
     if not force and (now - _last_nudge_time) < current_interval:
         logger.debug(f"Skipping nudge - too soon since last nudge (interval: {current_interval:.1f}s)")
         return False
