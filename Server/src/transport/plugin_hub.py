@@ -109,7 +109,7 @@ class InstanceSelectionRequiredError(RuntimeError):
         self.available_instances = available_instances or []
         text = message or self._SELECTION_REQUIRED
         if self.available_instances:
-            text = f"{text} Available instances: {self.available_instances}."
+            text = f"{text} Available instances: {', '.join(self.available_instances)}."
         super().__init__(text)
 
 
@@ -377,6 +377,7 @@ class PluginHub(WebSocketEndpoint):
                     hash=session.project_hash,
                     unity_version=session.unity_version,
                     connected_at=session.connected_at.isoformat(),
+                    project_path=session.project_path,
                 )
                 for session_id, session in sessions.items()
             }
