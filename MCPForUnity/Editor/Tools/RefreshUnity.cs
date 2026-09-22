@@ -118,10 +118,34 @@ namespace MCPForUnity.Editor.Tools
                 refresh_triggered = refreshTriggered,
                 compile_requested = compileRequested,
                 resulting_state = resultingState,
+                console_errors = shouldWaitForReady ? ConsoleErrors() : null,
                 hint = shouldWaitForReady
-                    ? "Unity refresh completed; editor should be ready."
+                    ? "Unity refresh completed; editor should be ready. console_errors holds what read_console would return."
                     : "If Unity enters compilation/domain reload, poll the mcpforunity://editor/state resource until data.advice.ready_for_tools is true."
             });
+        }
+
+        // Callers refresh to learn whether the code compiled, then always read_console for errors
+        private static object ConsoleErrors()
+        {
+            try
+            {
+                var res = ReadConsole.HandleCommand(JObject.FromObject(new
+                {
+                    action = "get",
+                    types = new[] { "error" },
+                    count = 20,
+                    format = "plain",
+                    include_stacktrace = false,
+                }));
+                // A null Data would read as "compiled clean", so never let a failed read look like one
+                if (res is SuccessResponse ok) return ok.Data ?? new object[0];
+                return new { error = (res as ErrorResponse)?.Error ?? "console_read_failed" };
+            }
+            catch (Exception ex)
+            {
+                return new { error = $"console_read_failed: {ex.Message}" };
+            }
         }
 
         private static Task WaitForUnityReadyAsync(TimeSpan timeout)
