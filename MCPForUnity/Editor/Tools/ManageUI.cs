@@ -811,10 +811,12 @@ namespace MCPForUnity.Editor.Tools
 
         // Play-mode coroutine capture state.  Only one capture is in-flight at a
         // time; concurrent render_ui calls while a capture is pending are rejected
-        // with an explicit error.
+        // with an explicit error.  Only used when the Screen Capture module is present.
+#if MCP_HAS_SCREEN_CAPTURE
         private static Texture2D s_pendingCaptureTex;
         private static bool s_pendingCaptureDone;
         private static bool s_pendingCaptureStarted;
+#endif
 
         private static object RenderUI(JObject @params)
         {
@@ -854,6 +856,7 @@ namespace MCPForUnity.Editor.Tools
             // Second call: result is ready – save PNG and return data.
             if (Application.isPlaying)
             {
+#if MCP_HAS_SCREEN_CAPTURE
                 // Build the output paths (used by both the pending and ready branches)
                 string resolvedPlayName = string.IsNullOrWhiteSpace(fileName)
                     ? $"ui-render-{DateTime.Now:yyyyMMdd-HHmmss}.png"
@@ -954,6 +957,12 @@ namespace MCPForUnity.Editor.Tools
                         { "gameObject", (object)target ?? uxmlPath },
                         { "note", "A screen capture was scheduled for the end of this frame. Call render_ui once more to get the result." }
                     });
+#else
+                return new ErrorResponse(
+                    "Play-mode UI capture requires the Screen Capture module (com.unity.modules.screencapture), " +
+                    "which is not installed. Enable it via Window > Package Manager > Built-in > Screen Capture, " +
+                    "or render the UI outside Play mode (which captures via a RenderTexture instead).");
+#endif
             }
             // ── End play-mode branch ────────────────────────────────────────────────
 

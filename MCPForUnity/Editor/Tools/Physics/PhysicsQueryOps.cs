@@ -25,14 +25,25 @@ namespace MCPForUnity.Editor.Tools.Physics
             float maxDistance = p.GetFloat("max_distance") ?? Mathf.Infinity;
 
             if (dimension == "2d")
+            {
+#if MCP_HAS_PHYSICS_2D
                 return Raycast2D(originArr, dirArr, maxDistance, p);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return Raycast3D(originArr, dirArr, maxDistance, p);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object Raycast3D(JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 3)
@@ -85,7 +96,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object Raycast2D(JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 2)
@@ -128,6 +141,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
         public static object Overlap(JObject @params)
         {
@@ -148,14 +162,25 @@ namespace MCPForUnity.Editor.Tools.Physics
             int layerMask = ResolveLayerMask(p.Get("layer_mask"));
 
             if (dimension == "2d")
+            {
+#if MCP_HAS_PHYSICS_2D
                 return Overlap2D(shape, posArr, sizeToken, layerMask);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return Overlap3D(shape, posArr, sizeToken, layerMask);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object Overlap3D(string shape, JArray posArr, JToken sizeToken, int layerMask)
         {
             if (posArr.Count < 3)
@@ -227,7 +252,9 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             return FormatOverlapResults(results, "3D");
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object Overlap2D(string shape, JArray posArr, JToken sizeToken, int layerMask)
         {
             if (posArr.Count < 2)
@@ -281,7 +308,9 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             return FormatOverlapResults2D(results, "2D");
         }
+#endif
 
+#if MCP_HAS_PHYSICS
         private static object FormatOverlapResults(Collider[] results, string dimension)
         {
             var colliders = new List<object>();
@@ -302,7 +331,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { colliders }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object FormatOverlapResults2D(Collider2D[] results, string dimension)
         {
             var colliders = new List<object>();
@@ -323,6 +354,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { colliders }
             };
         }
+#endif
 
         public static object Shapecast(JObject @params)
         {
@@ -343,14 +375,25 @@ namespace MCPForUnity.Editor.Tools.Physics
             float maxDistance = p.GetFloat("max_distance") ?? Mathf.Infinity;
 
             if (dimension == "2d")
+            {
+#if MCP_HAS_PHYSICS_2D
                 return Shapecast2D(shape, originArr, dirArr, maxDistance, p);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return Shapecast3D(shape, originArr, dirArr, maxDistance, p);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object Shapecast3D(string shape, JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 3)
@@ -470,7 +513,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object Shapecast2D(string shape, JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 2)
@@ -559,6 +604,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
         public static object RaycastAll(JObject @params)
         {
@@ -576,14 +622,25 @@ namespace MCPForUnity.Editor.Tools.Physics
             float maxDistance = p.GetFloat("max_distance") ?? Mathf.Infinity;
 
             if (dimension == "2d")
+            {
+#if MCP_HAS_PHYSICS_2D
                 return RaycastAll2D(originArr, dirArr, maxDistance, p);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return RaycastAll3D(originArr, dirArr, maxDistance, p);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object RaycastAll3D(JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 3)
@@ -632,7 +689,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { hit_count = hits.Length, hits = hitsArray }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object RaycastAll2D(JArray originArr, JArray dirArr, float maxDistance, ToolParams p)
         {
             if (originArr.Count < 2)
@@ -670,6 +729,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { hit_count = hits.Length, hits = hitsArray }
             };
         }
+#endif
 
         public static object Linecast(JObject @params)
         {
@@ -685,14 +745,25 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse("'end' parameter is required (array of floats).");
 
             if (dimension == "2d")
+            {
+#if MCP_HAS_PHYSICS_2D
                 return Linecast2D(startArr, endArr, p);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
+            }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return Linecast3D(startArr, endArr, p);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
+#if MCP_HAS_PHYSICS
         private static object Linecast3D(JArray startArr, JArray endArr, ToolParams p)
         {
             if (startArr.Count < 3)
@@ -745,7 +816,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object Linecast2D(JArray startArr, JArray endArr, ToolParams p)
         {
             if (startArr.Count < 2)
@@ -788,6 +861,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
         private static int ResolveLayerMask(string layerMaskStr)
         {

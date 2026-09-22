@@ -27,7 +27,11 @@ UI Toolkit workflow:
 8. Use render_ui to capture a visual preview for self-evaluation
    - In play mode: first call queues a WaitForEndOfFrame screen capture and returns pending=true;
      call render_ui a second time to retrieve the saved PNG (hasContent will be true).
+     Requires Unity's built-in Screen Capture module (com.unity.modules.screencapture), which is
+     optional and NOT forced as a dependency. If it is absent, play-mode render_ui returns a
+     'Screen Capture module is not installed' error — capture the UI in editor mode instead.
    - In editor mode: assigns a RenderTexture to PanelSettings (best-effort; may stay blank).
+     Works without the Screen Capture module.
 9. Use detach_ui_document to remove UIDocument from a GameObject
 10. Use delete to remove .uxml/.uss files
 

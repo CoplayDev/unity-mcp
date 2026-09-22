@@ -18,6 +18,12 @@ namespace MCPForUnity.Editor.Tools.Physics
             if (string.IsNullOrEmpty(action))
                 return new ErrorResponse("'action' parameter is required.");
 
+#if !(MCP_HAS_PHYSICS || MCP_HAS_PHYSICS_2D)
+            return new ErrorResponse(
+                "Physics tools are unavailable: neither the Physics (com.unity.modules.physics) nor "
+                + "Physics 2D (com.unity.modules.physics2d) built-in module is installed. "
+                + "Enable one via Window > Package Manager > Built-in.");
+#else
             try
             {
                 switch (action)
@@ -103,6 +109,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     new { stackTrace = ex.StackTrace }
                 );
             }
+#endif
         }
     }
 }
