@@ -108,6 +108,7 @@ Current server tool groups are:
 - `testing`
 - `probuilder`
 - `profiling`
+- `asset_gen`
 
 Tools with `group=None` are server meta-tools and are always visible. The default enabled group is `core`; other groups can be enabled through the Tools tab or `manage_tools`.
 
