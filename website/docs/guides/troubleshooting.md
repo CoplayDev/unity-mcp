@@ -216,6 +216,28 @@ If restarting doesn't fix it:
 
 ---
 
+## Unity takes focus while tests are running
+
+The server may briefly focus Unity when a running test has not reported progress,
+to help editors throttled in the background. To disable this behavior, set
+`UNITY_MCP_DISABLE_FOCUS_NUDGE=1` in the environment of the **Python MCP server**
+and restart that server. For a stdio client, add it to the server's `env` entry;
+for HTTP, set it in the environment that launches the shared server. The values
+`true`, `yes`, and `on` also disable nudges. Forced nudges respect this setting.
+
+On Windows, the nudge now requires an absolute project path matching exactly one
+running `Unity.exe` process. If the path cannot be resolved, including some stdio
+sessions, it skips activation. It restores the previous window by its saved HWND,
+so a changing window title does not prevent focus restoration. Windows can still
+deny an activation request, in which case the server reports failure.
+
+This mitigates the desktop disruption reported in
+[#1407](https://github.com/CoplayDev/unity-mcp/issues/1407). A long healthy test can
+still trigger the no-progress heuristic, and nudges currently have no per-job
+attempt limit. Disable them when background tests already run reliably.
+
+---
+
 ## FAQ — Claude Code
 
 **Q: Unity can't find `claude` even though Terminal can.**
