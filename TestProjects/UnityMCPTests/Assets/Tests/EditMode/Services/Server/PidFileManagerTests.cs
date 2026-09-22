@@ -1,7 +1,6 @@
 using System.IO;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services.Server;
-using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,15 +12,24 @@ namespace MCPForUnityTests.Editor.Services.Server
     [TestFixture]
     public class PidFileManagerTests
     {
+        // Ports used by handshake/tracking tests. Kept away from the default 8080 so a server the
+        // host editor actually launched is never touched, and cleared per port because the slots
+        // are per project+port now.
+        private const int PortA = 58080;
+        private const int PortB = 58081;
+
         private PidFileManager _manager;
         private string _testPidFilePath;
+        private int _savedLaunchedPort;
 
         [SetUp]
         public void SetUp()
         {
             _manager = new PidFileManager();
-            // Clear any test state
-            ClearTestEditorPrefs();
+            // The launch marker is one SessionState slot per editor process; preserve whatever the
+            // host editor recorded so running these tests never drops its own server ownership.
+            _savedLaunchedPort = SessionState.GetInt(PidFileManager.LaunchedPortSessionKey, 0);
+            ClearTestState();
         }
 
         [TearDown]
@@ -32,18 +40,18 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 try { File.Delete(_testPidFilePath); } catch { }
             }
-            // Clear test state
-            ClearTestEditorPrefs();
+            ClearTestState();
+            if (_savedLaunchedPort > 0)
+            {
+                SessionState.SetInt(PidFileManager.LaunchedPortSessionKey, _savedLaunchedPort);
+            }
         }
 
-        private void ClearTestEditorPrefs()
+        private void ClearTestState()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            _manager.ClearTracking(PortA);
+            _manager.ClearTracking(PortB);
+            SessionState.EraseInt(PidFileManager.LaunchedPortSessionKey);
         }
 
         #region GetPidFilePath Tests
@@ -195,62 +203,6 @@ namespace MCPForUnityTests.Editor.Services.Server
 
         #endregion
 
-        #region TryGetPortFromPidFilePath Tests
-
-        [Test]
-        public void TryGetPortFromPidFilePath_ValidPath_ReturnsTrue()
-        {
-            // Arrange
-            string path = "/some/path/mcp_http_8080.pid";
-
-            // Act
-            bool result = _manager.TryGetPortFromPidFilePath(path, out int port);
-
-            // Assert
-            Assert.IsTrue(result);
-            Assert.AreEqual(8080, port);
-        }
-
-        [Test]
-        public void TryGetPortFromPidFilePath_DifferentPort_ParsesCorrectly()
-        {
-            // Arrange
-            string path = "/path/to/mcp_http_9999.pid";
-
-            // Act
-            bool result = _manager.TryGetPortFromPidFilePath(path, out int port);
-
-            // Assert
-            Assert.IsTrue(result);
-            Assert.AreEqual(9999, port);
-        }
-
-        [Test]
-        public void TryGetPortFromPidFilePath_NullPath_ReturnsFalse()
-        {
-            // Act
-            bool result = _manager.TryGetPortFromPidFilePath(null, out int port);
-
-            // Assert
-            Assert.IsFalse(result);
-            Assert.AreEqual(0, port);
-        }
-
-        [Test]
-        public void TryGetPortFromPidFilePath_InvalidPrefix_ReturnsFalse()
-        {
-            // Arrange
-            string path = "/some/path/wrong_prefix_8080.pid";
-
-            // Act
-            bool result = _manager.TryGetPortFromPidFilePath(path, out int port);
-
-            // Assert
-            Assert.IsFalse(result);
-        }
-
-        #endregion
-
         #region Handshake Tests
 
         [Test]
@@ -261,8 +213,8 @@ namespace MCPForUnityTests.Editor.Services.Server
             string instanceToken = "test-token-123";
 
             // Act
-            _manager.StoreHandshake(pidFilePath, instanceToken);
-            bool result = _manager.TryGetHandshake(out var storedPath, out var storedToken);
+            _manager.StoreHandshake(PortA, pidFilePath, instanceToken);
+            bool result = _manager.TryGetHandshake(PortA, out var storedPath, out var storedToken);
 
             // Assert
             Assert.IsTrue(result);
@@ -274,7 +226,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void TryGetHandshake_NoHandshake_ReturnsFalse()
         {
             // Act
-            bool result = _manager.TryGetHandshake(out var pidFilePath, out var instanceToken);
+            bool result = _manager.TryGetHandshake(PortA, out var pidFilePath, out var instanceToken);
 
             // Assert
             Assert.IsFalse(result);
@@ -283,13 +235,87 @@ namespace MCPForUnityTests.Editor.Services.Server
         }
 
         [Test]
+        public void TryGetHandshake_OtherPort_ReturnsFalse()
+        {
+            // Two Unity-managed servers on different ports must not clobber each other's handshake.
+            _manager.StoreHandshake(PortA, "/a.pid", "token-a");
+
+            Assert.IsFalse(_manager.TryGetHandshake(PortB, out _, out _));
+        }
+
+        [Test]
+        public void StoreHandshake_TwoPorts_KeepBothSlots()
+        {
+            _manager.StoreHandshake(PortA, "/a.pid", "token-a");
+            _manager.StoreHandshake(PortB, "/b.pid", "token-b");
+
+            Assert.IsTrue(_manager.TryGetHandshake(PortA, out var pathA, out var tokenA));
+            Assert.IsTrue(_manager.TryGetHandshake(PortB, out var pathB, out var tokenB));
+            Assert.AreEqual("/a.pid", pathA);
+            Assert.AreEqual("token-a", tokenA);
+            Assert.AreEqual("/b.pid", pathB);
+            Assert.AreEqual("token-b", tokenB);
+        }
+
+        [Test]
         public void StoreHandshake_NullValues_DoesNotThrow()
         {
             // Act & Assert
             Assert.DoesNotThrow(() =>
             {
-                _manager.StoreHandshake(null, null);
+                _manager.StoreHandshake(PortA, null, null);
             });
+        }
+
+        [Test]
+        public void StoreHandshake_InvalidPort_StoresNothing()
+        {
+            _manager.StoreHandshake(0, "/a.pid", "token-a");
+
+            Assert.IsFalse(_manager.TryGetLaunchedPort(out _));
+        }
+
+        #endregion
+
+        #region Launch Marker Tests
+
+        [Test]
+        public void TryGetLaunchedPort_NothingLaunched_ReturnsFalse()
+        {
+            // Regression for the multi-editor shutdown bug: an editor that never launched the server
+            // (it only connected to one another editor started) must not resolve a launch to stop.
+            Assert.IsFalse(_manager.TryGetLaunchedPort(out int port));
+            Assert.AreEqual(0, port);
+        }
+
+        [Test]
+        public void StoreHandshake_RecordsLaunchedPort()
+        {
+            _manager.StoreHandshake(PortA, "/a.pid", "token-a");
+
+            Assert.IsTrue(_manager.TryGetLaunchedPort(out int port));
+            Assert.AreEqual(PortA, port);
+        }
+
+        [Test]
+        public void ClearTracking_SamePort_ClearsLaunchedPort()
+        {
+            _manager.StoreHandshake(PortA, "/a.pid", "token-a");
+
+            _manager.ClearTracking(PortA);
+
+            Assert.IsFalse(_manager.TryGetLaunchedPort(out _));
+        }
+
+        [Test]
+        public void ClearTracking_OtherPort_KeepsLaunchedPort()
+        {
+            _manager.StoreHandshake(PortA, "/a.pid", "token-a");
+
+            _manager.ClearTracking(PortB);
+
+            Assert.IsTrue(_manager.TryGetLaunchedPort(out int port));
+            Assert.AreEqual(PortA, port);
         }
 
         #endregion
@@ -301,11 +327,10 @@ namespace MCPForUnityTests.Editor.Services.Server
         {
             // Arrange
             int pid = 12345;
-            int port = 8080;
 
             // Act
-            _manager.StoreTracking(pid, port);
-            bool result = _manager.TryGetStoredPid(port, out int storedPid);
+            _manager.StoreTracking(pid, PortA);
+            bool result = _manager.TryGetStoredPid(PortA, out int storedPid);
 
             // Assert
             Assert.IsTrue(result);
@@ -316,10 +341,10 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void TryGetStoredPid_WrongPort_ReturnsFalse()
         {
             // Arrange
-            _manager.StoreTracking(12345, 8080);
+            _manager.StoreTracking(12345, PortA);
 
             // Act
-            bool result = _manager.TryGetStoredPid(9090, out int storedPid);
+            bool result = _manager.TryGetStoredPid(PortB, out int storedPid);
 
             // Assert
             Assert.IsFalse(result, "Should return false for wrong port");
@@ -329,7 +354,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void TryGetStoredPid_NoTracking_ReturnsFalse()
         {
             // Act
-            bool result = _manager.TryGetStoredPid(8080, out int storedPid);
+            bool result = _manager.TryGetStoredPid(PortA, out int storedPid);
 
             // Assert
             Assert.IsFalse(result);
@@ -337,30 +362,44 @@ namespace MCPForUnityTests.Editor.Services.Server
         }
 
         [Test]
-        public void ClearTracking_RemovesAllKeys()
+        public void ClearTracking_RemovesAllKeysForPort()
         {
             // Arrange
-            _manager.StoreTracking(12345, 8080, "somehash");
-            _manager.StoreHandshake("/path.pid", "token");
+            _manager.StoreTracking(12345, PortA, "somehash");
+            _manager.StoreHandshake(PortA, "/path.pid", "token");
 
             // Act
-            _manager.ClearTracking();
-            bool hasTracking = _manager.TryGetStoredPid(8080, out _);
-            bool hasHandshake = _manager.TryGetHandshake(out _, out _);
+            _manager.ClearTracking(PortA);
+            bool hasTracking = _manager.TryGetStoredPid(PortA, out _);
+            bool hasHandshake = _manager.TryGetHandshake(PortA, out _, out _);
 
             // Assert
             Assert.IsFalse(hasTracking);
             Assert.IsFalse(hasHandshake);
+            Assert.AreEqual(string.Empty, _manager.GetStoredArgsHash(PortA));
+        }
+
+        [Test]
+        public void ClearTracking_OtherPort_LeavesSlotIntact()
+        {
+            _manager.StoreTracking(12345, PortA, "somehash");
+            _manager.StoreHandshake(PortA, "/path.pid", "token");
+
+            _manager.ClearTracking(PortB);
+
+            Assert.IsTrue(_manager.TryGetStoredPid(PortA, out int storedPid));
+            Assert.AreEqual(12345, storedPid);
+            Assert.IsTrue(_manager.TryGetHandshake(PortA, out _, out _));
         }
 
         [Test]
         public void GetStoredArgsHash_WithHash_ReturnsHash()
         {
             // Arrange
-            _manager.StoreTracking(12345, 8080, "testhash123");
+            _manager.StoreTracking(12345, PortA, "testhash123");
 
             // Act
-            string hash = _manager.GetStoredArgsHash();
+            string hash = _manager.GetStoredArgsHash(PortA);
 
             // Assert
             Assert.AreEqual("testhash123", hash);
@@ -370,7 +409,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void GetStoredArgsHash_NoHash_ReturnsEmpty()
         {
             // Act
-            string hash = _manager.GetStoredArgsHash();
+            string hash = _manager.GetStoredArgsHash(PortA);
 
             // Assert
             Assert.AreEqual(string.Empty, hash);

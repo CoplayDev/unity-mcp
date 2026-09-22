@@ -8,12 +8,14 @@ namespace MCPForUnity.Editor.Constants
     {
         internal const string UseHttpTransport = "MCPForUnity.UseHttpTransport";
         internal const string HttpTransportScope = "MCPForUnity.HttpTransportScope"; // "local" | "remote"
-        internal const string LastLocalHttpServerPid = "MCPForUnity.LocalHttpServer.LastPid";
-        internal const string LastLocalHttpServerPort = "MCPForUnity.LocalHttpServer.LastPort";
-        internal const string LastLocalHttpServerStartedUtc = "MCPForUnity.LocalHttpServer.LastStartedUtc";
-        internal const string LastLocalHttpServerPidArgsHash = "MCPForUnity.LocalHttpServer.LastPidArgsHash";
-        internal const string LastLocalHttpServerPidFilePath = "MCPForUnity.LocalHttpServer.LastPidFilePath";
-        internal const string LastLocalHttpServerInstanceToken = "MCPForUnity.LocalHttpServer.LastInstanceToken";
+        // Unity-managed local HTTP server state. EditorPrefs are shared by every editor the user runs,
+        // so PidFileManager appends ".{projectHash}.{port}" to each of these: two editors, or two ports,
+        // never read or clear each other's slot.
+        internal const string LocalHttpServerPid = "MCPForUnity.LocalHttpServer.Pid";
+        internal const string LocalHttpServerStartedUtc = "MCPForUnity.LocalHttpServer.StartedUtc";
+        internal const string LocalHttpServerPidArgsHash = "MCPForUnity.LocalHttpServer.PidArgsHash";
+        internal const string LocalHttpServerPidFilePath = "MCPForUnity.LocalHttpServer.PidFilePath";
+        internal const string LocalHttpServerInstanceToken = "MCPForUnity.LocalHttpServer.InstanceToken";
         internal const string DebugLogs = "MCPForUnity.DebugLogs";
         internal const string ValidationLevel = "MCPForUnity.ValidationLevel";
         internal const string UnitySocketPort = "MCPForUnity.UnitySocketPort";
