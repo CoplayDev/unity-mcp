@@ -47,10 +47,13 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Returns the normalized local HTTP base URL (always reads local pref).
+        /// Returns the normalized local HTTP base URL. UNITY_MCP_HTTP_PORT wins when set,
+        /// so a CI editor keeps its own port instead of the one a sibling last wrote.
         /// </summary>
         public static string GetLocalBaseUrl()
         {
+            if (McpHttpCiBoot.TryGetCiPort(out int ciPort)) return $"http://127.0.0.1:{ciPort}";
+
             string stored = EditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
         }
@@ -128,9 +131,12 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Returns true if the active HTTP transport scope is "remote".
+        /// Always false under UNITY_MCP_HTTP_PORT: the CI endpoint is local by construction.
         /// </summary>
         public static bool IsRemoteScope()
         {
+            if (McpHttpCiBoot.TryGetCiPort(out _)) return false;
+
             string scope = EditorConfigurationCache.Instance.HttpTransportScope;
             return string.Equals(scope, "remote", StringComparison.OrdinalIgnoreCase);
         }
