@@ -46,6 +46,7 @@ namespace MCPForUnity.Editor.Services
     /// <summary>
     /// Tracks async test jobs started via MCP tools. This is not intended to capture manual Test Runner UI runs.
     /// </summary>
+    [InitializeOnLoad]
     internal static class TestJobManager
     {
         // Keep this small to avoid ballooning payloads during polling.
@@ -69,6 +70,42 @@ namespace MCPForUnity.Editor.Services
         {
             // Restore after domain reloads (e.g., compilation while a job is running).
             TryRestoreFromSessionState();
+            AssemblyReloadEvents.beforeAssemblyReload += BeforeAssemblyReload;
+            RestoreRunningJobCallbacks();
+        }
+
+        private static void BeforeAssemblyReload()
+        {
+            // Progress callbacks are normally throttled. Flush the last update before the
+            // managed domain (and the original RunTestsAsync task) is discarded.
+            PersistToSessionState(force: true);
+        }
+
+        private static void RestoreRunningJobCallbacks()
+        {
+            TestJob job;
+            lock (LockObj)
+            {
+                if (string.IsNullOrEmpty(_currentJobId) ||
+                    !Jobs.TryGetValue(_currentJobId, out job) || job.Status != TestJobStatus.Running)
+                {
+                    return;
+                }
+            }
+
+            try
+            {
+                // Polling a restored job never otherwise touches the lazy test service.
+                // Re-register callbacks now, before the Test Runner resumes after reload.
+                if (MCPServiceLocator.Tests is TestRunnerService service)
+                {
+                    service.ResumeJobAfterReload(job.JobId, job.Mode);
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[TestJobManager] Failed to restore test callbacks: {ex.Message}");
+            }
         }
 
         public static string CurrentJobId
@@ -381,7 +418,33 @@ namespace MCPForUnity.Editor.Services
                     : TestJobStatus.Succeeded;
                 job.Error = null;
                 job.Result = resultPayload;
+                if (resultPayload != null)
+                {
+                    job.TotalTests = resultPayload.Total;
+                    job.CompletedTests = resultPayload.Total;
+                }
                 job.CurrentTestFullName = null;
+                job.CurrentTestStartedUnixMs = null;
+                _currentJobId = null;
+            }
+            PersistToSessionState(force: true);
+        }
+
+        internal static void FinalizeCurrentJobFromRunError(string message)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            lock (LockObj)
+            {
+                if (string.IsNullOrEmpty(_currentJobId) || !Jobs.TryGetValue(_currentJobId, out var job))
+                {
+                    return;
+                }
+                job.Status = TestJobStatus.Failed;
+                job.Error = message;
+                job.LastUpdateUnixMs = now;
+                job.FinishedUnixMs = now;
+                job.CurrentTestFullName = null;
+                job.CurrentTestStartedUnixMs = null;
                 _currentJobId = null;
             }
             PersistToSessionState(force: true);
@@ -539,7 +602,7 @@ namespace MCPForUnity.Editor.Services
             }
 
             object resultPayload = null;
-            if (job.Status == TestJobStatus.Succeeded && job.Result != null)
+            if (job.Status != TestJobStatus.Running && job.Result != null)
             {
                 resultPayload = job.Result.ToSerializable(job.Mode, includeDetails, includeFailedTests);
             }
@@ -562,6 +625,7 @@ namespace MCPForUnity.Editor.Services
                     last_finished_unix_ms = job.LastFinishedUnixMs,
                     stuck_suspected = IsStuck(job),
                     editor_is_focused = InternalEditorUtility.isApplicationActive,
+                    run_in_background = UnityEngine.Application.runInBackground,
                     blocked_reason = GetBlockedReason(job),
                     failures_so_far = BuildFailuresPayload(job.FailuresSoFar),
                     failures_capped = (job.FailuresSoFar != null && job.FailuresSoFar.Count >= FailureCap)
@@ -685,4 +749,3 @@ namespace MCPForUnity.Editor.Services
         }
     }
 }
-
