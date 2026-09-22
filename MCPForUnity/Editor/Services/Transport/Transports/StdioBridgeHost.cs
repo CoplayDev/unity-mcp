@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
@@ -74,6 +75,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly Stopwatch _uptime = Stopwatch.StartNew();
         private static volatile int _consecutiveTimeouts = 0;
         private static bool _processCommandsHooked = false;
+#if UNITY_EDITOR_WIN
+        private const uint HandleFlagInherit = 0x00000001;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetHandleInformation(
+            IntPtr handle,
+            uint mask,
+            uint flags);
+#endif
 
         private static int ResolveFrameIOTimeoutMs()
         {
@@ -424,25 +435,44 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private static TcpListener CreateConfiguredListener(int port)
+        internal static TcpListener CreateConfiguredListener(int port)
         {
             var newListener = new TcpListener(IPAddress.Loopback, port);
-#if UNITY_EDITOR_OSX
-            // SO_REUSEADDR is intentionally NOT set. On macOS it allows multiple
-            // processes (including AssetImportWorkers) to bind the same port,
-            // causing connections to land on a worker that can't process commands.
-            // The ExclusiveAddressUse flag prevents this; port-busy conflicts are
-            // handled by the retry/fallback logic in Start() and the reload handler.
-            try { newListener.Server.ExclusiveAddressUse = true; } catch { }
-#endif
             try
             {
-                newListener.Server.LingerState = new LingerOption(true, 0);
+#if UNITY_EDITOR_WIN
+                if (!SetHandleInformation(
+                    newListener.Server.Handle,
+                    HandleFlagInherit,
+                    0))
+                {
+                    int errorCode = Marshal.GetLastWin32Error();
+                    throw new SocketException(errorCode);
+                }
+#endif
+#if UNITY_EDITOR_OSX
+                // SO_REUSEADDR is intentionally NOT set. On macOS it allows multiple
+                // processes (including AssetImportWorkers) to bind the same port,
+                // causing connections to land on a worker that can't process commands.
+                // The ExclusiveAddressUse flag prevents this; port-busy conflicts are
+                // handled by the retry/fallback logic in Start() and the reload handler.
+                try { newListener.Server.ExclusiveAddressUse = true; } catch { }
+#endif
+                try
+                {
+                    newListener.Server.LingerState = new LingerOption(true, 0);
+                }
+                catch (Exception)
+                {
+                }
+                return newListener;
             }
-            catch (Exception)
+            catch
             {
+                try { newListener.Stop(); } catch { }
+                try { newListener.Server?.Dispose(); } catch { }
+                throw;
             }
-            return newListener;
         }
 
         public static void Stop()
