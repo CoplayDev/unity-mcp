@@ -9,6 +9,7 @@ Unity to focus, allows it to process, then returns focus to the original app.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import platform
@@ -59,6 +60,7 @@ class _FrontmostAppInfo:
 
     name: str
     bundle_id: str | None = None  # macOS only: bundle identifier for precise activation
+    window_handle: int | None = None  # Windows only: stable identity even if the title changes
 
     def __str__(self) -> str:
         return self.name
@@ -356,64 +358,69 @@ end tell
 
 
 def _get_frontmost_app_windows() -> _FrontmostAppInfo | None:
-    """Get the title of the frontmost window on Windows."""
+    """Capture the title and HWND so restoration does not depend on the title."""
     try:
-        # PowerShell command to get active window title
         script = '''
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$ErrorActionPreference = 'Stop'
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class Win32 {
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")]
-    public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextW(IntPtr hWnd, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextLengthW(IntPtr hWnd);
 }
 "@
 $hwnd = [Win32]::GetForegroundWindow()
-$sb = New-Object System.Text.StringBuilder 256
-[Win32]::GetWindowText($hwnd, $sb, 256)
-$sb.ToString()
+if ($hwnd -eq [IntPtr]::Zero) { exit 1 }
+$length = [Win32]::GetWindowTextLengthW($hwnd) + 1
+$sb = New-Object System.Text.StringBuilder $length
+[void][Win32]::GetWindowTextW($hwnd, $sb, $length)
+@{ name = $sb.ToString(); window_handle = $hwnd.ToInt64() } | ConvertTo-Json -Compress
 '''
         result = subprocess.run(
-            ["powershell", "-Command", script],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=5,
         )
         if result.returncode == 0:
-            return _FrontmostAppInfo(name=result.stdout.strip())
+            window = json.loads(result.stdout)
+            handle = int(window["window_handle"])
+            if handle:
+                return _FrontmostAppInfo(name=window["name"], window_handle=handle)
     except Exception as e:
         logger.debug(f"Failed to get frontmost window: {e}")
     return None
 
 
-def _focus_app_windows(window_title: str) -> bool:
-    """Focus a window by title on Windows. For Unity, uses Unity Editor pattern."""
+def _focus_app_windows(window_title: str, window_handle: int | None = None) -> bool:
+    """Restore a saved HWND, or locate Unity/a named window for initial activation."""
     try:
-        # For Unity, we use a pattern match since the title varies
-        if window_title == "Unity":
-            script = '''
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class Win32 {
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-}
-"@
-$unity = Get-Process | Where-Object {$_.MainWindowTitle -like "*Unity*"} | Select-Object -First 1
-if ($unity) {
-    [Win32]::ShowWindow($unity.MainWindowHandle, 9)
-    [Win32]::SetForegroundWindow($unity.MainWindowHandle)
-}
+        if window_handle is not None:
+            # A saved window can change titles or share its title with another app.
+            select_window = f"$hwnd = [IntPtr]::new({int(window_handle)})"
+        elif window_title == "Unity":
+            select_window = '''
+$proc = Get-Process | Where-Object {$_.MainWindowTitle -like "*Unity*"} | Select-Object -First 1
+if (-not $proc) { exit 1 }
+$hwnd = $proc.MainWindowHandle
 '''
         else:
-            # Try to find window by title - escape special PowerShell characters
-            safe_title = window_title.replace("'", "''").replace("`", "``")
-            script = f'''
+            safe_title = window_title.replace("'", "''")
+            select_window = f'''
+$proc = Get-Process | Where-Object {{$_.MainWindowTitle -eq '{safe_title}'}} | Select-Object -First 1
+if (-not $proc) {{ exit 1 }}
+$hwnd = $proc.MainWindowHandle
+'''
+        script = f'''
+$ErrorActionPreference = 'Stop'
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -422,18 +429,24 @@ public class Win32 {{
     public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
 }}
 "@
-$proc = Get-Process | Where-Object {{$_.MainWindowTitle -eq '{safe_title}'}} | Select-Object -First 1
-if ($proc) {{
-    [Win32]::ShowWindow($proc.MainWindowHandle, 9)
-    [Win32]::SetForegroundWindow($proc.MainWindowHandle)
+{select_window}
+if (-not [Win32]::IsWindow($hwnd)) {{ exit 1 }}
+if ([Win32]::IsIconic($hwnd)) {{
+    [void][Win32]::ShowWindow($hwnd, 9)
 }}
+if (-not [Win32]::SetForegroundWindow($hwnd)) {{ exit 1 }}
 '''
         result = subprocess.run(
-            ["powershell", "-Command", script],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True,
             text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=5,
         )
         return result.returncode == 0
@@ -516,7 +529,7 @@ def _focus_app(
     if system == "Darwin":
         return _focus_app_macos(app_info.name, unity_project_path, app_info.bundle_id)
     elif system == "Windows":
-        return _focus_app_windows(app_info.name)
+        return _focus_app_windows(app_info.name, window_handle=app_info.window_handle)
     elif system == "Linux":
         return _focus_app_linux(app_info.name)
     return False
