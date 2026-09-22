@@ -22,6 +22,7 @@ on:
       - MCPForUnity/Editor/**
       - MCPForUnity/Runtime/**
       - .github/workflows/unity-tests.yml
+      - tools/check_unity_test_results.py
   # Same-repo PRs get a unity-tests status check on every open / push via this trigger
   # (mirrors python-tests.yml). Fork PRs ALSO fire this trigger but run in the fork's
   # context without secrets — the `license` gate job writes unity_ok=false and the test
@@ -40,6 +41,7 @@ on:
       - MCPForUnity/Editor/**
       - MCPForUnity/Runtime/**
       - .github/workflows/unity-tests.yml
+      - tools/check_unity_test_results.py
 
 # Dedup runs for the same branch across push / pull_request / workflow_call.
 # Same-repo PRs would otherwise fire both push (on the branch SHA) AND pull_request (on the PR);
@@ -203,6 +205,7 @@ jobs:
       - name: Check test results
         env:
           ARTIFACTS_PATH: ${{ steps.tests.outputs.artifactsPath }}
+          TEST_RUN_OUTCOME: ${{ steps.tests.outcome }}
         run: |
           set -euo pipefail
           # `|| true` so a missing $ARTIFACTS_PATH (Unity crashed before producing any) doesn't trip
@@ -212,47 +215,7 @@ jobs:
             echo "::error::No test results XML found — Unity may have crashed"
             exit 1
           fi
-          python3 - "$RESULTS_XML" <<'PY'
-          import sys, xml.etree.ElementTree as ET
-          # Escape workflow-command payloads so test-controlled XML can't break annotation
-          # rendering or inject extra workflow commands.
-          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
-          def esc_data(s):
-              return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          def esc_prop(s):
-              return esc_data(s).replace(":", "%3A").replace(",", "%2C")
-          root = ET.parse(sys.argv[1]).getroot()
-          totals = root.attrib
-          passed = totals.get("passed", "?")
-          failed = totals.get("failed", "?")
-          total  = totals.get("total", "?")
-          incon  = totals.get("inconclusive", "?")
-          skipped = totals.get("skipped", "?")
-          print(f"Results: {passed} passed, {failed} failed, {incon} inconclusive, {skipped} skipped (total: {total})")
-          fails = [tc for tc in root.iter("test-case") if tc.attrib.get("result") == "Failed"]
-          if not fails:
-              sys.exit(0)
-          # Surface every failure inline so a CI watcher doesn't need to download the NUnit XML artifact.
-          for tc in fails:
-              name = tc.attrib.get("fullname") or tc.attrib.get("name") or "<unknown>"
-              f = tc.find("failure")
-              msg = (f.findtext("message") or "").strip() if f is not None else ""
-              stack = (f.findtext("stack-trace") or "").strip() if f is not None else ""
-              # First line of the message becomes the GitHub annotation title.
-              first_line = msg.splitlines()[0] if msg else "(no message)"
-              # GitHub annotations don't render multi-line bodies, so emit the full failure inside a collapsible group.
-              print(f"::error title=Failed: {esc_prop(name)}::{esc_data(first_line)}")
-              print(f"::group::Failure details — {esc_data(name)}")
-              if msg:
-                  print("Message:")
-                  print(msg)
-              if stack:
-                  print("Stack trace:")
-                  print(stack)
-              print("::endgroup::")
-          print(f"::error::{len(fails)} test(s) failed")
-          sys.exit(1)
-          PY
+          python3 tools/check_unity_test_results.py "$RESULTS_XML" --runner-outcome "$TEST_RUN_OUTCOME"
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.domain-tests.outcome != 'skipped'
