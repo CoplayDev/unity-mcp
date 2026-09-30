@@ -177,11 +177,31 @@ namespace MCPForUnity.Editor.Helpers
                 Mathf.Min(windowRect.height, viewportHeight));
         }
 
-        private static Texture2D CaptureViewRect(SceneView sceneView, Rect viewportRectPixels)
+        internal static float GetWindowPixelsPerPoint(EditorWindow window)
         {
-            object hostView = GetHostView(sceneView);
+            // IPanel.scaledPixelsPerPoint is not public in the oldest supported Editors.
+            var panel = window.rootVisualElement.panel;
+            var property = panel?.GetType().GetProperty("scaledPixelsPerPoint",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property?.GetValue(panel, null) is float scale && scale > 0 && !float.IsInfinity(scale))
+                return scale;
+            return EditorGUIUtility.pixelsPerPoint;
+        }
+
+        internal static Texture2D CaptureWindowPixels(EditorWindow window, int width, int height)
+        {
+            if (window == null) throw new ArgumentNullException(nameof(window));
+            if (width <= 0 || height <= 0 || (long)width * height > 16777216)
+                throw new ArgumentOutOfRangeException(nameof(width), "Empty or excessive capture area.");
+            InvokeMethodIfExists(GetHostView(window), "RepaintImmediately");
+            return CaptureViewRect(window, new Rect(0, 0, width, height));
+        }
+
+        private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels)
+        {
+            object hostView = GetHostView(window);
             if (hostView == null)
-                throw new InvalidOperationException("Failed to resolve Scene view host view.");
+                throw new InvalidOperationException("Failed to resolve Editor window host view.");
 
             // GrabPixels is an internal extern on GUIView (parent of HostView), present since at least Unity 2021.1.
             // See: UnityCsReference/Editor/Mono/GUIView.bindings.cs — `internal extern void GrabPixels(RenderTexture, Rect)`
@@ -200,6 +220,7 @@ namespace MCPForUnity.Editor.Helpers
             int height = Mathf.RoundToInt(viewportRectPixels.height);
 
             RenderTexture rt = null;
+            Texture2D texture = null;
             RenderTexture previousActive = RenderTexture.active;
             try
             {
@@ -214,11 +235,13 @@ namespace MCPForUnity.Editor.Helpers
                 grabPixels.Invoke(hostView, new object[] { rt, viewportRectPixels });
 
                 RenderTexture.active = rt;
-                var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 FlipTextureVertically(texture);
-                return texture;
+                var result = texture;
+                texture = null;
+                return result;
             }
             catch (TargetInvocationException ex)
             {
@@ -228,6 +251,7 @@ namespace MCPForUnity.Editor.Helpers
             finally
             {
                 RenderTexture.active = previousActive;
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
                 if (rt != null)
                 {
                     rt.Release();
