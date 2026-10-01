@@ -16,6 +16,7 @@ namespace MCPForUnityTests.Editor.Tools
 {
     public class ScreenshotColorWindow : EditorWindow
     {
+        public bool paintEdgeMarkers;
         protected void OnGUI()
         {
             float halfWidth = position.width / 2;
@@ -24,6 +25,12 @@ namespace MCPForUnityTests.Editor.Tools
             EditorGUI.DrawRect(new Rect(halfWidth, 0, halfWidth, halfHeight), Color.green);
             EditorGUI.DrawRect(new Rect(0, halfHeight, halfWidth, halfHeight), Color.red);
             EditorGUI.DrawRect(new Rect(halfWidth, halfHeight, halfWidth, halfHeight), new Color(1, 1, 0, 1));
+            if (paintEdgeMarkers)
+            {
+                float edge = 4 / EditorGUIUtility.pixelsPerPoint;
+                EditorGUI.DrawRect(new Rect(edge, edge, position.width - 2 * edge,
+                    position.height - 2 * edge), Color.black);
+            }
         }
     }
 
@@ -213,6 +220,7 @@ namespace MCPForUnityTests.Editor.Tools
             RequireGraphics();
             var scene = EditorWindow.GetWindow<SceneView>();
             docked = EditorWindow.GetWindow<ScreenshotDockWindow>("MCP corner dock fixture", false, typeof(SceneView));
+            docked.paintEdgeMarkers = true;
             docked.ShowTab();
             yield return null;
             yield return null;
@@ -226,15 +234,10 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 Assert.That(image.LoadImage(Convert.FromBase64String((string)data["imageBase64"])), Is.True);
                 float scale = (float)data["pixels_per_point"];
+                TestContext.CurrentContext.Test.Properties.Set("capture_backing_scale", scale);
                 Assert.That(image.width, Is.EqualTo(Mathf.RoundToInt(docked.position.width * scale)));
                 Assert.That(image.height, Is.EqualTo(Mathf.RoundToInt(docked.position.height * scale)));
-                Debug.Log("[EditorWindowScreenshots] Capture dimensions=" + image.width + "x" + image.height
-                    + " source_points=" + data["window"]["position"] + " backing_scale=" + data["pixels_per_point"]
-                    + " graphics=" + SystemInfo.graphicsDeviceType + " uv_top=" + SystemInfo.graphicsUVStartsAtTop
-                    + " public_capture_api_available=" + (typeof(UnityEditorInternal.InternalEditorUtility).GetMethod("CaptureEditorWindow",
-                        BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(EditorWindow), typeof(RenderTexture) }, null) != null));
-                AssertCornerColors(image);
-                Debug.Log("[EditorWindowScreenshots] Corner capture pixels_per_point=" + scale);
+                AssertContentEdgeMarkers(image);
             }
             finally { Object.DestroyImmediate(image); scene.ShowTab(); }
         }
@@ -255,14 +258,131 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 Assert.That(image.LoadImage(Convert.FromBase64String((string)data["imageBase64"])), Is.True);
                 Assert.That(Mathf.Max(image.width, image.height), Is.LessThanOrEqualTo(160));
-                Debug.Log("[EditorWindowScreenshots] Capture dimensions=" + image.width + "x" + image.height
-                    + " source_points=" + data["window"]["position"] + " backing_scale=" + data["pixels_per_point"]
-                    + " graphics=" + SystemInfo.graphicsDeviceType + " uv_top=" + SystemInfo.graphicsUVStartsAtTop
-                    + " public_capture_api_available=" + (typeof(UnityEditorInternal.InternalEditorUtility).GetMethod("CaptureEditorWindow",
-                        BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(EditorWindow), typeof(RenderTexture) }, null) != null));
                 AssertCornerColors(image);
             }
             finally { Object.DestroyImmediate(image); }
+        }
+
+        [UnityTest]
+        public IEnumerator FloatingFullSizeBufferMatchesContentEdges()
+        {
+            RequireGraphics();
+            second.paintEdgeMarkers = true;
+            yield return ShowFixtures();
+            var task = Screenshot(second, 4096);
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+            var data = (JObject)((SuccessResponse)task.Result).Data;
+            var image = new Texture2D(2, 2);
+            try
+            {
+                Assert.That(image.LoadImage(Convert.FromBase64String((string)data["imageBase64"])), Is.True);
+                float scale = (float)data["pixels_per_point"];
+                TestContext.CurrentContext.Test.Properties.Set("capture_backing_scale", scale);
+                Assert.That(image.width, Is.EqualTo(Mathf.RoundToInt(second.position.width * scale)));
+                Assert.That(image.height, Is.EqualTo(Mathf.RoundToInt(second.position.height * scale)));
+                AssertContentEdgeMarkers(image);
+            }
+            finally { Object.DestroyImmediate(image); }
+        }
+
+        [UnityTest]
+        public IEnumerator SceneViewViewportPreservesContentEdgesAndOrientation() =>
+            CaptureSceneViewFixture(false);
+
+        [UnityTest]
+        public IEnumerator DockedSceneViewViewportPreservesContentEdgesAndOrientation() =>
+            CaptureSceneViewFixture(true);
+
+        private static IEnumerator CaptureSceneViewFixture(bool dockedScene)
+        {
+            RequireGraphics();
+            var scene = dockedScene ? EditorWindow.GetWindow<SceneView>() : ScriptableObject.CreateInstance<SceneView>();
+            bool previousGizmos = scene.drawGizmos;
+            if (!dockedScene)
+            {
+                scene.titleContent = new GUIContent("MCP Scene viewport fixture");
+                scene.position = new Rect(200, 150, 400, 300);
+            }
+            scene.drawGizmos = false;
+            // Controls are outside this fixture's painted viewport. Disable
+            // overlays only on the owned Scene View so they cannot cover markers.
+            var canvas = typeof(SceneView).GetProperty("overlayCanvas",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(scene);
+            var overlaysProperty = canvas?.GetType().GetProperty("overlaysEnabled",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            object previousOverlays = overlaysProperty?.GetValue(canvas);
+            void SetOverlays(bool enabled)
+            {
+                if (canvas == null) return;
+                if (overlaysProperty?.CanWrite == true) overlaysProperty.SetValue(canvas, enabled);
+                else
+                {
+                    var setter = canvas.GetType().GetMethod("SetOverlaysEnabled",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    Assert.That(setter, Is.Not.Null, "The Scene View fixture cannot hide its own overlays.");
+                    setter.Invoke(canvas, new object[] { enabled });
+                }
+            }
+            var image = new Texture2D(2, 2);
+            string folder = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Library/McpSceneViewportTests", Guid.NewGuid().ToString("N")));
+            int repaints = 0;
+            void PaintViewport(SceneView view)
+            {
+                if (view != scene || Event.current.type != EventType.Repaint) return;
+                var viewport = (Rect)typeof(SceneView).GetProperty("cameraViewport",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(scene);
+                Handles.BeginGUI();
+                try
+                {
+                    float halfWidth = viewport.width / 2;
+                    float halfHeight = viewport.height / 2;
+                    EditorGUI.DrawRect(new Rect(0, 0, halfWidth, halfHeight), Color.blue);
+                    EditorGUI.DrawRect(new Rect(halfWidth, 0, halfWidth, halfHeight), Color.green);
+                    EditorGUI.DrawRect(new Rect(0, halfHeight, halfWidth, halfHeight), Color.red);
+                    EditorGUI.DrawRect(new Rect(halfWidth, halfHeight, halfWidth, halfHeight), new Color(1, 1, 0, 1));
+                    float edge = 4 / EditorGUIUtility.pixelsPerPoint;
+                    EditorGUI.DrawRect(new Rect(edge, edge, viewport.width - 2 * edge,
+                        viewport.height - 2 * edge), Color.black);
+                    repaints++;
+                }
+                finally { Handles.EndGUI(); }
+            }
+            SceneView.duringSceneGui += PaintViewport;
+            try
+            {
+                if (dockedScene) scene.ShowTab(); else scene.ShowUtility();
+                Assert.That(scene.docked, Is.EqualTo(dockedScene));
+                SetOverlays(false);
+                scene.Focus();
+                double deadline = EditorApplication.timeSinceStartup + 5;
+                while (repaints < 2 && EditorApplication.timeSinceStartup < deadline)
+                {
+                    scene.Repaint();
+                    yield return null;
+                }
+                Assert.That(repaints, Is.GreaterThanOrEqualTo(2), "Scene View fixture never painted its viewport.");
+                var result = EditorWindowScreenshotUtility.CaptureSceneViewViewportToProject(scene,
+                    "viewport.png", 1, true, true, 4096, out int width, out int height, folder);
+                Assert.That(image.LoadImage(Convert.FromBase64String(result.ImageBase64)), Is.True);
+                TestContext.CurrentContext.Test.Properties.Set("capture_backing_scale",
+                    EditorWindowScreenshotUtility.GetWindowPixelsPerPoint(scene));
+                Assert.That(image.width, Is.EqualTo(width));
+                Assert.That(image.height, Is.EqualTo(height));
+                AssertContentEdgeMarkers(image);
+            }
+            finally
+            {
+                SceneView.duringSceneGui -= PaintViewport;
+                scene.drawGizmos = previousGizmos;
+                if (previousOverlays is bool enabled) SetOverlays(enabled);
+                if (!dockedScene) scene.Close();
+                Object.DestroyImmediate(image);
+                string file = Path.Combine(folder, "viewport.png");
+                if (File.Exists(file)) File.Delete(file);
+                if (Directory.Exists(folder)) Directory.Delete(folder);
+            }
         }
 
         [UnityTest]
@@ -593,8 +713,6 @@ namespace MCPForUnityTests.Editor.Tools
             });
             yield return Await(task);
             Assert.That(task.Result, Is.AssignableTo<IMcpResponse>());
-            Debug.Log("[EditorWindowScreenshots] Unsupported minimized capture: " +
-                (task.Result is ErrorResponse error ? error.Error : "buffer returned; freshness is not guaranteed"));
             second.Close();
             var retry = Screenshot(first);
             yield return Await(retry);
@@ -623,22 +741,51 @@ namespace MCPForUnityTests.Editor.Tools
             second.ShowUtility();
             Assert.That(first.docked, Is.False);
             Assert.That(second.docked, Is.False);
+            // Let both native utility-window creations finish before focusing.
+            // A fixed two-tick wait after Focus can leave delayed activation queued.
+            yield return null;
+            yield return null;
             first.Focus();
-            yield return null;
-            yield return null;
+            double deadline = EditorApplication.timeSinceStartup + 5;
+            while (EditorWindow.focusedWindow != first && EditorApplication.timeSinceStartup < deadline)
+                yield return null;
+            Assert.That(EditorWindow.focusedWindow, Is.SameAs(first),
+                "The fixture must establish keyboard focus before requesting capture.");
         }
 
         private static void AssertCornerColors(Texture2D image)
         {
-            Debug.Log("[EditorWindowScreenshots] Corners TL=" + image.GetPixel(image.width / 10, image.height * 9 / 10)
-                + " TR=" + image.GetPixel(image.width * 9 / 10, image.height * 9 / 10)
-                + " BL=" + image.GetPixel(image.width / 10, image.height / 10)
-                + " BR=" + image.GetPixel(image.width * 9 / 10, image.height / 10));
-            // Sample near all four edges, leaving room for the dock tab strip.
-            AssertColor(image.GetPixel(image.width / 10, image.height * 9 / 10), Color.blue, "top left");
-            AssertColor(image.GetPixel(image.width * 9 / 10, image.height * 9 / 10), Color.green, "top right");
-            AssertColor(image.GetPixel(image.width / 10, image.height / 10), Color.red, "bottom left");
-            AssertColor(image.GetPixel(image.width * 9 / 10, image.height / 10), new Color(1, 1, 0, 1), "bottom right");
+            // Coordinates are actual output pixels, not a percentage of the buffer.
+            // The fixture paints from content (0, 0) to position.size: a tab strip,
+            // host border or vertical flip must fail even on a large docked pane.
+            TestContext.CurrentContext.Test.Properties.Set("capture_graphics_api", SystemInfo.graphicsDeviceType.ToString());
+            TestContext.CurrentContext.Test.Properties.Set("capture_uv_starts_at_top", SystemInfo.graphicsUVStartsAtTop);
+            const int inset = 2;
+            AssertPixel(image, inset, image.height - 1 - inset, Color.blue, "top left content edge");
+            AssertPixel(image, image.width - 1 - inset, image.height - 1 - inset, Color.green, "top right content edge");
+            AssertPixel(image, inset, inset, Color.red, "bottom left content edge");
+            AssertPixel(image, image.width - 1 - inset, inset, new Color(1, 1, 0, 1), "bottom right content edge");
+        }
+
+        private static void AssertContentEdgeMarkers(Texture2D image)
+        {
+            AssertCornerColors(image);
+            // Four physical pixels of colored edge surround a black interior.
+            // Also sample just inside it: a shifted/cropped rectangle cannot pass
+            // merely because a large quadrant still has the expected color.
+            const int inner = 6;
+            AssertPixel(image, inner, image.height - 1 - inner, Color.black, "top left interior");
+            AssertPixel(image, image.width - 1 - inner, image.height - 1 - inner, Color.black, "top right interior");
+            AssertPixel(image, inner, inner, Color.black, "bottom left interior");
+            AssertPixel(image, image.width - 1 - inner, inner, Color.black, "bottom right interior");
+        }
+
+        private static void AssertPixel(Texture2D image, int x, int y, Color expected, string edge)
+        {
+            Color actual = image.GetPixel(x, y);
+            AssertColor(actual, expected, $"{edge} at ({x}, {y}) in {image.width}x{image.height}; "
+                + $"actual={actual}, expected={expected}, graphics={SystemInfo.graphicsDeviceType}, "
+                + $"uv_top={SystemInfo.graphicsUVStartsAtTop}");
         }
 
         private static void AssertColor(Color actual, Color expected, string corner)
@@ -663,7 +810,6 @@ namespace MCPForUnityTests.Editor.Tools
             while (!task.IsCompleted && EditorApplication.timeSinceStartup < deadline) yield return null;
             Assert.That(task.IsCompleted, Is.True, "Capture did not complete before the test deadline.");
             Assert.That(task.IsFaulted, Is.False, task.Exception?.ToString());
-            if (task.Result is ErrorResponse error) Debug.Log("[EditorWindowScreenshots] Capture result: " + error.Error);
         }
 
         private EditorWindow Resolve(ManageEditorWindows.Parameters p, out string error) =>

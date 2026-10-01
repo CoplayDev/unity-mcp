@@ -64,8 +64,8 @@ and `destructiveHint=false` because it does not overwrite assets or existing fil
 
 Capture requires a graphical Editor. Batch mode, minimized windows and
 native operating-system dialogs are unsupported. Only open `EditorWindow`
-objects are listed. Captures contain the selected tab area and exclude
-operating-system borders. An inactive tab must be selected to repaint it.
+objects are listed. Captures contain the tab content and exclude the dock tab
+strip, host borders and operating-system borders. An inactive tab must be selected to repaint it.
 Another capture is rejected until the pending capture finishes.
 Minimized windows may return an old buffer; restore them before capture.
 
