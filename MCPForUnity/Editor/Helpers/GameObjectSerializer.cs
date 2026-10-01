@@ -714,6 +714,7 @@ namespace MCPForUnity.Editor.Helpers
                 new RectConverter(),
                 new BoundsConverter(),
                 new Matrix4x4Converter(), // Fix #478: Safe Matrix4x4 serialization for Cinemachine
+                new TransformHandleConverter(), // Unity 6 TransformHandle: enumerating a destroyed handle's children throws NRE
                 new UnityEngineObjectConverter() // Handles serialization of references
             },
             ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
