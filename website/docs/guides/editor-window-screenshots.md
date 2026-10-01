@@ -44,15 +44,6 @@ Claude, Codex or another host hides the image. The host controls thumbnails,
 attachments, storage and transcript display. The tool does not create or
 upload a separate user-facing artifact.
 
-Image bytes stay in the image block; they are not repeated in text or emitted
-as a gallery. Files are saved only when requested. Returning a resource link
-instead would require the client to fetch and include the image, and would
-still leave display to that client. A path-only result does not give the model
-pixels to inspect.
-
-See the MCP [content annotations](https://modelcontextprotocol.io/specification/2025-11-25/schema#annotations)
-and [resource interaction model](https://modelcontextprotocol.io/specification/2025-11-25/server/resources#user-interaction-model).
-
 ## Files and private data
 
 No screenshot file is saved by default. `save_file=true` saves a unique,
@@ -66,6 +57,8 @@ sent to the selected MCP client. Enable and use the tool only with clients
 that may access that data. Saved PNGs have no automatic retention cleanup;
 delete them when no longer needed and exclude them from public PR evidence.
 Existing instance routing, tool visibility and remote authentication apply.
+The tool declares `readOnlyHint=false` because it can select tabs and save PNGs,
+and `destructiveHint=false` because it does not overwrite assets or existing files.
 
 ## Capture limits
 
@@ -76,9 +69,10 @@ operating-system borders. An inactive tab must be selected to repaint it.
 Another capture is rejected until the pending capture finishes.
 Minimized windows may return an old buffer; restore them before capture.
 
-The capture helper uses Unity's internal `GUIView.GrabPixels` API, also
-used by Scene View capture. Missing internal APIs return explicit errors;
-capture does not fall back to desktop pixels. Capture waits for Editor
+The helper reads Unity's internal `GUIView.GrabPixels` buffer in physical
+pixels, using the window's native backing scale and graphics-API-dependent
+orientation correction. Missing APIs return explicit errors; capture does not
+fall back to desktop pixels. Capture waits for Editor
 updates without `EditorApplication.Step` or a synchronous player-loop pump.
 Reload, shutdown or a closed target ends the pending capture. Retry after
 the Editor is ready. Capture does not save scenes or change Play Mode state.

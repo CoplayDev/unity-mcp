@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                var p = args?.ToObject<Parameters>() ?? new Parameters();
+                var p = ParseParameters(args);
                 var windows = UnityEngine.Resources.FindObjectsOfTypeAll<EditorWindow>()
                     .Where(w => w != null && (w.docked || w.hasFocus))
                     .OrderBy(w => w.titleContent.text, StringComparer.OrdinalIgnoreCase)
@@ -69,6 +69,33 @@ namespace MCPForUnity.Editor.Tools
             {
                 return Failure("Window capture failed: " + ex.Message);
             }
+        }
+
+        internal static Parameters ParseParameters(JObject args)
+        {
+            var values = new ToolParams(args ?? new JObject());
+            var p = new Parameters
+            {
+                action = values.Get("action", "list"),
+                window_id = values.GetInt("window_id"),
+                window_title = values.Get("window_title"),
+                window_type = values.Get("window_type"),
+                focus = values.GetBool("focus", true),
+                restore_focus = values.GetBool("restore_focus", true),
+                include_image = values.GetBool("include_image", true),
+                save_file = values.GetBool("save_file", false),
+                max_resolution = values.GetInt("max_resolution", 1600).Value
+            };
+            // An explicit invalid selector must never become a focused-window request.
+            if (values.Has("window_id") && !p.window_id.HasValue)
+                throw new ArgumentException("window_id must be an integer.");
+            foreach (string key in new[] { "window_title", "window_type" })
+                if (values.Has(key) && (values.GetRaw(key).Type != JTokenType.String
+                    || string.IsNullOrWhiteSpace(values.Get(key))))
+                    throw new ArgumentException(key + " must be a non-empty string.");
+            if (values.Has("max_resolution") && !values.GetInt("max_resolution").HasValue)
+                throw new ArgumentException("max_resolution must be an integer from 64 to 4096.");
+            return p;
         }
 
         internal static EditorWindow Resolve(EditorWindow[] windows, Parameters p, out string error)
@@ -107,7 +134,10 @@ namespace MCPForUnity.Editor.Tools
             var previous = EditorWindow.focusedWindow;
             var selectedTabs = UnityEngine.Resources.FindObjectsOfTypeAll<EditorWindow>()
                 .Where(w => w != null && w != target && w.docked && w.hasFocus).ToArray();
-            EditorWindow previousTab = null;
+            var targetHost = EditorWindowScreenshotUtility.GetHostView(target);
+            EditorWindow previousTab = target.docked && targetHost != null
+                ? selectedTabs.FirstOrDefault(w => ReferenceEquals(
+                    EditorWindowScreenshotUtility.GetHostView(w), targetHost)) : null;
             var completion = new TaskCompletionSource<object>();
             double start = EditorApplication.timeSinceStartup;
             int ticks = 0;
@@ -175,7 +205,6 @@ namespace MCPForUnity.Editor.Tools
                 if (p.focus)
                 {
                     target.ShowTab();
-                    previousTab = target.docked ? selectedTabs.FirstOrDefault(w => w.position == target.position) : null;
                 }
                 target.Repaint();
                 EditorApplication.QueuePlayerLoopUpdate();
@@ -200,13 +229,15 @@ namespace MCPForUnity.Editor.Tools
             {
                 full = EditorWindowScreenshotUtility.CaptureWindowPixels(target, width, height);
                 string path = null;
+                byte[] fullPng = null;
                 if (p.save_file)
                 {
                     string folder = Path.GetFullPath(Path.Combine(Application.dataPath, "../Library/McpEditorScreenshots"));
                     Directory.CreateDirectory(folder);
                     path = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff")
                         + "-" + Guid.NewGuid().ToString("N") + ".png");
-                    File.WriteAllBytes(path, full.EncodeToPNG());
+                    fullPng = full.EncodeToPNG();
+                    File.WriteAllBytes(path, fullPng);
                 }
                 var data = new JObject
                 {
@@ -221,7 +252,8 @@ namespace MCPForUnity.Editor.Tools
                 {
                     image = Mathf.Max(full.width, full.height) > p.max_resolution
                         ? ScreenshotUtility.DownscaleTexture(full, p.max_resolution) : full;
-                    data["imageBase64"] = Convert.ToBase64String(image.EncodeToPNG());
+                    data["imageBase64"] = Convert.ToBase64String(image == full
+                        ? fullPng ?? full.EncodeToPNG() : image.EncodeToPNG());
                     data["imageWidth"] = image.width;
                     data["imageHeight"] = image.height;
                 }

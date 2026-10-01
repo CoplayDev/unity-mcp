@@ -179,11 +179,14 @@ namespace MCPForUnity.Editor.Helpers
 
         internal static float GetWindowPixelsPerPoint(EditorWindow window)
         {
-            // IPanel.scaledPixelsPerPoint is not public in the oldest supported Editors.
-            var panel = window.rootVisualElement.panel;
-            var property = panel?.GetType().GetProperty("scaledPixelsPerPoint",
+            // The native backing scale measures physical pixels. UI Toolkit's
+            // scaledPixelsPerPoint also includes panel zoom, which must not resize
+            // a capture of the whole Editor window.
+            var host = GetHostView(window);
+            var method = host?.GetType().GetMethod("GetBackingScaleFactor",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (property?.GetValue(panel, null) is float scale && scale > 0 && !float.IsInfinity(scale))
+            if (method?.Invoke(host, null) is float scale && scale > 0
+                && !float.IsNaN(scale) && !float.IsInfinity(scale))
                 return scale;
             return EditorGUIUtility.pixelsPerPoint;
         }
@@ -194,10 +197,12 @@ namespace MCPForUnity.Editor.Helpers
             if (width <= 0 || height <= 0 || (long)width * height > 16777216)
                 throw new ArgumentOutOfRangeException(nameof(width), "Empty or excessive capture area.");
             InvokeMethodIfExists(GetHostView(window), "RepaintImmediately");
-            return CaptureViewRect(window, new Rect(0, 0, width, height));
+            // GrabPixels uses physical pixels. A point-sized source rectangle can
+            // crop fractional-DPI buffers. Readback orientation depends on the GPU API.
+            return CaptureViewRect(window, new Rect(0, 0, width, height), SystemInfo.graphicsUVStartsAtTop);
         }
 
-        private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels)
+        private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels, bool flipVertically = true)
         {
             object hostView = GetHostView(window);
             if (hostView == null)
@@ -238,7 +243,7 @@ namespace MCPForUnity.Editor.Helpers
                 texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
-                FlipTextureVertically(texture);
+                if (flipVertically) FlipTextureVertically(texture);
                 var result = texture;
                 texture = null;
                 return result;
@@ -260,7 +265,7 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
-        private static object GetHostView(EditorWindow window)
+        internal static object GetHostView(EditorWindow window)
         {
             if (window == null)
                 return null;

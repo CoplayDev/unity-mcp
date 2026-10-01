@@ -18,8 +18,12 @@ namespace MCPForUnityTests.Editor.Tools
     {
         protected void OnGUI()
         {
-            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height / 2), Color.blue);
-            EditorGUI.DrawRect(new Rect(0, position.height / 2, position.width, position.height / 2), Color.red);
+            float halfWidth = position.width / 2;
+            float halfHeight = position.height / 2;
+            EditorGUI.DrawRect(new Rect(0, 0, halfWidth, halfHeight), Color.blue);
+            EditorGUI.DrawRect(new Rect(halfWidth, 0, halfWidth, halfHeight), Color.green);
+            EditorGUI.DrawRect(new Rect(0, halfHeight, halfWidth, halfHeight), Color.red);
+            EditorGUI.DrawRect(new Rect(halfWidth, halfHeight, halfWidth, halfHeight), new Color(1, 1, 0, 1));
         }
     }
 
@@ -134,6 +138,107 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Throws<ArgumentOutOfRangeException>(() => EditorWindowScreenshotUtility.CaptureWindowPixels(first, width, height));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ParameterAccessorsPreserveEveryOptionAndDefault(bool camelCase)
+        {
+            string Key(string snake, string camel) => camelCase ? camel : snake;
+            var args = new JObject {
+                ["action"] = "screenshot", [Key("window_id", "windowId")] = second.GetInstanceID(),
+                [Key("window_title", "windowTitle")] = "Inspector",
+                [Key("window_type", "windowType")] = "UnityEditor.InspectorWindow",
+                ["focus"] = false, [Key("restore_focus", "restoreFocus")] = false,
+                [Key("include_image", "includeImage")] = false,
+                [Key("save_file", "saveFile")] = true, [Key("max_resolution", "maxResolution")] = 128
+            };
+            var p = ManageEditorWindows.ParseParameters(args);
+            Assert.That(p.action, Is.EqualTo("screenshot"));
+            Assert.That(p.window_id, Is.EqualTo(second.GetInstanceID()));
+            Assert.That(p.window_title, Is.EqualTo("Inspector"));
+            Assert.That(p.window_type, Is.EqualTo("UnityEditor.InspectorWindow"));
+            Assert.That(p.focus || p.restore_focus || p.include_image, Is.False);
+            Assert.That(p.save_file, Is.True);
+            Assert.That(p.max_resolution, Is.EqualTo(128));
+            p = ManageEditorWindows.ParseParameters(null);
+            Assert.That(p.action, Is.EqualTo("list"));
+            Assert.That(p.window_id, Is.Null);
+            Assert.That(p.focus && p.restore_focus && p.include_image, Is.True);
+            Assert.That(p.save_file, Is.False);
+            Assert.That(p.max_resolution, Is.EqualTo(1600));
+        }
+
+        [TestCase("window_id", "not-an-id")]
+        [TestCase("windowId", "not-an-id")]
+        [TestCase("windowId", null)]
+        [TestCase("windowTitle", "  ")]
+        [TestCase("window_type", "")]
+        [TestCase("windowType", null)]
+        [TestCase("maxResolution", "bad")]
+        public void InvalidExplicitParametersNeverBecomeFocusedWindowRequests(string key, string value)
+        {
+            var args = new JObject { ["action"] = "screenshot",
+                [key] = value == null ? JValue.CreateNull() : new JValue(value) };
+            var focused = EditorWindow.focusedWindow;
+            var result = ManageEditorWindows.HandleCommand(args).Result;
+            Assert.That(result, Is.TypeOf<ErrorResponse>());
+            Assert.That(((ErrorResponse)result).Error, Does.Contain("must be"));
+            Assert.That(EditorWindow.focusedWindow, Is.SameAs(focused));
+        }
+
+        [UnityTest]
+        public IEnumerator SavedAndInlineFullSizePngBytesMatch()
+        {
+            RequireGraphics();
+            yield return ShowFixtures();
+            var task = ManageEditorWindows.HandleCommand(new JObject {
+                ["action"] = "screenshot", ["windowId"] = second.GetInstanceID(),
+                ["saveFile"] = true, ["includeImage"] = true, ["maxResolution"] = 4096
+            });
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+            var data = (JObject)((SuccessResponse)task.Result).Data;
+            string saved = (string)data["path"];
+            try
+            {
+                Assert.That(File.ReadAllBytes(saved), Is.EqualTo(Convert.FromBase64String((string)data["imageBase64"])));
+                Assert.That((int)data["imageWidth"], Is.EqualTo((int)data["width"]));
+                Assert.That((int)data["imageHeight"], Is.EqualTo((int)data["height"]));
+            }
+            finally { if (File.Exists(saved)) File.Delete(saved); }
+        }
+
+        [UnityTest]
+        public IEnumerator DockedBufferPreservesFourCornerColorsAndPhysicalDimensions()
+        {
+            RequireGraphics();
+            var scene = EditorWindow.GetWindow<SceneView>();
+            docked = EditorWindow.GetWindow<ScreenshotDockWindow>("MCP corner dock fixture", false, typeof(SceneView));
+            docked.ShowTab();
+            yield return null;
+            yield return null;
+            Assert.That(docked.docked, Is.True);
+            var task = Screenshot(docked, 4096);
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+            var data = (JObject)((SuccessResponse)task.Result).Data;
+            var image = new Texture2D(2, 2);
+            try
+            {
+                Assert.That(image.LoadImage(Convert.FromBase64String((string)data["imageBase64"])), Is.True);
+                float scale = (float)data["pixels_per_point"];
+                Assert.That(image.width, Is.EqualTo(Mathf.RoundToInt(docked.position.width * scale)));
+                Assert.That(image.height, Is.EqualTo(Mathf.RoundToInt(docked.position.height * scale)));
+                Debug.Log("[EditorWindowScreenshots] Capture dimensions=" + image.width + "x" + image.height
+                    + " source_points=" + data["window"]["position"] + " backing_scale=" + data["pixels_per_point"]
+                    + " graphics=" + SystemInfo.graphicsDeviceType + " uv_top=" + SystemInfo.graphicsUVStartsAtTop
+                    + " public_capture_api_available=" + (typeof(UnityEditorInternal.InternalEditorUtility).GetMethod("CaptureEditorWindow",
+                        BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(EditorWindow), typeof(RenderTexture) }, null) != null));
+                AssertCornerColors(image);
+                Debug.Log("[EditorWindowScreenshots] Corner capture pixels_per_point=" + scale);
+            }
+            finally { Object.DestroyImmediate(image); scene.ShowTab(); }
+        }
+
         [UnityTest]
         public IEnumerator FloatingBufferCapturePreservesOrientationAndFocus()
         {
@@ -150,10 +255,106 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 Assert.That(image.LoadImage(Convert.FromBase64String((string)data["imageBase64"])), Is.True);
                 Assert.That(Mathf.Max(image.width, image.height), Is.LessThanOrEqualTo(160));
-                Assert.That(image.GetPixel(image.width / 2, image.height * 3 / 4).b, Is.GreaterThan(0.9));
-                Assert.That(image.GetPixel(image.width / 2, image.height / 4).r, Is.GreaterThan(0.9));
+                Debug.Log("[EditorWindowScreenshots] Capture dimensions=" + image.width + "x" + image.height
+                    + " source_points=" + data["window"]["position"] + " backing_scale=" + data["pixels_per_point"]
+                    + " graphics=" + SystemInfo.graphicsDeviceType + " uv_top=" + SystemInfo.graphicsUVStartsAtTop
+                    + " public_capture_api_available=" + (typeof(UnityEditorInternal.InternalEditorUtility).GetMethod("CaptureEditorWindow",
+                        BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(EditorWindow), typeof(RenderTexture) }, null) != null));
+                AssertCornerColors(image);
             }
             finally { Object.DestroyImmediate(image); }
+        }
+
+        [UnityTest]
+        public IEnumerator CamelCaseRequestSelectsTheUnfocusedWindow()
+        {
+            RequireGraphics();
+            yield return ShowFixtures();
+            var task = ManageEditorWindows.HandleCommand(new JObject {
+                ["action"] = "screenshot", ["windowId"] = second.GetInstanceID(),
+                ["maxResolution"] = 128, ["restoreFocus"] = true
+            });
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+            var data = (JObject)((SuccessResponse)task.Result).Data;
+            Assert.That((int)data["window"]["window_id"], Is.EqualTo(second.GetInstanceID()));
+            Assert.That(Math.Max((int)data["imageWidth"], (int)data["imageHeight"]), Is.EqualTo(128));
+            Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
+        }
+
+        [UnityTest]
+        public IEnumerator BatchRouteSelectsTheRequestedUnfocusedWindow()
+        {
+            RequireGraphics();
+            yield return ShowFixtures();
+            var task = BatchExecute.HandleCommand(new JObject {
+                ["commands"] = new JArray(new JObject {
+                    ["tool"] = "manage_editor_windows", ["params"] = new JObject {
+                        ["action"] = "screenshot", ["window_id"] = second.GetInstanceID(),
+                        ["max_resolution"] = 128
+                    }
+                })
+            });
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+            var data = JObject.FromObject(((SuccessResponse)task.Result).Data);
+            Assert.That((int)data["results"][0]["result"]["data"]["window"]["window_id"],
+                Is.EqualTo(second.GetInstanceID()));
+            Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
+        }
+
+        [UnityTest]
+        public IEnumerator InvalidBatchSelectorFailsWithoutCapturingTheFocusedWindow()
+        {
+            RequireGraphics();
+            yield return ShowFixtures();
+            var task = BatchExecute.HandleCommand(new JObject {
+                ["commands"] = new JArray(new JObject {
+                    ["tool"] = "manage_editor_windows", ["params"] = new JObject {
+                        ["action"] = "screenshot", ["window_title"] = "  "
+                    }
+                })
+            });
+            yield return Await(task);
+            Assert.That(task.Result, Is.TypeOf<ErrorResponse>());
+            var data = JObject.FromObject(((ErrorResponse)task.Result).Data);
+            Assert.That((bool)data["results"][0]["callSucceeded"], Is.False);
+            Assert.That(data["results"][0]["result"]["data"], Is.Null);
+            Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
+        }
+
+        [UnityTest]
+        public IEnumerator ResizedDockRestoresItsSelectedTabWhenAnotherWindowHadKeyboardFocus()
+        {
+            RequireGraphics();
+            yield return ShowFixtures();
+            var scene = EditorWindow.GetWindow<SceneView>();
+            docked = EditorWindow.GetWindow<ScreenshotDockWindow>("MCP resized dock fixture", false, typeof(SceneView));
+            docked.ShowTab();
+            yield return null;
+            yield return null;
+            scene.ShowTab();
+            yield return null;
+            var parentField = typeof(EditorWindow).GetField("m_Parent", BindingFlags.Instance | BindingFlags.NonPublic);
+            var host = parentField.GetValue(scene);
+            Assert.That(parentField.GetValue(docked), Is.SameAs(host));
+            var positionProperty = host.GetType().GetProperty("position", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Rect original = (Rect)positionProperty.GetValue(host);
+            try
+            {
+                positionProperty.SetValue(host, new Rect(original.x, original.y, original.width + 73, original.height + 41));
+                scene.Repaint();
+                yield return null;
+                yield return null;
+                Assert.That(docked.position, Is.Not.EqualTo(scene.position), "Background-tab rectangle must be stale to exercise the regression.");
+                first.Focus();
+                var task = Screenshot(docked);
+                yield return Await(task);
+                Assert.That(task.Result, Is.TypeOf<SuccessResponse>());
+                Assert.That(scene.hasFocus, Is.True, "The previous selected tab must be restored independently of keyboard focus.");
+                Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
+            }
+            finally { if (host != null) positionProperty.SetValue(host, original); }
         }
 
         [UnityTest]
@@ -427,6 +628,26 @@ namespace MCPForUnityTests.Editor.Tools
             yield return null;
         }
 
+        private static void AssertCornerColors(Texture2D image)
+        {
+            Debug.Log("[EditorWindowScreenshots] Corners TL=" + image.GetPixel(image.width / 10, image.height * 9 / 10)
+                + " TR=" + image.GetPixel(image.width * 9 / 10, image.height * 9 / 10)
+                + " BL=" + image.GetPixel(image.width / 10, image.height / 10)
+                + " BR=" + image.GetPixel(image.width * 9 / 10, image.height / 10));
+            // Sample near all four edges, leaving room for the dock tab strip.
+            AssertColor(image.GetPixel(image.width / 10, image.height * 9 / 10), Color.blue, "top left");
+            AssertColor(image.GetPixel(image.width * 9 / 10, image.height * 9 / 10), Color.green, "top right");
+            AssertColor(image.GetPixel(image.width / 10, image.height / 10), Color.red, "bottom left");
+            AssertColor(image.GetPixel(image.width * 9 / 10, image.height / 10), new Color(1, 1, 0, 1), "bottom right");
+        }
+
+        private static void AssertColor(Color actual, Color expected, string corner)
+        {
+            Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.04f), corner + " red");
+            Assert.That(actual.g, Is.EqualTo(expected.g).Within(0.04f), corner + " green");
+            Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.04f), corner + " blue");
+        }
+
         private static void RequireGraphics()
         {
             if (Application.isBatchMode || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
@@ -442,6 +663,7 @@ namespace MCPForUnityTests.Editor.Tools
             while (!task.IsCompleted && EditorApplication.timeSinceStartup < deadline) yield return null;
             Assert.That(task.IsCompleted, Is.True, "Capture did not complete before the test deadline.");
             Assert.That(task.IsFaulted, Is.False, task.Exception?.ToString());
+            if (task.Result is ErrorResponse error) Debug.Log("[EditorWindowScreenshots] Capture result: " + error.Error);
         }
 
         private EditorWindow Resolve(ManageEditorWindows.Parameters p, out string error) =>

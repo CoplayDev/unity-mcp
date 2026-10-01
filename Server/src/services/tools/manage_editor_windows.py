@@ -22,7 +22,7 @@ from transport.unity_transport import send_with_unity_instance
         "No file is saved unless save_file=true. Requires a graphical Editor; "
         "batch mode, native OS dialogs and minimized windows are unsupported."
     ),
-    annotations=ToolAnnotations(title="Manage Editor windows", readOnlyHint=False, destructiveHint=True),
+    annotations=ToolAnnotations(title="Manage Editor windows", readOnlyHint=False, destructiveHint=False),
 )
 async def manage_editor_windows(
     ctx: Context,
@@ -41,6 +41,11 @@ async def manage_editor_windows(
         return {"success": False, "message": "action must be list or screenshot."}
     params: dict[str, Any] = {"action": action}
     if action == "screenshot":
+        if window_id is not None and type(window_id) is not int:
+            return {"success": False, "message": "window_id must be an integer."}
+        for name, value in {"window_title": window_title, "window_type": window_type}.items():
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                return {"success": False, "message": f"{name} must be a non-empty string."}
         selectors = {key: value for key, value in {
             "window_id": window_id, "window_title": window_title, "window_type": window_type,
         }.items() if value is not None and (not isinstance(value, str) or value.strip())}

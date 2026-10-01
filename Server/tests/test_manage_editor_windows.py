@@ -46,6 +46,10 @@ def test_capture_routes_selector_and_privacy_defaults(transport, selector):
     {"action": "close"}, {"action": "screenshot", "window_id": 1, "window_title": "Inspector"},
     {"action": "screenshot", "max_resolution": 63}, {"action": "screenshot", "max_resolution": 4097},
     {"action": "screenshot", "max_resolution": True},
+    {"action": "screenshot", "window_id": True},
+    {"action": "screenshot", "window_id": "not-an-id"},
+    {"action": "screenshot", "window_title": "  "},
+    {"action": "screenshot", "window_type": ""},
     {"action": "screenshot", "include_image": False, "save_file": False},
 ])
 def test_invalid_requests_do_not_reach_unity(transport, kwargs):
@@ -99,7 +103,7 @@ async def run():
     async with Client(server) as client:
         tool = next(t for t in await client.list_tools() if t.name == "manage_editor_windows")
         assert tool.annotations.readOnlyHint is False
-        assert tool.annotations.destructiveHint is True
+        assert tool.annotations.destructiveHint is False
         result = await client.call_tool("manage_editor_windows", {"action": "screenshot", "window_id": 42})
         assert len(result.content) == 2
         assert isinstance(result.content[1], ImageContent)
