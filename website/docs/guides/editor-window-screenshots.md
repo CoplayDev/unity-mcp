@@ -51,6 +51,13 @@ full-size PNG in `Library/McpEditorScreenshots`; `max_resolution` only
 limits the inline image. Use `include_image=false, save_file=true` for a
 file-only result. Output paths are not supplied by the caller.
 
+The PNG is written after metadata and the inline image are prepared. Failed
+writes attempt to remove incomplete output; if removal also fails, the error
+includes `data.path` and `data.cleanup_failed=true` so you can delete it manually.
+If the server cannot build the MCP image block after Unity saves the file, its
+error retains `data.path` and omits the encoded pixels.
+A lost client connection after a successful save does not undo that saved file.
+
 Screenshots can contain private source code, asset names, file paths,
 Console messages or credentials displayed in Editor windows. The image is
 sent to the selected MCP client. Enable and use the tool only with clients

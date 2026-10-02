@@ -177,6 +177,7 @@ namespace MCPForUnity.Editor.Helpers
                 Mathf.Min(windowRect.height, viewportHeight));
         }
 
+        /// <summary>Uses native backing scale rather than panel zoom, falling back to the current Editor scale.</summary>
         internal static float GetWindowPixelsPerPoint(EditorWindow window)
         {
             // The native backing scale measures physical pixels. UI Toolkit's
@@ -191,6 +192,7 @@ namespace MCPForUnity.Editor.Helpers
             return EditorGUIUtility.pixelsPerPoint;
         }
 
+        /// <summary>Reads a bounded window content rectangle in physical pixels without a desktop-capture fallback.</summary>
         internal static Texture2D CaptureWindowPixels(EditorWindow window, int width, int height)
         {
             if (window == null) throw new ArgumentNullException(nameof(window));
@@ -202,6 +204,7 @@ namespace MCPForUnity.Editor.Helpers
             return CaptureViewRect(window, new Rect(0, 0, width, height));
         }
 
+        /// <summary>Offsets for host borders, normalizes GPU orientation, and restores render-target state on every exit.</summary>
         private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels)
         {
             object hostView = GetHostView(window);
@@ -278,6 +281,7 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
+        /// <summary>Resolves the native host identity used for buffer capture and dock-tab restoration across supported Editors.</summary>
         internal static object GetHostView(EditorWindow window)
         {
             if (window == null)

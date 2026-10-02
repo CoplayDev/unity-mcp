@@ -17,6 +17,7 @@ namespace MCPForUnityTests.Editor.Tools
     public class ScreenshotColorWindow : EditorWindow
     {
         public bool paintEdgeMarkers;
+        /// <summary>Paints deterministic color regions used to detect orientation, cropping, and color-space changes.</summary>
         protected void OnGUI()
         {
             float halfWidth = position.width / 2;
@@ -38,6 +39,7 @@ namespace MCPForUnityTests.Editor.Tools
 
     public class ScreenshotDarkWindow : EditorWindow
     {
+        /// <summary>Paints deterministic color regions used to detect orientation, cropping, and color-space changes.</summary>
         private void OnGUI() => EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height),
             new Color(0.12f, 0.18f, 0.24f, 1));
     }
@@ -50,6 +52,7 @@ namespace MCPForUnityTests.Editor.Tools
         private ScreenshotDockWindow docked;
         private EditorWindow previous;
 
+        /// <summary>Creates two unshown windows with distinct identities and records the previous keyboard focus.</summary>
         [SetUp]
         public void SetUp()
         {
@@ -60,6 +63,7 @@ namespace MCPForUnityTests.Editor.Tools
             second.titleContent = new GUIContent("MCP second fixture");
         }
 
+        /// <summary>Cancels any pending request, disposes owned fixtures, and restores the earlier focused window.</summary>
         [TearDown]
         public void TearDown()
         {
@@ -70,12 +74,14 @@ namespace MCPForUnityTests.Editor.Tools
             if (previous != null) previous.Focus();
         }
 
+        /// <summary>Returns the owned test Editor to Edit Mode after tests that enter Play Mode.</summary>
         [UnityTearDown]
         public IEnumerator LeavePlayMode()
         {
             if (EditorApplication.isPlaying) yield return new ExitPlayMode();
         }
 
+        /// <summary>Duplicate titles must not prevent an exact instance ID from selecting its intended window.</summary>
         [Test]
         public void IdSelectsOneWindowWithDuplicateTitles()
         {
@@ -84,12 +90,14 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(error, Is.Null);
         }
 
+        /// <summary>Title matching accepts case differences and surrounding whitespace.</summary>
         [Test]
         public void TitleIgnoresCaseAndOuterSpaces()
         {
             Assert.That(Resolve(new ManageEditorWindows.Parameters { window_title = " MCP FIRST fixture " }, out _), Is.SameAs(first));
         }
 
+        /// <summary>Ambiguous title and type selectors fail rather than capture an arbitrary window.</summary>
         [Test]
         public void DuplicateTitlesAndTypesRequireIds()
         {
@@ -99,6 +107,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(Resolve(new ManageEditorWindows.Parameters { window_type = typeof(ScreenshotColorWindow).FullName }, out _), Is.Null);
         }
 
+        /// <summary>Conflicting selectors fail before target selection.</summary>
         [Test]
         public void MultipleSelectorsAreRejected()
         {
@@ -106,6 +115,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(error, Does.Contain("only one"));
         }
 
+        /// <summary>A destroyed target ID must not fall back to another open window.</summary>
         [Test]
         public void ClosedIdCannotSelectAnotherWindow()
         {
@@ -116,6 +126,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(error, Does.Contain("No matching"));
         }
 
+        /// <summary>Unsupported actions return a structured error without changing keyboard focus.</summary>
         [Test]
         public void InvalidActionDoesNotChangeFocus()
         {
@@ -124,6 +135,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(focused));
         }
 
+        /// <summary>Headless Editors reject window pixel capture with an actionable batch-mode error.</summary>
         [Test]
         public void BatchCaptureHasAnExplicitError()
         {
@@ -132,12 +144,14 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(result.Error, Does.Contain("Batch mode"));
         }
 
+        /// <summary>An unshown window has no host and cannot trigger desktop capture.</summary>
         [Test]
         public void UnsupportedWindowHostFailsWithoutDesktopFallback()
         {
             Assert.Throws<InvalidOperationException>(() => EditorWindowScreenshotUtility.CaptureWindowPixels(first, 64, 64));
         }
 
+        /// <summary>Empty and over-limit pixel buffers fail before graphics allocation.</summary>
         [TestCase(0, 64)]
         [TestCase(4097, 4097)]
         public void EmptyAndExcessiveBufferSizesAreRejected(int width, int height)
@@ -145,10 +159,12 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Throws<ArgumentOutOfRangeException>(() => EditorWindowScreenshotUtility.CaptureWindowPixels(first, width, height));
         }
 
+        /// <summary>Direct snake-case and batch camel-case inputs preserve every capture option and omitted default.</summary>
         [TestCase(false)]
         [TestCase(true)]
         public void ParameterAccessorsPreserveEveryOptionAndDefault(bool camelCase)
         {
+            /// <summary>Chooses the input alias for each parameter without changing the expected value.</summary>
             string Key(string snake, string camel) => camelCase ? camel : snake;
             var args = new JObject {
                 ["action"] = "screenshot", [Key("window_id", "windowId")] = second.GetInstanceID(),
@@ -174,6 +190,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(p.max_resolution, Is.EqualTo(1600));
         }
 
+        /// <summary>Malformed explicit selectors and sizes fail without silently capturing the focused window.</summary>
         [TestCase("window_id", "not-an-id")]
         [TestCase("windowId", "not-an-id")]
         [TestCase("windowId", null)]
@@ -192,6 +209,105 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(focused));
         }
 
+        /// <summary>Late inline-processing failures must not leave encoded private pixels on disk.</summary>
+        [Test]
+        public void InlineProcessingFailureDoesNotPersistFullSizePng()
+        {
+            string folder = Path.GetFullPath(Path.Combine(Application.dataPath, "../Library/McpEditorScreenshots"));
+            var before = Directory.Exists(folder) ? Directory.GetFiles(folder) : Array.Empty<string>();
+            var full = new Texture2D(128, 128, TextureFormat.RGBA32, false);
+            bool reachedInlineProcessing = false;
+            try
+            {
+                var result = ManageEditorWindows.BuildCaptureResponse(first,
+                    new ManageEditorWindows.Parameters { save_file = true, include_image = true, max_resolution = 64 },
+                    full, 1, (_, __) => {
+                        reachedInlineProcessing = true;
+                        throw new InvalidOperationException("injected inline processing failure");
+                    });
+                Assert.That(reachedInlineProcessing, Is.True, "The full PNG must be encoded before the injected failure.");
+                Assert.That(result, Is.TypeOf<ErrorResponse>());
+                Assert.That(((ErrorResponse)result).Error, Does.Contain("injected inline processing failure"));
+                Assert.That(Directory.Exists(folder) ? Directory.GetFiles(folder) : Array.Empty<string>(),
+                    Is.EquivalentTo(before), "A failed response must not persist a new screenshot.");
+                Assert.That(full != null, Is.True, "Response construction must not destroy its caller's texture.");
+            }
+            finally { Object.DestroyImmediate(full); }
+        }
+
+        /// <summary>CPU pixel fixtures verify successful file-only and unscaled file/image output without window focus.</summary>
+        [TestCase(false)]
+        [TestCase(true)]
+        public void PreparedCapturePersistsFullPngAndReusesInlineBytes(bool includeImage)
+        {
+            var full = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            string path = null;
+            try
+            {
+                full.SetPixel(0, 0, Color.blue);
+                full.Apply();
+                var result = ManageEditorWindows.BuildCaptureResponse(first,
+                    new ManageEditorWindows.Parameters { save_file = true, include_image = includeImage }, full, 1);
+                Assert.That(result, Is.TypeOf<SuccessResponse>());
+                var data = (JObject)((SuccessResponse)result).Data;
+                path = (string)data["path"];
+                Assert.That(Path.GetDirectoryName(path), Is.EqualTo(Path.GetFullPath(
+                    Path.Combine(Application.dataPath, "../Library/McpEditorScreenshots"))));
+                Assert.That(File.ReadAllBytes(path), Is.EqualTo(full.EncodeToPNG()));
+                if (includeImage) Assert.That(Convert.FromBase64String((string)data["imageBase64"]), Is.EqualTo(File.ReadAllBytes(path)));
+                else Assert.That(data["imageBase64"], Is.Null);
+            }
+            finally
+            {
+                if (path != null && File.Exists(path)) File.Delete(path);
+                Object.DestroyImmediate(full);
+            }
+        }
+
+        /// <summary>Failed writes remove the generated partial file rather than returning an orphaned path.</summary>
+        [Test]
+        public void FailedFileWriteRemovesIncompleteOutput()
+        {
+            string path = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Library/McpEditorScreenshots", Guid.NewGuid().ToString("N") + ".png"));
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllBytes(path, new byte[] { 137, 80 });
+            try
+            {
+                var result = ManageEditorWindows.SaveCaptureFile(path, null, new SuccessResponse("prepared"));
+                Assert.That(result, Is.TypeOf<ErrorResponse>());
+                Assert.That(File.Exists(path), Is.False);
+                Assert.That(((ErrorResponse)result).Error, Does.Contain("incomplete output was removed"));
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        /// <summary>Windows sharing violations expose the retained file path when write and cleanup both fail.</summary>
+        [Test, Platform("Win")]
+        public void FailedCleanupReportsRetainedPath()
+        {
+            string path = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Library/McpEditorScreenshots", Guid.NewGuid().ToString("N") + ".png"));
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            try
+            {
+                using (var locked = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                {
+                    locked.WriteByte(137);
+                    locked.Flush();
+                    var result = ManageEditorWindows.SaveCaptureFile(path, new byte[] { 137, 80 }, new SuccessResponse("prepared"));
+                    Assert.That(result, Is.TypeOf<ErrorResponse>());
+                    var data = JObject.FromObject(((ErrorResponse)result).Data);
+                    Assert.That((string)data["path"], Is.EqualTo(path));
+                    Assert.That((bool)data["cleanup_failed"], Is.True);
+                    Assert.That((string)data["cleanup_error"], Is.Not.Empty);
+                }
+                Assert.That(File.Exists(path), Is.True, "The error must reference the retained output.");
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        /// <summary>Combined graphical output contains the same PNG bytes in the full-size file and inline image.</summary>
         [UnityTest]
         public IEnumerator SavedAndInlineFullSizePngBytesMatch()
         {
@@ -214,6 +330,7 @@ namespace MCPForUnityTests.Editor.Tools
             finally { if (File.Exists(saved)) File.Delete(saved); }
         }
 
+        /// <summary>Docked capture preserves four corner colors and dimensions derived from native backing scale.</summary>
         [UnityTest]
         public IEnumerator DockedBufferPreservesFourCornerColorsAndPhysicalDimensions()
         {
@@ -242,6 +359,7 @@ namespace MCPForUnityTests.Editor.Tools
             finally { Object.DestroyImmediate(image); scene.ShowTab(); }
         }
 
+        /// <summary>A floating capture keeps pixel orientation and restores the previously focused fixture.</summary>
         [UnityTest]
         public IEnumerator FloatingBufferCapturePreservesOrientationAndFocus()
         {
@@ -263,6 +381,7 @@ namespace MCPForUnityTests.Editor.Tools
             finally { Object.DestroyImmediate(image); }
         }
 
+        /// <summary>Thin colored rims detect host-margin offsets and cropping in floating full-size output.</summary>
         [UnityTest]
         public IEnumerator FloatingFullSizeBufferMatchesContentEdges()
         {
@@ -286,14 +405,17 @@ namespace MCPForUnityTests.Editor.Tools
             finally { Object.DestroyImmediate(image); }
         }
 
+        /// <summary>The floating Scene View viewport shares correct content margins and readback orientation.</summary>
         [UnityTest]
         public IEnumerator SceneViewViewportPreservesContentEdgesAndOrientation() =>
             CaptureSceneViewFixture(false);
 
+        /// <summary>The docked Scene View viewport excludes host chrome and preserves its edge markers.</summary>
         [UnityTest]
         public IEnumerator DockedSceneViewViewportPreservesContentEdgesAndOrientation() =>
             CaptureSceneViewFixture(true);
 
+        /// <summary>Paints only the owned Scene View viewport and restores its overlays, gizmos, handlers, and output file.</summary>
         private static IEnumerator CaptureSceneViewFixture(bool dockedScene)
         {
             RequireGraphics();
@@ -312,6 +434,7 @@ namespace MCPForUnityTests.Editor.Tools
             var overlaysProperty = canvas?.GetType().GetProperty("overlaysEnabled",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             object previousOverlays = overlaysProperty?.GetValue(canvas);
+            /// <summary>Temporarily hides fixture overlays through the setter available in the tested Editor version.</summary>
             void SetOverlays(bool enabled)
             {
                 if (canvas == null) return;
@@ -328,6 +451,7 @@ namespace MCPForUnityTests.Editor.Tools
             string folder = Path.GetFullPath(Path.Combine(Application.dataPath,
                 "../Library/McpSceneViewportTests", Guid.NewGuid().ToString("N")));
             int repaints = 0;
+            /// <summary>Paints quadrant and edge markers only during repaints of the owned Scene View.</summary>
             void PaintViewport(SceneView view)
             {
                 if (view != scene || Event.current.type != EventType.Repaint) return;
@@ -385,6 +509,7 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        /// <summary>A direct camel-case request captures the specified unfocused fixture rather than the focused one.</summary>
         [UnityTest]
         public IEnumerator CamelCaseRequestSelectsTheUnfocusedWindow()
         {
@@ -402,6 +527,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
         }
 
+        /// <summary>The real batch route preserves selector identity after parameter-key normalization.</summary>
         [UnityTest]
         public IEnumerator BatchRouteSelectsTheRequestedUnfocusedWindow()
         {
@@ -423,6 +549,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
         }
 
+        /// <summary>The batch route rejects invalid explicit IDs and leaves the focused window unchanged.</summary>
         [UnityTest]
         public IEnumerator InvalidBatchSelectorFailsWithoutCapturingTheFocusedWindow()
         {
@@ -443,6 +570,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(first));
         }
 
+        /// <summary>Dock restoration uses host identity even when an inactive tab rectangle is stale after resize.</summary>
         [UnityTest]
         public IEnumerator ResizedDockRestoresItsSelectedTabWhenAnotherWindowHadKeyboardFocus()
         {
@@ -477,6 +605,7 @@ namespace MCPForUnityTests.Editor.Tools
             finally { if (host != null) positionProperty.SetValue(host, original); }
         }
 
+        /// <summary>Explicit file-only captures use distinct generated names inside Library and return no inline pixels.</summary>
         [UnityTest]
         public IEnumerator FileOnlyCaptureIsUniqueAndInsideLibrary()
         {
@@ -511,6 +640,7 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        /// <summary>Cancellation restores prior focus and releases the gate for a subsequent successful capture.</summary>
         [UnityTest]
         public IEnumerator CancellationRestoresFocusAndAllowsTheNextCapture()
         {
@@ -528,6 +658,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(retry.Result, Is.TypeOf<SuccessResponse>());
         }
 
+        /// <summary>Closing a target completes its request with an error and permits a later capture.</summary>
         [UnityTest]
         public IEnumerator ClosingTargetCompletesWithErrorAndReleasesTheCaptureGate()
         {
@@ -542,6 +673,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(retry.Result, Is.TypeOf<SuccessResponse>());
         }
 
+        /// <summary>Inactive docked tabs remain discoverable and their prior selected tab is restored after capture.</summary>
         [UnityTest]
         public IEnumerator InactiveDockedTabIsListedCapturedAndRestored()
         {
@@ -566,6 +698,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(EditorWindow.focusedWindow, Is.SameAs(scene));
         }
 
+        /// <summary>A focus change after capture begins takes precedence over automatic focus restoration.</summary>
         [UnityTest]
         public IEnumerator CaptureDoesNotOverrideUserFocusChanges()
         {
@@ -584,6 +717,7 @@ namespace MCPForUnityTests.Editor.Tools
             finally { third.Close(); }
         }
 
+        /// <summary>Resizing retains the full-size dark colors within readback tolerance.</summary>
         [UnityTest]
         public IEnumerator DownscaledDarkPixelsMatchTheFullSizeCapture()
         {
@@ -620,6 +754,7 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        /// <summary>Composited Game View capture leaves Play Mode running and introduces no PlayerLoop step.</summary>
         [UnityTest]
         public IEnumerator GameViewBufferCaptureInPlayModeDoesNotStepOrPauseThePlayer()
         {
@@ -643,6 +778,7 @@ namespace MCPForUnityTests.Editor.Tools
             yield return new ExitPlayMode();
         }
 
+        /// <summary>Assembly reload interrupts the request through normal cleanup and leaves capture retry usable.</summary>
         [UnityTest]
         public IEnumerator AssemblyReloadCancelsThePendingCaptureAndAllowsRetry()
         {
@@ -653,6 +789,7 @@ namespace MCPForUnityTests.Editor.Tools
             const string focusKey = "MCP.ScreenshotTests.ReloadFocus";
             SessionState.EraseString(resultKey);
             SessionState.EraseBool(focusKey);
+            /// <summary>Records that reload cancellation completed before the test assembly is replaced.</summary>
             void ObserveCancellation()
             {
                 SessionState.SetString(resultKey, task.IsCompleted && task.Result is ErrorResponse error ? error.Error : "not cancelled");
@@ -673,6 +810,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(retry.Result, Is.TypeOf<SuccessResponse>());
         }
 
+        /// <summary>Minimized-window capture is bounded and capture recovers after restoring the owned Editor window.</summary>
         [UnityTest]
         public IEnumerator MinimizedWindowCompletesAndSubsequentCaptureRecovers()
         {
@@ -733,6 +871,7 @@ namespace MCPForUnityTests.Editor.Tools
         private static extern bool IsIconic(IntPtr handle);
 #endif
 
+        /// <summary>Shows only owned utility windows and waits for a stable first-fixture focus before assertions.</summary>
         private IEnumerator ShowFixtures()
         {
             first.position = new Rect(100, 100, 320, 240);
@@ -753,6 +892,7 @@ namespace MCPForUnityTests.Editor.Tools
                 "The fixture must establish keyboard focus before requesting capture.");
         }
 
+        /// <summary>Checks all four image corners to detect axis flips and mismatched color quadrants.</summary>
         private static void AssertCornerColors(Texture2D image)
         {
             // Coordinates are actual output pixels, not a percentage of the buffer.
@@ -767,6 +907,7 @@ namespace MCPForUnityTests.Editor.Tools
             AssertPixel(image, image.width - 1 - inset, inset, new Color(1, 1, 0, 1), "bottom right content edge");
         }
 
+        /// <summary>Checks the colored outer rim and black interior to detect content offsets as well as flips.</summary>
         private static void AssertContentEdgeMarkers(Texture2D image)
         {
             AssertCornerColors(image);
@@ -780,6 +921,7 @@ namespace MCPForUnityTests.Editor.Tools
             AssertPixel(image, image.width - 1 - inner, inner, Color.black, "bottom right interior");
         }
 
+        /// <summary>Samples one expected edge or interior position with an explanatory assertion label.</summary>
         private static void AssertPixel(Texture2D image, int x, int y, Color expected, string edge)
         {
             Color actual = image.GetPixel(x, y);
@@ -788,6 +930,7 @@ namespace MCPForUnityTests.Editor.Tools
                 + $"uv_top={SystemInfo.graphicsUVStartsAtTop}");
         }
 
+        /// <summary>Compares RGB channels within tolerance while preserving a precise failing region label.</summary>
         private static void AssertColor(Color actual, Color expected, string corner)
         {
             Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.04f), corner + " red");
@@ -795,15 +938,18 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.04f), corner + " blue");
         }
 
+        /// <summary>Skips window-buffer cases in headless Editors and records the active graphics API for real captures.</summary>
         private static void RequireGraphics()
         {
             if (Application.isBatchMode || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
                 Assert.Ignore("Pixel capture requires a graphical Editor; run this fixture without -batchmode/-nographics.");
         }
 
+        /// <summary>Requests an inline-only capture of the explicit fixture ID at the requested resolution.</summary>
         private static Task<object> Screenshot(EditorWindow window, int resolution = 1600) =>
             ManageEditorWindows.HandleCommand(new JObject { ["action"] = "screenshot", ["window_id"] = window.GetInstanceID(), ["max_resolution"] = resolution });
 
+        /// <summary>Bounds asynchronous fixture requests so capture lifecycle regressions fail instead of hanging the suite.</summary>
         private static IEnumerator Await(Task<object> task)
         {
             double deadline = EditorApplication.timeSinceStartup + 10;
@@ -812,6 +958,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.That(task.IsFaulted, Is.False, task.Exception?.ToString());
         }
 
+        /// <summary>Runs selector resolution against only the two owned windows.</summary>
         private EditorWindow Resolve(ManageEditorWindows.Parameters p, out string error) =>
             ManageEditorWindows.Resolve(new EditorWindow[] { first, second }, p, out error);
     }

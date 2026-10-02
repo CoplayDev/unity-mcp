@@ -36,7 +36,14 @@ async def manage_editor_windows(
     save_file: Annotated[bool, "Save a unique full-size PNG in Library/McpEditorScreenshots. Default false."] = False,
     max_resolution: Annotated[int, "Maximum edge for the inline image, from 64 to 4096. Does not resize saved files."] = 1600,
 ) -> dict[str, Any] | ToolResult:
-    """Observe open Editor windows through the selected Unity instance."""
+    """Observe open windows through the context-selected Unity instance.
+
+    Validate selectors before dispatch. Successful captures return one image
+    block and metadata, or file-only metadata when requested. If image-block
+    conversion fails after Unity saves a file, retain its path in a structured
+    error without returning encoded pixels. Audience annotations are client
+    display hints and do not enforce privacy or remove saved files.
+    """
     if action not in ("list", "screenshot"):
         return {"success": False, "message": "action must be list or screenshot."}
     params: dict[str, Any] = {"action": action}
@@ -63,7 +70,16 @@ async def manage_editor_windows(
     if not isinstance(response, dict):
         return {"success": False, "message": str(response)}
     if action == "screenshot":
-        images = extract_screenshot_images(response, image_audience=["assistant"])
+        try:
+            images = extract_screenshot_images(response, image_audience=["assistant"])
+        except (TypeError, ValueError):
+            data = response.get("data")
+            metadata = {key: value for key, value in data.items() if key != "imageBase64"} if isinstance(data, dict) else {}
+            return {
+                "success": False,
+                "message": "Could not build the image response. Any saved screenshot remains at data.path.",
+                "data": metadata,
+            }
         if images is not None:
             return images
     return response

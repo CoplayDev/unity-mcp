@@ -29,6 +29,7 @@ namespace MCPForUnity.Editor.Tools
             public int max_resolution = 1600;
         }
 
+        /// <summary>Lists eligible windows or schedules one validated capture; errors never select a replacement target.</summary>
         public static Task<object> HandleCommand(JObject args)
         {
             try
@@ -71,6 +72,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
+        /// <summary>Reads direct and batch-route aliases, retaining defaults while rejecting invalid explicit selectors.</summary>
         internal static Parameters ParseParameters(JObject args)
         {
             var values = new ToolParams(args ?? new JObject());
@@ -98,6 +100,7 @@ namespace MCPForUnity.Editor.Tools
             return p;
         }
 
+        /// <summary>Requires one unambiguous selector; only an omitted selector may use the currently focused window.</summary>
         internal static EditorWindow Resolve(EditorWindow[] windows, Parameters p, out string error)
         {
             error = null;
@@ -124,11 +127,13 @@ namespace MCPForUnity.Editor.Tools
             return null;
         }
 
+        /// <summary>Completes the current request through its normal cleanup path during reload, shutdown, or cancellation.</summary>
         internal static void CancelPendingCapture()
         {
             cancelPendingCapture?.Invoke();
         }
 
+        /// <summary>Waits for the selected tab to repaint and restores its former host selection without overriding later user focus.</summary>
         private static Task<object> CaptureAfterRepaint(EditorWindow target, Parameters p)
         {
             var previous = EditorWindow.focusedWindow;
@@ -143,6 +148,7 @@ namespace MCPForUnity.Editor.Tools
             int ticks = 0;
             bool finished = false;
 
+            /// <summary>Completes once, detaches lifecycle callbacks, releases the capture gate, and conditionally restores focus.</summary>
             void Finish(object result)
             {
                 if (finished) return;
@@ -171,6 +177,7 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
+            /// <summary>Bounds tab-selection waiting and handles a closed target before synchronous pixel capture.</summary>
             void Tick()
             {
                 try
@@ -216,6 +223,7 @@ namespace MCPForUnity.Editor.Tools
             return completion.Task;
         }
 
+        /// <summary>Checks the physical pixel area and owns the full-size texture until response construction finishes.</summary>
         private static object Capture(EditorWindow target, Parameters p)
         {
             float scale = EditorWindowScreenshotUtility.GetWindowPixelsPerPoint(target);
@@ -224,48 +232,95 @@ namespace MCPForUnity.Editor.Tools
             if (width <= 0 || height <= 0 || (long)width * height > 16777216)
                 return new ErrorResponse("The target has an empty or excessive capture area.");
             Texture2D full = null;
-            Texture2D image = null;
             try
             {
                 full = EditorWindowScreenshotUtility.CaptureWindowPixels(target, width, height);
+                return BuildCaptureResponse(target, p, full, scale);
+            }
+            finally
+            {
+                if (full != null) Object.DestroyImmediate(full);
+            }
+        }
+
+        /// <summary>
+        /// Prepares metadata and inline pixels before persisting an optional full-size PNG.
+        /// The caller owns full; this method releases only its downscaled texture.
+        /// </summary>
+        internal static object BuildCaptureResponse(EditorWindow target, Parameters p, Texture2D full,
+            float scale, Func<Texture2D, int, Texture2D> downscale = null)
+        {
+            Texture2D image = null;
+            try
+            {
                 string path = null;
                 byte[] fullPng = null;
                 if (p.save_file)
                 {
                     string folder = Path.GetFullPath(Path.Combine(Application.dataPath, "../Library/McpEditorScreenshots"));
-                    Directory.CreateDirectory(folder);
                     path = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff")
                         + "-" + Guid.NewGuid().ToString("N") + ".png");
                     fullPng = full.EncodeToPNG();
-                    File.WriteAllBytes(path, fullPng);
                 }
                 var data = new JObject
                 {
                     ["window"] = JObject.FromObject(Describe(target)),
                     ["capture_source"] = "editor_window_buffer",
                     ["captured_at_utc"] = DateTime.UtcNow.ToString("O"),
-                    ["width"] = width, ["height"] = height,
+                    ["width"] = full.width, ["height"] = full.height,
                     ["pixels_per_point"] = scale, ["path"] = path,
                     ["mimeType"] = "image/png"
                 };
                 if (p.include_image)
                 {
                     image = Mathf.Max(full.width, full.height) > p.max_resolution
-                        ? ScreenshotUtility.DownscaleTexture(full, p.max_resolution) : full;
+                        ? (downscale ?? ScreenshotUtility.DownscaleTexture)(full, p.max_resolution) : full;
                     data["imageBase64"] = Convert.ToBase64String(image == full
                         ? fullPng ?? full.EncodeToPNG() : image.EncodeToPNG());
                     data["imageWidth"] = image.width;
                     data["imageHeight"] = image.height;
                 }
-                return new SuccessResponse("Editor window captured.", data);
+                var response = new SuccessResponse("Editor window captured.", data);
+                return path == null ? response : SaveCaptureFile(path, fullPng, response);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse("Window capture failed: " + ex.Message);
             }
             finally
             {
                 if (image != null && image != full) Object.DestroyImmediate(image);
-                if (full != null) Object.DestroyImmediate(full);
             }
         }
 
+        /// <summary>
+        /// Saves a prepared response's unique PNG, removing incomplete output on failure.
+        /// If removal fails, the error exposes the retained path and cleanup outcome.
+        /// </summary>
+        internal static object SaveCaptureFile(string path, byte[] png, SuccessResponse response)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, png);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception cleanupError)
+                {
+                    return new ErrorResponse("Screenshot file write failed and its output could not be removed: " + ex.Message,
+                        new { path, cleanup_failed = true, cleanup_error = cleanupError.Message });
+                }
+                return new ErrorResponse("Screenshot file write failed; incomplete output was removed: " + ex.Message);
+            }
+        }
+
+        /// <summary>Reports current window identity, tab selection, keyboard focus, and content position in Editor points.</summary>
         private static object Describe(EditorWindow window)
         {
             Rect rect = window.position;
@@ -278,6 +333,7 @@ namespace MCPForUnity.Editor.Tools
             };
         }
 
+        /// <summary>Returns a completed command task containing a structured error instead of a transport exception.</summary>
         private static Task<object> Failure(string message) => Task.FromResult<object>(new ErrorResponse(message));
     }
 }

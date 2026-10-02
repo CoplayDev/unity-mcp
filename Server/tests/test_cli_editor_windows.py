@@ -9,6 +9,7 @@ from cli.utils.config import CLIConfig, set_config
 
 @pytest.fixture
 def transport(monkeypatch):
+    """Use an isolated CLI configuration and mock transport without connecting to Unity."""
     config = CLIConfig(format="json", unity_instance="isolated-test@hash")
     set_config(config)
     send = Mock(return_value={"success": True, "data": {"path": "Library/McpEditorScreenshots/test.png"}})
@@ -17,6 +18,7 @@ def transport(monkeypatch):
 
 
 def test_list_routes_through_cli_configuration(transport):
+    """The window-list command retains configured instance routing."""
     send, config = transport
     result = CliRunner().invoke(editor, ["windows"])
     assert result.exit_code == 0, result.output
@@ -29,6 +31,7 @@ def test_list_routes_through_cli_configuration(transport):
     (["--window-type", "UnityEditor.ConsoleWindow"], {"window_type": "UnityEditor.ConsoleWindow"}),
 ])
 def test_capture_saves_file_without_printing_base64(transport, selector, params):
+    """CLI captures request file-only output and preserve explicit selector and focus options."""
     send, config = transport
     result = CliRunner().invoke(editor, ["screenshot", *selector, "--no-focus", "--no-restore-focus"])
     assert result.exit_code == 0, result.output
@@ -44,6 +47,7 @@ def test_capture_saves_file_without_printing_base64(transport, selector, params)
     ["--output-folder", "../private"],
 ])
 def test_invalid_cli_capture_does_not_connect(transport, args):
+    """Invalid selectors and unsupported output paths fail before connection."""
     result = CliRunner().invoke(editor, ["screenshot", *args])
     assert result.exit_code == 2
     transport[0].assert_not_called()
