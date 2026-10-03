@@ -37,7 +37,7 @@ namespace MCPForUnity.Editor.Tools
     /// </summary>
     public static class CommandRegistry
     {
-        private static readonly Dictionary<string, HandlerInfo> _handlers = new();
+        private static readonly Dictionary<string, HandlerInfo> _handlers = new Dictionary<string, HandlerInfo>();
         private static bool _initialized = false;
 
         /// <summary>
@@ -353,7 +353,7 @@ namespace MCPForUnity.Editor.Tools
                     return null;
                 }
 
-                if (rawResult is not Task task)
+                if (!(rawResult is Task task))
                 {
                     throw new InvalidOperationException(
                         $"Async handler '{commandName}' returned an object that is not a Task"

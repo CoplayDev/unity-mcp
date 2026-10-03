@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Import;
 using UnityEngine;
 using UnityEngine.UIElements;
+using MCPForUnity.Editor.Windows.Components;
 
 namespace MCPForUnity.Editor.Windows.Components.AssetGen
 {
@@ -39,7 +40,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         // UI Elements
         private VisualElement providersContainer;
         private VisualElement gltfastNotice;
-        private DropdownField formatDropdown;
+        private CompatDropdownField formatDropdown;
         private TextField outputRootField;
         private Toggle autoNormalizeToggle;
         private Button refreshButton;
@@ -47,7 +48,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
         // Per-provider enable toggles for the GLB-capable (model) providers, used to
         // recompute the glTFast notice when a toggle changes.
-        private readonly List<(string Id, Toggle Toggle)> modelEnableToggles = new();
+        private readonly List<(string Id, Toggle Toggle)> modelEnableToggles = new List<(string Id, Toggle Toggle)>();
 
         public VisualElement Root { get; private set; }
 
@@ -63,7 +64,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             providersContainer = Root.Q<VisualElement>("assetgen-providers-container");
             gltfastNotice = Root.Q<VisualElement>("gltfast-notice");
-            formatDropdown = Root.Q<DropdownField>("assetgen-format-dropdown");
+            formatDropdown = Root.Q<CompatDropdownField>("assetgen-format-dropdown");
             outputRootField = Root.Q<TextField>("assetgen-output-root");
             autoNormalizeToggle = Root.Q<Toggle>("assetgen-auto-normalize");
             refreshButton = Root.Q<Button>("assetgen-refresh");
@@ -417,7 +418,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             modelLabel.AddToClassList("setting-label");
             dropdownRow.Add(modelLabel);
 
-            var dropdown = new DropdownField(choices, 0);
+            var dropdown = new CompatDropdownField(choices, 0);
             dropdown.AddToClassList("setting-dropdown-inline");
             dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
             dropdown.SetValueWithoutNotify(selected.Label);

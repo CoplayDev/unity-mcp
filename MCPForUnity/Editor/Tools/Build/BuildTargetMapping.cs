@@ -63,12 +63,12 @@ namespace MCPForUnity.Editor.Tools.Build
             }
         }
 
-        public static NamedBuildTarget GetNamedBuildTarget(BuildTarget target)
+        public static BuildTargetGroup GetNamedBuildTarget(BuildTarget target)
         {
-            return NamedBuildTarget.FromBuildTargetGroup(GetTargetGroup(target));
+            return GetTargetGroup(target);
         }
 
-        public static string TryResolveNamedBuildTarget(string name, out NamedBuildTarget namedTarget)
+        public static string TryResolveNamedBuildTarget(string name, out BuildTargetGroup namedTarget)
         {
             if (!TryResolveBuildTarget(name, out var buildTarget))
             {
@@ -85,7 +85,7 @@ namespace MCPForUnity.Editor.Tools.Build
                     : $"Build target group could not be resolved for target '{buildTarget}'.";
             }
 
-            namedTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
+            namedTarget = targetGroup;
             return null;
         }
 
@@ -154,12 +154,17 @@ namespace MCPForUnity.Editor.Tools.Build
 
         public static int ResolveSubtarget(string subtarget)
         {
+#if UNITY_2021_2_OR_NEWER
             if (string.IsNullOrEmpty(subtarget))
                 return (int)StandaloneBuildSubtarget.Player;
             string lower = subtarget.ToLowerInvariant();
             if (lower == "server")
                 return (int)StandaloneBuildSubtarget.Server;
             return (int)StandaloneBuildSubtarget.Player;
+#else
+            // Unity 2020.3 has no StandaloneBuildSubtarget API; only Player subtarget is supported.
+            return 0;
+#endif
         }
     }
 }

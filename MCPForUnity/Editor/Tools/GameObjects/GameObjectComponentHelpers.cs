@@ -250,7 +250,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
 
                     // Nested paths (e.g. "transform.position") need local handling
                     // since ComponentOps doesn't support dot/bracket notation.
-                    if (propName.Contains('.') || propName.Contains('['))
+                    if (propName.Contains(".") || propName.Contains("["))
                     {
                         setResult = SetNestedProperty(targetComponent, propName, propValue, InputSerializer, out setError);
                     }

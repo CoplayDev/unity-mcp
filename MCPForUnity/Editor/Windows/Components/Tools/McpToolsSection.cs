@@ -22,7 +22,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
     /// </summary>
     public class McpToolsSection
     {
-        private readonly Dictionary<string, Toggle> toolToggleMap = new();
+        private readonly Dictionary<string, Toggle> toolToggleMap = new Dictionary<string, Toggle>();
         private Toggle projectScopedToolsToggle;
         private Label summaryLabel;
         private Label noteLabel;
@@ -31,12 +31,12 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         private Button rescanButton;
         private Button reconfigureButton;
         private VisualElement categoryContainer;
-        private List<ToolMetadata> allTools = new();
-        private readonly Dictionary<string, Toggle> groupToggleMap = new();
-        private readonly List<(Foldout foldout, string title, List<ToolMetadata> tools)> foldoutEntries = new();
+        private List<ToolMetadata> allTools = new List<ToolMetadata>();
+        private readonly Dictionary<string, Toggle> groupToggleMap = new Dictionary<string, Toggle>();
+        private readonly List<(Foldout foldout, string title, List<ToolMetadata> tools)> foldoutEntries = new List<(Foldout foldout, string title, List<ToolMetadata> tools)>();
 
         /// <summary>Human-friendly names for tool groups shown in the UI.</summary>
-        private static readonly Dictionary<string, string> GroupDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, string> GroupDisplayNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "core", "Core Tools" },
             { "vfx", "VFX & Shaders" },
@@ -654,14 +654,14 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
             var field = new IntegerField
             {
-                value = Math.Clamp(currentValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch),
+                value = UnityEngine.Mathf.Clamp(currentValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch),
                 style = { width = 60 }
             };
             field.tooltip = $"Number of commands allowed per batch_execute call (1–{BatchExecute.AbsoluteMaxCommandsPerBatch}). Default: {BatchExecute.DefaultMaxCommandsPerBatch}.";
 
             field.RegisterValueChangedCallback(evt =>
             {
-                int clamped = Math.Clamp(evt.newValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch);
+                int clamped = UnityEngine.Mathf.Clamp(evt.newValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch);
                 if (clamped != evt.newValue)
                 {
                     field.SetValueWithoutNotify(clamped);

@@ -31,8 +31,8 @@ namespace MCPForUnity.Editor.Services
         private const int MaxJobsToKeep = 10;
         private const long DomainReloadTimeoutMs = 120_000;
 
-        private static readonly object LockObj = new();
-        private static readonly Dictionary<string, PackageJob> Jobs = new();
+        private static readonly object LockObj = new object();
+        private static readonly Dictionary<string, PackageJob> Jobs = new Dictionary<string, PackageJob>();
 
         static PackageJobManager()
         {
@@ -128,7 +128,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 string packageName = ExtractPackageName(job.Package);
-                var allPackages = PackageInfo.GetAllRegisteredPackages();
+                var allPackages = RegisteredPackageInfo.GetRegisteredPackages();
                 var info = FindPackageInfo(allPackages, packageName, job.Package);
 
                 if (job.Operation == "add" || job.Operation == "embed")
@@ -179,7 +179,11 @@ namespace MCPForUnity.Editor.Services
         /// <summary>
         /// Find a PackageInfo by name, falling back to packageId or git/local source for non-standard identifiers.
         /// </summary>
-        private static PackageInfo FindPackageInfo(PackageInfo[] allPackages, string packageName, string originalIdentifier)
+
+
+
+
+        private static RegisteredPackageInfo FindPackageInfo(RegisteredPackageInfo[] allPackages, string packageName, string originalIdentifier)
         {
             // Direct name match (handles normal com.company.package identifiers)
             var info = allPackages.FirstOrDefault(p =>
@@ -200,7 +204,7 @@ namespace MCPForUnity.Editor.Services
             return allPackages.FirstOrDefault(p =>
                 p.source == PackageSource.Git || p.source == PackageSource.Local
                     ? p.packageId != null && p.packageId.Contains(originalIdentifier)
-                      || p.resolvedPath != null && p.resolvedPath.Contains(originalIdentifier)
+                      || p.name != null && p.name.Contains(originalIdentifier)
                     : false);
         }
 

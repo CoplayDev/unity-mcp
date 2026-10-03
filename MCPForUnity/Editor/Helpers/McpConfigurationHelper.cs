@@ -37,7 +37,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
 
-            JsonSerializerSettings jsonSettings = new() { Formatting = Formatting.Indented };
+            JsonSerializerSettings jsonSettings = new JsonSerializerSettings() { Formatting = Formatting.Indented };
 
             // Read existing config if it exists
             string existingJson = "{}";

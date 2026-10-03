@@ -134,14 +134,14 @@ namespace MCPForUnity.Editor.Clients
                 return true;
 
             // PyPI prerelease range: >=0.0.0a0 (used for prerelease package builds)
-            if (packageSource.Contains(">=0.0.0a0", StringComparison.OrdinalIgnoreCase))
+            if (packageSource.IndexOf(">=0.0.0a0", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
 
             // Git-based beta references
-            if (packageSource.Contains("@beta", StringComparison.OrdinalIgnoreCase))
+            if (packageSource.IndexOf("@beta", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
 
-            if (packageSource.Contains("-beta", StringComparison.OrdinalIgnoreCase))
+            if (packageSource.IndexOf("-beta", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
 
             return false;

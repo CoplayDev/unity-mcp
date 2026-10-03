@@ -56,7 +56,7 @@ namespace MCPForUnity.Editor.Services
         /// <summary>
         /// Detailed messages for each client
         /// </summary>
-        public System.Collections.Generic.List<string> Messages { get; set; } = new();
+        public System.Collections.Generic.List<string> Messages { get; set; } = new System.Collections.Generic.List<string>();
 
         /// <summary>
         /// Gets a human-readable summary message

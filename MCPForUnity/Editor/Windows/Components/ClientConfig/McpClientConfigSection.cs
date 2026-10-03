@@ -15,6 +15,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+using MCPForUnity.Editor.Windows.Components;
 namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 {
     /// <summary>
@@ -24,7 +25,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
     public class McpClientConfigSection
     {
         // UI Elements
-        private DropdownField clientDropdown;
+        private CompatDropdownField clientDropdown;
         private Button configureAllButton;
         private VisualElement clientStatusIndicator;
         private Label clientStatusLabel;
@@ -48,8 +49,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         // Data
         private readonly List<IMcpClientConfigurator> configurators;
-        private readonly Dictionary<IMcpClientConfigurator, DateTime> lastStatusChecks = new();
-        private readonly HashSet<IMcpClientConfigurator> statusRefreshInFlight = new();
+        private readonly Dictionary<IMcpClientConfigurator, DateTime> lastStatusChecks = new Dictionary<IMcpClientConfigurator, DateTime>();
+        private readonly HashSet<IMcpClientConfigurator> statusRefreshInFlight = new HashSet<IMcpClientConfigurator>();
         private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(45);
         private int selectedClientIndex = 0;
         private bool isSkillSyncInProgress;
@@ -80,7 +81,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void CacheUIElements()
         {
-            clientDropdown = Root.Q<DropdownField>("client-dropdown");
+            clientDropdown = Root.Q<CompatDropdownField>("client-dropdown");
             configureAllButton = Root.Q<Button>("configure-all-button");
             clientStatusIndicator = Root.Q<VisualElement>("client-status-indicator");
             clientStatusLabel = Root.Q<Label>("client-status");
@@ -609,7 +610,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             {
                 var client = configurators[selectedClientIndex];
                 // Force immediate for non-Claude CLI, or when explicitly requested
-                bool shouldForceImmediate = forceImmediate || client is not ClaudeCliMcpConfigurator;
+                bool shouldForceImmediate = forceImmediate || !(client is ClaudeCliMcpConfigurator);
                 RefreshClientStatus(client, shouldForceImmediate);
                 UpdateManualConfiguration();
                 UpdateClaudeCliPathVisibility();

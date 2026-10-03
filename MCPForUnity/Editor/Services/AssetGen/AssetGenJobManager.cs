@@ -57,9 +57,9 @@ namespace MCPForUnity.Editor.Services.AssetGen
         internal static double PollIntervalSeconds = 3.0;
         internal static double TimeoutSeconds = 600.0;
 
-        private static readonly Dictionary<string, AssetGenJob> Jobs = new();
-        private static readonly Dictionary<string, Runner> Runners = new();
-        private static readonly List<string> _tickIds = new();
+        private static readonly Dictionary<string, AssetGenJob> Jobs = new Dictionary<string, AssetGenJob>();
+        private static readonly Dictionary<string, Runner> Runners = new Dictionary<string, Runner>();
+        private static readonly List<string> _tickIds = new List<string>();
         private static bool _ticking;
 
         static AssetGenJobManager()
@@ -245,7 +245,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             public string Name;
             public string Subfolder;
 
-            public CancellationTokenSource Cts = new();
+            public CancellationTokenSource Cts = new CancellationTokenSource();
             public RunnerPhase Phase = RunnerPhase.Submit;
             public double StartedAt;
             public double NextPollAt;
@@ -441,20 +441,20 @@ namespace MCPForUnity.Editor.Services.AssetGen
         // provider-controlled result URL (OverrideExt), so a rogue provider could otherwise land a
         // .cs/.asmdef/.meta/.asset under Assets/ and get it compiled/imported on Refresh — Editor
         // RCE. Anything outside these sets is rejected. Mirrors ModelImportPipeline's allowlist style.
-        private static readonly HashSet<string> AudioAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> AudioAllowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "wav", "mp3", "ogg", "aiff", "aif", "flac",
         };
-        private static readonly HashSet<string> ImageAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> ImageAllowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "png", "jpg", "jpeg", "exr", "tga", "psd", "tiff", "webp", "gif", "bmp",
         };
-        private static readonly HashSet<string> ModelAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> ModelAllowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "glb", "gltf", "fbx", "obj", "usd", "usdz", "dae", "ply", "stl", "zip",
         };
         // Fail closed: an unexpected kind allows nothing, so the RCE boundary never opens by default.
-        private static readonly HashSet<string> NoAllowedExtensions = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> NoAllowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Whether <paramref name="ext"/> (no leading dot) is an allowed result extension for the

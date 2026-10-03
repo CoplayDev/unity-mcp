@@ -19,7 +19,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
         // Inert asset types permitted out of an UNTRUSTED provider archive (Sketchfab et al.).
         // Anything else — scripts, assemblies, asmdefs — is skipped on extraction so it can never
         // compile or load inside the Editor. See SafeZipExtractor for the enforcement.
-        private static readonly HashSet<string> ArchiveAllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> ArchiveAllowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".gltf", ".glb", ".bin", ".fbx", ".obj", ".mtl",
             ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".tif", ".tiff", ".webp", ".exr", ".hdr",
