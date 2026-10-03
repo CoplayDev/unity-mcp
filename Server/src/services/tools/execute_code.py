@@ -26,7 +26,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "Actions: execute (run code), get_history (list past executions), "
         "replay (re-run a history entry), clear_history. "
         "NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. "
-        "Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only)."
+        "Compiler options: 'auto' and 'roslyn' both use the Roslyn that ships with Unity (C# 9); 'codedom' forces the legacy provider (C# 6 only)."
     ),
     group="scripting_ext",
     annotations=ToolAnnotations(
@@ -61,8 +61,8 @@ async def execute_code(
     compiler: Annotated[
         Literal["auto", "roslyn", "codedom"],
         "Compiler backend for 'execute' action. "
-        "'auto' uses Roslyn if Microsoft.CodeAnalysis is installed, else falls back to CodeDom. "
-        "'roslyn' forces Roslyn (C# 12+). 'codedom' forces legacy CSharpCodeProvider (C# 6). Default: auto.",
+        "'auto' and 'roslyn' both load the Roslyn shipped with the editor, which caps the language at C# 9. "
+        "'codedom' forces the legacy CSharpCodeProvider (C# 6). Default: auto.",
     ] = "auto",
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
