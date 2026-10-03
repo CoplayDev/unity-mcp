@@ -60,6 +60,14 @@ uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://lo
 }
 ```
 
+**Autohand Code (stdio):**
+
+```bash
+autohand mcp add UnityMCP uvx --from mcpforunityserver mcp-for-unity --transport stdio
+```
+
+Add `--scope project` after `add` to keep the server configuration in the current project. See [Autohand Code](https://github.com/autohandai/code-cli/) for current installation and CLI details.
+
 ### Option 2: From GitHub Source
 
 Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
