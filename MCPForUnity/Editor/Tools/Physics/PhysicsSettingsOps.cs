@@ -11,26 +11,34 @@ namespace MCPForUnity.Editor.Tools.Physics
     {
         public static object Ping(JObject @params)
         {
-            var gravity3d = UnityEngine.Physics.gravity;
-            var gravity2d = Physics2D.gravity;
             var simMode = UnityPhysicsCompat.GetPhysicsSimulationMode().ToString();
+
+            var data = new Dictionary<string, object>
+            {
+                ["simulationMode"] = simMode
+            };
+
+#if MCP_HAS_PHYSICS
+            var gravity3d = UnityEngine.Physics.gravity;
+            data["gravity3d"] = new[] { gravity3d.x, gravity3d.y, gravity3d.z };
+            data["defaultSolverIterations"] = UnityEngine.Physics.defaultSolverIterations;
+            data["defaultSolverVelocityIterations"] = UnityEngine.Physics.defaultSolverVelocityIterations;
+            data["bounceThreshold"] = UnityEngine.Physics.bounceThreshold;
+            data["sleepThreshold"] = UnityEngine.Physics.sleepThreshold;
+            data["defaultContactOffset"] = UnityEngine.Physics.defaultContactOffset;
+            data["queriesHitTriggers"] = UnityEngine.Physics.queriesHitTriggers;
+#endif
+
+#if MCP_HAS_PHYSICS_2D
+            var gravity2d = Physics2D.gravity;
+            data["gravity2d"] = new[] { gravity2d.x, gravity2d.y };
+#endif
 
             return new
             {
                 success = true,
                 message = "Physics tool ready.",
-                data = new
-                {
-                    gravity3d = new[] { gravity3d.x, gravity3d.y, gravity3d.z },
-                    gravity2d = new[] { gravity2d.x, gravity2d.y },
-                    simulationMode = simMode,
-                    defaultSolverIterations = UnityEngine.Physics.defaultSolverIterations,
-                    defaultSolverVelocityIterations = UnityEngine.Physics.defaultSolverVelocityIterations,
-                    bounceThreshold = UnityEngine.Physics.bounceThreshold,
-                    sleepThreshold = UnityEngine.Physics.sleepThreshold,
-                    defaultContactOffset = UnityEngine.Physics.defaultContactOffset,
-                    queriesHitTriggers = UnityEngine.Physics.queriesHitTriggers
-                }
+                data = data
             };
         }
 
@@ -41,6 +49,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
+#if MCP_HAS_PHYSICS_2D
                 var g = Physics2D.gravity;
                 return new
                 {
@@ -58,11 +67,15 @@ namespace MCPForUnity.Editor.Tools.Physics
                         autoSyncTransforms = UnityPhysicsCompat.GetPhysics2DAutoSyncTransforms()
                     }
                 };
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
             }
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             var g3 = UnityEngine.Physics.gravity;
             var simMode = UnityPhysicsCompat.GetPhysicsSimulationMode().ToString();
 
@@ -86,6 +99,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     autoSyncTransforms = UnityPhysicsCompat.GetPhysicsAutoSyncTransforms()
                 }
             };
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
         public static object SetSettings(JObject @params)
@@ -117,6 +133,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
         private static object SetSettings3D(JObject settings)
         {
+#if MCP_HAS_PHYSICS
             // Validate all keys before applying any changes
             var unknown = new List<string>();
             foreach (var prop in settings.Properties())
@@ -211,6 +228,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 message = $"Updated {changed.Count} physics 3D setting(s).",
                 data = new { changed }
             };
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
         private static readonly HashSet<string> Valid2DKeys = new HashSet<string>
@@ -222,6 +242,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
         private static object SetSettings2D(JObject settings)
         {
+#if MCP_HAS_PHYSICS_2D
             // Validate all keys before applying any changes
             var unknown = new List<string>();
             foreach (var prop in settings.Properties())
@@ -287,6 +308,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 message = $"Updated {changed.Count} physics 2D setting(s).",
                 data = new { changed }
             };
+#else
+            return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
         }
 
         private static void MarkDynamicsManagerDirty()

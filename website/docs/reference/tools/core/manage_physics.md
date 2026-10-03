@@ -24,12 +24,14 @@ RIGIDBODY: get_rigidbody, configure_rigidbody
 VALIDATION: validate
 SIMULATION: simulate_step
 
+MODULE REQUIREMENTS: 3D actions need Unity's built-in Physics module (com.unity.modules.physics); 2D actions need the Physics 2D module (com.unity.modules.physics2d). These modules are optional and are NOT forced as package dependencies, so a project may have one, both, or neither. 'dimension' defaults to '3d': in a project without the 3D Physics module you MUST pass dimension:'2d' explicitly, otherwise the action returns a 'Physics module is not installed' error. If neither module is installed, every action reports that physics tools are unavailable.
+
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `action` | `Literal['ping', 'get_settings', 'set_settings', 'get_collision_matrix', 'set_collision_matrix', 'create_physics_material', 'configure_physics_material', 'assign_physics_material', 'add_joint', 'configure_joint', 'remove_joint', 'raycast', 'raycast_all', 'linecast', 'shapecast', 'overlap', 'validate', 'simulate_step', 'apply_force', 'get_rigidbody', 'configure_rigidbody']` | yes | The physics action to perform. |
-| `dimension` | `str \| None` | — | Physics dimension: '3d' (default) or '2d'. |
+| `dimension` | `str \| None` | — | Physics dimension: '3d' (default) or '2d'. The matching built-in physics module must be installed; pass '2d' explicitly in projects that don't have the 3D Physics module. |
 | `settings` | `dict[str, Any] \| None` | — | Key-value settings for set_settings. |
 | `layer_a` | `str \| None` | — | Layer name or index for collision matrix. |
 | `layer_b` | `str \| None` | — | Layer name or index for collision matrix. |
