@@ -62,6 +62,7 @@ class SessionDetails(BaseModel):
     hash: str
     unity_version: str
     connected_at: str
+    project_path: str | None = None
 
 
 class SessionList(BaseModel):
