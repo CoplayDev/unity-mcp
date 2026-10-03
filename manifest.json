@@ -98,6 +98,10 @@
       "description": "Control Unity Editor state, play mode, preferences, undo/redo"
     },
     {
+      "name": "manage_editor_windows",
+      "description": "List and capture open Unity Editor tabs and windows"
+    },
+    {
       "name": "manage_gameobject",
       "description": "Create, modify, transform, and delete GameObjects"
     },
