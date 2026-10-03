@@ -68,6 +68,10 @@ namespace MCPForUnity.Editor.Services.AssetGen
             new ModelEntry { Id = "cassetteai/music-generator", Label = "CassetteAI Music", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.02/min", MaxDurationSeconds = 180f,
                 DurationField = "duration", DefaultDurationSeconds = 10f, MinDurationSeconds = 1f },
             new ModelEntry { Id = "fal-ai/lyria2", Label = "Google Lyria 2", Provider = "fal", Kind = "audio", UseCase = "Background music", PriceLabel = "$0.10/30s", MaxDurationSeconds = 30f },
+
+            // Audio cover — MiniMax. Reference input must be 6-360 seconds and no larger than 50 MB.
+            new ModelEntry { Id = MiniMaxAudioAdapter.DefaultModel, Label = "MiniMax Music Cover", Provider = "minimax", Kind = "audio", UseCase = "Reference-audio cover" },
+            new ModelEntry { Id = "music-cover-free", Label = "MiniMax Music Cover (free)", Provider = "minimax", Kind = "audio", UseCase = "Reference-audio cover" },
         };
 
         /// <summary>Curated entries for a provider+kind, in curated order (default first). Never null.</summary>

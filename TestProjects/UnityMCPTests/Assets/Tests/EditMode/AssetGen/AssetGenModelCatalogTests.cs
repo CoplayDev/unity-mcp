@@ -80,6 +80,17 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(MeshyAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("meshy", "model"));
             Assert.AreEqual(FalAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "image"));
             Assert.AreEqual(FalAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "audio"));
+            Assert.AreEqual(MiniMaxAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("minimax", "audio"));
+        }
+
+        [Test]
+        public void Curated_HasMiniMaxCoverModels()
+        {
+            IReadOnlyList<ModelEntry> audio = AssetGenModelCatalog.ForProvider("minimax", "audio");
+
+            CollectionAssert.AreEqual(
+                new[] { "music-cover", "music-cover-free" },
+                audio.Select(e => e.Id).ToList());
         }
 
         [Test]
