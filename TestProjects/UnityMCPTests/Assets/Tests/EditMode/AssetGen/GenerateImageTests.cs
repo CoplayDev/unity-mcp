@@ -25,6 +25,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             AssetGenJobManager.ResetForTests();
             Environment.SetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY", null);
             Environment.SetEnvironmentVariable("MCPFORUNITY_OPENROUTER_API_KEY", null);
+            Environment.SetEnvironmentVariable("MCPFORUNITY_MINIMAX_API_KEY", null);
             _dir = Path.Combine(Path.GetTempPath(), "mcp_imghandler_" + Guid.NewGuid().ToString("N"));
             _store = new EncryptedFileKeyStore(_dir);
             SecureKeyStore.OverrideForTests(_store);
@@ -69,6 +70,20 @@ namespace MCPForUnityTests.Editor.AssetGen
         {
             _store.Set("fal", "falkey");
             JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "fal", ["mode"] = "text", ["prompt"] = "a cat" });
+            Assert.AreEqual("pending", (string)gen["_mcp_status"]);
+            Assert.IsFalse(string.IsNullOrEmpty((string)gen["data"]["job_id"]));
+        }
+
+        [Test]
+        public void Generate_MiniMax_WithKey_ReturnsPendingJobId()
+        {
+            _store.Set("minimax", "mmkey");
+            AssetGenJobManager.TransportOverrideForTests = new FakeHttpTransport
+            {
+                Handler = spec => new HttpResult { Status = 200, IsSuccess = true,
+                    Text = "{\"data\":{\"image_urls\":[\"https://cdn.minimax.io/img/x.png\"]},\"base_resp\":{\"status_code\":0}}" }
+            };
+            JObject gen = Call(new JObject { ["action"] = "generate", ["provider"] = "minimax", ["mode"] = "text", ["prompt"] = "a cat" });
             Assert.AreEqual("pending", (string)gen["_mcp_status"]);
             Assert.IsFalse(string.IsNullOrEmpty((string)gen["data"]["job_id"]));
         }
@@ -136,6 +151,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             string s = resp.ToString();
             StringAssert.Contains("fal", s);
             StringAssert.Contains("openrouter", s);
+            StringAssert.Contains("minimax", s);
             StringAssert.DoesNotContain("tripo", s); // model providers excluded
         }
 
