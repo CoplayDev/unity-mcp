@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
@@ -61,6 +62,43 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 list.Add(new { id = info.Id, kind = info.Kind, configured = info.Configured, capabilities = info.Capabilities });
             }
             return new SuccessResponse($"{list.Count} {kind} provider(s).", new { providers = list });
+        }
+
+        /// <summary>Return the same model snapshot as the panel; refreshes run without blocking.</summary>
+        public static object ListModels(ToolParams p, string kind, bool forceRefresh = false)
+        {
+            string provider = p.Get("provider")?.ToLowerInvariant();
+            var providers = AssetGenProviders.List().Where(info => info.Kind == kind && (string.IsNullOrEmpty(provider) || info.Id == provider)).ToList();
+            if (providers.Count == 0) return new ErrorResponse($"Unknown {kind} provider '{provider}'.");
+            if (forceRefresh && !providers.Any(info => info.Id == "fal"))
+                return new ErrorResponse("Live model refresh currently supports fal image and audio. Other providers use the bundled catalog.");
+            var models = new List<object>();
+            var catalogs = new List<object>();
+            foreach (var info in providers)
+            {
+                bool live = info.Id == "fal" && (kind == "image" || kind == "audio");
+                if (live) _ = FalModelCatalog.RefreshAsync(kind, forceRefresh);
+                foreach (var model in AssetGenModelCatalog.ForProvider(info.Id, kind))
+                    models.Add(new
+                    {
+                        id = model.Id, label = model.Label, provider = model.Provider, kind = model.Kind,
+                        use_case = model.UseCase, verified_at = model.VerifiedAt,
+                        status = model.FromRefresh ? "verified" : "unverified",
+                        capabilities = kind == "model" ? info.Capabilities : kind == "image" && (!model.FromRefresh || !string.IsNullOrEmpty(model.EditModelId))
+                            ? new[] { "text", "image" } : new[] { "text" },
+                        max_duration_seconds = model.MaxDurationSeconds, license_type = model.LicenseType,
+                    });
+                catalogs.Add(new
+                {
+                    provider = info.Id, source = live ? FalModelCatalog.Source(kind) : "bundled",
+                    last_verified = live ? FalModelCatalog.VerifiedAt(kind) : null,
+                    stale = !live || FalModelCatalog.IsStale(kind),
+                    refreshing = live && FalModelCatalog.IsRefreshing(kind),
+                    refresh_error = live ? FalModelCatalog.LastError(kind) : null,
+                });
+            }
+            return new SuccessResponse("Model catalog. If refreshing is true, call list_models again after the refresh completes. Bundled entries are unverified; fal endpoints are rechecked before generation.",
+                new { models, catalogs });
         }
     }
 }

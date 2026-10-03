@@ -23,6 +23,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void SetUp()
         {
             AssetGenJobManager.ResetForTests();
+            AssetGenModelCatalog.ResetForTests(true);
+            AssetGenJobManager.SkipModelVerificationForTests = true;
             Environment.SetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY", null);
             Environment.SetEnvironmentVariable("MCPFORUNITY_OPENROUTER_API_KEY", null);
             _dir = Path.Combine(Path.GetTempPath(), "mcp_imghandler_" + Guid.NewGuid().ToString("N"));

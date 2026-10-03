@@ -56,6 +56,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         internal static Func<AssetGenJob, string, AssetGenJob> ImportOverrideForTests;
         internal static double PollIntervalSeconds = 3.0;
         internal static double TimeoutSeconds = 600.0;
+        internal static bool SkipModelVerificationForTests;
 
         private static readonly Dictionary<string, AssetGenJob> Jobs = new();
         private static readonly Dictionary<string, Runner> Runners = new();
@@ -132,7 +133,12 @@ namespace MCPForUnity.Editor.Services.AssetGen
             var runner = new Runner
             {
                 Job = job,
-                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                SubmitFn = async ct =>
+                {
+                    if (!SkipModelVerificationForTests && string.Equals(provider, "fal", StringComparison.OrdinalIgnoreCase))
+                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(string.IsNullOrEmpty(req.Model) ? FalAdapter.DefaultModel : req.Model, "image", req.Mode, ct, apiKey);
+                    return await adapter.SubmitAsync(req, apiKey, transport, ct);
+                },
                 PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
                 ImportFn = ImportOverrideForTests ?? ((j, path) => ImageImportPipeline.ImportInto(j, path, asSprite, transparent, isColor: true)),
                 Transport = transport,
@@ -160,7 +166,12 @@ namespace MCPForUnity.Editor.Services.AssetGen
             var runner = new Runner
             {
                 Job = job,
-                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                SubmitFn = async ct =>
+                {
+                    if (!SkipModelVerificationForTests)
+                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(string.IsNullOrEmpty(req.Model) ? FalAudioAdapter.DefaultModel : req.Model, "audio", "text", ct, apiKey);
+                    return await adapter.SubmitAsync(req, apiKey, transport, ct);
+                },
                 PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
                 ImportFn = ImportOverrideForTests ?? AudioImportPipeline.ImportInto,
                 Transport = transport,
@@ -597,6 +608,8 @@ namespace MCPForUnity.Editor.Services.AssetGen
             ImportOverrideForTests = null;
             PollIntervalSeconds = 3.0;
             TimeoutSeconds = 600.0;
+            SkipModelVerificationForTests = false;
+            AssetGenModelCatalog.ResetForTests();
         }
     }
 }

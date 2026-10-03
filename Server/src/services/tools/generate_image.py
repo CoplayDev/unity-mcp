@@ -30,7 +30,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- remove_background: Unsupported in this version; returns an error instead of a job_id.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
-        "- list_providers: List configured image providers and capabilities (no key values)."
+        "- list_providers: List configured image providers and capabilities (no key values).\n"
+        "- list_models: List models and supported modes from the editor's shared catalog; "
+        "refresh stale fal data in the background. If catalogs[].refreshing is true, call "
+        "list_models again later. OpenRouter uses the bundled catalog.\n"
+        "- refresh_models: Force a background fal catalog refresh; returns the current snapshot."
     ),
     annotations=ToolAnnotations(
         title="Generate Image",
@@ -39,7 +43,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def generate_image(
     ctx: Context,
-    action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers"],
+    action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers", "list_models", "refresh_models"],
                       "Action to perform."],
 
     provider: Annotated[str, "Provider id (fal, openrouter)."] | None = None,
@@ -47,7 +51,7 @@ async def generate_image(
     prompt: Annotated[str, "Text prompt for text->image."] | None = None,
     image_path: Annotated[str, "Path to a source image for image->image mode."] | None = None,
     image_url: Annotated[str, "URL of a source image for image->image."] | None = None,
-    model: Annotated[str, "Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image)."] | None = None,
+    model: Annotated[str, "Provider model id/slug returned by list_models; omit for the GUI-selected default."] | None = None,
     transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "
                            "and OpenRouter have no generation-time transparency, so this only sets the "
                            "Unity import flag — it does not make the model render a transparent background."] | None = None,

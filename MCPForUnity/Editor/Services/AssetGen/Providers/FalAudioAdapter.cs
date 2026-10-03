@@ -11,8 +11,8 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
-    /// fal.ai audio provider via the queue API. One adapter fronts every v1 audio model
-    /// (stable-audio-25, cassetteai/*, lyria2); the model id in <see cref="AudioGenRequest.Model"/>
+    /// fal.ai audio provider via the queue API. The captured catalog profile describes each
+    /// compatible model's prompt and duration fields; <see cref="AudioGenRequest.Model"/>
     /// selects the endpoint. Submits to queue.fal.run/{model} (auth header
     /// "Authorization: Key &lt;key&gt;"), polls status, then returns the result audio URL for the job
     /// manager to download. Reuses the single existing "fal" secure key.
@@ -69,17 +69,17 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         // prompt-only.
         private static JObject BuildBody(string model, AudioGenRequest req)
         {
-            var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty };
-
-            ModelEntry entry = AssetGenModelCatalog.Find(model);
+            ModelEntry entry = req.CatalogEntry ?? AssetGenModelCatalog.Find(model);
+            var body = new JObject { [entry?.PromptField ?? "prompt"] = req.Prompt ?? string.Empty };
             if (entry != null && !string.IsNullOrEmpty(entry.DurationField))
             {
                 float dur = req.Duration > 0f ? req.Duration : entry.DefaultDurationSeconds;
-                float floor = Math.Max(1f, entry.MinDurationSeconds);
+                float floor = entry.FromRefresh ? entry.MinDurationSeconds : Math.Max(1f, entry.MinDurationSeconds);
                 dur = Math.Min(Math.Max(dur, floor), entry.MaxDurationSeconds);
-                // Floor (not round) so we never exceed the requested duration, then enforce >= 1.
-                int seconds = Math.Max(1, (int)Math.Floor(dur));
-                body[entry.DurationField] = seconds;
+                float units = dur * entry.DurationScale;
+                body[entry.DurationField] = entry.DurationIsInteger
+                    ? (JToken)(long)Math.Max(Math.Ceiling(floor * entry.DurationScale), Math.Floor(units))
+                    : (JToken)units;
             }
             return body;
         }

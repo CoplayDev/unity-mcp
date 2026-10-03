@@ -19,6 +19,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void SetUp()
         {
             AssetGenJobManager.ResetForTests();
+            AssetGenModelCatalog.ResetForTests(true);
+            AssetGenJobManager.SkipModelVerificationForTests = true;
             Environment.SetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY", null);
             _dir = Path.Combine(Path.GetTempPath(), "mcp_audiohandler_" + Guid.NewGuid().ToString("N"));
             _store = new EncryptedFileKeyStore(_dir);

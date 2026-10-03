@@ -30,9 +30,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                     case "status": return AssetGenToolHelpers.Status(p, "Audio", 3.0);
                     case "cancel": return AssetGenToolHelpers.Cancel(p);
                     case "list_providers": return AssetGenToolHelpers.ListProviders("audio");
+                    case "list_models": return AssetGenToolHelpers.ListModels(p, "audio");
+                    case "refresh_models": return AssetGenToolHelpers.ListModels(p, "audio", true);
                     case "": return new ErrorResponse("'action' parameter is required.");
                     default:
-                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, status, cancel, list_providers.");
+                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, status, cancel, list_providers, list_models, refresh_models.");
                 }
             }
             catch (NotSupportedException nse)
@@ -57,9 +59,8 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             if (string.IsNullOrWhiteSpace(prompt))
                 return new ErrorResponse("'prompt' is required for audio generation.");
 
-            // Empty -> GUI-selected model -> catalog default. A null model reaches the adapter's own
-            // default; a resolved id is passed through verbatim (the catalog default equals the
-            // adapter constant, so an omitted model is a no-op either way).
+            // Empty -> GUI-selected model -> current catalog default. Preserve the resolved ID;
+            // exact availability and the live request profile are checked before submission.
             string model = AssetGenModelCatalog.ResolveModel("audio", provider, p.Get("model"));
 
             var req = new AudioGenRequest

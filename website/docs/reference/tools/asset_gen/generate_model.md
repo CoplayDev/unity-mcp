@@ -19,12 +19,13 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured 3D providers and capabilities (no key values).
+- list_models: List bundled 3D models. Live discovery is currently limited to fal image/audio; 3D entries are marked unverified.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['generate', 'status', 'cancel', 'list_providers']` | yes | Action to perform. |
+| `action` | `Literal['generate', 'status', 'cancel', 'list_providers', 'list_models']` | yes | Action to perform. |
 | `provider` | `str \| None` | — | Provider id (tripo, meshy). |
 | `mode` | `str \| None` | — | Generation mode: text or image. |
 | `prompt` | `str \| None` | — | Text prompt for text->3D. |
@@ -46,6 +47,13 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+```json
+{"action": "list_models", "provider": "meshy"}
+```
+
+This version returns bundled Tripo/Meshy entries marked unverified. Live discovery is
+currently available for fal image/audio models.
+
+CLI: `unity-mcp asset-gen list-models --kind model`.
 <!-- examples:end -->
 

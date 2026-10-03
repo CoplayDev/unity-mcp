@@ -22,9 +22,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "Generate audio (sound effects and background music) with fal.ai models and import "
         "them as AudioClips into the Unity project. Bring-your-own-key: the fal key lives in "
         "the editor's secure store (shared with image generation) and never crosses the bridge.\n\n"
-        "MODELS (all via fal.ai): fal-ai/stable-audio-25/text-to-audio (music + SFX, <=190s), "
-        "cassetteai/sound-effects-generator (SFX, <=30s), cassetteai/music-generator (music), "
-        "fal-ai/lyria2 (music). Omit model to use the model selected in the "
+        "Use list_models to discover current compatible sound/music models, their duration "
+        "limits and catalog freshness. Omit model to use the model selected in the "
         "MCP for Unity -> Asset Generation tab.\n\n"
         "ACTIONS:\n"
         "- generate: Submit an audio job from a text prompt. Returns { job_id }; poll with the "
@@ -32,7 +31,10 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "output_folder.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
-        "- list_providers: List configured audio providers and capabilities (no key values)."
+        "- list_providers: List configured audio providers and capabilities (no key values).\n"
+        "- list_models: List models from the editor's shared catalog; refresh stale fal data "
+        "in the background. If catalogs[].refreshing is true, call list_models again later.\n"
+        "- refresh_models: Force a background fal catalog refresh; returns the current snapshot."
     ),
     annotations=ToolAnnotations(
         title="Generate Audio",
@@ -41,12 +43,12 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def generate_audio(
     ctx: Context,
-    action: Annotated[Literal["generate", "status", "cancel", "list_providers"],
+    action: Annotated[Literal["generate", "status", "cancel", "list_providers", "list_models", "refresh_models"],
                       "Action to perform."],
 
     provider: Annotated[str, "Provider id (fal)."] | None = None,
     prompt: Annotated[str, "Text prompt describing the sound or music."] | None = None,
-    model: Annotated[str, "fal model id (e.g. fal-ai/stable-audio-25/text-to-audio). "
+    model: Annotated[str, "fal model id returned by list_models. "
                      "Omit to use the GUI-selected default."] | None = None,
     duration: Annotated[float, "Requested length in seconds (soft-clamped per model)."] | None = None,
     name: Annotated[str, "Base name for the imported asset."] | None = None,

@@ -20,18 +20,20 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured image providers and capabilities (no key values).
+- list_models: List models and supported modes from the editor's shared catalog; refresh stale fal data in the background. If catalogs[].refreshing is true, call list_models again later. OpenRouter uses the bundled catalog.
+- refresh_models: Force a background fal catalog refresh; returns the current snapshot.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['generate', 'remove_background', 'status', 'cancel', 'list_providers']` | yes | Action to perform. |
+| `action` | `Literal['generate', 'remove_background', 'status', 'cancel', 'list_providers', 'list_models', 'refresh_models']` | yes | Action to perform. |
 | `provider` | `str \| None` | — | Provider id (fal, openrouter). |
 | `mode` | `str \| None` | — | Generation mode: text or image. |
 | `prompt` | `str \| None` | — | Text prompt for text->image. |
 | `image_path` | `str \| None` | — | Path to a source image for image->image mode. |
 | `image_url` | `str \| None` | — | URL of a source image for image->image. |
-| `model` | `str \| None` | — | Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image). |
+| `model` | `str \| None` | — | Provider model id/slug returned by list_models; omit for the GUI-selected default. |
 | `transparent` | `bool \| None` | — | Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX and OpenRouter have no generation-time transparency, so this only sets the Unity import flag — it does not make the model render a transparent background. |
 | `width` | `int \| None` | — | Output width in pixels. |
 | `height` | `int \| None` | — | Output height in pixels. |
@@ -46,6 +48,15 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+```json
+{"action": "list_models", "provider": "fal"}
+```
+
+Use an ID from `data.models` and inspect its `capabilities` before choosing text or image
+mode. Image editing requires a verified editing endpoint. `refresh_models` forces a
+background fal refresh; repeat `list_models` when `data.catalogs[].refreshing` becomes false.
+OpenRouter currently returns bundled entries marked unverified.
+
+CLI: `unity-mcp asset-gen list-models --kind image --provider fal --refresh`.
 <!-- examples:end -->
 

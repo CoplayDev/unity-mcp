@@ -25,6 +25,18 @@ genuine provider keys and an interactive Editor before shipping.
 - [ ] `generate_model(provider=tripo, mode=text, prompt="...", format=glb)`, poll status.
 - [ ] Confirm the GLB imports correctly (no missing-importer error).
 
+## Dynamic fal model catalog
+
+- Open Asset Generation: cached choices appear immediately, and fal image/audio catalogs refresh in the background after 24 hours. Refresh forces a fetch. Tripo, Meshy and OpenRouter remain bundled in this version.
+- Run `generate_audio(action="list_models")` or `generate_image(action="list_models", provider="fal")`. The response includes `models` and `catalogs` with source, verification time, staleness, errors and refresh progress. If `refreshing` is true, query `list_models` again later. `refresh_models` forces a background fetch. CLI equivalent: `unity-mcp asset-gen list-models --kind audio --refresh`.
+- Discovery uses the public [fal model search API](https://fal.ai/docs/platform-apis/v1/models), optionally attaching the locally configured fal key for higher rate limits. A complete metadata fetch is followed by OpenAPI checks for a bounded shortlist (known models, saved selection, vendor highlights, then five recent candidates). Recency is not a quality benchmark. Speech/vector endpoints, unsupported required inputs and unknown output shapes are excluded.
+- Each kind commits independently after its pages/schema batches succeed. Simulate a timeout/429 or malformed response: the previous successful snapshot and its original timestamp must remain. Automatic failed fetches back off for two minutes; manual Refresh retries immediately. Successful empty snapshots must not restore removed bundled entries.
+- Select an audio model using `text` instead of `prompt`, fractional seconds or milliseconds: verify the adapter uses the live field names, units and limits. Image editing is offered only when the exact `/edit` endpoint has a compatible schema. Unsupported editing and dimensions return an error.
+- Save a model selection, then make it unavailable in a fake catalog: the panel must preserve the saved ID and ask for another selection; generation must not silently switch models. Automatic refresh must preserve unsaved API-key text.
+- Before each fal generation, a free exact-endpoint query verifies status and captures the current schema. An unavailable/incompatible endpoint or a failed verification must fail the job before a paid submit. This does not run paid generation probes or measure output quality.
+- Cache lives in the project's ignored `Library/MCPForUnity/fal-model-catalog.json`; it contains no provider credentials. Delete/corrupt the cache and reopen: bundled entries appear as unverified until discovery succeeds.
+- Requests are serialized and paced, and HTTP 429 responses get bounded retries; a failed fetch still preserves the cache. For a real, unpaid integration check, set `MCPFORUNITY_RUN_LIVE_CATALOG=1` and explicitly run `FalModelCatalogTests.LivePublicCatalog_RefreshAndExactEndpointVerification` in EditMode. Regular runs exclude this network test.
+
 ## fal.ai (default 2D image)
 
 - [ ] Enter the fal key.

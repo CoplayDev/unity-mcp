@@ -18,8 +18,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     {
         private const string QueueBase = "https://queue.fal.run/";
         private const string QueueHost = "queue.fal.run";
-        // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
-        // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
+        // Bundled bootstrap default. The shared live catalog may remove it or offer newer models.
         // internal so the model catalog references it directly (single source of truth, drift-guarded).
         internal const string DefaultModel = "fal-ai/flux-2";
 
@@ -34,15 +33,21 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
                          && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
 
-            var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty, ["num_images"] = 1 };
+            ModelEntry entry = req.CatalogEntry ?? AssetGenModelCatalog.Find(model);
+            var body = new JObject { [entry?.PromptField ?? "prompt"] = req.Prompt ?? string.Empty };
+            if (entry == null || (image ? entry.EditSupportsNumImages : entry.SupportsNumImages)) body["num_images"] = 1;
+            string outputFormat = image ? entry?.EditOutputFormat : entry?.OutputFormat;
+            if (outputFormat != null) body["output_format"] = outputFormat;
             string url;
             if (image)
             {
                 // image→image / editing lives on the model's /edit endpoint and takes an image_urls
                 // array; each entry accepts a hosted URL or an inline base64 data URI (local image_path).
-                url = QueueBase + model + "/edit";
+                if (entry?.FromRefresh == true && string.IsNullOrEmpty(entry.EditModelId))
+                    throw new Exception($"Model '{model}' has no verified image editing endpoint.");
+                url = QueueBase + (entry?.EditModelId ?? model + "/edit");
                 string imageRef = !string.IsNullOrEmpty(req.ImageUrl) ? req.ImageUrl : LocalImage.ToDataUri(req.ImagePath);
-                body["image_urls"] = new JArray(imageRef);
+                body[entry?.ImageInputField ?? "image_urls"] = entry?.ImageInputIsArray != false ? (JToken)new JArray(imageRef) : (JToken)imageRef;
             }
             else
             {
@@ -51,6 +56,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             // Forward explicit output dimensions for text→image only; fal's image_size accepts a
             // {width,height} object. (/edit derives size from the source image and may reject it.
             // FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
+            if (!image && req.Width > 0 && req.Height > 0 && entry?.SupportsImageSize == false)
+                throw new Exception($"Model '{model}' does not support width/height image_size parameters.");
             if (!image && req.Width > 0 && req.Height > 0)
                 body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
 

@@ -28,6 +28,27 @@ def _emit(result, config, verb):
             print_info(f"{verb} started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
 
 
+@asset_gen.command("list-models")
+@click.option("--kind", type=click.Choice(["audio", "image", "model"]), required=True,
+              help="Asset kind to discover.")
+@click.option("--provider", default=None, help="Restrict results to one provider.")
+@click.option("--refresh", is_flag=True, help="Force a background fal catalog refresh (audio/image only).")
+@handle_unity_errors
+def list_models(kind: str, provider: Optional[str], refresh: bool):
+    """List compatible models, capabilities, and catalog freshness.
+
+    If catalogs[].refreshing is true, repeat this command without --refresh later.
+    Tripo, Meshy and OpenRouter currently return bundled, unverified entries.
+    """
+    if refresh and (kind == "model" or provider not in (None, "fal")):
+        raise click.UsageError("--refresh currently supports fal audio and image models.")
+    params = {"action": "refresh_models" if refresh else "list_models"}
+    if provider is not None:
+        params["provider"] = provider
+    config = get_config()
+    click.echo(format_output(run_command(f"generate_{kind}", params, config), config.format))
+
+
 @asset_gen.command("generate-model")
 @click.option("--provider", default=None, help="Provider id (tripo, meshy).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")

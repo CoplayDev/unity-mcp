@@ -30,6 +30,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void SetUp()
         {
             AssetGenJobManager.ResetForTests();
+            AssetGenModelCatalog.ResetForTests(true);
+            AssetGenJobManager.SkipModelVerificationForTests = true;
             Environment.SetEnvironmentVariable(EnvVar, Secret);
             Environment.SetEnvironmentVariable(FalEnvVar, FalSecret);
             _fake = new FakeHttpTransport();

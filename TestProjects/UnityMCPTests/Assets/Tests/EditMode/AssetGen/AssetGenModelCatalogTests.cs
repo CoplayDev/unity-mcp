@@ -12,6 +12,11 @@ namespace MCPForUnityTests.Editor.AssetGen
     /// </summary>
     public class AssetGenModelCatalogTests
     {
+        [SetUp]
+        public void SetUp() => AssetGenModelCatalog.ResetForTests(true);
+
+        [TearDown]
+        public void TearDown() => AssetGenModelCatalog.ResetForTests();
         [Test]
         public void Curated_HasAllFourAudioModels()
         {

@@ -29,7 +29,9 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "tier, model, name, output_folder.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
-        "- list_providers: List configured 3D providers and capabilities (no key values)."
+        "- list_providers: List configured 3D providers and capabilities (no key values).\n"
+        "- list_models: List bundled 3D models. Live discovery is currently limited to "
+        "fal image/audio; 3D entries are marked unverified."
     ),
     annotations=ToolAnnotations(
         title="Generate Model",
@@ -38,7 +40,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def generate_model(
     ctx: Context,
-    action: Annotated[Literal["generate", "status", "cancel", "list_providers"],
+    action: Annotated[Literal["generate", "status", "cancel", "list_providers", "list_models"],
                       "Action to perform."],
 
     provider: Annotated[str, "Provider id (tripo, meshy)."] | None = None,

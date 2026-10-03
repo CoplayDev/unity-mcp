@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Services.AssetGen;
@@ -48,6 +50,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         // Per-provider enable toggles for the GLB-capable (model) providers, used to
         // recompute the glTFast notice when a toggle changes.
         private readonly List<(string Id, Toggle Toggle)> modelEnableToggles = new();
+        private readonly List<(VisualElement Container, string Kind, string Provider)> modelControls = new();
 
         public VisualElement Root { get; private set; }
 
@@ -57,6 +60,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
+            Root.RegisterCallback<AttachToPanelEvent>(_ => { FalModelCatalog.Changed -= OnCatalogChanged; FalModelCatalog.Changed += OnCatalogChanged; });
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => FalModelCatalog.Changed -= OnCatalogChanged);
+            if (Root.panel != null) FalModelCatalog.Changed += OnCatalogChanged;
+            _ = RefreshCatalog(false);
         }
 
         private void CacheUIElements()
@@ -124,29 +131,57 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (refreshButton != null)
             {
                 refreshButton.tooltip =
-                    "Re-check API-key presence and rebuild the provider/model rows. Picks up keys or " +
-                    "prefs set elsewhere (CLI, env override). The model list is curated in-package.";
+                    "Fetch current fal image and sound models and re-check key presence. Other providers use the bundled catalog.";
                 refreshButton.clicked += OnRefreshClicked;
             }
         }
 
         /// <summary>
-        /// Re-reads secure-store key presence and the curated catalog and rebuilds the rows — useful
-        /// to pick up keys/prefs set elsewhere (CLI, env override). fal has no public list-models API,
-        /// so the curated catalog is the source of truth; this never hits the network or blocks the tab.
+        /// Re-reads key presence and forces a nonblocking fal catalog refresh.
         /// </summary>
         private void OnRefreshClicked()
         {
             SyncFromPrefs();
-            if (refreshStatusLabel != null)
-                SetStatus(refreshStatusLabel, "refreshed — using the built-in model catalog", true);
+            _ = RefreshCatalog(true);
         }
 
         /// <summary>
         /// Re-reads secure-store presence and prefs and rebuilds the rows. Called when the
         /// tab becomes visible so keys set elsewhere (e.g. via CLI) are reflected.
         /// </summary>
-        public void Refresh() => SyncFromPrefs();
+        public void Refresh()
+        {
+            SyncFromPrefs();
+            _ = RefreshCatalog(false);
+        }
+
+        private async Task RefreshCatalog(bool force)
+        {
+            refreshButton?.SetEnabled(false);
+            if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, "Checking fal model catalog…", true);
+            try
+            {
+                await Task.WhenAll(FalModelCatalog.RefreshAsync("image", force), FalModelCatalog.RefreshAsync("audio", force));
+                // Only replace model controls: an automatic refresh must preserve unsaved API-key input.
+                OnCatalogChanged(null);
+                string error = FalModelCatalog.LastError("image") ?? FalModelCatalog.LastError("audio");
+                string verified = FalModelCatalog.VerifiedAt("audio") ?? FalModelCatalog.VerifiedAt("image");
+                string when = DateTime.TryParse(verified, out var time) ? time.ToLocalTime().ToString("g") : "unknown";
+                string label = error != null ? error : "fal models verified " + when + " · other providers use bundled models";
+                if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, label, error == null);
+            }
+            finally { refreshButton?.SetEnabled(true); }
+        }
+
+        private void OnCatalogChanged(string kind)
+        {
+            foreach (var control in modelControls.ToArray())
+            {
+                if (control.Provider != "fal" || kind != null && control.Kind != kind) continue;
+                control.Container.Clear();
+                PopulateModelDropdown(control.Container, control.Kind, control.Provider);
+            }
+        }
 
         /// <summary>Rebuild the provider rows and reflect current prefs into the fields.</summary>
         private void SyncFromPrefs()
@@ -167,6 +202,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             providersContainer.Clear();
             modelEnableToggles.Clear();
+            modelControls.Clear();
 
             var modelPanel = AddCategoryPanel("3D Models");
             foreach (var provider in ModelProviders)
@@ -388,24 +424,29 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         /// </summary>
         private void AddModelDropdown(VisualElement parent, string kind, string providerId)
         {
+            var container = new VisualElement();
+            parent.Add(container);
+            modelControls.Add((container, kind, providerId));
+            PopulateModelDropdown(container, kind, providerId);
+        }
+
+        private void PopulateModelDropdown(VisualElement parent, string kind, string providerId)
+        {
             IReadOnlyList<ModelEntry> models = AssetGenModelCatalog.ForProvider(providerId, kind);
-            if (models.Count == 0) return;
+            if (models.Count == 0)
+            {
+                if (providerId == "fal") parent.Add(new Label("No compatible models found. Refresh the catalog to check again."));
+                return;
+            }
 
             var choices = new List<string>();
-            foreach (ModelEntry m in models) choices.Add(m.Label);
+            foreach (ModelEntry m in models) choices.Add(m.Label + " (" + m.Id + ")");
 
             string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
             if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
-            ModelEntry selected = AssetGenModelCatalog.Find(selectedId);
-            if (selected == null)
-            {
-                // The stored pref points at a model that's no longer in the catalog (stale/invalid).
-                // The dropdown falls back to the first model — clear the pref so generate_* resolves to
-                // the same shown model instead of sending the stale id.
-                selected = models[0];
-                if (!string.IsNullOrEmpty(AssetGenPrefs.GetSelectedModel(kind, providerId)))
-                    AssetGenPrefs.SetSelectedModel(kind, providerId, string.Empty);
-            }
+            ModelEntry selected = models.FirstOrDefault(model => model.Id == selectedId);
+            int selectedIndex = selected == null ? choices.Count : models.ToList().IndexOf(selected);
+            if (selected == null) choices.Add("Saved model unavailable — choose another (" + selectedId + ")");
 
             // Lay the dropdown out like the Format row: a horizontal .setting-row (align-items:center,
             // min-height:24px) with a .setting-label + a label-less DropdownField. Adding the dropdown
@@ -420,7 +461,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             var dropdown = new DropdownField(choices, 0);
             dropdown.AddToClassList("setting-dropdown-inline");
             dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
-            dropdown.SetValueWithoutNotify(selected.Label);
+            dropdown.SetValueWithoutNotify(choices[selectedIndex]);
             dropdownRow.Add(dropdown);
 
             parent.Add(dropdownRow);
@@ -435,13 +476,18 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             caveat.style.whiteSpace = WhiteSpace.Normal;
             parent.Add(caveat);
 
-            UpdateModelMeta(meta, selected);
-            UpdateModelCaveat(caveat, selected);
+            if (selected != null)
+            {
+                UpdateModelMeta(meta, selected);
+                UpdateModelCaveat(caveat, selected);
+            }
+            else meta.text = "Your saved selection is preserved. Choose an available model before generating.";
 
             dropdown.RegisterValueChangedCallback(evt =>
             {
-                ModelEntry picked = FindByLabel(models, evt.newValue);
-                if (picked == null) return;
+                int index = choices.IndexOf(evt.newValue);
+                if (index < 0 || index >= models.Count) return;
+                ModelEntry picked = models[index];
                 AssetGenPrefs.SetSelectedModel(kind, providerId, picked.Id);
                 UpdateModelMeta(meta, picked);
                 UpdateModelCaveat(caveat, picked);
@@ -499,13 +545,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             Root?.schedule.Execute(SyncFromPrefs);
         }
 
-        private static ModelEntry FindByLabel(IReadOnlyList<ModelEntry> models, string label)
-        {
-            foreach (ModelEntry m in models)
-                if (m.Label == label) return m;
-            return null;
-        }
-
         private static void UpdateModelMeta(Label label, ModelEntry m)
         {
             if (label == null || m == null) return;
@@ -516,7 +555,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             // Lyria advertises a max but takes no duration input, so showing a hint would mislead.
             if (m.MaxDurationSeconds > 0f && !string.IsNullOrEmpty(m.DurationField)) parts.Add($"≤{m.MaxDurationSeconds:0}s");
             if (m.Loopable) parts.Add("loopable");
+            parts.Add(m.FromRefresh ? "verified catalog" : "bundled · unverified");
+            if (!string.IsNullOrEmpty(m.LicenseType)) parts.Add("license: " + m.LicenseType);
             label.text = string.Join(" · ", parts);
+            label.tooltip = m.ModelUrl ?? m.Id;
         }
 
         private static void UpdateModelCaveat(Label label, ModelEntry m)
