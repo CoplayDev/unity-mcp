@@ -3,12 +3,12 @@ id: tool-groups
 slug: /guides/tool-groups
 title: Tool Groups and manage_tools
 sidebar_label: Tool Groups
-description: Per-session visibility for the 47 tools. Activate vfx, animation, ui, testing, etc. only when you need them.
+description: Per-session visibility for the 48 tools. Activate vfx, animation, ui, testing, etc. only when you need them.
 ---
 
 # Tool Groups
 
-MCP for Unity ships 47 tools, but exposing all of them to the LLM at once balloons the prompt and dilutes routing decisions. So tools are sorted into **groups**, and only `core` is enabled by default.
+MCP for Unity ships 48 tools, but exposing all of them to the LLM at once balloons the prompt and dilutes routing decisions. So tools are sorted into **groups**, and only `core` is enabled by default.
 
 ## The groups
 
@@ -23,6 +23,7 @@ MCP for Unity ships 47 tools, but exposing all of them to the LLM at once balloo
 | `probuilder` | off | ProBuilder 3D modeling. Requires `com.unity.probuilder` package. |
 | `profiling` | off | Profiler session control, counters, memory snapshots, Frame Debugger. |
 | `docs` | off | Unity API reflection and documentation lookup. |
+| `asset_gen` | off | AI asset generation (3D model, image, audio; bring your own key) and the Blender Bridge. |
 
 ## Enabling a group
 
@@ -64,7 +65,7 @@ Useful when a group's tools are confusing the assistant — e.g., `manage_shader
 Three reasons:
 
 1. **Prompt economy**: each visible tool adds tokens to every assistant call. Hiding what you're not using is real money saved at scale.
-2. **Routing clarity**: when the LLM picks between 47 tools versus the 30 core tools, the wrong-tool rate drops measurably.
+2. **Routing clarity**: when the LLM picks between 48 tools versus the 30 core tools, the wrong-tool rate drops measurably.
 3. **Package hygiene**: tools in `probuilder` only work if `com.unity.probuilder` is installed; hiding them by default avoids confusing errors.
 
 ## Server vs. session state
