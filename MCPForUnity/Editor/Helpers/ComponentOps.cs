@@ -455,11 +455,10 @@ namespace MCPForUnity.Editor.Helpers
             error = null;
             using var so = new SerializedObject(component);
 
-            SerializedProperty prop = so.FindProperty(propertyName)
-                                   ?? so.FindProperty(normalizedName);
+            SerializedProperty prop = FindTopLevelProperty(so, propertyName, normalizedName, out error);
             if (prop == null)
             {
-                error = $"SerializedProperty '{propertyName}' not found on component '{component.GetType().Name}'.";
+                error ??= $"SerializedProperty '{propertyName}' not found on component '{component.GetType().Name}'.";
                 return false;
             }
 
@@ -474,8 +473,7 @@ namespace MCPForUnity.Editor.Helpers
                 && !(value is JValue jv && jv.Type == JTokenType.Null))
             {
                 so.Update();
-                var verifyProp = so.FindProperty(propertyName)
-                              ?? so.FindProperty(normalizedName);
+                var verifyProp = FindTopLevelProperty(so, propertyName, normalizedName, out _);
                 if (verifyProp != null
                     && verifyProp.propertyType == SerializedPropertyType.ObjectReference
                     && verifyProp.objectReferenceValue == null)
@@ -897,6 +895,52 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return AssignObjectReference(prop, go, componentFilter, out error);
+        }
+
+        /// <summary>
+        /// Finds a top-level SerializedProperty by name. Built-in components often back a public
+        /// property with a differently named native field (SpriteRenderer.sprite is m_Sprite), so
+        /// fall back to comparing names case-insensitively with the m_ prefix and underscores removed.
+        /// </summary>
+        private static SerializedProperty FindTopLevelProperty(SerializedObject so, string propertyName, string normalizedName, out string error)
+        {
+            error = null;
+            var prop = so.FindProperty(propertyName) ?? so.FindProperty(normalizedName);
+            if (prop != null) return prop;
+
+            // Compare against the raw name as well: NormalizePropertyName turns "m_sprite" into
+            // "mSprite", which strips to "msprite" rather than "sprite".
+            string rawKey = StripSerializedFieldPrefix(propertyName);
+            string normalizedKey = StripSerializedFieldPrefix(normalizedName);
+            string match = null;
+            var iter = so.GetIterator();
+            bool enterChildren = true;
+            while (iter.Next(enterChildren))
+            {
+                enterChildren = false;
+                string candidate = StripSerializedFieldPrefix(iter.name);
+                if (candidate != rawKey && candidate != normalizedKey)
+                    continue;
+
+                // Two fields that collapse to the same key (target_ and m_Target) would make
+                // this pick whichever comes first; refuse rather than write the wrong one.
+                if (match != null)
+                {
+                    error = $"Property '{propertyName}' matches more than one serialized field " +
+                            $"('{match}', '{iter.name}'); use the exact field name.";
+                    return null;
+                }
+                match = iter.name;
+            }
+
+            return match != null ? so.FindProperty(match) : null;
+        }
+
+        private static string StripSerializedFieldPrefix(string name)
+        {
+            if (name.StartsWith("m_", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(2);
+            return name.Replace("_", "").ToLowerInvariant();
         }
 
         /// <summary>
