@@ -111,6 +111,29 @@ namespace MCPForUnity.Editor.Helpers
             return writer.ToString();
         }
 
+        public static string RemoveCodexServerBlock(string existingToml, out bool removed)
+        {
+            removed = false;
+            var root = TryParseToml(existingToml);
+            if (root == null) return existingToml;
+
+            if (TryGetTable(root, "mcp_servers", out var snakeCaseServers))
+            {
+                removed |= RemoveUnityMcpServer(snakeCaseServers);
+            }
+
+            if (TryGetTable(root, "mcpServers", out var camelCaseServers))
+            {
+                removed |= RemoveUnityMcpServer(camelCaseServers);
+            }
+
+            if (!removed) return existingToml;
+
+            using var writer = new StringWriter();
+            root.WriteTo(writer);
+            return writer.ToString();
+        }
+
         public static bool TryParseCodexServer(string toml, out string command, out string[] args)
         {
             return TryParseCodexServer(toml, out command, out args, out _);
@@ -270,6 +293,18 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return false;
+        }
+
+        private static bool RemoveUnityMcpServer(TomlTable servers)
+        {
+            if (servers == null) return false;
+
+            string key = servers.Keys.FirstOrDefault(k =>
+                string.Equals(k, "unityMCP", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrEmpty(key)) return false;
+
+            servers.Delete(key);
+            return true;
         }
 
         private static string GetTomlString(TomlTable table, string key)
