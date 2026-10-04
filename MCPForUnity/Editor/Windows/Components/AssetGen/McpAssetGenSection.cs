@@ -36,6 +36,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             ("fal", "fal"),
             ("openrouter", "OpenRouter"),
+            ("minimax", "MiniMax"),
         };
 
         // UI Elements

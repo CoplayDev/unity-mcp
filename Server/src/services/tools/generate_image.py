@@ -19,7 +19,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 @mcp_for_unity_tool(
     group="asset_gen",
     description=(
-        "Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as "
+        "Generate 2D images with AI providers (fal.ai, OpenRouter, MiniMax) and import them as "
         "textures/sprites into the Unity project. Bring-your-own-key: provider keys live "
         "in the editor's secure store and never cross the bridge.\n\n"
         "ACTIONS:\n"
@@ -42,7 +42,7 @@ async def generate_image(
     action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers"],
                       "Action to perform."],
 
-    provider: Annotated[str, "Provider id (fal, openrouter)."] | None = None,
+    provider: Annotated[str, "Provider id (fal, openrouter, minimax)."] | None = None,
     mode: Annotated[str, "Generation mode: text or image."] | None = None,
     prompt: Annotated[str, "Text prompt for text->image."] | None = None,
     image_path: Annotated[str, "Path to a source image for image->image mode."] | None = None,
