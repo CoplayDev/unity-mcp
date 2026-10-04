@@ -10,12 +10,14 @@ using MCPForUnity.Editor.Helpers; // For Response class
 using MCPForUnity.Editor.Tools;
 using MCPForUnity.Runtime.Helpers;
 
+#if MCP_HAS_PHYSICS
 #if UNITY_6000_0_OR_NEWER
 using PhysicsMaterialType = UnityEngine.PhysicsMaterial;
 using PhysicsMaterialCombine = UnityEngine.PhysicsMaterialCombine;
 #else
 using PhysicsMaterialType = UnityEngine.PhysicMaterial;
 using PhysicsMaterialCombine = UnityEngine.PhysicMaterialCombine;
+#endif
 #endif
 
 namespace MCPForUnity.Editor.Tools
@@ -224,11 +226,17 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else if (lowerAssetType == "physicsmaterial")
                 {
+#if MCP_HAS_PHYSICS
                     PhysicsMaterialType pmat = new PhysicsMaterialType();
                     if (properties != null)
                         ApplyPhysicsMaterialProperties(pmat, properties);
                     AssetDatabase.CreateAsset(pmat, fullPath);
                     newAsset = pmat;
+#else
+                    return new ErrorResponse(
+                        "Cannot create a PhysicsMaterial: the Physics module (com.unity.modules.physics) is not installed. "
+                        + "Enable it via Window > Package Manager > Built-in > Physics.");
+#endif
                 }
                 else if (lowerAssetType == "prefab")
                 {
@@ -876,6 +884,7 @@ namespace MCPForUnity.Editor.Tools
 
 
 
+#if MCP_HAS_PHYSICS
         /// <summary>
         ///  Applies properties from JObject to a PhysicsMaterial.
         /// </summary>
@@ -946,6 +955,7 @@ namespace MCPForUnity.Editor.Tools
 
             return modified;
         }
+#endif
 
         /// <summary>
         /// Generic helper to set properties on any UnityEngine.Object using reflection.

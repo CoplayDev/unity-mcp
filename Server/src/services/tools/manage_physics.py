@@ -47,14 +47,21 @@ ALL_ACTIONS: list[str] = list(get_args(PhysicsAction))
         "FORCES: apply_force\n"
         "RIGIDBODY: get_rigidbody, configure_rigidbody\n"
         "VALIDATION: validate\n"
-        "SIMULATION: simulate_step\n"
+        "SIMULATION: simulate_step\n\n"
+        "MODULE REQUIREMENTS: 3D actions need Unity's built-in Physics module "
+        "(com.unity.modules.physics); 2D actions need the Physics 2D module "
+        "(com.unity.modules.physics2d). These modules are optional and are NOT forced as package "
+        "dependencies, so a project may have one, both, or neither. 'dimension' defaults to '3d': "
+        "in a project without the 3D Physics module you MUST pass dimension:'2d' explicitly, otherwise "
+        "the action returns a 'Physics module is not installed' error. If neither module is installed, "
+        "every action reports that physics tools are unavailable.\n"
     ),
     annotations=ToolAnnotations(title="Manage Physics", destructiveHint=True),
 )
 async def manage_physics(
     ctx: Context,
     action: Annotated[PhysicsAction, "The physics action to perform."],
-    dimension: Annotated[Optional[str], "Physics dimension: '3d' (default) or '2d'."] = None,
+    dimension: Annotated[Optional[str], "Physics dimension: '3d' (default) or '2d'. The matching built-in physics module must be installed; pass '2d' explicitly in projects that don't have the 3D Physics module."] = None,
     settings: Annotated[
         Optional[dict[str, Any]], "Key-value settings for set_settings."
     ] = None,

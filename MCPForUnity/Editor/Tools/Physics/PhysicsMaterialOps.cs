@@ -27,12 +27,20 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse(folderError);
 
             if (dimension == "2d")
+#if MCP_HAS_PHYSICS_2D
                 return Create2D(name, folder, p);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
 
             if (dimension != "3d")
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
+#if MCP_HAS_PHYSICS
             return Create3D(name, folder, p);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
         public static object Configure(JObject @params)
@@ -56,9 +64,17 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
             if (dimension == "2d")
+#if MCP_HAS_PHYSICS_2D
                 return Configure2D(path, properties);
+#else
+                return new ErrorResponse("Physics 2D module (com.unity.modules.physics2d) is not installed.");
+#endif
 
+#if MCP_HAS_PHYSICS
             return Configure3D(path, properties);
+#else
+            return new ErrorResponse("Physics module (com.unity.modules.physics) is not installed.");
+#endif
         }
 
         public static object Assign(JObject @params)
@@ -86,16 +102,25 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"GameObject not found: '{targetToken}'.");
 
             // Try to load as 3D physics material first
+#if MCP_HAS_PHYSICS
 #if UNITY_6000_0_OR_NEWER
             var mat3D = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(materialPath);
 #else
             var mat3D = AssetDatabase.LoadAssetAtPath<PhysicMaterial>(materialPath);
 #endif
+#else
+            UnityEngine.Object mat3D = null;
+#endif
+#if MCP_HAS_PHYSICS_2D
             var mat2D = AssetDatabase.LoadAssetAtPath<PhysicsMaterial2D>(materialPath);
+#else
+            UnityEngine.Object mat2D = null;
+#endif
 
             if (mat3D == null && mat2D == null)
                 return new ErrorResponse($"No physics material found at path: '{materialPath}'.");
 
+#if MCP_HAS_PHYSICS
             // Try 3D colliders first
             if (mat3D != null)
             {
@@ -131,7 +156,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
             // Try 2D colliders
             if (mat2D != null)
             {
@@ -167,6 +194,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     }
                 }
             }
+#endif
 
             return new ErrorResponse($"No suitable collider found on '{go.name}'.");
         }
@@ -175,6 +203,7 @@ namespace MCPForUnity.Editor.Tools.Physics
         // Create helpers
         // =====================================================================
 
+#if MCP_HAS_PHYSICS
         private static object Create3D(string name, string folder, ToolParams p)
         {
             float dynamicFriction = p.GetFloat("dynamic_friction") ?? 0.6f;
@@ -239,7 +268,9 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static object Create2D(string name, string folder, ToolParams p)
         {
             float friction = p.GetFloat("friction") ?? 0.4f;
@@ -272,6 +303,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
             };
         }
+#endif
 
         // =====================================================================
         // Configure helpers
@@ -282,6 +314,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             "dynamicfriction", "staticfriction", "bounciness", "frictioncombine", "bouncecombine"
         };
 
+#if MCP_HAS_PHYSICS
         private static object Configure3D(string path, JObject properties)
         {
             // Validate all keys before applying any changes
@@ -367,12 +400,14 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { path, changed }
             };
         }
+#endif
 
         private static readonly HashSet<string> Valid2DMatKeys = new HashSet<string>
         {
             "friction", "bounciness"
         };
 
+#if MCP_HAS_PHYSICS_2D
         private static object Configure2D(string path, JObject properties)
         {
             // Validate all keys before applying any changes
@@ -420,11 +455,13 @@ namespace MCPForUnity.Editor.Tools.Physics
                 data = new { path, changed }
             };
         }
+#endif
 
         // =====================================================================
         // Assign helpers
         // =====================================================================
 
+#if MCP_HAS_PHYSICS
         private static Collider FindCollider3D(GameObject go, string colliderType, int? index = null)
         {
             if (!string.IsNullOrEmpty(colliderType))
@@ -454,7 +491,9 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             return go.GetComponent<Collider>();
         }
+#endif
 
+#if MCP_HAS_PHYSICS_2D
         private static Collider2D FindCollider2D(GameObject go, string colliderType, int? index = null)
         {
             if (!string.IsNullOrEmpty(colliderType))
@@ -484,6 +523,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             return go.GetComponent<Collider2D>();
         }
+#endif
 
         // =====================================================================
         // Folder helpers
