@@ -1,3 +1,4 @@
+using System;
 using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
@@ -10,6 +11,15 @@ namespace MCPForUnity.Editor.Helpers
         private const string DebugPrefix = "<b><color=#6AA84F>MCP-FOR-UNITY</color></b>:";
         private const string WarnPrefix = "<b><color=#cc7a00>MCP-FOR-UNITY</color></b>:";
         private const string ErrorPrefix = "<b><color=#cc3333>MCP-FOR-UNITY</color></b>:";
+
+        internal static bool IsMcpLogMessage(string message)
+        {
+            return message.StartsWith(InfoPrefix, StringComparison.Ordinal)
+                || message.StartsWith(DebugPrefix, StringComparison.Ordinal)
+                || message.StartsWith(WarnPrefix, StringComparison.Ordinal)
+                || message.StartsWith(ErrorPrefix, StringComparison.Ordinal)
+                || message.StartsWith("MCP-FOR-UNITY:", StringComparison.Ordinal);
+        }
 
         private static volatile bool _debugEnabled = ReadDebugPreference();
 

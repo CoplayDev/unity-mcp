@@ -77,12 +77,17 @@ def stop():
     help="Include stack traces."
 )
 @click.option(
+    "--mcp-logs/--no-mcp-logs",
+    default=True,
+    help="Include MCP for Unity's own diagnostics (default: included)."
+)
+@click.option(
     "--clear",
     is_flag=True,
     help="Clear the console instead of reading."
 )
 @handle_unity_errors
-def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace: bool, clear: bool):
+def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace: bool, mcp_logs: bool, clear: bool):
     """Read or clear the Unity console.
 
     \b
@@ -90,6 +95,7 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
         unity-mcp editor console
         unity-mcp editor console --type error --count 20
         unity-mcp editor console --filter "NullReference" --stacktrace
+        unity-mcp editor console --type error --no-mcp-logs
         unity-mcp editor console --clear
     """
     config = get_config()
@@ -106,6 +112,7 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
         "types": list(log_types),
         "count": count,
         "include_stacktrace": stacktrace,
+        "include_mcp_logs": mcp_logs,
     }
 
     if filter_text:

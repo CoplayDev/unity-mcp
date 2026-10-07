@@ -26,6 +26,7 @@ Gets messages from or clears the Unity Editor console. Defaults to 10 most recen
 | `cursor` | `int \| str \| None` | — | Opaque cursor for paging (0-based offset). Defaults to 0. |
 | `format` | `Literal['plain', 'detailed', 'json'] \| None` | — | Output format |
 | `include_stacktrace` | `bool \| str \| None` | — | Include stack traces in output (accepts true/false or 'true'/'false') |
+| `include_mcp_logs` | `bool \| str \| None` | — | Include MCP for Unity's own diagnostics (default true). Set false to exclude them before count and paging limits. |
 
 ## Returns
 
@@ -34,6 +35,21 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ## Examples
 
 <!-- examples:start -->
-*No examples yet. Add usage examples here — they will be preserved across regenerations.*
+Read project warnings and errors without MCP for Unity's transport diagnostics
+consuming the result limit:
+
+```json
+{"action":"get","types":["error","warning"],"count":10,"include_mcp_logs":false}
+```
+
+MCP diagnostics are included by default. Leave `include_mcp_logs` unset or set it
+to `true` when troubleshooting the bridge itself. Exclusion happens before count
+and paging limits; project messages that merely mention MCP for Unity are retained.
+
+The CLI exposes the same filter:
+
+```bash
+unity-mcp editor console --type error --type warning --no-mcp-logs
+```
 <!-- examples:end -->
 
