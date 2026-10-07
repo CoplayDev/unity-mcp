@@ -256,7 +256,7 @@ GitHub withholds repository secrets from workflow runs triggered by a fork's pul
 | Check | On a fork PR |
 |---|---|
 | `Compile MCPForUnity (win/osx/linux)` | **Runs.** License-free compile across win/osx/linux — real signal. |
-| `Run Python Tests` | **Runs.** Real signal. |
+| `Run Python Tests (3.10/3.14)` | **Runs.** Real signal. |
 | `Check docs reference is fresh` | **Runs.** Real signal. |
 | `Test in editmode on Unity <version>` | **Skipped** — no Editor booted, no C# compiled by this job. |
 | `e2e-bridge` | **Skipped** — no Editor booted, no tool call exercised. |

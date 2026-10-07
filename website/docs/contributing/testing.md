@@ -25,7 +25,7 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 cd Server && uv run pytest tests/ -k "test_create_material" -v
 ```
 
-CI workflow: `.github/workflows/python-tests.yml`. Coverage is uploaded to Codecov on every run.
+CI workflow: `.github/workflows/python-tests.yml`. It runs the tests on Python 3.10 and 3.14; coverage is uploaded to Codecov from the 3.10 job.
 
 ### Adding a Python test
 

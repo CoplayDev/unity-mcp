@@ -28,8 +28,14 @@ on:
 
 jobs:
   test:
-    name: Run Python Tests
+    name: Run Python Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the oldest supported version; 3.14 catches changes like the lazy
+        # __annotations__ evaluation from PEP 649.
+        python-version: ["3.10", "3.14"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,7 +48,7 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.10
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -51,7 +57,7 @@ jobs:
           # re-resolving, so a dependency or version bump that forgot `uv lock` shows up here.
           # The dev extra is resolved in the lock too, so pytest runs against pinned versions
           # instead of whatever `uv pip install` would fetch today.
-          uv sync --locked --extra dev
+          uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Run tests with coverage
         run: |
@@ -65,7 +71,7 @@ jobs:
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
-        if: always()
+        if: always() && matrix.python-version == '3.10'
         # fail_ci_if_error: false does not cover a failed download: v4 crashes on the https
         # error before it reads that input. This job gates both release pipelines, and a
         # Codecov outage must not stop a release.
@@ -80,7 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pytest-results
+          name: pytest-results-${{ matrix.python-version }}
           path: |
             Server/.pytest_cache/
             Server/tests/
