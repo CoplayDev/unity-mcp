@@ -23,6 +23,7 @@ Essential scene, script, asset & editor tools (always on by default)
 - **[`manage_camera`](./manage_camera.md)** — Manage cameras (Unity Camera + Cinemachine).
 - **[`manage_components`](./manage_components.md)** — Add, remove, or set properties on components attached to GameObjects.
 - **[`manage_editor`](./manage_editor.md)** — Controls and queries the Unity editor's state and settings.
+- **[`manage_editor_windows`](./manage_editor_windows.md)** — List open Unity Editor tabs/windows or capture one as an MCP PNG image.
 - **[`manage_gameobject`](./manage_gameobject.md)** — Performs CRUD operations on GameObjects.
 - **[`manage_graphics`](./manage_graphics.md)** — Manage rendering graphics: volumes, post-processing, light baking, rendering stats, pipeline settings, and URP renderer features.
 - **[`manage_material`](./manage_material.md)** — Manages Unity materials (set properties, colors, shaders, etc).
