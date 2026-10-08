@@ -50,6 +50,35 @@ def stop():
         print_success("Stopped play mode")
 
 
+@editor.command("game-view-size")
+@click.option("--width", type=click.IntRange(10, 8192), default=None,
+              help="Fixed width in pixels. Supply with --height to set the size.")
+@click.option("--height", type=click.IntRange(10, 8192), default=None,
+              help="Fixed height in pixels. Supply with --width to set the size.")
+@handle_unity_errors
+def game_view_size(width: Optional[int], height: Optional[int]):
+    """Read or set the open Game View's fixed render resolution.
+
+    Requires a focused Game View, or exactly one open Game View. Make it visible
+    before setting dimensions so Unity can repaint and verify its render target. Reuses one
+    MCP-owned preset per platform group in shared Editor preferences; other
+    presets and focus stay intact. Actual size can be limited by the GPU.
+
+    \b
+    Examples:
+        unity-mcp editor game-view-size
+        unity-mcp editor game-view-size --width 2400 --height 1080
+    """
+    if (width is None) != (height is None):
+        raise click.UsageError("Supply both --width and --height, or neither to read the size.")
+    config = get_config()
+    params: dict[str, Any] = {"action": "get_game_view_size"}
+    if width is not None:
+        params.update(action="set_game_view_size", width=width, height=height)
+    result = run_command("manage_editor", params, config)
+    click.echo(format_output(result, config.format))
+
+
 @editor.command("console")
 @click.option(
     "--type", "-t",
