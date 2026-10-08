@@ -409,7 +409,12 @@ class CustomToolService:
         _handler.__name__ = f"custom_tool_{definition.name}"
         _handler.__doc__ = definition.description or ""
         _handler.__signature__ = self._build_signature(definition)
-        _handler.__annotations__ = self._build_annotations(definition)
+        annotations = self._build_annotations(definition)
+        _handler.__annotations__ = annotations
+        # On Python 3.14, functools.wraps copies __annotate__ instead of __annotations__,
+        # and assigning __annotations__ sets __annotate__ to None. Without a real
+        # __annotate__ the logging/telemetry wrappers end up with no annotations.
+        _handler.__annotate__ = lambda format: dict(annotations)
         return _handler
 
     def _build_signature(self, definition: ToolDefinitionModel) -> inspect.Signature:
