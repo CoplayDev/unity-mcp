@@ -109,11 +109,14 @@ namespace MCPForUnity.Editor.Services.Server
             string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
             Directory.CreateDirectory(scriptsDir);
             string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.cmd");
+            // Match cmd's code page to the script encoding before it reads non-ASCII paths.
             File.WriteAllText(
                 scriptPath,
                 "@echo off\r\n" +
+                "chcp 65001 >nul\r\n" +
                 "cls\r\n" +
-                command + "\r\n");
+                command + "\r\n",
+                new System.Text.UTF8Encoding(false));
             return new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "cmd.exe",
