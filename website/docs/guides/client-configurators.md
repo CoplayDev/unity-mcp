@@ -173,6 +173,24 @@ Some clients cannot be handled by the generic JSON configurator alone.
 - The bridge exposes a single proxy tool such as `unityMCP__call`, which then forwards to Unity MCP tool names.
 - OpenClaw support follows the currently selected MCP for Unity transport (via `openclaw-mcp-bridge`).
 
+### DeepSeek Harness (Cordis patch YAML)
+
+- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, configured as Cordis rows in a **YAML patch layer** — not a JSON/TOML config.
+- Target file is `$DSH_HOME/cordis.patch.yml` (the `DSH_HOME` environment variable wins, default `~/.dsh`). The home patch layer applies to every DSH profile (web, sdk, headless, acp); per-profile `cordis.patch.yml` files are documented in the manual snippet instead.
+- The row shape (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
+  ```yaml
+  - insert:
+      - id: unitymcp
+        name: '@deepseek-ai/dsh-mcp-client'
+        config:
+          serverName: unityMCP
+          transport: streamable-http   # or stdio with command/args
+          url: http://127.0.0.1:<port>/mcp
+  ```
+- All patch-file surgery lives in `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`), which manages **one marker-fenced block**. This is deliberate: the package has no YAML parser, and user patch files may contain features one (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Upsert replaces only the fenced region; status checks parse only the fenced region's known shape; Unregister removes only the fenced region.
+- After a DSH reload/restart, Unity tools surface as `mcp__unityMCP__<tool>` (DSH's server-qualified MCP naming).
+- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
+
 ---
 
 ## Adding a new MCP client (typical JSON case)
