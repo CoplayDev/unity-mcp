@@ -60,11 +60,15 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return OpenPrefabStage(prefabPath);
                     }
                     case ACTION_SAVE_PREFAB_STAGE:
-                        return SavePrefabStage();
+                    {
+                        bool refresh = @params["refresh"]?.ToObject<bool>() ?? true;
+                        return SavePrefabStage(refresh);
+                    }
                     case ACTION_CLOSE_PREFAB_STAGE:
                     {
                         bool saveBeforeClose = @params["saveBeforeClose"]?.ToObject<bool>() ?? false;
-                        return ClosePrefabStage(saveBeforeClose);
+                        bool refresh = @params["refresh"]?.ToObject<bool>() ?? true;
+                        return ClosePrefabStage(saveBeforeClose, refresh);
                     }
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
@@ -1338,7 +1342,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
         }
 
-        private static object SavePrefabStage()
+        private static object SavePrefabStage(bool refreshAfterSave = true)
         {
             try
             {
@@ -1348,12 +1352,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     return new ErrorResponse("Not currently in prefab editing mode. Open a prefab stage first with open_prefab_stage.");
                 }
 
-                if (!TrySavePrefabStage(prefabStage, out string prefabPath, out string errorMessage))
+                if (!TrySavePrefabStage(prefabStage, refreshAfterSave, out string prefabPath, out string errorMessage))
                 {
                     return new ErrorResponse(errorMessage);
                 }
 
-                return new SuccessResponse($"Saved prefab stage changes for '{prefabPath}'.", new { prefabPath, saved = true });
+                return new SuccessResponse($"Saved prefab stage changes for '{prefabPath}'.", new { prefabPath, saved = true, refreshed = refreshAfterSave });
             }
             catch (Exception e)
             {
@@ -1361,7 +1365,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
         }
 
-        private static object ClosePrefabStage(bool saveBeforeClose = false)
+        private static object ClosePrefabStage(bool saveBeforeClose = false, bool refreshAfterSave = true)
         {
             try
             {
@@ -1373,7 +1377,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
                 if (saveBeforeClose)
                 {
-                    if (!TrySavePrefabStage(prefabStage, out _, out string errorMessage))
+                    if (!TrySavePrefabStage(prefabStage, refreshAfterSave, out _, out string errorMessage))
                     {
                         return new ErrorResponse(errorMessage);
                     }
@@ -1389,7 +1393,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
         }
 
-        private static bool TrySavePrefabStage(PrefabStage prefabStage, out string prefabPath, out string errorMessage)
+        private static bool TrySavePrefabStage(PrefabStage prefabStage, bool refreshAfterSave, out string prefabPath, out string errorMessage)
         {
             prefabPath = prefabStage.assetPath;
             errorMessage = null;
@@ -1410,7 +1414,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             prefabStage.ClearDirtiness();
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            if (refreshAfterSave)
+            {
+                AssetDatabase.Refresh();
+            }
             return true;
         }
 
