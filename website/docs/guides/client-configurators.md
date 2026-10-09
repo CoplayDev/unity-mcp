@@ -187,7 +187,7 @@ Some clients cannot be handled by the generic JSON configurator alone.
           transport: streamable-http   # or stdio with command/args
           url: http://127.0.0.1:<port>/mcp
   ```
-- All patch-file surgery lives in `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`), which manages **one marker-fenced block**. This is deliberate: the package has no YAML parser, and user patch files may contain features one (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Upsert replaces only the fenced region; status checks parse only the fenced region's known shape; Unregister removes only the fenced region.
+- All patch-file surgery lives in `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`), which manages **one marker-fenced block**. This is deliberate: the package has no YAML parser, and user patch files may contain YAML features this helper does not parse (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Upsert replaces only the fenced region; status checks parse only the fenced region's known shape; Unregister removes only the fenced region.
 - After a DSH reload/restart, Unity tools surface as `mcp__unityMCP__<tool>` (DSH's server-qualified MCP naming).
 - Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
 

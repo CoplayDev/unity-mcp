@@ -90,7 +90,7 @@ namespace MCPForUnityTests.Editor.Clients
             string block = DshConfigHelper.BuildUnityMcpBlock(
                 useHttp: true, httpUrl: "http://127.0.0.1:8090/mcp",
                 uvxCommand: null, uvxArgs: null,
-                apiKeyHeader: "X-API-Key", apiKey: "it''s-a-key", windowsSystemRoot: null);
+                apiKeyHeader: "X-API-Key", apiKey: "it's-a-key", windowsSystemRoot: null);
 
             bool parsed = DshConfigHelper.TryParseManagedBlock(
                 block, out string transport, out string url, out string command, out string[] args,
