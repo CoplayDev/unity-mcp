@@ -12,7 +12,7 @@ description: "Execute arbitrary C# code inside the Unity Editor."
 
 ## Description
 
-Execute arbitrary C# code inside the Unity Editor. The code runs as a method body with access to UnityEngine and UnityEditor namespaces. Use 'return' to send data back. Compiled in-memory — no script files created. Actions: execute (run code), get_history (list past executions), replay (re-run a history entry), clear_history. NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only).
+Execute arbitrary C# code inside the Unity Editor. The code runs as a method body with access to UnityEngine and UnityEditor namespaces. Object and Random resolve to the UnityEngine types (write System.Random explicitly). Use 'return' to send data back. Compiled in-memory — no script files created. Actions: execute (run code), get_history (list past executions), replay (re-run a history entry), clear_history. NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only).
 
 ## Parameters
 
