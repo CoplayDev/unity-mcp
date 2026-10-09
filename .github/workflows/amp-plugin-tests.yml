@@ -1,0 +1,30 @@
+name: Amp Plugin Tests
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - .amp/plugins/**
+      - .github/workflows/amp-plugin-tests.yml
+  pull_request:
+    branches: [main, beta]
+    paths:
+      - .amp/plugins/**
+      - .github/workflows/amp-plugin-tests.yml
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: Run Bun Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run plugin tests
+        run: bun test ./.amp/plugins/__tests__
