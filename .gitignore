@@ -79,3 +79,7 @@ docs/superpowers/
 
 # Reference DLLs fetched by tools/compile-check.sh (not redistributable)
 .compile-refs/
+.compile-out/
+
+# Local-only scratch files marked by name
+*.DO-NOT-COMMIT.*

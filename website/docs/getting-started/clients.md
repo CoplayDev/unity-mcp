@@ -27,13 +27,14 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **OpenClaw** | HTTP / stdio | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport choice. |
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
 | **Pi** | stdio / HTTP | yes | yes | yes | Needs an MCP extension (Pi ships no MCP client of its own): `pi install npm:pi-mcp-adapter`. Writes the shared `~/.config/mcp/mcp.json`. |
+| **DeepSeek Harness** | HTTP / stdio | yes | yes | yes | Writes a managed block into `$DSH_HOME/cordis.patch.yml` (applies to every profile). Tools appear as `mcp__unityMCP__<tool>`. |
 
 ## How to pick
 
 - **You want it to just work**: Claude Desktop. Stdio means no port conflicts and no firewall prompts.
 - **You're building a multi-agent or remote workflow**: anything HTTP. Multiple clients can share one Python server; see [Multi-Instance Routing](/guides/multi-instance).
 - **You're already in your IDE**: Cursor, VS Code Copilot, or Cline — keeps you in flow.
-- **You want a terminal**: Claude Code, Copilot CLI, Codex, Gemini CLI, Qwen Code, or Pi.
+- **You want a terminal**: Claude Code, Copilot CLI, Codex, Gemini CLI, Qwen Code, Pi, or DeepSeek Harness.
 
 ## Manual configuration
 
