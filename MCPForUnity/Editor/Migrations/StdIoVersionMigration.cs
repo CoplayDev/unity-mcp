@@ -137,7 +137,9 @@ namespace MCPForUnity.Editor.Migrations
                 }
                 else
                 {
-                    unityNode = root.SelectToken("mcpServers.unityMCP");
+                    string containerKey = string.IsNullOrEmpty(client.ServerContainerKey)
+                        ? "mcpServers" : client.ServerContainerKey;
+                    unityNode = root.SelectToken(containerKey)?["unityMCP"];
                 }
 
                 if (unityNode == null) return false;
