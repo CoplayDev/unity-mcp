@@ -14,7 +14,7 @@ from cli.utils.confirmation import confirm_destructive_action
 
 @click.group()
 def asset():
-    """Asset operations - search, import, create, delete assets."""
+    """Asset operations and read-only AssetBundle exploration."""
     pass
 
 
@@ -96,6 +96,42 @@ def info(path: str, preview: bool):
     }
 
     result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@asset.command("bundles")
+@click.argument("path")
+@click.option("--limit", "-l", default=25, type=click.IntRange(1, 200), help="Entries per page (1-200).")
+@click.option("--page", default=1, type=click.IntRange(min=1), help="Page number (1-based).")
+@handle_unity_errors
+def bundles(path: str, limit: int, page: int):
+    """List built bundles and subdirectories in a project directory.
+
+    Example: unity-mcp asset bundles "Builds/AssetBundles"
+    """
+    config = get_config()
+    result = run_command("manage_asset", {
+        "action": "list_asset_bundles", "path": path,
+        "pageSize": limit, "pageNumber": page,
+    }, config)
+    click.echo(format_output(result, config.format))
+
+
+@asset.command("bundle-info")
+@click.argument("path")
+@click.option("--limit", "-l", default=25, type=click.IntRange(1, 200), help="Asset/scene names per page (1-200).")
+@click.option("--page", default=1, type=click.IntRange(min=1), help="Page number (1-based).")
+@handle_unity_errors
+def bundle_info(path: str, limit: int, page: int):
+    """Inspect a built bundle's asset/scene names without loading assets.
+
+    Example: unity-mcp asset bundle-info "Builds/AssetBundles/characters"
+    """
+    config = get_config()
+    result = run_command("manage_asset", {
+        "action": "get_asset_bundle_info", "path": path,
+        "pageSize": limit, "pageNumber": page,
+    }, config)
     click.echo(format_output(result, config.format))
 
 
