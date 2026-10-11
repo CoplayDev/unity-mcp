@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.TestTools.TestRunner.Api;
@@ -157,6 +159,19 @@ namespace MCPForUnity.Editor.Services
         private readonly List<ITestResultAdaptor> _leafResults = new List<ITestResultAdaptor>();
         private TaskCompletionSource<TestRunResult> _runCompletionSource;
         private string _trackedJobId;
+        private string _unityRunId;
+        private bool _initializationTimedOut;
+        private bool _nativeRunStarted;
+        private TestRunResult _pendingResult;
+        private Exception _pendingError;
+        private static readonly MethodInfo CancelRunMethod = typeof(TestRunnerApi).GetMethod("CancelTestRun", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
+        private static readonly MethodInfo IsRunningMethod =
+            typeof(TestRunnerApi).GetMethod("IsRunActive", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null) ??
+            typeof(TestRunnerApi).GetMethod("IsRunning", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
+        private static readonly PropertyInfo RunnerHolderProperty = typeof(TestRunnerApi).GetProperty("m_testJobDataHolder", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly MethodInfo GetRunnerMethod = RunnerHolderProperty?.PropertyType.GetMethod("GetRunner");
+        private static readonly MethodInfo IsRunningJobMethod = GetRunnerMethod?.ReturnType.GetMethod("IsRunningJob");
+        private static readonly bool CanQueryNativeRun = IsRunningMethod != null || IsRunningJobMethod != null;
 
         public TestRunnerService()
         {
@@ -165,7 +180,9 @@ namespace MCPForUnity.Editor.Services
             _testRunnerApi.RegisterCallbacks(this);
         }
 
-        internal void ResumeJobAfterReload(string jobId, string mode)
+        internal void ResumeJobAfterReload(string jobId, string mode, string unityRunId = null,
+            bool initializationTimedOut = false, bool nativeRunStarted = false,
+            bool nativeCleanupPending = false, TestRunResult pendingResult = null, string pendingError = null)
         {
             if (_runCompletionSource != null || _trackedJobId != null ||
                 string.IsNullOrEmpty(jobId) || TestJobManager.CurrentJobId != jobId)
@@ -174,9 +191,76 @@ namespace MCPForUnity.Editor.Services
             }
 
             _trackedJobId = jobId;
+            _unityRunId = unityRunId;
+            _nativeRunStarted = nativeRunStarted;
+            _initializationTimedOut = initializationTimedOut;
+            _pendingResult = pendingResult;
+            _pendingError = pendingError == null ? null : new InvalidOperationException(pendingError);
             if (Enum.TryParse<TestMode>(mode, out var testMode))
             {
                 TestRunStatus.MarkStarted(testMode);
+            }
+            if (nativeCleanupPending && CanQueryNativeRun)
+            {
+                EditorApplication.update += CompleteRunWhenIdle;
+            }
+            else if (initializationTimedOut) CancelForInitializationTimeout(jobId);
+        }
+
+        internal void CancelForInitializationTimeout(string jobId)
+        {
+            if (_trackedJobId != jobId || string.IsNullOrEmpty(_unityRunId)) return;
+            _initializationTimedOut = true;
+            _pendingError = new InvalidOperationException(TestJobManager.InitializationTimeoutError);
+            // Older Test Framework releases have no public per-run activity query. Keep
+            // ownership until cleanup finishes, including cancellation before RunStarted
+            // where Unity may skip RunFinished entirely.
+            if (CancelRunMethod == null || !CanQueryNativeRun)
+            {
+                McpLog.Warn("[TestRunnerService] Test Framework cancellation monitoring is unavailable; waiting for the timed-out run to finish.");
+                return;
+            }
+            EditorApplication.update -= CompleteRunWhenIdle;
+            EditorApplication.update += CompleteRunWhenIdle;
+            // Before RunStarted, cancellation can skip Unity's scene snapshot but still
+            // run its scene restore task. Wait until setup has captured the open scenes.
+            if (!_nativeRunStarted) return;
+            try
+            {
+                if (IsNativeRunActive()) CancelRunMethod.Invoke(null, new object[] { _unityRunId });
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[TestRunnerService] Failed to cancel timed-out run: {ex.GetBaseException().Message}");
+            }
+        }
+
+        private bool IsNativeRunActive()
+        {
+            if (IsRunningMethod != null)
+            {
+                return (bool)IsRunningMethod.Invoke(null, new object[] { _unityRunId });
+            }
+            // Test Framework 1.1.33 exposes only a global activity query. Ask its
+            // holder for this GUID so a manual run cannot keep an MCP lock alive.
+            var holder = RunnerHolderProperty.GetValue(null);
+            var runner = GetRunnerMethod.Invoke(holder, new object[] { _unityRunId });
+            return runner != null && (bool)IsRunningJobMethod.Invoke(runner, null);
+        }
+
+        private void CompleteRunWhenIdle()
+        {
+            try
+            {
+                if (!IsNativeRunActive())
+                {
+                    CompleteRun(_pendingResult, _pendingError);
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorApplication.update -= CompleteRunWhenIdle;
+                McpLog.Warn($"[TestRunnerService] Failed to monitor native test cleanup: {ex.GetBaseException().Message}");
             }
         }
 
@@ -222,6 +306,7 @@ namespace MCPForUnity.Editor.Services
             await _operationLock.WaitAsync().ConfigureAwait(true);
             Task<TestRunResult> runTask;
             bool adjustedPlayModeOptions = false;
+            bool appliedNoThrottling = false;
             bool originalEnterPlayModeOptionsEnabled = false;
             EnterPlayModeOptions originalEnterPlayModeOptions = EnterPlayModeOptions.None;
             try
@@ -270,23 +355,22 @@ namespace MCPForUnity.Editor.Services
                 // (Issue #525: EditMode tests were blocked by save dialog)
                 SaveDirtyScenesIfNeeded();
 
-                // Apply no-throttling preemptively for PlayMode tests. This ensures Unity
-                // isn't throttled during the Play mode transition (which requires multiple
-                // editor frames). Without this, unfocused Unity may never reach RunStarted
-                // where throttling would normally be disabled.
-                if (mode == TestMode.PlayMode)
-                {
-                    TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
-                }
+                // EditMode setup also advances over editor frames before RunStarted.
+                // Disable background throttling before Execute for both test modes.
+                appliedNoThrottling = true;
+                TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
 
-                _testRunnerApi.Execute(settings);
+                _unityRunId = _testRunnerApi.Execute(settings);
+                TestJobManager.OnRunScheduled(_trackedJobId, _unityRunId);
 
                 runTask = _runCompletionSource.Task;
             }
             catch
             {
                 _trackedJobId = null;
+                _unityRunId = null;
                 _runCompletionSource = null;
+                if (appliedNoThrottling) TestRunnerNoThrottle.RestoreThrottling();
                 // Ensure the status is cleared if we failed to start the run.
                 TestRunStatus.MarkFinished();
                 if (adjustedPlayModeOptions)
@@ -315,6 +399,7 @@ namespace MCPForUnity.Editor.Services
 
         public void Dispose()
         {
+            EditorApplication.update -= CompleteRunWhenIdle;
             try
             {
                 _testRunnerApi?.UnregisterCallbacks(this);
@@ -341,6 +426,8 @@ namespace MCPForUnity.Editor.Services
             {
                 return;
             }
+            _nativeRunStarted = true;
+            if (_initializationTimedOut) CancelForInitializationTimeout(_trackedJobId);
             try
             {
                 // Best-effort progress info for async polling (avoid heavy payloads).
@@ -375,6 +462,37 @@ namespace MCPForUnity.Editor.Services
 
         private void CompleteRun(TestRunResult payload, Exception error)
         {
+            if (_initializationTimedOut)
+            {
+                error = new InvalidOperationException(TestJobManager.InitializationTimeoutError);
+            }
+            if (!string.IsNullOrEmpty(_unityRunId) && CanQueryNativeRun)
+            {
+                _pendingResult = payload;
+                _pendingError = error;
+                try
+                {
+                    if (IsNativeRunActive())
+                    {
+                        // RunFinished/OnError precede native scene and preference teardown.
+                        // Persist the result, but retain ownership until all cleanup is done.
+                        if (IsTrackingCurrentJob)
+                        {
+                            if (error == null) TestJobManager.FinalizeCurrentJobFromRunFinished(payload, keepOwnership: true);
+                            else TestJobManager.FinalizeCurrentJobFromRunError(error.Message, keepOwnership: true);
+                        }
+                        EditorApplication.update -= CompleteRunWhenIdle;
+                        EditorApplication.update += CompleteRunWhenIdle;
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[TestRunnerService] Failed to query native test cleanup: {ex.GetBaseException().Message}");
+                    return;
+                }
+            }
+            EditorApplication.update -= CompleteRunWhenIdle;
 
             // A late callback from a cleared job must not finish a newer job or restore
             // settings belonging to it. Callbacks do not contain an MCP job identifier.
@@ -383,6 +501,7 @@ namespace MCPForUnity.Editor.Services
             if (canCleanUp)
             {
                 TestRunStatus.MarkFinished();
+                TestRunnerNoThrottle.RestoreThrottling();
             }
             if (ownsCurrentJob)
             {
@@ -409,6 +528,11 @@ namespace MCPForUnity.Editor.Services
             var completion = _runCompletionSource;
             _runCompletionSource = null;
             _trackedJobId = null;
+            _unityRunId = null;
+            _initializationTimedOut = false;
+            _nativeRunStarted = false;
+            _pendingResult = null;
+            _pendingError = null;
             if (completion != null)
             {
                 if (error == null) completion.TrySetResult(payload);
@@ -667,6 +791,7 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public sealed class TestRunResult
     {
+        [JsonConstructor]
         internal TestRunResult(TestRunSummary summary, IReadOnlyList<TestRunTestResult> results)
         {
             Summary = summary;
@@ -770,6 +895,7 @@ namespace MCPForUnity.Editor.Services
 
     public sealed class TestRunSummary
     {
+        [JsonConstructor]
         internal TestRunSummary(int total, int passed, int failed, int skipped, double durationSeconds, string resultState)
         {
             Total = total;
@@ -803,6 +929,7 @@ namespace MCPForUnity.Editor.Services
 
     public sealed class TestRunTestResult
     {
+        [JsonConstructor]
         internal TestRunTestResult(
             string name,
             string fullName,
