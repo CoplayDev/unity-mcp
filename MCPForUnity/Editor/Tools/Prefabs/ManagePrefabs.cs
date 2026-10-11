@@ -14,7 +14,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 {
     [McpForUnityTool("manage_prefabs", AutoRegister = false)]
     /// <summary>
-    /// Tool to manage Unity Prefabs: create, inspect, modify, and open/save/close prefab stage.
+    /// Tool to manage Unity Prefabs: assets, scene-instance overrides, and prefab stage.
     /// Supports both headless editing (modify_contents) and interactive prefab stage workflows.
     /// </summary>
     public static class ManagePrefabs
@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         private const string ACTION_OPEN_PREFAB_STAGE = "open_prefab_stage";
         private const string ACTION_SAVE_PREFAB_STAGE = "save_prefab_stage";
         private const string ACTION_CLOSE_PREFAB_STAGE = "close_prefab_stage";
-        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS + ", " + ACTION_OPEN_PREFAB_STAGE + ", " + ACTION_SAVE_PREFAB_STAGE + ", " + ACTION_CLOSE_PREFAB_STAGE;
+        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS + ", " + ACTION_OPEN_PREFAB_STAGE + ", " + ACTION_SAVE_PREFAB_STAGE + ", " + ACTION_CLOSE_PREFAB_STAGE + ", list_overrides, revert_overrides, apply_overrides";
 
         public static object HandleCommand(JObject @params)
         {
@@ -54,6 +54,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return GetHierarchy(@params);
                     case ACTION_MODIFY_CONTENTS:
                         return ModifyContents(@params);
+                    case "list_overrides":
+                    case "revert_overrides":
+                    case "apply_overrides":
+                        return ManagePrefabInstanceOverrides.HandleCommand(@params, action);
                     case ACTION_OPEN_PREFAB_STAGE:
                     {
                         string prefabPath = @params["prefabPath"]?.ToString() ?? @params["path"]?.ToString();

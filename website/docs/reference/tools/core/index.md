@@ -28,7 +28,7 @@ Essential scene, script, asset & editor tools (always on by default)
 - **[`manage_material`](./manage_material.md)** — Manages Unity materials (set properties, colors, shaders, etc).
 - **[`manage_packages`](./manage_packages.md)** — Manage Unity packages: query, install, remove, embed, and configure registries.
 - **[`manage_physics`](./manage_physics.md)** — Manage physics settings, collision matrix, materials, joints, queries, and validation.
-- **[`manage_prefabs`](./manage_prefabs.md)** — Manages Unity Prefab assets.
+- **[`manage_prefabs`](./manage_prefabs.md)** — Manages Unity Prefab assets and scene-instance overrides.
 - **[`manage_scene`](./manage_scene.md)** — Performs CRUD operations on Unity scenes.
 - **[`manage_script`](./manage_script.md)** — Compatibility router for legacy script operations.
 - **[`manage_script_capabilities`](./manage_script_capabilities.md)** — Get manage_script capabilities (supported ops, limits, and guards).

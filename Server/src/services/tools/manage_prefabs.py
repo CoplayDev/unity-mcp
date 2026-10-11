@@ -18,13 +18,16 @@ REQUIRED_PARAMS = {
     "create_from_gameobject": ["target", "prefab_path"],
     "modify_contents": ["prefab_path"],
     "open_prefab_stage": ["prefab_path"],
+    "list_overrides": ["target"],
+    "revert_overrides": ["target"],
+    "apply_overrides": ["target"],
 }
 
 
 @mcp_for_unity_tool(
     description=(
-        "Manages Unity Prefab assets. "
-        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents, open_prefab_stage, save_prefab_stage, close_prefab_stage. "
+        "Manages Unity Prefab assets and scene-instance overrides. "
+        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents, open_prefab_stage, save_prefab_stage, close_prefab_stage, list_overrides, revert_overrides, apply_overrides. "
         "Two approaches to prefab editing: "
         "(1) Headless: use modify_contents for automated/scripted edits without opening the prefab in the editor. "
         "(2) Interactive: use open_prefab_stage to open a prefab, then manage_gameobject/manage_components to edit objects inside the prefab stage, then save_prefab_stage to save and close_prefab_stage to return to the main scene. "
@@ -39,6 +42,12 @@ REQUIRED_PARAMS = {
         "(e.g. component_properties={\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}). "
         "Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. "
         "Use manage_asset action=search filterType=Prefab to list prefabs."
+        " Use list_overrides with a scene instance target to inspect property values and added/removed components/GameObjects. "
+        "Filter with child_path, component_type or property_prefix. "
+        "Use revert_overrides/apply_overrides to change only the selected scene object (and its components), "
+        "or narrow to a component_type/property_path. Children are not changed implicitly. "
+        "Structural changes require override_type and an unambiguous target or override_index from list_overrides. "
+        "Applying writes the source prefab asset and can affect other instances."
     ),
     annotations=ToolAnnotations(
         title="Manage Prefabs",
@@ -56,11 +65,14 @@ async def manage_prefabs(
             "open_prefab_stage",
             "save_prefab_stage",
             "close_prefab_stage",
+            "list_overrides",
+            "revert_overrides",
+            "apply_overrides",
         ],
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab)."] | None = None,
-    target: Annotated[str, "Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents (name or path like 'Parent/Child')."] | None = None,
+    target: Annotated[str, "Target GameObject: scene object for creation or overrides (name, hierarchy path, or instance ID), or object within prefab for modify_contents."] | None = None,
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
@@ -78,6 +90,13 @@ async def manage_prefabs(
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), source_prefab_path (optional: asset path to instantiate as nested prefab, e.g. 'Assets/Prefabs/Bullet.prefab'), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. source_prefab_path and primitive_type are mutually exclusive."] | None = None,
     delete_child: Annotated[str | list[str], "Child name(s) or path(s) to remove from the prefab. Supports single string or array for batch deletion (e.g. 'Child1' or ['Child1', 'Child1/Grandchild'])."] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"}. Single-sprite textures auto-resolve."] | None = None,
+    child_path: Annotated[str, "Relative child path within target for override actions. May identify a deleted child for removed_gameobject overrides."] | None = None,
+    component_type: Annotated[str, "Component type name to select for override actions. Ambiguous structural selections require override_index."] | None = None,
+    property_path: Annotated[str, "Exact serialized property path to list/apply/revert (e.g. m_AnchorMin.x). Ambiguous paths require component_type or override_index."] | None = None,
+    property_prefix: Annotated[str, "Serialized property prefix filter for list_overrides only (e.g. m_Anchor)."] | None = None,
+    override_type: Annotated[Literal["property", "added_component", "removed_component", "added_gameobject", "removed_gameobject"], "Override kind for writes; defaults to property. Omit for listing all kinds."] | None = None,
+    override_index: Annotated[int, "Index within an override kind returned by list_overrides; selects one entry."] | None = None,
+    include_default_overrides: Annotated[bool, "Include Unity's default overrides, such as instance-root placement; defaults to false."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -94,6 +113,11 @@ async def manage_prefabs(
                 "success": False,
                 "message": f"Action '{action}' requires parameter '{param_name}'."
             }
+
+    if action in ("revert_overrides", "apply_overrides") and property_prefix is not None:
+        return {"success": False, "message": "property_prefix is only supported by list_overrides; use property_path for writes."}
+    if override_index is not None and override_index < 0:
+        return {"success": False, "message": "override_index must be non-negative."}
 
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -118,6 +142,20 @@ async def manage_prefabs(
 
         if target:
             params["target"] = target
+
+        for key, value in (
+            ("childPath", child_path),
+            ("componentType", component_type),
+            ("propertyPath", property_path),
+            ("propertyPrefix", property_prefix),
+            ("overrideType", override_type),
+            ("overrideIndex", override_index),
+        ):
+            if value is not None:
+                params[key] = value
+        default_overrides_val = coerce_bool(include_default_overrides)
+        if default_overrides_val is not None:
+            params["includeDefaultOverrides"] = default_overrides_val
 
         allow_overwrite_val = coerce_bool(allow_overwrite)
         if allow_overwrite_val is not None:

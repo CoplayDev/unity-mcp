@@ -186,7 +186,7 @@ uri="file:///full/path/to/file.cs"
 | **Scene** | `manage_scene`, `find_gameobjects` | Scene operations, finding objects. Multi-scene editing (additive load, close, set active, move GO between scenes), scene templates (`3d_basic`, `2d_basic`, `empty`, `default`), scene validation with `auto_repair`. For build settings, use `manage_build(action="scenes")`. |
 | **Objects** | `manage_gameobject`, `manage_components` | Creating/modifying GameObjects |
 | **Scripts** | `create_script`, `script_apply_edits`, `validate_script` | C# code management (auto-refreshes on create/edit) |
-| **Assets** | `manage_asset`, `manage_prefabs` | Asset operations. **Prefab instantiation** is done via `manage_gameobject(action="create", prefab_path="...")`, not `manage_prefabs`. |
+| **Assets** | `manage_asset`, `manage_prefabs` | Asset operations. Use `manage_prefabs(action="list_overrides", target="...")` to inspect scene-instance overrides before `apply_overrides`/`revert_overrides`; narrow writes with `child_path`, `component_type` and `property_path`, or a structural `override_type`/`override_index`. Applying writes a prefab asset. **Prefab instantiation** is done via `manage_gameobject(action="create", prefab_path="...")`, not `manage_prefabs`. |
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control, package deployment (`deploy_package`/`restore_package`), undo/redo (`undo`/`redo` actions) |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
