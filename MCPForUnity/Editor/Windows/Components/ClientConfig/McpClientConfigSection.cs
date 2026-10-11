@@ -48,9 +48,9 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         // Data
         private readonly List<IMcpClientConfigurator> configurators;
-        private readonly Dictionary<IMcpClientConfigurator, DateTime> lastStatusChecks = new();
         private readonly HashSet<IMcpClientConfigurator> statusRefreshInFlight = new();
-        private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(45);
+        private EditorAsyncRefresh<McpClientConfiguratorBase.ClientRefreshResult> clientRefresh;
+        private WindowRefreshContext displayedContext;
         private int selectedClientIndex = 0;
         private bool isSkillSyncInProgress;
 
@@ -68,6 +68,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         public event Action<string, string> OnClientConfigMismatch;
 
         public VisualElement Root { get; private set; }
+        public bool HasClientProjectDirOverride => displayedContext?.HasProjectDirOverride == true;
 
         public McpClientConfigSection(VisualElement root)
         {
@@ -219,84 +220,32 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         public void UpdateManualConfiguration()
         {
-            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
-                return;
-
-            var client = configurators[selectedClientIndex];
-
-            string configPath = client.GetConfigPath();
-            configPathField.value = configPath;
-
-            string configJson = client.GetManualSnippet();
-            configJsonField.value = configJson;
-
-            var steps = client.GetInstallationSteps();
-            if (steps != null && steps.Count > 0)
-            {
-                var numbered = steps.Select((s, i) => $"{i + 1}. {s}");
-                installationStepsLabel.text = string.Join("\n", numbered);
-            }
-            else
-            {
-                installationStepsLabel.text = "Configuration steps not available for this client.";
-            }
+            RefreshSelectedClient();
         }
 
         private void UpdateClaudeCliPathVisibility()
         {
-            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
-                return;
-
-            var client = configurators[selectedClientIndex];
-
-            if (client is ClaudeCliMcpConfigurator)
-            {
-                string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
-                if (string.IsNullOrEmpty(claudePath))
-                {
-                    claudeCliPathRow.style.display = DisplayStyle.Flex;
-                    claudeCliPath.value = "Not found - click Browse to select";
-                }
-                else
-                {
-                    claudeCliPathRow.style.display = DisplayStyle.Flex;
-                    claudeCliPath.value = claudePath;
-                }
-            }
-            else
-            {
-                claudeCliPathRow.style.display = DisplayStyle.None;
-            }
+            bool isClaude = selectedClientIndex >= 0 && selectedClientIndex < configurators.Count
+                && configurators[selectedClientIndex] is ClaudeCliMcpConfigurator;
+            claudeCliPathRow.style.display = isClaude ? DisplayStyle.Flex : DisplayStyle.None;
+            if (isClaude)
+                claudeCliPath.SetValueWithoutNotify(displayedContext == null ? "Checking..."
+                    : displayedContext.Paths.ClaudePath ?? "Not found - click Browse to select");
         }
 
         private void UpdateClientProjectDirVisibility()
         {
-            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
-                return;
-
-            var client = configurators[selectedClientIndex];
-
-            if (client is ClaudeCliMcpConfigurator)
-            {
-                clientProjectDirRow.style.display = DisplayStyle.Flex;
-                string projectDir = ClaudeCliMcpConfigurator.GetClientProjectDir();
-                if (ClaudeCliMcpConfigurator.HasClientProjectDirOverride)
-                {
-                    clientProjectDirField.value = projectDir + "  (override)";
-                }
-                else
-                {
-                    clientProjectDirField.value = projectDir;
-                }
-            }
-            else
-            {
-                clientProjectDirRow.style.display = DisplayStyle.None;
-            }
+            bool isClaude = selectedClientIndex >= 0 && selectedClientIndex < configurators.Count
+                && configurators[selectedClientIndex] is ClaudeCliMcpConfigurator;
+            clientProjectDirRow.style.display = isClaude ? DisplayStyle.Flex : DisplayStyle.None;
+            if (isClaude)
+                clientProjectDirField.SetValueWithoutNotify(displayedContext == null ? "Checking..."
+                    : displayedContext.ProjectDir + (displayedContext.HasProjectDirOverride ? "  (override)" : ""));
         }
 
         private void OnConfigureAllClientsClicked()
         {
+            clientRefresh?.Invalidate();
             try
             {
                 var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
@@ -312,12 +261,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
                 EditorUtility.DisplayDialog("Configure Detected Clients", message, "OK");
 
-                // The bulk path mutated state for every detected client. Clear the per-client
-                // status cache so any subsequent dropdown switch (or the currently-selected
-                // client refresh below) reads fresh status from disk instead of the pre-bulk
-                // value — otherwise every other client in the dropdown looks like it still
-                // has Missing/IncorrectPath status until 45 s elapses on the throttle.
-                lastStatusChecks.Clear();
+                // Pending display results were invalidated before bulk configuration.
+                // Recheck the selected client's files using the new configuration.
 
                 if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
                 {
@@ -333,6 +278,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void OnConfigureClicked()
         {
+            clientRefresh?.Invalidate();
             if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
                 return;
 
@@ -359,7 +305,6 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 {
                     MCPServiceLocator.Client.ConfigureClient(client);
                 }
-                lastStatusChecks.Remove(client);
                 RefreshClientStatus(client, forceImmediate: true);
                 UpdateManualConfiguration();
             }
@@ -377,6 +322,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             if (statusRefreshInFlight.Contains(client))
                 return;
 
+            clientRefresh?.Invalidate();
             statusRefreshInFlight.Add(client);
             bool isCurrentlyConfigured = client.Status == McpStatus.Configured;
             ApplyStatusToUi(client, showChecking: true, customMessage: isCurrentlyConfigured ? "Unregistering..." : "Configuring...");
@@ -439,7 +385,6 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 EditorApplication.delayCall += () =>
                 {
                     statusRefreshInFlight.Remove(client);
-                    lastStatusChecks.Remove(client);
 
                     if (errorMessage != null)
                     {
@@ -452,9 +397,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     }
                     else
                     {
-                        // Registration succeeded - trust the status set by RegisterWithCapturedValues
-                        // and update UI without re-verifying (which could fail due to CLI timing/scope issues)
-                        lastStatusChecks[client] = DateTime.UtcNow;
+                        // Show the explicit operation's result before the read-only file refresh.
                         ApplyStatusToUi(client);
                     }
                     UpdateManualConfiguration();
@@ -606,108 +549,38 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         public void RefreshSelectedClient(bool forceImmediate = false)
         {
             if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
-            {
-                var client = configurators[selectedClientIndex];
-                // Force immediate for non-Claude CLI, or when explicitly requested
-                bool shouldForceImmediate = forceImmediate || client is not ClaudeCliMcpConfigurator;
-                RefreshClientStatus(client, shouldForceImmediate);
-                UpdateManualConfiguration();
-                UpdateClaudeCliPathVisibility();
-            }
+                RefreshClientStatus(configurators[selectedClientIndex], forceImmediate);
         }
 
         private void RefreshClientStatus(IMcpClientConfigurator client, bool forceImmediate = false)
         {
-            if (client is ClaudeCliMcpConfigurator)
+            // An explicitly requested configuration operation owns the client until it completes.
+            if (statusRefreshInFlight.Contains(client) || client is not McpClientConfiguratorBase baseClient) return;
+            var context = WindowRefreshContext.Capture();
+            var work = baseClient.CaptureRefresh(context);
+            string key = context.Key + "\n" + client.Id;
+            clientRefresh ??= new EditorAsyncRefresh<McpClientConfiguratorBase.ClientRefreshResult>(Root, 45);
+            ApplyStatusToUi(client, showChecking: true);
+            copyJsonButton?.SetEnabled(false);
+            clientRefresh.Request(key, work, (result, _) =>
             {
-                RefreshClaudeCliStatus(client, forceImmediate);
-                return;
-            }
-
-            if (forceImmediate || ShouldRefreshClient(client))
-            {
-                MCPServiceLocator.Client.CheckClientStatus(client);
-                lastStatusChecks[client] = DateTime.UtcNow;
-            }
-
-            ApplyStatusToUi(client);
-        }
-
-        private void RefreshClaudeCliStatus(IMcpClientConfigurator client, bool forceImmediate)
-        {
-            bool hasStatus = lastStatusChecks.ContainsKey(client);
-            bool needsRefresh = !hasStatus || ShouldRefreshClient(client);
-
-            if (!hasStatus)
-            {
-                ApplyStatusToUi(client, showChecking: true);
-            }
-            else
-            {
+                baseClient.Client.status = result.Status;
+                baseClient.Client.configStatus = result.Message;
+                baseClient.Client.configuredTransport = result.Transport;
+                displayedContext = result.Context;
+                configPathField.SetValueWithoutNotify(result.ConfigPath);
+                configJsonField.SetValueWithoutNotify(result.Snippet);
+                installationStepsLabel.text = result.Steps != null && result.Steps.Count > 0
+                    ? string.Join("\n", result.Steps.Select((step, i) => $"{i + 1}. {step}"))
+                    : "Configuration steps not available for this client.";
+                copyJsonButton?.SetEnabled(true);
+                UpdateClaudeCliPathVisibility();
+                UpdateClientProjectDirVisibility();
                 ApplyStatusToUi(client);
-            }
-
-            if ((forceImmediate || needsRefresh) && !statusRefreshInFlight.Contains(client))
-            {
-                statusRefreshInFlight.Add(client);
-                ApplyStatusToUi(client, showChecking: true);
-
-                // Capture main-thread-only values before async task
-                string projectDir = ClaudeCliMcpConfigurator.GetClientProjectDir();
-                bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
-                string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
-                RuntimePlatform platform = Application.platform;
-                bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
-                // Get expected package source based on installed package version and overrides.
-                string expectedPackageSource = GetExpectedPackageSourceForCurrentPackage();
-                bool hasProjectDirOverride = ClaudeCliMcpConfigurator.HasClientProjectDirOverride;
-
-                Task.Run(() =>
-                {
-                    // Defensive: RefreshClientStatus routes Claude CLI clients here, but avoid hard-cast
-                    // so accidental future call sites can't crash the UI.
-                    if (client is ClaudeCliMcpConfigurator claudeConfigurator)
-                    {
-                        // Use thread-safe version with captured main-thread values
-                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite: false, hasProjectDirOverride: hasProjectDirOverride);
-                    }
-                }).ContinueWith(t =>
-                {
-                    bool faulted = false;
-                    string errorMessage = null;
-                    if (t.IsFaulted && t.Exception != null)
-                    {
-                        var baseException = t.Exception.GetBaseException();
-                        errorMessage = baseException?.Message ?? "Status check failed";
-                        McpLog.Error($"Failed to refresh Claude CLI status: {errorMessage}");
-                        faulted = true;
-                    }
-
-                    EditorApplication.delayCall += () =>
-                    {
-                        statusRefreshInFlight.Remove(client);
-                        lastStatusChecks[client] = DateTime.UtcNow;
-                        if (faulted)
-                        {
-                            if (client is McpClientConfiguratorBase baseConfigurator)
-                            {
-                                baseConfigurator.Client.SetStatus(McpStatus.Error, errorMessage ?? "Status check failed");
-                            }
-                        }
-                        ApplyStatusToUi(client);
-                    };
-                });
-            }
-        }
-
-        private bool ShouldRefreshClient(IMcpClientConfigurator client)
-        {
-            if (!lastStatusChecks.TryGetValue(client, out var last))
-            {
-                return true;
-            }
-
-            return (DateTime.UtcNow - last) > StatusRefreshInterval;
+            }, () => selectedClientIndex >= 0 && selectedClientIndex < configurators.Count
+                && ReferenceEquals(configurators[selectedClientIndex], client)
+                && !statusRefreshInFlight.Contains(client) && WindowRefreshContext.Capture().Key == context.Key,
+                forceImmediate);
         }
 
         private void ApplyStatusToUi(IMcpClientConfigurator client, bool showChecking = false, string customMessage = null)
@@ -736,7 +609,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             // in the overridden project may legitimately differ from the local server.
             bool hasTransportMismatch = false;
             if (client.ConfiguredTransport != ConfiguredTransport.Unknown
-                && !ClaudeCliMcpConfigurator.HasClientProjectDirOverride)
+                && displayedContext?.HasProjectDirOverride != true)
             {
                 ConfiguredTransport serverTransport = HttpEndpointUtility.GetCurrentServerTransport();
                 hasTransportMismatch = client.ConfiguredTransport != serverTransport;
@@ -790,16 +663,6 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 // Clear any previous mismatch warning
                 OnClientConfigMismatch?.Invoke(client.DisplayName, null);
             }
-        }
-
-        /// <summary>
-        /// Gets the expected package source for validation based on installed package version.
-        /// Uses the same logic as registration to ensure validation matches what was registered.
-        /// MUST be called from the main thread due to EditorPrefs access.
-        /// </summary>
-        private static string GetExpectedPackageSourceForCurrentPackage()
-        {
-            return AssetPathUtility.GetMcpServerPackageSource();
         }
 
         private int FindConfiguratorIndex(string persistedClientValue)

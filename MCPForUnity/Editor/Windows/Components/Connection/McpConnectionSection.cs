@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
+using MCPForUnity.Editor.Services.Server;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -60,7 +61,12 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Task verificationTask;
         private string lastHealthStatus;
         private int consecutiveVerifyFailures;
-        private double lastLocalServerRunningPollTime;
+        private EditorAsyncRefresh<bool> localServerRefresh;
+        private EditorAsyncRefresh<Tuple<string, string>> commandRefresh;
+        internal Func<string, bool> LocalServerProbe = ServerManagementService.IsLocalHttpServerReachable;
+        private string localProbeKey;
+        private bool hasLocalProbeResult;
+        private int connectionEpoch;
         private bool lastLocalServerRunning;
         private int consecutiveServerDownPolls;
         private bool sessionWasRunning;
@@ -82,6 +88,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         public McpConnectionSection(VisualElement root)
         {
             Root = root;
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => connectionEpoch++);
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
@@ -185,6 +192,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         {
             transportDropdown.RegisterValueChangedCallback(evt =>
             {
+                InvalidateConnectionRefresh();
                 var previous = (TransportProtocol)evt.previousValue;
                 var selected = (TransportProtocol)evt.newValue;
                 bool useHttp = selected != TransportProtocol.Stdio;
@@ -503,6 +511,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // Only show the local-server helper UI when HTTP Local is selected.
             if (!useHttp || !httpLocalSelected)
             {
+                commandRefresh?.Invalidate();
                 httpServerCommandSection.style.display = DisplayStyle.None;
                 httpServerCommandField.value = string.Empty;
                 httpServerCommandField.tooltip = string.Empty;
@@ -522,6 +531,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             if (!isLocalHttpUrlAllowed)
             {
+                commandRefresh?.Invalidate();
                 httpServerCommandField.value = string.Empty;
                 httpServerCommandField.tooltip = string.Empty;
                 httpServerCommandField.SetEnabled(false);
@@ -543,7 +553,21 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 httpServerCommandHint.RemoveFromClassList("http-local-url-error");
             }
 
-            if (MCPServiceLocator.Server.TryGetLocalHttpServerCommand(out var command, out var error))
+            var context = WindowRefreshContext.Capture();
+            commandRefresh ??= new EditorAsyncRefresh<Tuple<string, string>>(Root, 30);
+            commandRefresh.Request(context.Key, () =>
+            {
+                context.Resolve();
+                new ServerCommandBuilder().TryBuildCommand(context, out _, out _, out string command, out string error);
+                return Tuple.Create(command, error);
+            }, (result, _) => ApplyHttpServerCommand(result.Item1, result.Item2),
+                () => IsHttpLocalSelected() && TryGetLocalHttpLaunchPolicy(out _, out _)
+                    && WindowRefreshContext.Capture().Key == context.Key);
+        }
+
+        private void ApplyHttpServerCommand(string command, string error)
+        {
+            if (!string.IsNullOrEmpty(command))
             {
                 httpServerCommandField.value = command;
                 httpServerCommandField.tooltip = command;
@@ -626,26 +650,30 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool canStartLocalServer = httpLocalSelected && localUrlAllowedForLaunch;
             bool localServerRunning = false;
 
-            // Avoid running expensive port/PID checks every UI tick; use a fast socket probe for UI state.
             if (httpLocalSelected)
             {
-                double now = EditorApplication.timeSinceStartup;
-                if ((now - lastLocalServerRunningPollTime) > 0.75f || httpServerToggleInProgress)
+                string key = GetConnectionRefreshKey();
+                if (key != localProbeKey)
                 {
-                    lastLocalServerRunningPollTime = now;
-                    lastLocalServerRunning = MCPServiceLocator.Server.IsLocalHttpServerReachable();
-
-                    // Probe results taken while the editor is busy are unreliable (main-thread
-                    // stalls starve the connect wait), so they don't count toward teardown.
-                    if (EditorApplication.isCompiling || EditorApplication.isUpdating)
-                    {
-                        consecutiveServerDownPolls = 0;
-                    }
-                    else
-                    {
-                        consecutiveServerDownPolls = lastLocalServerRunning ? 0 : consecutiveServerDownPolls + 1;
-                    }
+                    localProbeKey = key;
+                    consecutiveServerDownPolls = 0;
+                    hasLocalProbeResult = false;
+                    lastLocalServerRunning = false;
                 }
+                string url = HttpEndpointUtility.GetLocalBaseUrl();
+                var probe = LocalServerProbe;
+                localServerRefresh ??= new EditorAsyncRefresh<bool>(Root, 0.75);
+                localServerRefresh.Request(key, () => probe(url), (running, fresh) =>
+                {
+                    lastLocalServerRunning = running;
+                    hasLocalProbeResult = true;
+                    if (!fresh) return;
+                    // Only a newly completed probe counts, never cached false on focus.
+                    consecutiveServerDownPolls = EditorApplication.isCompiling || EditorApplication.isUpdating
+                        || httpServerToggleInProgress || connectionToggleInProgress ? 0
+                        : running ? 0 : consecutiveServerDownPolls + 1;
+                    UpdateConnectionStatus();
+                }, () => IsHttpLocalSelected() && GetConnectionRefreshKey() == key);
                 localServerRunning = lastLocalServerRunning;
             }
 
@@ -659,13 +687,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else
             {
-                startHttpServerButton.text = shouldShowStop ? "Stop Server" : "Start Server";
+                startHttpServerButton.text = httpLocalSelected && !hasLocalProbeResult ? "Checking..."
+                    : shouldShowStop ? "Stop Server" : "Start Server";
             }
             // Note: Server logs may contain transient HTTP 400s on /mcp during startup probing and
             // CancelledError stack traces on shutdown when streaming requests are cancelled; this is expected.
             startHttpServerButton.EnableInClassList("server-running", localServerRunning);
             startHttpServerButton.SetEnabled(
-                !httpServerToggleInProgress && (shouldShowStop || canStartLocalServer));
+                !httpServerToggleInProgress && hasLocalProbeResult && (shouldShowStop || canStartLocalServer));
             startHttpServerButton.tooltip = httpLocalSelected
                 ? (canStartLocalServer
                     ? string.Empty
@@ -686,6 +715,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 return;
             }
 
+            InvalidateConnectionRefresh();
             var bridgeService = MCPServiceLocator.Bridge;
             httpServerToggleInProgress = true;
             startHttpServerButton?.SetEnabled(false);
@@ -841,6 +871,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 return;
             }
 
+            InvalidateConnectionRefresh();
             var bridgeService = MCPServiceLocator.Bridge;
             connectionToggleInProgress = true;
             connectionToggleButton?.SetEnabled(false);
@@ -1073,6 +1104,26 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             McpLog.Info("API key cleared");
         }
 
+        private string GetConnectionRefreshKey()
+        {
+            var bridge = MCPServiceLocator.Bridge;
+            var mode = bridge.ActiveMode;
+            string sessionId = mode.HasValue
+                ? MCPServiceLocator.TransportManager.GetClient(mode.Value)?.State?.SessionId : null;
+            return string.Join("\n", HttpEndpointUtility.GetCurrentServerTransport(),
+                HttpEndpointUtility.GetLocalBaseUrl(), HttpEndpointUtility.GetRemoteBaseUrl(),
+                bridge.IsRunning, bridge.CurrentPort, mode, sessionId, connectionEpoch);
+        }
+
+        private void InvalidateConnectionRefresh()
+        {
+            connectionEpoch++;
+            consecutiveServerDownPolls = 0;
+            consecutiveVerifyFailures = 0;
+            localServerRefresh?.Invalidate();
+            commandRefresh?.Invalidate();
+        }
+
         public async Task VerifyBridgeConnectionAsync()
         {
             // Prevent concurrent verification calls
@@ -1101,7 +1152,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 return;
             }
 
+            string key = GetConnectionRefreshKey();
+            var panel = Root.panel;
             var result = await bridgeService.VerifyAsync();
+            if (!ReferenceEquals(Root.panel, panel) || key != GetConnectionRefreshKey()) return;
 
             string newStatus;
             bool isHealthy;
@@ -1168,7 +1222,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         /// </summary>
         /// <param name="clientName">The display name of the client being checked.</param>
         /// <param name="clientTransport">The transport the client is configured to use.</param>
-        public void UpdateTransportMismatchWarning(string clientName, ConfiguredTransport clientTransport)
+        public void UpdateTransportMismatchWarning(string clientName, ConfiguredTransport clientTransport, bool hasProjectDirOverride = false)
         {
             if (transportMismatchWarning == null || transportMismatchText == null)
                 return;
@@ -1183,7 +1237,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // When a project dir override is active the registered transport belongs
             // to a different project and may legitimately differ from the local server
             // transport, so skip the mismatch check.
-            if (ClaudeCliMcpConfigurator.HasClientProjectDirOverride)
+            if (hasProjectDirOverride)
             {
                 transportMismatchWarning.RemoveFromClassList("visible");
                 return;
