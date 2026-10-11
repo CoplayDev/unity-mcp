@@ -70,18 +70,8 @@ namespace MCPForUnity.Editor.Migrations
                         continue;
                     }
 
-                    // Handle JSON file-based configurators
-                    if (!ConfigUsesStdIo(configurator.Client))
-                        continue;
-
-                    // Skip clients that don't support the current transport setting —
-                    // Configure() would throw (e.g., Claude Desktop when HTTP is enabled).
-                    bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                    if (useHttp && !configurator.Client.SupportsHttpTransport)
-                        continue;
-
-                    MCPServiceLocator.Client.ConfigureClient(configurator);
-                    touchedAny = true;
+                    if (RefreshStdioConfiguration(configurator, MCPServiceLocator.Client))
+                        touchedAny = true;
                 }
                 catch (Exception ex)
                 {
@@ -112,9 +102,19 @@ namespace MCPForUnity.Editor.Migrations
             McpLog.Info($"Updated stdio MCP configs to package version {currentVersion}.");
         }
 
-        private static bool ConfigUsesStdIo(McpClient client)
+        internal static bool RefreshStdioConfiguration(
+            McpClientConfiguratorBase configurator, IClientConfigurationService clientService)
         {
-            return JsonConfigUsesStdIo(client);
+            if (!configurator.SupportsAutoConfigure || !JsonConfigUsesStdIo(configurator.Client))
+                return false;
+
+            // Preserve the migration's existing transport guard.
+            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
+            if (useHttp && !configurator.Client.SupportsHttpTransport)
+                return false;
+
+            clientService.ConfigureClient(configurator);
+            return true;
         }
 
         private static bool JsonConfigUsesStdIo(McpClient client)
@@ -129,20 +129,9 @@ namespace MCPForUnity.Editor.Migrations
             {
                 var root = JObject.Parse(File.ReadAllText(configPath));
 
-                JToken unityNode = null;
-                if (client.IsVsCodeLayout)
-                {
-                    unityNode = root.SelectToken("servers.unityMCP")
-                               ?? root.SelectToken("mcp.servers.unityMCP");
-                }
-                else
-                {
-                    unityNode = root.SelectToken("mcpServers.unityMCP");
-                }
-
-                if (unityNode == null) return false;
-
-                return unityNode["command"] != null;
+                var unityNode = McpConfigurationHelper.GetJsonUnityEntry(root, client);
+                return unityNode?["command"] != null
+                    && !McpConfigurationHelper.HasCustomStdioLauncher(unityNode, client);
             }
             catch
             {

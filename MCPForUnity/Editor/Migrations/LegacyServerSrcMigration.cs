@@ -1,4 +1,5 @@
 using System;
+using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
@@ -24,6 +25,39 @@ namespace MCPForUnity.Editor.Migrations
             EditorApplication.delayCall += RunMigrationIfNeeded;
         }
 
+        internal static ClientConfigurationSummary MigrateDetectedClients(IClientConfigurationService clientService)
+        {
+            var summary = new ClientConfigurationSummary();
+            foreach (var configurator in clientService.GetAllClients())
+            {
+                if (!configurator.IsInstalled)
+                {
+                    summary.SkippedCount++;
+                    continue;
+                }
+                try
+                {
+                    // Automatic migration must leave user-managed launchers untouched.
+                    // Explicit Configure All continues to replace them.
+                    if (configurator is JsonFileMcpConfigurator json && json.HasCustomStdioConfiguration())
+                    {
+                        summary.SkippedCount++;
+                        continue;
+                    }
+                    configurator.CheckStatus(attemptAutoRewrite: false);
+                    clientService.ConfigureClient(configurator);
+                    summary.SuccessCount++;
+                    summary.Messages.Add($"✓ {configurator.DisplayName}: Configured successfully");
+                }
+                catch (Exception ex)
+                {
+                    summary.FailureCount++;
+                    summary.Messages.Add($"⚠ {configurator.DisplayName}: {ex.Message}");
+                }
+            }
+            return summary;
+        }
+
         private static void RunMigrationIfNeeded()
         {
             EditorApplication.delayCall -= RunMigrationIfNeeded;
@@ -40,7 +74,7 @@ namespace MCPForUnity.Editor.Migrations
             {
                 McpLog.Info("Detected legacy embedded MCP server configuration. Updating all client configs...");
 
-                var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
+                var summary = MigrateDetectedClients(MCPServiceLocator.Client);
 
                 if (summary.FailureCount > 0)
                 {
