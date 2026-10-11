@@ -119,7 +119,7 @@
     },
     {
       "name": "manage_editor",
-      "description": "Control Unity Editor state, play mode, preferences, undo/redo"
+      "description": "Control Unity Editor state, wait for play startup, run startup code once, and undo/redo"
     },
     {
       "name": "manage_gameobject",

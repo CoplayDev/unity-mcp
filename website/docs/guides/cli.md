@@ -154,6 +154,9 @@ unity-mcp shader delete "Assets/Shaders/Old.shader" --force
 ```bash
 # Play mode
 unity-mcp editor play
+unity-mcp editor play --wait-until first_frame --wait-timeout 60
+unity-mcp editor play --on-ready-code 'return UnityEngine.Time.frameCount;'
+unity-mcp editor play-status <job_id>
 unity-mcp editor pause
 unity-mcp editor stop
 
@@ -180,6 +183,19 @@ unity-mcp editor custom-tool "Deploy" --params '{"target": "Android"}'
 unity-mcp tool list
 unity-mcp custom_tool list
 ```
+
+`--wait-until scene_loaded` waits for the active scene to load; `first_frame` also
+waits for `Start` and a completed frame. `--on-ready-code` runs a C# body once
+after first-frame startup, using the same compiler and safety checks as
+`execute_code`. Its result is in `data.on_ready_result`.
+
+Startup waits default to 30 seconds (`--wait-timeout` accepts 1–300). A timeout
+does not stop Play Mode. Poll `editor play-status` with the returned `job_id` on
+the same Unity instance after a timeout or lost reply; resubmitting code creates
+a new request. Pending code expires with its Unity-side wait, while code already
+executing may still finish. Startup jobs survive domain reloads and preserve
+Enter Play Mode settings; completed results are kept for the latest 16 jobs in
+the current Editor session.
 
 ### Testing
 
@@ -571,7 +587,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `component` | `add`, `modify`, `remove`, `set` |
 | `custom_tool` | `list` |
 | `docs` | `get` |
-| `editor` | `add-layer`, `add-tag`, `console`, `custom-tool`, `deploy`, `menu`, `pause`, `play`, `poll-test`, `redo`, `refresh`, `remove-layer`, `remove-tag`, `restore`, `stop`, `tests`, `tool`, `undo` |
+| `editor` | `add-layer`, `add-tag`, `console`, `custom-tool`, `deploy`, `menu`, `pause`, `play`, `play-status`, `poll-test`, `redo`, `refresh`, `remove-layer`, `remove-tag`, `restore`, `stop`, `tests`, `tool`, `undo` |
 | `gameobject` | `create`, `delete`, `duplicate`, `find`, `modify`, `move` |
 | `graphics` | `bake-cancel`, `bake-clear`, `bake-create-probes`, `bake-create-reflection`, `bake-reflection-probe`, `bake-set-settings`, `bake-settings`, `bake-start`, `bake-status`, `feature-add`, `feature-configure`, `feature-list`, `feature-remove`, `feature-reorder`, `feature-toggle`, `ping`, `pipeline-info`, `pipeline-set-quality`, `pipeline-set-settings`, `pipeline-settings`, `skybox-info`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-reflection`, `skybox-set-sun`, `stats`, `stats-debug-mode`, `stats-memory`, `volume-add-effect`, `volume-create`, `volume-create-profile`, `volume-info`, `volume-list-effects`, `volume-remove-effect`, `volume-set-effect`, `volume-set-properties` |
 | `instance` | `current`, `list` |
