@@ -1,0 +1,11 @@
+[project]
+name = "unity-mcp-web-research-example"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["fastmcp>=3.0.2,<4"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
