@@ -55,19 +55,26 @@ namespace MCPForUnity.Editor.Tools.Cameras
 
         internal static string GetCinemachineVersion()
         {
-            if (!HasCinemachine || _cmCameraType == null)
-                return null;
+            // Assembly versions need not match the installed UPM release.
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+                .FirstOrDefault(info => info.name == "com.unity.cinemachine");
+            if (package != null) return package.version;
 
-            try
-            {
-                var assembly = _cmCameraType.Assembly;
-                var version = assembly.GetName().Version;
-                return version?.ToString();
-            }
-            catch
-            {
-                return "unknown";
-            }
+            var cameraType = CinemachineCameraType
+                ?? UnityTypeResolver.ResolveComponent("Cinemachine.CinemachineVirtualCamera");
+            if (cameraType == null) return null;
+            return cameraType.Assembly.GetName().Version?.ToString() ?? "unknown";
+        }
+
+        internal static bool IsCinemachineInstalled => HasCinemachine || GetCinemachineVersion() != null;
+
+        internal static string GetUnavailableCinemachineMessage()
+        {
+            string version = GetCinemachineVersion();
+            return version == null
+                ? "Cinemachine not installed."
+                : $"Cinemachine {version} is installed, but manage_camera requires the Cinemachine 3 camera API. "
+                  + "Keep the project's installed version and use execute_code with that version's API.";
         }
 
         internal static GameObject FindTargetGameObject(JObject @params)
@@ -245,6 +252,8 @@ namespace MCPForUnity.Editor.Tools.Cameras
 
         internal static string GetFallbackSuggestion(string action)
         {
+            if (IsCinemachineInstalled && !HasCinemachine)
+                return "Use manage_packages get_package_info to confirm the installed version before writing Cinemachine code.";
             return action switch
             {
                 "set_body" or "set_aim" => "Use 'set_lens' and 'set_target' for basic camera configuration.",

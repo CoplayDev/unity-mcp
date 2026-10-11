@@ -54,6 +54,10 @@ After import, MCP for Unity opens a **setup wizard** automatically.
 
 You can return to this UI anytime via **Window → MCP for Unity** to start/stop the server, switch transport (HTTP vs stdio), or reconfigure clients. The status panel reads `Connected` when everything is wired up.
 
+### Optional packages
+
+The **Dependencies** tab lets you choose exact versions of ProBuilder, Cinemachine, VFX Graph, and glTFast. Existing versions are kept unless you select a different one. See [Optional dependencies](../guides/optional-dependencies.md) for version selection and Cinemachine compatibility.
+
 ### First prompt
 
 Try one of these in your MCP client:

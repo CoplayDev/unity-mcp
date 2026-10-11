@@ -60,12 +60,14 @@ namespace MCPForUnity.Editor.Tools.Cameras
             return new
             {
                 success = true,
-                message = $"Created basic Camera '{name}' (Cinemachine not installed — using Unity Camera).",
+                message = $"Created basic Camera '{name}'. " + CameraHelpers.GetUnavailableCinemachineMessage(),
                 data = new
                 {
                     instanceID = go.GetInstanceIDCompat(),
                     cinemachine = false,
-                    hint = "Install com.unity.cinemachine for presets, blending, and virtual camera features."
+                    hint = CameraHelpers.IsCinemachineInstalled
+                        ? CameraHelpers.GetFallbackSuggestion("create_camera")
+                        : "Install com.unity.cinemachine for presets, blending, and virtual camera features."
                 }
             };
         }

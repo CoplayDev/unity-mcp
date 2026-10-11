@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Advanced;
@@ -825,7 +826,8 @@ namespace MCPForUnity.Editor.Windows
             var content = new VisualElement();
             content.AddToClassList("section-content");
 
-            var desc = new Label("Some tool groups require optional packages. Install them to unlock additional capabilities.");
+            var desc = new Label("Some tool groups require optional packages. Choose an exact version or leave it empty for automatic selection. Install All keeps installed packages unless a different version is selected.");
+            desc.style.whiteSpace = WhiteSpace.Normal;
             desc.AddToClassList("validation-description");
             desc.style.marginBottom = 4;
             content.Add(desc);
@@ -836,21 +838,42 @@ namespace MCPForUnity.Editor.Windows
             bulkRow.style.marginBottom = 8;
 
             var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph", "com.unity.cloud.gltfast" };
+            var packageSelections = new List<PackageVersionSelection>();
+            Action refreshDependencies = () => {
+                container.Clear();
+                BuildDependenciesSection(container);
+            };
 
             Button installAllButton = null;
             installAllButton = new Button(() =>
             {
+                if (!PackageVersionSelection.TryCollectRequests(packageSelections, out var requests, out var error))
+                {
+                    EditorUtility.DisplayDialog("Invalid Package Version", error, "OK");
+                    return;
+                }
                 if (!EditorUtility.DisplayDialog("Install All Dependencies",
-                    "This will install Roslyn DLLs, ProBuilder, Cinemachine, VFX Graph, and glTFast. Continue?",
+                    "Install missing Roslyn DLLs and these package requests (other installed packages are kept):\n" +
+                    (requests.Length == 0 ? "No UPM package changes." : string.Join("\n", requests)),
                     "Install All", "Cancel")) return;
                 installAllButton.SetEnabled(false);
                 installAllButton.text = "Installing...";
                 if (!RoslynInstaller.IsInstalled()) RoslynInstaller.Install(interactive: false);
-                BatchUpmAdd(upmPackages, () =>
+                content.SetEnabled(false);
+                try
                 {
+                    BatchUpmAdd(requests, () => {
+                        content.SetEnabled(true);
+                        refreshDependencies();
+                    });
+                }
+                catch (Exception exception)
+                {
+                    content.SetEnabled(true);
                     installAllButton.SetEnabled(true);
                     installAllButton.text = "Install All";
-                });
+                    Debug.LogError($"[MCP] Install failed: {exception.Message}");
+                }
             });
             installAllButton.text = "Install All";
             installAllButton.AddToClassList("action-button");
@@ -897,58 +920,67 @@ namespace MCPForUnity.Editor.Windows
 
             // ProBuilder
             bool hasProBuilder = Type.GetType("UnityEngine.ProBuilder.ProBuilderMesh, Unity.ProBuilder") != null;
-            AddDependencyRow(content,
+            packageSelections.Add(AddUpmDependencyRow(content,
                 "ProBuilder",
                 "Required for the manage_probuilder tool (probuilder group).",
-                hasProBuilder,
+                "com.unity.probuilder", hasProBuilder,
                 "Installed",
-                "Not installed",
-                done => InstallUpmPackage("com.unity.probuilder", done),
-                done => RemoveUpmPackage("com.unity.probuilder", done));
+                "Not installed", refreshDependencies));
 
             // Cinemachine
             bool hasCinemachine = Type.GetType("Unity.Cinemachine.CinemachineCamera, Unity.Cinemachine") != null
                 || Type.GetType("Cinemachine.CinemachineVirtualCamera, Cinemachine") != null;
-            AddDependencyRow(content,
+            packageSelections.Add(AddUpmDependencyRow(content,
                 "Cinemachine",
-                "Enhances manage_camera with virtual camera support (core group).",
-                hasCinemachine,
+                "Virtual camera actions in manage_camera use Cinemachine 3. For Cinemachine 2, use execute_code with its installed API.",
+                "com.unity.cinemachine", hasCinemachine,
                 "Installed",
-                "Not installed \u2014 camera tool works without it",
-                done => InstallUpmPackage("com.unity.cinemachine", done),
-                done => RemoveUpmPackage("com.unity.cinemachine", done));
+                "Not installed \u2014 camera tool works without it", refreshDependencies));
 
             // VFX Graph — uses preprocessor symbol, so check via UPM package list
             bool hasVfxGraph = IsUpmPackageInstalled("com.unity.visualeffectgraph");
-            AddDependencyRow(content,
+            packageSelections.Add(AddUpmDependencyRow(content,
                 "VFX Graph",
-                "Enables VisualEffect support in manage_vfx tool (vfx group).",
-                hasVfxGraph,
+                "Enables Visual Effect Graph operations in the manage_vfx tool (vfx group).",
+                "com.unity.visualeffectgraph", hasVfxGraph,
                 "Installed",
-                "Not installed \u2014 VFX tool falls back to ParticleSystem/LineRenderer",
-                done => InstallUpmPackage("com.unity.visualeffectgraph", done),
-                done => RemoveUpmPackage("com.unity.visualeffectgraph", done));
+                "Not installed \u2014 VFX tool falls back to ParticleSystem/LineRenderer", refreshDependencies));
 
             // glTFast — uses an assembly type, but also check via UPM package list
             bool hasGltfast = IsUpmPackageInstalled("com.unity.cloud.gltfast") || Type.GetType("GLTFast.GltfImport, glTFast") != null;
-            AddDependencyRow(content,
+            packageSelections.Add(AddUpmDependencyRow(content,
                 "glTFast (glTF/GLB import)",
                 "Enables .glb/.gltf model import for the AI Asset Generation tools (asset_gen group).",
-                hasGltfast,
+                "com.unity.cloud.gltfast", hasGltfast,
                 "Installed — GLB generation/import works",
-                "Not installed — GLB import is unavailable; FBX still works, or install to enable GLB",
-                done => InstallUpmPackage("com.unity.cloud.gltfast", done),
-                done => RemoveUpmPackage("com.unity.cloud.gltfast", done));
+                "Not installed — GLB import is unavailable; FBX still works, or install to enable GLB", refreshDependencies));
 
             section.Add(content);
             container.Add(section);
         }
 
-        private static void AddDependencyRow(VisualElement parent, string name, string description,
-            bool isInstalled, string installedText, string missingText,
-            Action<Action> installAction, Action<Action> uninstallAction)
+        private static PackageVersionSelection AddUpmDependencyRow(VisualElement parent, string name,
+            string description, string packageId, bool detected, string installedText, string missingText,
+            Action refreshDependencies)
         {
-            var row = new VisualElement();
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+                .FirstOrDefault(info => info.name == packageId);
+            var selection = new PackageVersionSelection(packageId, package?.version, package != null || detected);
+            selection.Version = SessionState.GetString(selection.SessionKey, selection.Version);
+            AddDependencyRow(parent, name, description, selection.IsInstalled,
+                package == null ? installedText + " (loaded outside Package Manager)" : installedText + " — " + package.version,
+                missingText,
+                done => InstallUpmPackage(selection, () => { done(); refreshDependencies?.Invoke(); }),
+                done => RemoveUpmPackage(packageId, () => { done(); refreshDependencies?.Invoke(); }), selection);
+            return selection;
+        }
+
+        internal static VisualElement AddDependencyRow(VisualElement parent, string name, string description,
+            bool isInstalled, string installedText, string missingText,
+            Action<Action> installAction, Action<Action> uninstallAction,
+            PackageVersionSelection selection = null)
+        {
+            var row = new VisualElement { name = selection?.PackageId };
             row.style.marginBottom = 8;
             row.style.paddingBottom = 8;
             row.style.borderBottomWidth = 1;
@@ -974,28 +1006,53 @@ namespace MCPForUnity.Editor.Windows
             var descLabel = new Label(description);
             descLabel.AddToClassList("validation-description");
             descLabel.style.marginBottom = 2;
+            descLabel.style.whiteSpace = WhiteSpace.Normal;
             row.Add(descLabel);
 
             var statusText = new Label(isInstalled ? installedText : missingText);
             statusText.style.fontSize = 11;
             statusText.style.color = isInstalled ? new Color(0.6f, 0.8f, 0.6f) : new Color(0.8f, 0.7f, 0.5f);
+            statusText.style.whiteSpace = WhiteSpace.Normal;
             row.Add(statusText);
+
+            TextField versionField = null;
+            Label versionMessage = null;
+            Button installButton = null;
+            if (selection != null)
+            {
+                versionField = new TextField("Version (optional)") {
+                    name = selection.PackageId + "-version", value = selection.Version,
+                    tooltip = "Exact version (e.g. 2.4.0). Empty keeps an installed package or selects the latest compatible version for a missing package."
+                };
+                versionField.labelElement.style.minWidth = 120;
+                versionField.labelElement.style.width = 120;
+                bool external = selection.IsInstalled && selection.InstalledVersion == null;
+                versionField.SetEnabled(!external);
+                versionMessage = new Label { name = selection.PackageId + "-version-message" };
+                versionMessage.style.fontSize = 11;
+                versionMessage.style.whiteSpace = WhiteSpace.Normal;
+                row.Add(versionField);
+                row.Add(versionMessage);
+            }
 
             var buttonRow = new VisualElement();
             buttonRow.style.flexDirection = FlexDirection.Row;
             buttonRow.style.marginTop = 4;
+            buttonRow.style.flexWrap = Wrap.Wrap;
 
-            if (!isInstalled && installAction != null)
+            if (installAction != null && (!isInstalled || selection != null))
             {
                 Button btn = null;
                 btn = new Button(() =>
                 {
                     btn.SetEnabled(false);
                     btn.text = "Installing...";
+                    if (selection != null) row.SetEnabled(false);
                     Action restore = () =>
                     {
-                        btn.SetEnabled(true);
-                        btn.text = "Install";
+                        row.SetEnabled(true);
+                        btn.text = isInstalled ? "Change Version" : "Install";
+                        btn.SetEnabled(selection == null || (selection.TryGetRequest(out var request, out _) && request != null));
                     };
                     try { installAction(restore); }
                     catch (Exception e)
@@ -1004,7 +1061,9 @@ namespace MCPForUnity.Editor.Windows
                         restore();
                     }
                 });
-                btn.text = "Install";
+                btn.text = isInstalled ? "Change Version" : "Install";
+                btn.name = selection == null ? null : selection.PackageId + "-install";
+                installButton = btn;
                 btn.AddToClassList("action-button");
                 buttonRow.Add(btn);
             }
@@ -1038,12 +1097,37 @@ namespace MCPForUnity.Editor.Windows
             if (buttonRow.childCount > 0)
                 row.Add(buttonRow);
 
+            if (selection != null)
+            {
+                void UpdateVersionState()
+                {
+                    bool valid = selection.TryGetRequest(out var request, out var error);
+                    bool external = selection.IsInstalled && selection.InstalledVersion == null;
+                    versionMessage.text = external ? "Manage this dependency at its original source." :
+                        !valid ? error : request == null ? "Keep installed version." :
+                        string.IsNullOrWhiteSpace(selection.Version) ? "Automatic (latest compatible version)." :
+                        selection.IsInstalled ? $"Change {selection.InstalledVersion} to {selection.Version.Trim()}." :
+                        $"Install version {selection.Version.Trim()}.";
+                    versionMessage.style.color = valid ? new StyleColor(StyleKeyword.Null)
+                        : new StyleColor(EditorGUIUtility.isProSkin ? new Color(1f, 0.65f, 0.4f) : new Color(0.7f, 0.2f, 0.1f));
+                    installButton?.SetEnabled(!external && valid && request != null);
+                }
+                versionField.RegisterValueChangedCallback(evt => {
+                    selection.Version = evt.newValue;
+                    SessionState.SetString(selection.SessionKey, evt.newValue);
+                    UpdateVersionState();
+                });
+                UpdateVersionState();
+            }
             parent.Add(row);
+            return row;
         }
 
-        private static void InstallUpmPackage(string packageId, Action onComplete = null)
+        private static void InstallUpmPackage(PackageVersionSelection selection, Action onComplete = null)
         {
-            BatchUpmAdd(new[] { packageId }, onComplete);
+            if (!selection.TryGetRequest(out var request, out var error)) throw new ArgumentException(error);
+            if (request == null) { onComplete?.Invoke(); return; }
+            BatchUpmAdd(new[] { request }, onComplete);
         }
 
         private static void RemoveUpmPackage(string packageId, Action onComplete = null)
@@ -1053,6 +1137,7 @@ namespace MCPForUnity.Editor.Windows
 
         private static void BatchUpmAdd(string[] packageIds, Action onComplete = null)
         {
+            if (packageIds.Length == 0) { onComplete?.Invoke(); return; }
             var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
             EditorUtility.DisplayProgressBar("Installing Packages", $"Installing {packageIds.Length} package(s)...", 0.5f);
             PollUpmRequest(request, "install", onComplete);
