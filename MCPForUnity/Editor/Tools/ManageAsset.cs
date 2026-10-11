@@ -635,6 +635,10 @@ namespace MCPForUnity.Editor.Tools
             int pageNumber = @params["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
             bool generatePreview = @params["generatePreview"]?.ToObject<bool>() ?? false;
 
+            if (pageSize <= 0 || pageNumber <= 0)
+                return new ErrorResponse("pageSize and pageNumber must be greater than zero.");
+            long startIndex = (long)(pageNumber - 1) * pageSize;
+
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))
                 searchFilters.Add(searchPattern);
@@ -647,12 +651,9 @@ namespace MCPForUnity.Editor.Tools
                 folderScope = new string[] { AssetPathUtility.SanitizeAssetPath(pathScope) };
                 if (!AssetDatabase.IsValidFolder(folderScope[0]))
                 {
-                    // Maybe the user provided a file path instead of a folder?
-                    // We could search in the containing folder, or return an error.
-                    McpLog.Warn(
-                        $"Search path '{folderScope[0]}' is not a valid folder. Searching entire project."
+                    return new ErrorResponse(
+                        $"Search path '{folderScope[0]}' is not a valid folder. Use an existing folder such as 'Assets' for path, and put asset names or queries in searchPattern (search_pattern in MCP)."
                     );
-                    folderScope = null; // Search everywhere if path isn't a folder
                 }
             }
 
@@ -705,22 +706,20 @@ namespace MCPForUnity.Editor.Tools
                         }
                     }
 
-                    totalFound++; // Count matching assets before pagination
-                    results.Add(GetAssetData(assetPath, generatePreview));
+                    // Count every match, but load assets and generate previews only for this page.
+                    if (totalFound >= startIndex && results.Count < pageSize)
+                        results.Add(GetAssetData(assetPath, generatePreview));
+                    totalFound++;
                 }
 
-                // Apply pagination
-                int startIndex = (pageNumber - 1) * pageSize;
-                var pagedResults = results.Skip(startIndex).Take(pageSize).ToList();
-
                 return new SuccessResponse(
-                    $"Found {totalFound} asset(s). Returning page {pageNumber} ({pagedResults.Count} assets).",
+                    $"Found {totalFound} asset(s). Returning page {pageNumber} ({results.Count} assets).",
                     new
                     {
                         totalAssets = totalFound,
                         pageSize = pageSize,
                         pageNumber = pageNumber,
-                        assets = pagedResults,
+                        assets = results,
                     }
                 );
             }
