@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -258,6 +259,24 @@ namespace MCPForUnity.Editor.Helpers
 
             var s = token.ToString();
             return string.IsNullOrEmpty(s) ? defaultValue : s;
+        }
+
+        /// <summary>Opt in to one JSON string decoding layer, preserving other input.</summary>
+        internal static string DecodeJsonString(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+            string trimmed = value.Trim();
+            if (trimmed.Length < 2 || trimmed[0] != '"' || trimmed[trimmed.Length - 1] != '"')
+                return value;
+            try
+            {
+                var decoded = JToken.Parse(trimmed);
+                return decoded.Type == JTokenType.String ? decoded.Value<string>() : value;
+            }
+            catch (JsonException)
+            {
+                return value;
+            }
         }
 
         /// <summary>

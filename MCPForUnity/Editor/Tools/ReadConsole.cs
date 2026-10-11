@@ -172,7 +172,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             var p = new ToolParams(@params);
-            string action = p.Get("action", "get").ToLower();
+            string action = ParamCoercion.DecodeJsonString(p.Get("action", "get")).ToLowerInvariant();
 
             try
             {
@@ -190,7 +190,7 @@ namespace MCPForUnity.Editor.Tools
                     int? pageSize = p.GetInt("pageSize");
                     int? cursor = p.GetInt("cursor");
                     string filterText = p.Get("filterText");
-                    string format = p.Get("format", "plain").ToLower();
+                    string format = ParamCoercion.DecodeJsonString(p.Get("format", "plain")).ToLowerInvariant();
                     bool includeStacktrace = p.GetBool("includeStacktrace", false);
 
                     if (types.Contains("all"))

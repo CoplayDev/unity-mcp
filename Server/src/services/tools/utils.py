@@ -62,6 +62,20 @@ def parse_json_payload(value: Any) -> Any:
         return value
 
 
+def decode_json_string(value: Any) -> Any:
+    """Opt in to one JSON string decoding layer; leave other values unchanged."""
+    if not isinstance(value, str):
+        return value
+    trimmed = value.strip()
+    if not (trimmed.startswith('"') and trimmed.endswith('"')):
+        return value
+    try:
+        decoded = json.loads(value)
+        return decoded if isinstance(decoded, str) else value
+    except (json.JSONDecodeError, ValueError):
+        return value
+
+
 def coerce_int(value: Any, default: int | None = None) -> int | None:
     """Attempt to coerce a loosely-typed value to an integer."""
     if value is None:
