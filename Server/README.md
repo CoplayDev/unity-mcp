@@ -136,6 +136,7 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `--api-key-service-token-header HEADER` - Header name for server-to-auth-service authentication (e.g. `X-Service-Token`)
 - `--api-key-service-token TOKEN` - Token value sent to the auth service for server authentication
 - `--default-instance INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
+- `--instructions-file PATH` - Append a UTF-8 text file to the built-in server instructions at startup (overrides `UNITY_MCP_INSTRUCTIONS_FILE`)
 - `--project-scoped-tools` - Keep custom tools scoped to the active Unity project and enable the custom tools resource
 - `--unity-instance-token TOKEN` - Optional per-launch token set by Unity for deterministic lifecycle management
 - `--pidfile PATH` - Optional path where the server writes its PID on startup (used by Unity-managed terminal launches)
@@ -148,6 +149,7 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `UNITY_MCP_HTTP_PORT` - HTTP bind port (overrides URL port)
 - `UNITY_MCP_HTTP_REMOTE_HOSTED` - Enable remote-hosted mode (`true`, `1`, or `yes`)
 - `UNITY_MCP_DEFAULT_INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
+- `UNITY_MCP_INSTRUCTIONS_FILE` - Path to a UTF-8 file containing additional server instructions
 - `UNITY_MCP_SKIP_STARTUP_CONNECT=1` - Skip initial Unity connection attempt on startup
 - `UNITY_MCP_LOG_DIR` - Override the rotating server log directory. Default: `%LOCALAPPDATA%\UnityMCP\Logs` (Windows), `~/Library/Application Support/UnityMCP/Logs` (macOS), `$XDG_STATE_HOME/UnityMCP/Logs` (Linux/BSD, defaults to `~/.local/state/UnityMCP/Logs`).
 
@@ -198,6 +200,27 @@ uvx --from mcpforunityserver mcp-for-unity \
 ```bash
 DISABLE_TELEMETRY=1 uvx --from mcpforunityserver mcp-for-unity --transport stdio
 ```
+
+### Custom server instructions
+
+Provide project context or preferred tool workflows in a UTF-8 text file (a UTF-8 BOM is also accepted):
+
+```text
+Before changing gameplay scripts, run the project's EditMode tests.
+Keep generated assets under Assets/Generated/.
+```
+
+Supply its path when starting the server:
+
+```bash
+uvx --from mcpforunityserver mcp-for-unity --transport http --instructions-file ./project-context.md
+```
+
+For stdio, add `"--instructions-file", "/path/to/project-context.md"` after `"mcp-for-unity"` in the MCP client's `args`, or set `UNITY_MCP_INSTRUCTIONS_FILE` in the server's environment. The CLI option takes precedence. Relative paths resolve from the server's working directory, and `~` expands to the server user's home directory.
+
+The file is read once at startup and appended to the built-in instructions in the MCP `initialize` response for both transports. Restart the server and reconnect the client after editing it. Empty or whitespace-only files leave the built-in instructions unchanged. A missing, unreadable, or non-UTF-8 file stops startup with a configuration error; its path and contents are omitted from that error.
+
+These instructions apply to every client and Unity project connected to that server, including a shared remote server. Include only context intended for those clients, without credentials or private data. How instructions are presented to the model depends on the MCP client; they do not enforce tool permissions. See the [MCP server instructions guidance](https://blog.modelcontextprotocol.io/posts/2025-11-03-using-server-instructions/).
 
 ---
 
