@@ -28,6 +28,16 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
 | **Pi** | stdio / HTTP | yes | yes | yes | Needs an MCP extension (Pi ships no MCP client of its own): `pi install npm:pi-mcp-adapter`. Writes the shared `~/.config/mcp/mcp.json`. |
 
+## WorkBuddy
+
+Select **WorkBuddy** in the Unity MCP window and click **Configure**. The configurator
+writes the user-level `~/.workbuddy/mcp.json` on Windows, macOS, and Linux, using the
+selected HTTP or stdio transport. Existing settings and other MCP servers are preserved.
+
+In WorkBuddy, open **Plugins → MCP Servers** and enable `unityMCP`, then reconnect or
+restart WorkBuddy if needed. WorkBuddy uses its own configuration file, separate from
+CodeBuddy CLI. See the [official WorkBuddy MCP guide](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide).
+
 ## How to pick
 
 - **You want it to just work**: Claude Desktop. Stdio means no port conflicts and no firewall prompts.
