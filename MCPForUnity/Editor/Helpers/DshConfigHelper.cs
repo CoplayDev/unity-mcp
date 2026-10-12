@@ -81,6 +81,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
+            lines.Add("        failOnStartupError: true");
             lines.Add(EndMarker);
             return string.Join("\n", lines) + "\n";
         }
