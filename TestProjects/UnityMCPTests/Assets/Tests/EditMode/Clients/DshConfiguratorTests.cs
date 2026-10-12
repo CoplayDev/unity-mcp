@@ -343,6 +343,66 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
+        public void CheckStatus_StdioMatch_Configured()
+        {
+            WithHttpTransport(false, () =>
+            {
+                // The --from spec that Configure would really write, so the test matches
+                // in any environment (prerelease range, beta pin, or local override).
+                string expected = AssetPathUtility.GetMcpServerPackageSource();
+                WriteProfileBundleEntry(_tempDir, "desktop");
+                WriteBundleFiles(_tempDir, BuildStdioBlock(expected));
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                var status = configurator.CheckStatus(attemptAutoRewrite: false);
+
+                Assert.AreEqual(McpStatus.Configured, status,
+                    "identical --from spec must validate (specs are text, not file paths)");
+            });
+        }
+
+        [Test]
+        public void CheckStatus_StdioSpecMismatch_NotConfigured()
+        {
+            WithHttpTransport(false, () =>
+            {
+                string expected = AssetPathUtility.GetMcpServerPackageSource();
+                WriteProfileBundleEntry(_tempDir, "desktop");
+                WriteBundleFiles(_tempDir, BuildStdioBlock(expected + ".x"));
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                var status = configurator.CheckStatus(attemptAutoRewrite: false);
+
+                Assert.AreNotEqual(McpStatus.Configured, status,
+                    "a different --from spec must not read as Configured");
+            });
+        }
+
+        [Test]
+        public void PackageSourcesEqual_SpecsCompareAsText()
+        {
+            // Regression: PathsEqual compared specs as file paths, and Path.GetFullPath
+            // throws on '>' — so identical specs compared unequal and status was always
+            // IncorrectPath (masked only by auto-rewrite).
+            Assert.IsTrue(McpConfigurationHelper.PackageSourcesEqual(
+                "mcpforunityserver>=0.0.0a0", "mcpforunityserver>=0.0.0a0"));
+            Assert.IsTrue(McpConfigurationHelper.PackageSourcesEqual(
+                "mcpforunityserver>=0.0.0a0", "  MCPforUnityServer>=0.0.0a0  "));
+            Assert.IsFalse(McpConfigurationHelper.PackageSourcesEqual(
+                "mcpforunityserver>=0.0.0a0", "mcpforunityserver>=0.0.1a0"));
+            Assert.IsFalse(McpConfigurationHelper.PackageSourcesEqual(null, "x"));
+            Assert.IsFalse(McpConfigurationHelper.PackageSourcesEqual("x", " "));
+        }
+
+        [Test]
+        public void PackageSourcesEqual_PathsCompareNormalized()
+        {
+            Assert.IsTrue(McpConfigurationHelper.PackageSourcesEqual("file:C:\\dev\\Server", "file:C:\\dev\\Server"));
+            Assert.IsTrue(McpConfigurationHelper.PackageSourcesEqual("C:\\dev\\Server", "c:/dev/Server"));
+            Assert.IsFalse(McpConfigurationHelper.PackageSourcesEqual("C:\\dev\\Server", "C:\\dev\\Other"));
+        }
+
+        [Test]
         public void Configure_WritesBundleAndInvokesSeam()
         {
             WithHttpTransport(true, () =>
@@ -528,6 +588,15 @@ namespace MCPForUnityTests.Editor.Clients
                 useHttp: true, httpUrl: url,
                 uvxCommand: null, uvxArgs: null,
                 apiKeyHeader: null, apiKey: null, windowsSystemRoot: null);
+        }
+
+        private static string BuildStdioBlock(string fromSpec)
+        {
+            string[] uvxArgs = { "--from", fromSpec, "mcp-for-unity", "--transport", "stdio" };
+            return DshConfigHelper.BuildUnityMcpBlock(
+                useHttp: false, httpUrl: null,
+                uvxCommand: "uvx.exe", uvxArgs: uvxArgs,
+                apiKeyHeader: null, apiKey: null, windowsSystemRoot: "C:\\WINDOWS");
         }
 
         private static void WriteBundleFiles(string dshHome, string patchBlock)

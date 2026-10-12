@@ -188,7 +188,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
                     string expected = GetExpectedPackageSourceForValidation();
                     string configured = McpConfigurationHelper.ExtractUvxUrl(args);
                     if (!string.IsNullOrEmpty(configured) && !string.IsNullOrEmpty(expected)
-                        && McpConfigurationHelper.PathsEqual(configured, expected))
+                        && McpConfigurationHelper.PackageSourcesEqual(configured, expected))
                     {
                         client.SetStatus(McpStatus.Configured);
                     }

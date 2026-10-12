@@ -209,6 +209,32 @@ namespace MCPForUnity.Editor.Helpers
             return null;
         }
 
+        /// <summary>
+        /// Compares uvx package sources. Spec strings (e.g. <c>mcpforunityserver&gt;=0.0.0a0</c>)
+        /// compare as text; path-like sources (local <c>file:</c> overrides, directories)
+        /// compare as normalized paths. <see cref="PathsEqual"/> must not be used for specs:
+        /// <c>Path.GetFullPath</c> throws on characters specs contain (<c>&gt;</c>, <c>=</c>)
+        /// and its catch makes identical strings compare unequal.
+        /// </summary>
+        public static bool PackageSourcesEqual(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+            a = a.Trim();
+            b = b.Trim();
+
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return true;
+
+            if (LooksLikeFilePath(a) && LooksLikeFilePath(b)) return PathsEqual(a, b);
+            return false;
+        }
+
+        private static bool LooksLikeFilePath(string source)
+        {
+            return source.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+                || source.IndexOfAny(new[] { '/', '\\' }) >= 0
+                || (source.Length > 1 && source[1] == ':');
+        }
+
         public static bool PathsEqual(string a, string b)
         {
             if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
