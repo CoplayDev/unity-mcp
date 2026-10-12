@@ -554,6 +554,38 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         /// <summary>
+        /// Regression: a disabled-but-installed bundle (dependency present, absent from
+        /// dsh.profile.bundles after DSH's toggle) must still go through dsh plugin remove.
+        /// </summary>
+        [Test]
+        public void Unregister_DisabledButInstalled_StillRunsRemove()
+        {
+            WithHttpTransport(true, () =>
+            {
+                var calls = new List<string>();
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                {
+                    calls.Add(string.Join(" ", args));
+                    return (0, "ok");
+                };
+                WriteProfilePackage(_tempDir, "desktop");
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+                // Simulate the plugin-manager toggle OFF: the dependency stays installed
+                // while the entry disappears from dsh.profile.bundles.
+                WriteProfileDependencyOnly(_tempDir, "desktop");
+                calls.Clear();
+
+                configurator.Unregister();
+
+                Assert.IsTrue(calls.Exists(c => c.Contains("remove") && c.Contains(DshBundleWriter.BundleName)),
+                    "remove must run while the dependency is still declared");
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp")));
+            });
+        }
+
+        /// <summary>
         /// Regression: unregistering one profile must not delete or dangle another
         /// profile's bundle (dsh plugin add symlinks the bundle directory).
         /// </summary>
@@ -733,6 +765,15 @@ namespace MCPForUnityTests.Editor.Clients
             string profileDir = Path.Combine(dshHome, "profiles", profile);
             Directory.CreateDirectory(profileDir);
             File.WriteAllText(Path.Combine(profileDir, "package.json"), "{\n  \"name\": \"test-profile\"\n}\n");
+        }
+
+        /// <summary>Creates a profile package.json declaring the bundle only as a dependency (disabled state).</summary>
+        private static void WriteProfileDependencyOnly(string dshHome, string profile)
+        {
+            string profileDir = Path.Combine(dshHome, "profiles", profile);
+            Directory.CreateDirectory(profileDir);
+            string packageJson = "{\n  \"dependencies\": {\n    \"" + DshBundleWriter.BundleName + "\": \"link:./somewhere\"\n  }\n}\n";
+            File.WriteAllText(Path.Combine(profileDir, "package.json"), packageJson);
         }
 
         /// <summary>Creates a profile package.json that lists the bundle as installed.</summary>

@@ -260,7 +260,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
             string dshHome = ResolveDshHome(_dshHomeOverride);
             string profile = ResolveDshProfile(_profileOverride);
 
-            if (ProfileListsBundle(dshHome, profile, DshBundleWriter.BundleName))
+            // Removal must consider a disabled-but-installed bundle: DSH's plugin-manager
+            // toggle drops the entry from dsh.profile.bundles while the dependency stays,
+            // so skipping `remove` for it would delete the directory the dependency links.
+            if (ProfileDeclaresBundle(dshHome, profile, DshBundleWriter.BundleName))
             {
                 string manualCommand = $"dsh plugin --profile {profile} remove {DshBundleWriter.BundleName}";
                 (int exitCode, string output) = DshCommandRunner(new[]
@@ -437,6 +440,41 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
             string updated = DshConfigHelper.RemoveManagedBlock(fileText);
             McpConfigurationHelper.WriteAtomicFile(rootPatch, updated);
+        }
+
+        /// <summary>
+        /// True when the profile declares the bundle anywhere: in <c>dsh.profile.bundles</c>
+        /// (enabled) or in <c>dependencies</c> (installed but possibly disabled through DSH's
+        /// plugin manager). Unregister uses this so a disabled-but-installed bundle still goes
+        /// through <c>dsh plugin remove</c>; status checks use <see cref="ProfileListsBundle"/>
+        /// because a disabled bundle does not mount tools.
+        /// </summary>
+        private static bool ProfileDeclaresBundle(string dshHome, string profile, string bundleName)
+        {
+            string profilePackagePath = Path.Combine(dshHome, "profiles", profile, "package.json");
+            if (!File.Exists(profilePackagePath)) return false;
+
+            try
+            {
+                var json = JObject.Parse(File.ReadAllText(profilePackagePath));
+
+                var bundles = json["dsh"]?["profile"]?["bundles"] as JArray;
+                if (bundles != null)
+                {
+                    foreach (var item in bundles)
+                    {
+                        if (string.Equals(item.ToString(), bundleName, StringComparison.Ordinal))
+                            return true;
+                    }
+                }
+
+                var dependencies = json["dependencies"] as JObject;
+                return dependencies != null && dependencies.Property(bundleName) != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
