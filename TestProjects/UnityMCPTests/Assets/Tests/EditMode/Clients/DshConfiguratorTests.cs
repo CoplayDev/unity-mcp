@@ -503,6 +503,56 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>Regression: a failed dsh plugin remove must keep the bundle (no dangling link) and report the failure.</summary>
+        [Test]
+        public void Unregister_RemovalFailure_KeepsBundleAndThrows()
+        {
+            WithHttpTransport(true, () =>
+            {
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                    string.Join(" ", args).Contains("remove") ? (1, "remove failed") : (0, "ok");
+                WriteProfilePackage(_tempDir, "desktop");
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+                WriteProfileBundleEntry(_tempDir, "desktop");
+
+                Assert.Throws<InvalidOperationException>(() => configurator.Unregister());
+
+                Assert.IsTrue(Directory.Exists(Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp")),
+                    "bundle must be kept while the profile still links it");
+                Assert.AreNotEqual(McpStatus.NotConfigured, configurator.Status,
+                    "a failed removal must not report NotConfigured");
+            });
+        }
+
+        /// <summary>Unregister deletes leftover bundle files without invoking the CLI when the profile does not list the bundle.</summary>
+        [Test]
+        public void Unregister_Unregistered_DeletesFilesWithoutRemove()
+        {
+            WithHttpTransport(true, () =>
+            {
+                var calls = new List<string>();
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                {
+                    calls.Add(string.Join(" ", args));
+                    return (0, "ok");
+                };
+                WriteProfilePackage(_tempDir, "desktop");
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+                calls.Clear();
+
+                configurator.Unregister();
+
+                Assert.IsFalse(calls.Exists(c => c.Contains("remove")),
+                    "CLI remove must not run when the profile does not list the bundle");
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp")));
+                Assert.AreEqual(McpStatus.NotConfigured, configurator.Status);
+            });
+        }
+
         /// <summary>
         /// Regression: unregistering one profile must not delete or dangle another
         /// profile's bundle (dsh plugin add symlinks the bundle directory).
@@ -554,6 +604,10 @@ namespace MCPForUnityTests.Editor.Clients
                 WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
+                // Simulate the registration effect of the real `dsh plugin add`, which the
+                // stubbed seam does not perform; Unregister only runs `remove` when the
+                // profile lists the bundle.
+                WriteProfileBundleEntry(_tempDir, "desktop");
                 string bundleDir = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp");
                 Assert.IsTrue(Directory.Exists(bundleDir));
 
@@ -631,11 +685,13 @@ namespace MCPForUnityTests.Editor.Clients
             {
                 Environment.SetEnvironmentVariable("DSH_CLI", shim);
                 var (exitCode, output) = DeepSeekHarnessConfigurator.RunDshCommand(
-                    new[] { "plugin", "--profile", "desktop", "add", "C:\\bundle dir" });
+                    new[] { "plugin", "--profile", "R&D", "add", "C:\\bundle dir" });
 
                 Assert.AreEqual(0, exitCode);
                 StringAssert.Contains("shim-ok", output);
-                StringAssert.Contains("plugin --profile desktop add", output);
+                StringAssert.Contains("plugin", output);
+                // cmd.exe metacharacters must round-trip as data, not be interpreted.
+                StringAssert.Contains("R&D", output);
                 StringAssert.Contains("C:\\bundle dir", output);
             }
             finally

@@ -139,6 +139,12 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.Throws<ArgumentException>(() => DshBundleWriter.GetBundleDir(_tempDir, ".."));
             Assert.Throws<ArgumentException>(() => DshBundleWriter.GetBundleDir(_tempDir, "a/b"));
             Assert.Throws<ArgumentException>(() => DshBundleWriter.GetBundleDir(_tempDir, "a\\b"));
+            Assert.Throws<ArgumentException>(() => DshBundleWriter.GetBundleDir(_tempDir, "a%b"),
+                "cmd.exe expands %NAME% patterns even inside quotes");
+            Assert.Throws<ArgumentException>(() => DshBundleWriter.GetBundleDir(_tempDir, "a\"b"),
+                "double quotes break argument quoting");
+            // cmd.exe metacharacters are safe: arguments are always double-quoted.
+            StringAssert.Contains("R&D", DshBundleWriter.GetBundleDir(_tempDir, "R&D"));
         }
     }
 }

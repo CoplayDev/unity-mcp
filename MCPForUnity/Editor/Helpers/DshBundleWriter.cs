@@ -82,6 +82,10 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Path to the profile-qualified bundle directory that holds the manifest and patch.
+        /// Profile names are validated because the name flows into filesystem paths and into
+        /// the <c>cmd.exe</c> command line: '%' is rejected (cmd expands %NAME% patterns even
+        /// inside double quotes) and '"' breaks argument quoting. cmd.exe metacharacters such
+        /// as '&amp;' are allowed because arguments are always double-quoted.
         /// </summary>
         public static string GetBundleDir(string dshHome, string profile)
         {
@@ -89,9 +93,9 @@ namespace MCPForUnity.Editor.Helpers
                 throw new ArgumentException("profile is required", nameof(profile));
             if (profile == "." || profile == ".."
                 || profile.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                || profile.IndexOfAny(new[] { '/', '\\' }) >= 0)
+                || profile.IndexOfAny(new[] { '/', '\\', '%', '"' }) >= 0)
             {
-                throw new ArgumentException($"profile is not a valid directory name: '{profile}'", nameof(profile));
+                throw new ArgumentException($"profile is not a safe directory name: '{profile}'", nameof(profile));
             }
             return Path.Combine(dshHome, "bundles", profile, BundleDirName);
         }

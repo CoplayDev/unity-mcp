@@ -260,15 +260,23 @@ namespace MCPForUnity.Editor.Clients.Configurators
             string dshHome = ResolveDshHome(_dshHomeOverride);
             string profile = ResolveDshProfile(_profileOverride);
 
-            // Best-effort: remove from DSH plugin manager (ignore failure if dsh is missing).
-            try
+            if (ProfileListsBundle(dshHome, profile, DshBundleWriter.BundleName))
             {
-                DshCommandRunner(new[]
+                string manualCommand = $"dsh plugin --profile {profile} remove {DshBundleWriter.BundleName}";
+                (int exitCode, string output) = DshCommandRunner(new[]
                 {
                     "plugin", "--profile", profile, "remove", DshBundleWriter.BundleName
                 });
+                if (exitCode != 0)
+                {
+                    // Keep the bundle: the profile still links this directory, and deleting
+                    // the source now would leave a dangling symlink and break the bundle at
+                    // the next reload. Report the failure so the user can retry.
+                    throw new InvalidOperationException(
+                        $"Failed to remove DSH bundle via '{manualCommand}' (exit code {exitCode}): {output}\n" +
+                        $"Run this command manually: {manualCommand}");
+                }
             }
-            catch { }
 
             DshBundleWriter.TryDeleteBundle(dshHome, profile);
             RemoveLegacyRootPatchBlock(dshHome);
@@ -563,29 +571,51 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>Wraps an argument in double quotes for cmd.exe command lines.</summary>
+        /// <summary>Wraps an argument in double quotes, escaping embedded quotes and backslashes.</summary>
         private static string QuoteArg(string arg)
         {
-            return "\"" + (arg ?? string.Empty) + "\"";
+            // Standard CreateProcess/CommandLineToArgvW quoting: backslashes before a quote
+            // are doubled and embedded quotes escaped. cmd.exe metacharacters (& | < > ^)
+            // are literal inside double quotes, so quoting every argument also protects
+            // profile names like "R&D". '%' cannot be escaped this way (cmd expands %NAME%
+            // even inside quotes and leaves %% literal on the command line), so it is
+            // rejected in profile names instead.
+            string value = arg ?? string.Empty;
+            var sb = new StringBuilder(value.Length + 2);
+            sb.Append('"');
+            int backslashes = 0;
+            foreach (char c in value)
+            {
+                if (c == '\\') { backslashes++; continue; }
+                if (c == '"')
+                {
+                    sb.Append('\\', backslashes * 2 + 1);
+                    sb.Append('"');
+                    backslashes = 0;
+                    continue;
+                }
+                sb.Append('\\', backslashes);
+                backslashes = 0;
+                sb.Append(c);
+            }
+            sb.Append('\\', backslashes * 2);
+            sb.Append('"');
+            return sb.ToString();
         }
 
         /// <summary>Builds a process argument string with Windows-compatible quoting.</summary>
         private static string BuildArgumentsString(string[] args)
         {
             if (args == null || args.Length == 0) return string.Empty;
+
+            // Quote every argument, not only those with spaces: values may carry cmd.exe
+            // metacharacters (a profile named "R&D", a home path containing "&"), which
+            // are literal only inside double quotes.
             var sb = new StringBuilder();
             for (int i = 0; i < args.Length; i++)
             {
                 if (i > 0) sb.Append(' ');
-                string arg = args[i] ?? string.Empty;
-                if (arg.IndexOfAny(new[] { ' ', '\t', '"' }) >= 0)
-                {
-                    sb.Append('"').Append(arg.Replace("\"", "\\\"")).Append('"');
-                }
-                else
-                {
-                    sb.Append(arg);
-                }
+                sb.Append(QuoteArg(args[i]));
             }
             return sb.ToString();
         }
