@@ -226,6 +226,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
         {
             string dshHome = ResolveDshHome(_dshHomeOverride);
             string profile = ResolveDshProfile(_profileOverride);
+            EnsureProfileExists(dshHome, profile);
             string block = BuildBlock();
             string bundleDir = DshBundleWriter.WriteBundle(dshHome, block);
 
@@ -379,6 +380,33 @@ namespace MCPForUnity.Editor.Clients.Configurators
         }
 
         /// <summary>
+        /// Fails fast when the target DSH profile does not exist. <c>dsh plugin add</c>
+        /// silently initializes a missing profile as a bare, unusable one, so a typo in
+        /// <c>DSH_PROFILE</c> would otherwise "succeed" into junk.
+        /// </summary>
+        private static void EnsureProfileExists(string dshHome, string profile)
+        {
+            string profilePackage = Path.Combine(dshHome, "profiles", profile, "package.json");
+            if (File.Exists(profilePackage)) return;
+
+            string profilesRoot = Path.Combine(dshHome, "profiles");
+            string available = "(none)";
+            if (Directory.Exists(profilesRoot))
+            {
+                var names = new List<string>();
+                foreach (string dir in Directory.GetDirectories(profilesRoot))
+                {
+                    names.Add(Path.GetFileName(dir));
+                }
+                if (names.Count > 0) available = string.Join(", ", names);
+            }
+
+            throw new InvalidOperationException(
+                $"DSH profile '{profile}' does not exist ({profilePackage} missing). " +
+                $"Set DSH_PROFILE to an existing profile. Available profiles: {available}.");
+        }
+
+        /// <summary>
         /// Removes the managed block from the root home patch (legacy target). This
         /// prevents duplicate rows when migrating from the root-patch approach to the
         /// bundle approach.
@@ -423,22 +451,34 @@ namespace MCPForUnity.Editor.Clients.Configurators
         }
 
         /// <summary>
-        /// Default <c>dsh</c> command runner using <see cref="Process"/>. Captures
-        /// stdout+stderr, enforces a 60-second timeout, and returns -1 on any failure
-        /// (including missing <c>dsh</c>) so callers can surface the manual command.
+        /// Default <c>dsh</c> command runner using <see cref="Process"/>. Resolves the
+        /// launcher explicitly because on Windows <c>dsh</c> is a <c>.cmd</c> shim and
+        /// <see cref="Process"/> with <c>UseShellExecute=false</c> will not find it by
+        /// bare name. Captures stdout+stderr, enforces a 60-second timeout, and returns
+        /// -1 on any failure (including missing <c>dsh</c>) so callers can surface the
+        /// manual command.
         /// </summary>
-        private static (int ExitCode, string Output) RunDshCommand(string[] args)
+        internal static (int ExitCode, string Output) RunDshCommand(string[] args)
         {
             try
             {
+                if (!TryResolveDshExecutable(out string exePath, out bool isCmdShim))
+                {
+                    return (-1, "dsh executable not found on PATH. Install DeepSeek Harness " +
+                        "or set DSH_CLI to the dsh launcher (.cmd on Windows).");
+                }
+
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "dsh",
+                    FileName = isCmdShim ? "cmd.exe" : exePath,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true,
-                    Arguments = BuildArgumentsString(args)
+                    // cmd.exe /s /c "<line>" strips the outer quotes and runs the rest as-is.
+                    Arguments = isCmdShim
+                        ? "/s /c \"" + QuoteArg(exePath) + " " + BuildArgumentsString(args) + "\""
+                        : BuildArgumentsString(args)
                 };
 
                 using (var process = Process.Start(psi))
@@ -459,6 +499,59 @@ namespace MCPForUnity.Editor.Clients.Configurators
             {
                 return (-1, $"Failed to run 'dsh': {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Finds the <c>dsh</c> launcher: a <c>DSH_CLI</c> environment override wins,
+        /// then each PATH entry is probed with platform-specific names
+        /// (<c>dsh.cmd</c>/<c>dsh.bat</c>/<c>dsh.exe</c>/<c>dsh</c> on Windows,
+        /// <c>dsh</c> elsewhere). Reports whether the hit is a cmd shim that must run
+        /// through <c>cmd.exe</c>.
+        /// </summary>
+        internal static bool TryResolveDshExecutable(out string path, out bool isCmdShim)
+        {
+            path = null;
+            isCmdShim = false;
+
+            string overridePath = Environment.GetEnvironmentVariable("DSH_CLI");
+            if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+            {
+                path = overridePath;
+                isCmdShim = IsCmdShim(overridePath);
+                return true;
+            }
+
+            bool windows = Path.DirectorySeparatorChar == '\\';
+            string[] names = windows
+                ? new[] { "dsh.cmd", "dsh.bat", "dsh.exe", "dsh" }
+                : new[] { "dsh" };
+
+            foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator))
+            {
+                string trimmed = dir.Trim().Trim('"');
+                if (trimmed.Length == 0) continue;
+                foreach (string name in names)
+                {
+                    string candidate = Path.Combine(trimmed, name);
+                    if (!File.Exists(candidate)) continue;
+                    path = candidate;
+                    isCmdShim = IsCmdShim(candidate);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsCmdShim(string path)
+        {
+            return path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string QuoteArg(string arg)
+        {
+            return "\"" + (arg ?? string.Empty) + "\"";
         }
 
         /// <summary>Builds a process argument string with Windows-compatible quoting.</summary>

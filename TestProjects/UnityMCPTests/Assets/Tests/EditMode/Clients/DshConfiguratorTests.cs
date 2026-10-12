@@ -354,6 +354,7 @@ namespace MCPForUnityTests.Editor.Clients
                     return (0, "ok");
                 };
 
+                WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
 
@@ -381,6 +382,7 @@ namespace MCPForUnityTests.Editor.Clients
 
                 DeepSeekHarnessConfigurator.DshCommandRunner = _ => (0, "ok");
 
+                WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
 
@@ -401,6 +403,7 @@ namespace MCPForUnityTests.Editor.Clients
 
                 DeepSeekHarnessConfigurator.DshCommandRunner = _ => (0, "ok");
 
+                WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
 
@@ -427,6 +430,7 @@ namespace MCPForUnityTests.Editor.Clients
                     return (0, "ok");
                 };
 
+                WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
                 string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
@@ -438,6 +442,82 @@ namespace MCPForUnityTests.Editor.Clients
                 StringAssert.Contains(DshBundleWriter.BundleName, capturedArgs);
                 Assert.IsFalse(Directory.Exists(bundleDir), "bundle directory must be deleted");
             });
+        }
+
+        [Test]
+        public void Configure_MissingProfile_ThrowsWithoutCreatingProfile()
+        {
+            WithHttpTransport(true, () =>
+            {
+                bool runnerCalled = false;
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                {
+                    runnerCalled = true;
+                    return (0, "ok");
+                };
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                var ex = Assert.Throws<InvalidOperationException>(() => configurator.Configure());
+
+                StringAssert.Contains("desktop", ex.Message);
+                Assert.IsFalse(runnerCalled, "dsh CLI must not run when the profile is missing");
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "profiles", "desktop")),
+                    "guard must not create the profile");
+            });
+        }
+
+        [Test]
+        public void TryResolveDshExecutable_FindsCmdShimOnPath()
+        {
+            if (Path.DirectorySeparatorChar != '\\') Assert.Ignore("cmd shim resolution is Windows-specific");
+
+            string shimDir = Path.Combine(_tempDir, "fakebin");
+            Directory.CreateDirectory(shimDir);
+            string shim = Path.Combine(shimDir, "dsh.cmd");
+            File.WriteAllText(shim, "@echo off\r\n");
+
+            string originalPath = Environment.GetEnvironmentVariable("PATH");
+            string originalCli = Environment.GetEnvironmentVariable("DSH_CLI");
+            try
+            {
+                Environment.SetEnvironmentVariable("DSH_CLI", null);
+                Environment.SetEnvironmentVariable("PATH", shimDir);
+
+                Assert.IsTrue(DeepSeekHarnessConfigurator.TryResolveDshExecutable(out string path, out bool isCmdShim));
+                Assert.AreEqual(shim, path);
+                Assert.IsTrue(isCmdShim, ".cmd must be reported as a cmd shim");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("PATH", originalPath);
+                Environment.SetEnvironmentVariable("DSH_CLI", originalCli);
+            }
+        }
+
+        [Test]
+        public void RunDshCommand_RoutesCmdShimThroughCmdExe()
+        {
+            if (Path.DirectorySeparatorChar != '\\') Assert.Ignore("cmd shim routing is Windows-specific");
+
+            string shim = Path.Combine(_tempDir, "dsh.cmd");
+            File.WriteAllText(shim, "@echo off\r\necho shim-ok %*\r\nexit /b 0\r\n");
+
+            string originalCli = Environment.GetEnvironmentVariable("DSH_CLI");
+            try
+            {
+                Environment.SetEnvironmentVariable("DSH_CLI", shim);
+                var (exitCode, output) = DeepSeekHarnessConfigurator.RunDshCommand(
+                    new[] { "plugin", "--profile", "desktop", "add", "C:\\bundle dir" });
+
+                Assert.AreEqual(0, exitCode);
+                StringAssert.Contains("shim-ok", output);
+                StringAssert.Contains("plugin --profile desktop add", output);
+                StringAssert.Contains("C:\\bundle dir", output);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("DSH_CLI", originalCli);
+            }
         }
 
         // ---------------------------------------------------------------- helpers
@@ -453,6 +533,14 @@ namespace MCPForUnityTests.Editor.Clients
         private static void WriteBundleFiles(string dshHome, string patchBlock)
         {
             DshBundleWriter.WriteBundle(dshHome, patchBlock);
+        }
+
+        /// <summary>Creates a bare profile directory with a package.json (no bundle entry).</summary>
+        private static void WriteProfilePackage(string dshHome, string profile)
+        {
+            string profileDir = Path.Combine(dshHome, "profiles", profile);
+            Directory.CreateDirectory(profileDir);
+            File.WriteAllText(Path.Combine(profileDir, "package.json"), "{\n  \"name\": \"test-profile\"\n}\n");
         }
 
         private static void WriteProfileBundleEntry(string dshHome, string profile)

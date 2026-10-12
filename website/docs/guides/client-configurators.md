@@ -173,11 +173,12 @@ Some clients cannot be handled by the generic JSON configurator alone.
 - The bridge exposes a single proxy tool such as `unityMCP__call`, which then forwards to Unity MCP tool names.
 - OpenClaw support follows the currently selected MCP for Unity transport (via `openclaw-mcp-bridge`).
 
-### DeepSeek Harness (Cordis patch YAML)
+### DeepSeek Harness (native DSH bundle)
 
-- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, configured as Cordis rows in a **YAML patch layer** — not a JSON/TOML config.
-- Target file is `$DSH_HOME/cordis.patch.yml` (the `DSH_HOME` environment variable wins, default `~/.dsh`). The home patch layer applies to every DSH profile (web, sdk, headless, acp); per-profile `cordis.patch.yml` files are documented in the manual snippet instead.
-- The row shape (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
+- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, configured as Cordis rows — not a JSON/TOML config file.
+- Configure writes a **configuration-only DSH bundle** to `$DSH_HOME/bundles/unity-mcp/` (the `DSH_HOME` environment variable wins, default `~/.dsh`) containing a `package.json` manifest (`dsh.bundle.patch` → `./cordis.patch.yml`) and the patch itself, then installs it into a DSH profile with `dsh plugin --profile <name> add <bundle-dir>`. The profile is `desktop` by default; set `DSH_PROFILE` to target another profile.
+- Installing as a bundle (instead of editing `$DSH_HOME/cordis.patch.yml`) keeps the row **profile-scoped and removable** through DSH's own plugin manager (`dsh plugin --profile <name> remove @local/unity-mcp-dsh`). The root home patch applies to *every* profile and collides with rows from other sources, so it is only used for one-shot experiments (`dsh web --patch <file>`) and migration cleanup.
+- The row shape inside the bundle's `cordis.patch.yml` (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
   ```yaml
   - insert:
       - id: unitymcp
@@ -187,9 +188,10 @@ Some clients cannot be handled by the generic JSON configurator alone.
           transport: streamable-http   # or stdio with command/args
           url: http://127.0.0.1:<port>/mcp
   ```
-- All patch-file surgery lives in `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`), which manages **one marker-fenced block**. This is deliberate: the package has no YAML parser, and user patch files may contain YAML features this helper does not parse (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Upsert replaces only the fenced region; status checks parse only the fenced region's known shape; Unregister removes only the fenced region.
+- Bundle contents are wholly managed (files are overwritten in place). `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`) still owns the block shape and any marker-fenced surgery on *foreign* patch files: the package has no YAML parser, and user patch files may contain YAML features this helper does not parse (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Configure/Unregister also migrate away a legacy managed block left in `$DSH_HOME/cordis.patch.yml` by earlier versions, so exactly one row exists.
 - After a DSH reload/restart, Unity tools surface as `mcp__unityMCP__<tool>` (DSH's server-qualified MCP naming).
-- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
+- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists). Configure refuses to run when the target profile does not exist, because `dsh plugin add` silently initializes a missing profile as a bare, unusable one.
+- Status checks never rewrite anything: bundle install is a user action only, so opening a project never modifies DSH configuration.
 
 ---
 
