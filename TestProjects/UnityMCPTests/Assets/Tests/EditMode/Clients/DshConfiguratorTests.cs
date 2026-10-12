@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Helpers;
@@ -9,25 +10,28 @@ using NUnit.Framework;
 namespace MCPForUnityTests.Editor.Clients
 {
     /// <summary>
-    /// Covers the DeepSeek Harness integration: the marker-fenced YAML patch block
-    /// helper and the DeepSeekHarnessConfigurator that manages it inside the user's
-    /// $DSH_HOME/cordis.patch.yml without touching unrelated user patches.
+    /// Covers the DeepSeek Harness integration: the marker-fenced YAML patch block helper
+    /// and the DeepSeekHarnessConfigurator that writes a configuration-only DSH bundle
+    /// and installs it via the DSH plugin manager (<c>dsh plugin add</c>).
     /// </summary>
     [TestFixture]
     public class DshConfiguratorTests
     {
         private string _tempDir;
+        private Func<string[], (int ExitCode, string Output)> _originalRunner;
 
         [SetUp]
         public void SetUp()
         {
             _tempDir = Path.Combine(Path.GetTempPath(), "UnityMCPTests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_tempDir);
+            _originalRunner = DeepSeekHarnessConfigurator.DshCommandRunner;
         }
 
         [TearDown]
         public void TearDown()
         {
+            DeepSeekHarnessConfigurator.DshCommandRunner = _originalRunner;
             try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
         }
 
@@ -224,10 +228,11 @@ namespace MCPForUnityTests.Editor.Clients
         // ---------------------------------------------------------------- configurator wiring
 
         [Test]
-        public void ConfigPath_UsesOverrideHome()
+        public void ConfigPath_UsesBundlePatchInsideOverrideHome()
         {
             var configurator = new DeepSeekHarnessConfigurator(_tempDir);
-            Assert.AreEqual(Path.Combine(_tempDir, "cordis.patch.yml"), configurator.GetConfigPath());
+            string expected = Path.Combine(_tempDir, "bundles", "unity-mcp", "cordis.patch.yml");
+            Assert.AreEqual(expected, configurator.GetConfigPath());
         }
 
         [Test]
@@ -253,6 +258,26 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
+        public void ResolveDshProfile_PrefersOverride_ThenEnv_ThenDesktop()
+        {
+            Assert.AreEqual("my-profile", DeepSeekHarnessConfigurator.ResolveDshProfile("my-profile"));
+
+            string previous = Environment.GetEnvironmentVariable("DSH_PROFILE");
+            try
+            {
+                Environment.SetEnvironmentVariable("DSH_PROFILE", "web");
+                Assert.AreEqual("web", DeepSeekHarnessConfigurator.ResolveDshProfile(null));
+
+                Environment.SetEnvironmentVariable("DSH_PROFILE", null);
+                Assert.AreEqual("desktop", DeepSeekHarnessConfigurator.ResolveDshProfile(null));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("DSH_PROFILE", previous);
+            }
+        }
+
+        [Test]
         public void IsInstalled_FollowsParentDirectory()
         {
             string missing = Path.Combine(_tempDir, "does-not-exist");
@@ -261,12 +286,22 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
-        public void CheckStatus_MissingBlock_NotConfigured_WithoutRewrite()
+        public void CheckStatus_MissingBundle_NotConfigured_NoAutoWrite()
         {
+            bool seamCalled = false;
+            DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+            {
+                seamCalled = true;
+                return (0, "");
+            };
+
             var configurator = new DeepSeekHarnessConfigurator(_tempDir);
-            var status = configurator.CheckStatus(attemptAutoRewrite: false);
+            var status = configurator.CheckStatus(attemptAutoRewrite: true);
+
             Assert.AreEqual(McpStatus.NotConfigured, status);
-            Assert.IsFalse(File.Exists(configurator.GetConfigPath()));
+            Assert.IsFalse(seamCalled, "CheckStatus must never invoke the dsh command seam");
+            string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+            Assert.IsFalse(Directory.Exists(bundleDir), "CheckStatus must never write bundle files");
         }
 
         [Test]
@@ -275,9 +310,8 @@ namespace MCPForUnityTests.Editor.Clients
             WithHttpTransport(true, () =>
             {
                 string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                File.WriteAllText(
-                    Path.Combine(_tempDir, "cordis.patch.yml"),
-                    BuildHttpBlock(expectedUrl));
+                WriteBundleFiles(_tempDir, BuildHttpBlock(expectedUrl));
+                WriteProfileBundleEntry(_tempDir, "desktop");
 
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 var status = configurator.CheckStatus(attemptAutoRewrite: false);
@@ -288,26 +322,71 @@ namespace MCPForUnityTests.Editor.Clients
         }
 
         [Test]
-        public void CheckStatus_HttpMismatch_RewritesOnAutoRewrite()
+        public void CheckStatus_HttpMismatch_ReturnsIncorrectPath_WithoutRewrite()
         {
             WithHttpTransport(true, () =>
             {
-                string path = Path.Combine(_tempDir, "cordis.patch.yml");
-                string userRow = "- insert:\n    - id: mcp-memory\n      name: '@deepseek-ai/dsh-mcp-client'\n";
-                File.WriteAllText(path, userRow + BuildHttpBlock("http://127.0.0.1:1/mcp"));
+                string bundlePatch = Path.Combine(_tempDir, "bundles", "unity-mcp", "cordis.patch.yml");
+                WriteBundleFiles(_tempDir, BuildHttpBlock("http://127.0.0.1:1/mcp"));
+                WriteProfileBundleEntry(_tempDir, "desktop");
 
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 var before = configurator.CheckStatus(attemptAutoRewrite: false);
                 Assert.AreEqual(McpStatus.IncorrectPath, before);
 
                 var after = configurator.CheckStatus(attemptAutoRewrite: true);
-                Assert.AreEqual(McpStatus.Configured, after);
+                Assert.AreEqual(McpStatus.IncorrectPath, after, "must not auto-rewrite");
 
-                string updated = File.ReadAllText(path);
-                StringAssert.StartsWith(userRow, updated, "user patches must survive the rewrite");
-                StringAssert.Contains(
-                    HttpEndpointUtility.GetMcpRpcUrl(), updated,
-                    "rewritten block must carry the current RPC URL");
+                string updated = File.ReadAllText(bundlePatch);
+                StringAssert.Contains("127.0.0.1:1", updated, "bundle must not have been rewritten");
+            });
+        }
+
+        [Test]
+        public void Configure_WritesBundleAndInvokesSeam()
+        {
+            WithHttpTransport(true, () =>
+            {
+                string capturedArgs = null;
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                {
+                    capturedArgs = string.Join(" ", args);
+                    return (0, "ok");
+                };
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+
+                string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+                Assert.IsTrue(File.Exists(Path.Combine(bundleDir, "package.json")), "manifest must exist");
+                Assert.IsTrue(File.Exists(Path.Combine(bundleDir, "cordis.patch.yml")), "patch must exist");
+
+                StringAssert.Contains("plugin", capturedArgs);
+                StringAssert.Contains("--profile", capturedArgs);
+                StringAssert.Contains("desktop", capturedArgs);
+                StringAssert.Contains("add", capturedArgs);
+                StringAssert.Contains(bundleDir, capturedArgs);
+                Assert.AreEqual(McpStatus.Configured, configurator.Status);
+            });
+        }
+
+        [Test]
+        public void Configure_MigrationRemovesLegacyRootPatchBlock()
+        {
+            WithHttpTransport(true, () =>
+            {
+                string rootPatch = Path.Combine(_tempDir, "cordis.patch.yml");
+                string userRow = "- insert:\n    - id: mcp-memory\n      name: '@deepseek-ai/dsh-mcp-client'\n";
+                File.WriteAllText(rootPatch, userRow + BuildHttpBlock("http://127.0.0.1:1/mcp"));
+
+                DeepSeekHarnessConfigurator.DshCommandRunner = _ => (0, "ok");
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+
+                string after = File.ReadAllText(rootPatch);
+                Assert.AreEqual(userRow, after, "legacy managed block must be removed from root patch");
+                Assert.AreEqual(0, CountOccurrences(after, DshConfigHelper.BeginMarker));
             });
         }
 
@@ -316,23 +395,48 @@ namespace MCPForUnityTests.Editor.Clients
         {
             WithHttpTransport(true, () =>
             {
-                string path = Path.Combine(_tempDir, "cordis.patch.yml");
+                string rootPatch = Path.Combine(_tempDir, "cordis.patch.yml");
                 string userRow = "- insert:\n    - id: mcp-memory\n      name: '@deepseek-ai/dsh-mcp-client'\n";
-                File.WriteAllText(path, userRow);
+                File.WriteAllText(rootPatch, userRow);
+
+                DeepSeekHarnessConfigurator.DshCommandRunner = _ => (0, "ok");
 
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
 
-                string configured = File.ReadAllText(path);
-                StringAssert.StartsWith(userRow, configured);
-                Assert.AreEqual(1, CountOccurrences(configured, DshConfigHelper.BeginMarker));
                 Assert.AreEqual(McpStatus.Configured, configurator.Status);
+                Assert.AreEqual(userRow, File.ReadAllText(rootPatch), "root patch must be untouched when no legacy block exists");
 
                 configurator.Unregister();
 
-                string after = File.ReadAllText(path);
-                Assert.AreEqual(userRow, after, "unregister must remove exactly the managed block");
                 Assert.AreEqual(McpStatus.NotConfigured, configurator.Status);
+                Assert.AreEqual(userRow, File.ReadAllText(rootPatch), "unregister must not touch user rows");
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "unity-mcp")), "bundle dir must be deleted");
+            });
+        }
+
+        [Test]
+        public void Unregister_CallsRemoveAndDeletesBundle()
+        {
+            WithHttpTransport(true, () =>
+            {
+                string capturedArgs = null;
+                DeepSeekHarnessConfigurator.DshCommandRunner = args =>
+                {
+                    capturedArgs = string.Join(" ", args);
+                    return (0, "ok");
+                };
+
+                var configurator = new DeepSeekHarnessConfigurator(_tempDir);
+                configurator.Configure();
+                string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+                Assert.IsTrue(Directory.Exists(bundleDir));
+
+                configurator.Unregister();
+
+                StringAssert.Contains("remove", capturedArgs);
+                StringAssert.Contains(DshBundleWriter.BundleName, capturedArgs);
+                Assert.IsFalse(Directory.Exists(bundleDir), "bundle directory must be deleted");
             });
         }
 
@@ -344,6 +448,19 @@ namespace MCPForUnityTests.Editor.Clients
                 useHttp: true, httpUrl: url,
                 uvxCommand: null, uvxArgs: null,
                 apiKeyHeader: null, apiKey: null, windowsSystemRoot: null);
+        }
+
+        private static void WriteBundleFiles(string dshHome, string patchBlock)
+        {
+            DshBundleWriter.WriteBundle(dshHome, patchBlock);
+        }
+
+        private static void WriteProfileBundleEntry(string dshHome, string profile)
+        {
+            string profileDir = Path.Combine(dshHome, "profiles", profile);
+            Directory.CreateDirectory(profileDir);
+            string packageJson = "{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\"" + DshBundleWriter.BundleName + "\"]\n    }\n  }\n}\n";
+            File.WriteAllText(Path.Combine(profileDir, "package.json"), packageJson);
         }
 
         private static void WithHttpTransport(bool useHttp, Action body)
