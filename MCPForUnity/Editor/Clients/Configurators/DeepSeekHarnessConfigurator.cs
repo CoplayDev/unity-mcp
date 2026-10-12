@@ -38,9 +38,9 @@ namespace MCPForUnity.Editor.Clients.Configurators
             : base(new McpClient
             {
                 name = "DeepSeek Harness",
-                windowsConfigPath = BuildConfigPath(dshHomeOverride),
-                macConfigPath = BuildConfigPath(dshHomeOverride),
-                linuxConfigPath = BuildConfigPath(dshHomeOverride)
+                windowsConfigPath = BuildConfigPath(dshHomeOverride, profileOverride),
+                macConfigPath = BuildConfigPath(dshHomeOverride, profileOverride),
+                linuxConfigPath = BuildConfigPath(dshHomeOverride, profileOverride)
             })
         {
             _dshHomeOverride = dshHomeOverride;
@@ -65,13 +65,17 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         // ------------------------------------------------------------------ paths
 
-        private static string BuildConfigPath(string dshHomeOverride)
+        /// <summary>Path to the managed bundle patch for the resolved home and profile.</summary>
+        private static string BuildConfigPath(string dshHomeOverride, string profileOverride)
         {
             return Path.Combine(
-                DshBundleWriter.GetBundleDir(ResolveDshHome(dshHomeOverride)),
+                DshBundleWriter.GetBundleDir(
+                    ResolveDshHome(dshHomeOverride),
+                    ResolveDshProfile(profileOverride)),
                 "cordis.patch.yml");
         }
 
+        /// <summary>Config path shown in the Setup window (the managed bundle patch).</summary>
         public override string GetConfigPath() => CurrentOsPath();
 
         /// <summary>
@@ -106,6 +110,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         // ------------------------------------------------------------------ status
 
+        /// <summary>Configure when unconfigured, Unregister when configured.</summary>
         public override string GetConfigureActionLabel()
             => client.status == McpStatus.Configured ? "Unregister" : "Configure";
 
@@ -125,7 +130,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
                 // Bundle files must exist.
                 string bundlePatchPath = Path.Combine(
-                    DshBundleWriter.GetBundleDir(dshHome), "cordis.patch.yml");
+                    DshBundleWriter.GetBundleDir(dshHome, profile), "cordis.patch.yml");
                 if (!File.Exists(bundlePatchPath))
                 {
                     client.SetStatus(McpStatus.NotConfigured);
@@ -228,7 +233,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             string profile = ResolveDshProfile(_profileOverride);
             EnsureProfileExists(dshHome, profile);
             string block = BuildBlock();
-            string bundleDir = DshBundleWriter.WriteBundle(dshHome, block);
+            string bundleDir = DshBundleWriter.WriteBundle(dshHome, profile, block);
 
             // Install into the named DSH profile through the plugin manager.
             string manualCommand = $"dsh plugin --profile {profile} add {bundleDir}";
@@ -265,7 +270,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
             catch { }
 
-            DshBundleWriter.TryDeleteBundle(dshHome);
+            DshBundleWriter.TryDeleteBundle(dshHome, profile);
             RemoveLegacyRootPatchBlock(dshHome);
 
             client.SetStatus(McpStatus.NotConfigured);
@@ -274,13 +279,14 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         // ------------------------------------------------------------------ manual snippet / steps
 
+        /// <summary>Renders the bundle files and the CLI install/remove commands.</summary>
         public override string GetManualSnippet()
         {
             try
             {
                 string dshHome = ResolveDshHome(_dshHomeOverride);
                 string profile = ResolveDshProfile(_profileOverride);
-                string bundleDir = DshBundleWriter.GetBundleDir(dshHome);
+                string bundleDir = DshBundleWriter.GetBundleDir(dshHome, profile);
 
                 var sb = new StringBuilder();
                 sb.AppendLine("# Mount the Unity MCP server in DeepSeek Harness as a native DSH bundle.");
@@ -310,6 +316,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
         }
 
+        /// <summary>Short user-facing steps shown under the manual snippet.</summary>
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Install DeepSeek Harness and run any 'dsh' command once (creates ~/.dsh)",
@@ -320,6 +327,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         // ------------------------------------------------------------------ internals
 
+        /// <summary>Builds the managed block from the current transport preference and package settings.</summary>
         private string BuildBlock()
         {
             var transport = HttpEndpointUtility.GetCurrentServerTransport();
@@ -485,13 +493,18 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 {
                     if (process == null) return (-1, "Failed to start dsh process");
 
-                    string output = process.StandardOutput.ReadToEnd()
-                        + process.StandardError.ReadToEnd();
+                    // Read both pipes concurrently and only then wait. Sequential ReadToEnd
+                    // deadlocks when the child fills the other pipe's buffer first, and a
+                    // hung child would block the read forever, past the timeout below.
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    var stderrTask = process.StandardError.ReadToEndAsync();
                     if (!process.WaitForExit(60_000))
                     {
                         try { process.Kill(); } catch { }
-                        return (-1, output + "\n(dsh timed out after 60s)");
+                        return (-1, "(dsh timed out after 60s)");
                     }
+                    process.WaitForExit();
+                    string output = stdoutTask.Result + stderrTask.Result;
                     return (process.ExitCode, output);
                 }
             }
@@ -543,12 +556,14 @@ namespace MCPForUnity.Editor.Clients.Configurators
             return false;
         }
 
+        /// <summary>True for .cmd/.bat launchers that must run through cmd.exe.</summary>
         private static bool IsCmdShim(string path)
         {
             return path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Wraps an argument in double quotes for cmd.exe command lines.</summary>
         private static string QuoteArg(string arg)
         {
             return "\"" + (arg ?? string.Empty) + "\"";

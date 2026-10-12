@@ -228,6 +228,7 @@ namespace MCPForUnity.Editor.Helpers
             return false;
         }
 
+        /// <summary>True for file: urls, drive-letter paths, or strings containing path separators.</summary>
         private static bool LooksLikeFilePath(string source)
         {
             return source.StartsWith("file:", StringComparison.OrdinalIgnoreCase)

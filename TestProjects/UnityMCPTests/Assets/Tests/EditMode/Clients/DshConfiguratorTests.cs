@@ -20,6 +20,7 @@ namespace MCPForUnityTests.Editor.Clients
         private string _tempDir;
         private Func<string[], (int ExitCode, string Output)> _originalRunner;
 
+        /// <summary>Creates a fresh temp DSH home and saves the default command runner.</summary>
         [SetUp]
         public void SetUp()
         {
@@ -28,6 +29,7 @@ namespace MCPForUnityTests.Editor.Clients
             _originalRunner = DeepSeekHarnessConfigurator.DshCommandRunner;
         }
 
+        /// <summary>Restores the command runner and removes the temp DSH home.</summary>
         [TearDown]
         public void TearDown()
         {
@@ -37,6 +39,7 @@ namespace MCPForUnityTests.Editor.Clients
 
         // ---------------------------------------------------------------- helper: build
 
+        /// <summary>HTTP block emits the expected insert row and url.</summary>
         [Test]
         public void BuildBlock_Http_EmitsExpectedRows()
         {
@@ -56,6 +59,7 @@ namespace MCPForUnityTests.Editor.Clients
             StringAssert.DoesNotContain("command:", block);
         }
 
+        /// <summary>HTTP block emits an auth header row when an API key is configured.</summary>
         [Test]
         public void BuildBlock_Http_WithApiKey_EmitsHeader()
         {
@@ -68,6 +72,7 @@ namespace MCPForUnityTests.Editor.Clients
             StringAssert.Contains("X-API-Key: 's3cret'", block);
         }
 
+        /// <summary>stdio block emits command, args, and the Windows SystemRoot env row.</summary>
         [Test]
         public void BuildBlock_Stdio_EmitsCommandArgsAndWindowsEnv()
         {
@@ -88,6 +93,7 @@ namespace MCPForUnityTests.Editor.Clients
 
         // ---------------------------------------------------------------- helper: parse
 
+        /// <summary>TryParseManagedBlock round-trips the HTTP block shape.</summary>
         [Test]
         public void TryParse_RoundTripsHttpBlock()
         {
@@ -109,6 +115,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual("it's-a-key", headerValue, "doubled single quotes must unescape");
         }
 
+        /// <summary>TryParseManagedBlock round-trips stdio rows containing Windows paths.</summary>
         [Test]
         public void TryParse_RoundTripsStdioBlock_WithWindowsPaths()
         {
@@ -132,6 +139,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.IsNull(headerValue, "env rows must not be mistaken for headers");
         }
 
+        /// <summary>TryParseManagedBlock rejects an empty block.</summary>
         [Test]
         public void TryParse_RejectsEmptyBlock()
         {
@@ -142,6 +150,7 @@ namespace MCPForUnityTests.Editor.Clients
 
         // ---------------------------------------------------------------- helper: upsert/remove
 
+        /// <summary>Upsert into an empty file produces just the managed block.</summary>
         [Test]
         public void Upsert_IntoEmptyFile_ProducesValidListDocument()
         {
@@ -152,6 +161,7 @@ namespace MCPForUnityTests.Editor.Clients
             StringAssert.EndsWith("\n", result);
         }
 
+        /// <summary>Upserting the same block twice is idempotent.</summary>
         [Test]
         public void Upsert_Twice_IsIdempotent()
         {
@@ -165,6 +175,7 @@ namespace MCPForUnityTests.Editor.Clients
             StringAssert.DoesNotContain("8090", twice);
         }
 
+        /// <summary>Upsert preserves unrelated user patch content byte-for-byte.</summary>
         [Test]
         public void Upsert_PreservesForeignUserPatches_ByteForByte()
         {
@@ -187,6 +198,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(1, CountOccurrences(result, DshConfigHelper.BeginMarker));
         }
 
+        /// <summary>Upsert appends cleanly when the file lacks a trailing newline.</summary>
         [Test]
         public void Upsert_AppendsWithoutTrailingNewlineInput()
         {
@@ -196,6 +208,7 @@ namespace MCPForUnityTests.Editor.Clients
             StringAssert.StartsWith(existing + "\n", result);
         }
 
+        /// <summary>Remove deletes only the managed block.</summary>
         [Test]
         public void Remove_DeletesOnlyManagedBlock()
         {
@@ -207,6 +220,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(userPatches, result, "only the managed block may be removed");
         }
 
+        /// <summary>Remove leaves text unchanged when no block exists.</summary>
         [Test]
         public void Remove_WithoutBlock_ReturnsTextUnchanged()
         {
@@ -214,6 +228,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(text, DshConfigHelper.RemoveManagedBlock(text));
         }
 
+        /// <summary>Extract returns null without markers and the rows when markers exist.</summary>
         [Test]
         public void Extract_ReturnsNullWithoutMarkers_AndRowsWithMarkers()
         {
@@ -227,14 +242,16 @@ namespace MCPForUnityTests.Editor.Clients
 
         // ---------------------------------------------------------------- configurator wiring
 
+        /// <summary>Config path points at the bundle patch inside the overridden DSH home.</summary>
         [Test]
         public void ConfigPath_UsesBundlePatchInsideOverrideHome()
         {
             var configurator = new DeepSeekHarnessConfigurator(_tempDir);
-            string expected = Path.Combine(_tempDir, "bundles", "unity-mcp", "cordis.patch.yml");
+            string expected = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp", "cordis.patch.yml");
             Assert.AreEqual(expected, configurator.GetConfigPath());
         }
 
+        /// <summary>ResolveDshHome precedence: explicit override, then DSH_HOME, then ~/.dsh.</summary>
         [Test]
         public void ResolveDshHome_PrefersOverride_ThenEnv_ThenDotDsh()
         {
@@ -257,6 +274,7 @@ namespace MCPForUnityTests.Editor.Clients
             }
         }
 
+        /// <summary>ResolveDshProfile precedence: explicit override, then DSH_PROFILE, then desktop.</summary>
         [Test]
         public void ResolveDshProfile_PrefersOverride_ThenEnv_ThenDesktop()
         {
@@ -277,6 +295,7 @@ namespace MCPForUnityTests.Editor.Clients
             }
         }
 
+        /// <summary>IsInstalled follows existence of the DSH home directory.</summary>
         [Test]
         public void IsInstalled_FollowsParentDirectory()
         {
@@ -285,6 +304,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.IsTrue(new DeepSeekHarnessConfigurator(_tempDir).IsInstalled);
         }
 
+        /// <summary>A missing bundle reports NotConfigured and performs no writes or CLI calls.</summary>
         [Test]
         public void CheckStatus_MissingBundle_NotConfigured_NoAutoWrite()
         {
@@ -300,10 +320,11 @@ namespace MCPForUnityTests.Editor.Clients
 
             Assert.AreEqual(McpStatus.NotConfigured, status);
             Assert.IsFalse(seamCalled, "CheckStatus must never invoke the dsh command seam");
-            string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+            string bundleDir = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp");
             Assert.IsFalse(Directory.Exists(bundleDir), "CheckStatus must never write bundle files");
         }
 
+        /// <summary>A bundle matching the current HTTP endpoint reports Configured.</summary>
         [Test]
         public void CheckStatus_HttpMatch_Configured()
         {
@@ -321,12 +342,13 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>A stale HTTP url reports IncorrectPath without rewriting anything.</summary>
         [Test]
         public void CheckStatus_HttpMismatch_ReturnsIncorrectPath_WithoutRewrite()
         {
             WithHttpTransport(true, () =>
             {
-                string bundlePatch = Path.Combine(_tempDir, "bundles", "unity-mcp", "cordis.patch.yml");
+                string bundlePatch = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp", "cordis.patch.yml");
                 WriteBundleFiles(_tempDir, BuildHttpBlock("http://127.0.0.1:1/mcp"));
                 WriteProfileBundleEntry(_tempDir, "desktop");
 
@@ -402,6 +424,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.IsFalse(McpConfigurationHelper.PackageSourcesEqual("C:\\dev\\Server", "C:\\dev\\Other"));
         }
 
+        /// <summary>Configure writes the bundle and invokes dsh plugin add through the seam.</summary>
         [Test]
         public void Configure_WritesBundleAndInvokesSeam()
         {
@@ -418,7 +441,7 @@ namespace MCPForUnityTests.Editor.Clients
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
 
-                string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+                string bundleDir = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp");
                 Assert.IsTrue(File.Exists(Path.Combine(bundleDir, "package.json")), "manifest must exist");
                 Assert.IsTrue(File.Exists(Path.Combine(bundleDir, "cordis.patch.yml")), "patch must exist");
 
@@ -431,6 +454,7 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>Configure removes a legacy managed block from the root home patch.</summary>
         [Test]
         public void Configure_MigrationRemovesLegacyRootPatchBlock()
         {
@@ -452,6 +476,7 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>Configure and Unregister leave user patch rows untouched.</summary>
         [Test]
         public void Configure_ThenUnregister_LeavesUserPatchesIntact()
         {
@@ -474,10 +499,46 @@ namespace MCPForUnityTests.Editor.Clients
 
                 Assert.AreEqual(McpStatus.NotConfigured, configurator.Status);
                 Assert.AreEqual(userRow, File.ReadAllText(rootPatch), "unregister must not touch user rows");
-                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "unity-mcp")), "bundle dir must be deleted");
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp")), "bundle dir must be deleted");
             });
         }
 
+        /// <summary>
+        /// Regression: unregistering one profile must not delete or dangle another
+        /// profile's bundle (dsh plugin add symlinks the bundle directory).
+        /// </summary>
+        [Test]
+        public void Unregister_OnlyRemovesTargetProfileBundle()
+        {
+            WithHttpTransport(true, () =>
+            {
+                DeepSeekHarnessConfigurator.DshCommandRunner = _ => (0, "ok");
+
+                WriteProfilePackage(_tempDir, "desktop");
+                WriteProfilePackage(_tempDir, "web");
+
+                var desktop = new DeepSeekHarnessConfigurator(_tempDir, "desktop");
+                desktop.Configure();
+                var web = new DeepSeekHarnessConfigurator(_tempDir, "web");
+                web.Configure();
+
+                // Simulate the registration effect of the real `dsh plugin add`, which the
+                // stubbed seam does not perform.
+                WriteProfileBundleEntry(_tempDir, "desktop");
+                WriteProfileBundleEntry(_tempDir, "web");
+
+                desktop.Unregister();
+
+                Assert.IsFalse(Directory.Exists(Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp")),
+                    "target profile bundle must be deleted");
+                Assert.IsTrue(Directory.Exists(Path.Combine(_tempDir, "bundles", "web", "unity-mcp")),
+                    "other profile bundle must survive");
+                Assert.AreEqual(McpStatus.Configured, web.CheckStatus(attemptAutoRewrite: false),
+                    "other profile must stay configured");
+            });
+        }
+
+        /// <summary>Unregister calls dsh plugin remove and deletes the bundle directory.</summary>
         [Test]
         public void Unregister_CallsRemoveAndDeletesBundle()
         {
@@ -493,7 +554,7 @@ namespace MCPForUnityTests.Editor.Clients
                 WriteProfilePackage(_tempDir, "desktop");
                 var configurator = new DeepSeekHarnessConfigurator(_tempDir);
                 configurator.Configure();
-                string bundleDir = Path.Combine(_tempDir, "bundles", "unity-mcp");
+                string bundleDir = Path.Combine(_tempDir, "bundles", "desktop", "unity-mcp");
                 Assert.IsTrue(Directory.Exists(bundleDir));
 
                 configurator.Unregister();
@@ -504,6 +565,7 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>Configure fails fast on a missing profile without creating it or calling the CLI.</summary>
         [Test]
         public void Configure_MissingProfile_ThrowsWithoutCreatingProfile()
         {
@@ -526,6 +588,7 @@ namespace MCPForUnityTests.Editor.Clients
             });
         }
 
+        /// <summary>The resolver finds dsh.cmd on PATH and reports it as a cmd shim.</summary>
         [Test]
         public void TryResolveDshExecutable_FindsCmdShimOnPath()
         {
@@ -554,6 +617,7 @@ namespace MCPForUnityTests.Editor.Clients
             }
         }
 
+        /// <summary>RunDshCommand executes a .cmd shim through cmd.exe and forwards its arguments.</summary>
         [Test]
         public void RunDshCommand_RoutesCmdShimThroughCmdExe()
         {
@@ -582,6 +646,7 @@ namespace MCPForUnityTests.Editor.Clients
 
         // ---------------------------------------------------------------- helpers
 
+        /// <summary>Builds an HTTP managed block for the given url.</summary>
         private static string BuildHttpBlock(string url)
         {
             return DshConfigHelper.BuildUnityMcpBlock(
@@ -590,6 +655,7 @@ namespace MCPForUnityTests.Editor.Clients
                 apiKeyHeader: null, apiKey: null, windowsSystemRoot: null);
         }
 
+        /// <summary>Builds a stdio managed block with the given --from package spec.</summary>
         private static string BuildStdioBlock(string fromSpec)
         {
             string[] uvxArgs = { "--from", fromSpec, "mcp-for-unity", "--transport", "stdio" };
@@ -599,9 +665,10 @@ namespace MCPForUnityTests.Editor.Clients
                 apiKeyHeader: null, apiKey: null, windowsSystemRoot: "C:\\WINDOWS");
         }
 
+        /// <summary>Writes the bundle files for the default test profile.</summary>
         private static void WriteBundleFiles(string dshHome, string patchBlock)
         {
-            DshBundleWriter.WriteBundle(dshHome, patchBlock);
+            DshBundleWriter.WriteBundle(dshHome, "desktop", patchBlock);
         }
 
         /// <summary>Creates a bare profile directory with a package.json (no bundle entry).</summary>
@@ -612,6 +679,7 @@ namespace MCPForUnityTests.Editor.Clients
             File.WriteAllText(Path.Combine(profileDir, "package.json"), "{\n  \"name\": \"test-profile\"\n}\n");
         }
 
+        /// <summary>Creates a profile package.json that lists the bundle as installed.</summary>
         private static void WriteProfileBundleEntry(string dshHome, string profile)
         {
             string profileDir = Path.Combine(dshHome, "profiles", profile);
@@ -620,6 +688,7 @@ namespace MCPForUnityTests.Editor.Clients
             File.WriteAllText(Path.Combine(profileDir, "package.json"), packageJson);
         }
 
+        /// <summary>Runs a body under the given transport preference, restoring the previous one afterwards.</summary>
         private static void WithHttpTransport(bool useHttp, Action body)
         {
             bool original = EditorConfigurationCache.Instance.UseHttpTransport;
@@ -634,6 +703,7 @@ namespace MCPForUnityTests.Editor.Clients
             }
         }
 
+        /// <summary>Counts non-overlapping occurrences of a substring.</summary>
         private static int CountOccurrences(string text, string needle)
         {
             int count = 0;
