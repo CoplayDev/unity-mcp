@@ -82,6 +82,35 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(response.Value<bool>("success"), response.ToString());
         }
 
+        [TestCase(true, 0)]
+        [TestCase(true, 2)]
+        [TestCase(false, 0)]
+        [TestCase(false, 2)]
+        public void PartialFailureResponse_ReportsCompletedEntriesAndFailedOverride(bool applying, int changed)
+        {
+            var writtenPaths = applying && changed > 0 ? new[] { PrefabPath, PrefabPath } : Array.Empty<string>();
+
+            var response = ToJObject(ManagePrefabInstanceOverrides.BuildPartialFailureResponse(
+                applying, changed, 3, "property", "Child", 7, writtenPaths, "Override write failed."));
+
+            Assert.IsFalse(response.Value<bool>("success"));
+            var data = response["data"];
+            Assert.AreEqual(changed, data.Value<int>("changed"));
+            Assert.AreEqual(3, data.Value<int>("total"));
+            Assert.AreEqual(changed, data.Value<int>("failedIndex"));
+            Assert.AreEqual("property", data.Value<string>("overrideType"));
+            Assert.AreEqual("Child", data.Value<string>("childPath"));
+            Assert.AreEqual(7, data.Value<int>("overrideIndex"));
+            CollectionAssert.AreEqual(writtenPaths.Distinct().ToArray(), data["prefabPaths"].Values<string>().ToArray());
+            string error = response.Value<string>("error");
+            StringAssert.Contains($"{changed} of 3 overrides were {(applying ? "applied" : "reverted")}", error);
+            StringAssert.Contains("overrideType 'property', childPath 'Child', overrideIndex 7", error);
+            StringAssert.Contains("Override write failed.", error);
+            StringAssert.Contains(applying
+                ? "Changes already written to prefab assets were NOT rolled back."
+                : "Overrides already reverted on the instance were NOT rolled back.", error);
+        }
+
         [Test]
         public void ListOverrides_FiltersChildComponentAndPropertyPrefix()
         {

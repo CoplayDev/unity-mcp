@@ -128,23 +128,47 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             var scene = selected.scene;
-            foreach (var entry in candidates)
+            int changed = 0;
+            try
             {
-                if (property != null)
+                for (; changed < candidates.Count; changed++)
                 {
-                    using (var serialized = new SerializedObject(entry.Instance))
+                    var entry = candidates[changed];
+                    if (property != null)
                     {
-                        var serializedProperty = serialized.FindProperty(property);
-                        if (applying) PrefabUtility.ApplyPropertyOverride(serializedProperty, destinations[entry], InteractionMode.AutomatedAction);
-                        else PrefabUtility.RevertPropertyOverride(serializedProperty, InteractionMode.AutomatedAction);
+                        using (var serialized = new SerializedObject(entry.Instance))
+                        {
+                            var serializedProperty = serialized.FindProperty(property);
+                            if (applying) PrefabUtility.ApplyPropertyOverride(serializedProperty, destinations[entry], InteractionMode.AutomatedAction);
+                            else PrefabUtility.RevertPropertyOverride(serializedProperty, InteractionMode.AutomatedAction);
+                        }
                     }
+                    else if (applying) entry.Native.Apply(destinations[entry], InteractionMode.AutomatedAction);
+                    else entry.Native.Revert(InteractionMode.AutomatedAction);
                 }
-                else if (applying) entry.Native.Apply(destinations[entry], InteractionMode.AutomatedAction);
-                else entry.Native.Revert(InteractionMode.AutomatedAction);
+            }
+            catch (Exception e)
+            {
+                // Return a structured error, but keep the stack trace the generic handler used to log.
+                McpLog.Error($"[ManagePrefabInstanceOverrides] Override {changed + 1} of {candidates.Count} failed: {e}");
+                if (changed > 0) EditorSceneManager.MarkSceneDirty(scene);
+                var failed = candidates[changed];
+                return BuildPartialFailureResponse(applying, changed, candidates.Count, failed.Kind, failed.Path, failed.Index,
+                    applying ? candidates.Take(changed).Select(entry => destinations[entry]) : Array.Empty<string>(), e.Message);
             }
             EditorSceneManager.MarkSceneDirty(scene);
             return new SuccessResponse(applying ? "Selected overrides applied to prefab assets." : "Selected overrides reverted.",
                 new { changed = candidates.Count, childPath = scope, overrideType = kind, prefabPaths = destinations.Values.Distinct().ToArray() });
+        }
+
+        internal static ErrorResponse BuildPartialFailureResponse(bool applying, int changed, int total,
+            string kind, string childPath, int overrideIndex, IEnumerable<string> prefabPaths, string error)
+        {
+            return new ErrorResponse($"{changed} of {total} overrides were {(applying ? "applied" : "reverted")} before failure. "
+                + $"Failed entry: overrideType '{kind}', childPath '{childPath}', overrideIndex {overrideIndex}. "
+                + $"{error} {(applying ? "Changes already written to prefab assets" : "Overrides already reverted on the instance")} were NOT rolled back.",
+                new { changed, total, failedIndex = changed, overrideType = kind, childPath, overrideIndex,
+                    prefabPaths = prefabPaths.Distinct().ToArray() });
         }
 
         private static List<Entry> Collect(GameObject root, bool includeDefaults)
