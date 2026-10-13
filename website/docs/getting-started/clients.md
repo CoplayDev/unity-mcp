@@ -58,6 +58,7 @@ A few clients need an MCP toggle flipped on after the configurator writes their 
 - **OpenClaw** → enable the `openclaw-mcp-bridge` plugin
 - **Pi** → install an MCP extension first (`pi install npm:pi-mcp-adapter`) and restart Pi; Pi has no
   built-in MCP client, so the config file alone does nothing
+- **WorkBuddy** → Plugins → MCP Servers → enable the `unityMCP` server, then reconnect or restart WorkBuddy if needed
 
 Everything else just connects on next launch.
 
