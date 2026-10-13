@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Threading;
 using MCPForUnity.Editor.Helpers;
 using NUnit.Framework;
@@ -134,6 +135,115 @@ namespace MCPForUnityTests.Editor.Windows
             yield return WaitFor(() => Volatile.Read(ref completed) == 1);
             for (int i = 0; i < 3; i++) yield return null;
             Assert.AreEqual(0, applied);
+        }
+
+        [UnityTest]
+        public IEnumerator FaultedWork_ReportsOriginalExceptionExactlyOnce()
+        {
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            var expected = new InvalidOperationException("Status check failed.");
+            Exception reported = null;
+            int failures = 0, applied = 0, failureThread = 0;
+            int mainThread = Thread.CurrentThread.ManagedThreadId;
+            refresh.Request("fault", () => { throw expected; }, (value, _) => applied++, () => true,
+                onFailure: ex => { reported = ex; failures++; failureThread = Thread.CurrentThread.ManagedThreadId; });
+            yield return WaitFor(() => failures == 1);
+            for (int i = 0; i < 3; i++) yield return null;
+            Assert.AreSame(expected, reported);
+            Assert.AreEqual(1, failures);
+            Assert.AreEqual(0, applied);
+            Assert.AreEqual(mainThread, failureThread);
+        }
+
+        [UnityTest]
+        public IEnumerator SupersededFault_DoesNotNotifyEitherFailureHandler()
+        {
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            int started = 0, failures = 0, applied = 0;
+            refresh.Request("old", () =>
+            {
+                Interlocked.Increment(ref started);
+                release.Wait(5000);
+                throw new InvalidOperationException("Superseded status check.");
+            }, (value, _) => applied = value, () => true, onFailure: _ => failures++);
+            yield return WaitFor(() => Volatile.Read(ref started) == 1);
+            refresh.Request("new", () => 2, (value, _) => applied = value, () => true,
+                onFailure: _ => failures++);
+            release.Set();
+            yield return WaitFor(() => applied == 2);
+            Assert.AreEqual(0, failures);
+        }
+
+        [UnityTest]
+        public IEnumerator SettingsChangedWithoutAnotherRequest_DoNotReportStaleFault()
+        {
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            int started = 0, failures = 0, currentChecks = 0;
+            bool sameSettings = true;
+            refresh.Request("old", () =>
+            {
+                Interlocked.Increment(ref started);
+                release.Wait(5000);
+                throw new InvalidOperationException("Stale status check.");
+            }, (value, _) => Assert.Fail("A fault must not apply a result."),
+                () => { currentChecks++; return sameSettings; }, onFailure: _ => failures++);
+            yield return WaitFor(() => Volatile.Read(ref started) == 1);
+            sameSettings = false;
+            release.Set();
+            yield return WaitFor(() => currentChecks == 1);
+            Assert.AreEqual(0, failures);
+        }
+
+        [UnityTest]
+        public IEnumerator InvalidatedFault_DoesNotNotifyFailureHandler()
+        {
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            int started = 0, failures = 0, applied = 0;
+            refresh.Request("same", () =>
+            {
+                Interlocked.Increment(ref started);
+                release.Wait(5000);
+                throw new InvalidOperationException("Invalidated status check.");
+            }, (value, _) => applied = value, () => true, onFailure: _ => failures++);
+            yield return WaitFor(() => Volatile.Read(ref started) == 1);
+            refresh.Invalidate();
+            refresh.Request("same", () => 2, (value, _) => applied = value, () => true,
+                onFailure: _ => failures++);
+            release.Set();
+            yield return WaitFor(() => applied == 2);
+            Assert.AreEqual(0, failures);
+        }
+
+        [UnityTest]
+        public IEnumerator SuccessfulWorkAndCache_DoNotNotifyFailureHandler()
+        {
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            int failures = 0, applied = 0;
+            refresh.Request("success", () => 7, (value, _) => applied = value, () => true,
+                onFailure: _ => failures++);
+            yield return WaitFor(() => applied == 7);
+            refresh.Request("success", () => 8, (value, _) => applied = value, () => true,
+                onFailure: _ => failures++);
+            Assert.AreEqual(7, applied);
+            Assert.AreEqual(0, failures);
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowingFailureHandler_DoesNotPreventNextRequestCompleting()
+        {
+            // The guard must swallow the handler's exception and log this warning, not let it escape the poll loop.
+            LogAssert.Expect(LogType.Warning, new Regex("Window refresh failure handler failed"));
+            var refresh = new EditorAsyncRefresh<int>(window.rootVisualElement, 30);
+            int failures = 0, applied = 0;
+            refresh.Request("fault", () => { throw new InvalidOperationException("Status check failed."); },
+                (value, _) => applied = value, () => true, onFailure: _ =>
+                {
+                    failures++;
+                    refresh.Request("next", () => 7, (value, fresh) => applied = value, () => true);
+                    throw new InvalidOperationException("Failure handler failed.");
+                });
+            yield return WaitFor(() => applied == 7);
+            Assert.AreEqual(1, failures);
         }
 
         internal static IEnumerator WaitFor(Func<bool> condition)

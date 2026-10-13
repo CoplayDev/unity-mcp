@@ -12,6 +12,7 @@ namespace MCPForUnity.Editor.Helpers
         private Task<T> task;
         private Func<T> pendingWork;
         private Action<T, bool> apply;
+        private Action<Exception> onFailure;
         private Func<bool> isCurrent;
         private string requestedKey, runningKey, cachedKey;
         private int generation, runningGeneration;
@@ -39,13 +40,14 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         internal void Request(string key, Func<T> work, Action<T, bool> onResult,
-            Func<bool> stillCurrent, bool force = false)
+            Func<bool> stillCurrent, bool force = false, Action<Exception> onFailure = null)
         {
             if (!attached) return;
             if (requestedKey != key || force) Invalidate();
             requestedKey = key;
             apply = onResult;
             isCurrent = stillCurrent;
+            this.onFailure = onFailure;
             if (!force && cachedKey == key && EditorApplication.timeSinceStartup - completedAt < ttlSeconds)
             {
                 if (stillCurrent()) onResult(cached, false);
@@ -91,10 +93,18 @@ namespace MCPForUnity.Editor.Helpers
                     apply(result, true);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Avoid including private file contents, paths or credentials in refresh logs.
                 if (current) McpLog.Warn("Window refresh failed; retry the refresh after checking your settings.");
+                if (current && completed.IsFaulted && onFailure != null)
+                {
+                    try { onFailure(ex); }
+                    catch (Exception)
+                    {
+                        McpLog.Warn("Window refresh failure handler failed; retry the refresh after checking your settings.");
+                    }
+                }
             }
             if (attached && pendingWork != null) Start();
         }

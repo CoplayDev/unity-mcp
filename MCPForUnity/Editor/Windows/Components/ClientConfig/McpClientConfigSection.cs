@@ -580,7 +580,22 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             }, () => selectedClientIndex >= 0 && selectedClientIndex < configurators.Count
                 && ReferenceEquals(configurators[selectedClientIndex], client)
                 && !statusRefreshInFlight.Contains(client) && WindowRefreshContext.Capture().Key == context.Key,
-                forceImmediate);
+                forceImmediate, onFailure: ex =>
+                {
+                    baseClient.Client.SetStatus(McpStatus.Error, $"Status check failed: {ex.Message}");
+                    baseClient.Client.configuredTransport = ConfiguredTransport.Unknown;
+                    // These fields still describe whichever client was shown last. Clear them and leave
+                    // Copy JSON disabled so a failed check never copies another client's configuration.
+                    configPathField.SetValueWithoutNotify(string.Empty);
+                    configJsonField.SetValueWithoutNotify(string.Empty);
+                    installationStepsLabel.text = "Configuration details are unavailable because the status check failed.";
+                    if (displayedContext == null)
+                    {
+                        claudeCliPath.SetValueWithoutNotify("Unavailable");
+                        clientProjectDirField.SetValueWithoutNotify("Unavailable");
+                    }
+                    ApplyStatusToUi(client);
+                });
         }
 
         private void ApplyStatusToUi(IMcpClientConfigurator client, bool showChecking = false, string customMessage = null)
