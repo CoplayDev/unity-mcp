@@ -635,6 +635,11 @@ namespace MCPForUnity.Editor.Tools
             int pageNumber = @params["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
             bool generatePreview = @params["generatePreview"]?.ToObject<bool>() ?? false;
 
+            if (string.IsNullOrWhiteSpace(pathScope))
+                return new ErrorResponse(
+                    "Search path is required. Use an existing folder such as 'Assets' for path, and put asset names or queries in searchPattern (search_pattern in MCP)."
+                );
+
             if (pageSize <= 0 || pageNumber <= 0)
                 return new ErrorResponse("pageSize and pageNumber must be greater than zero.");
             long startIndex = (long)(pageNumber - 1) * pageSize;

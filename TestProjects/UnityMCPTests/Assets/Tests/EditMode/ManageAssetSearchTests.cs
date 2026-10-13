@@ -104,6 +104,23 @@ namespace MCPForUnityTests.Editor
             Assert.AreEqual(0, _assetPaths.Count(AssetDatabase.IsMainAssetAtPathLoaded));
         }
 
+        [TestCase("")]
+        [TestCase(" \t\r\n")]
+        [TestCase(null)]
+        public void Search_EmptyOrMissingScopeReturnsErrorWithoutLoadingAssets(string path)
+        {
+            var parameters = SearchParams(2, 1);
+            if (path == null)
+                parameters.Remove("path");
+            else
+                parameters["path"] = path;
+            var response = ManageAsset.HandleCommand(parameters);
+            Assert.IsInstanceOf<ErrorResponse>(response);
+            StringAssert.Contains("existing folder such as 'Assets'", ((ErrorResponse)response).Error);
+            StringAssert.Contains("searchPattern (search_pattern in MCP)", ((ErrorResponse)response).Error);
+            Assert.AreEqual(0, _assetPaths.Count(AssetDatabase.IsMainAssetAtPathLoaded));
+        }
+
         private JObject Search(int pageSize, int pageNumber, string filterDateAfter = null)
         {
             var parameters = SearchParams(pageSize, pageNumber);
