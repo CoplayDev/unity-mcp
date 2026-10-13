@@ -164,6 +164,17 @@ namespace MCPForUnity.Editor.Services
         private bool _nativeRunStarted;
         private TestRunResult _pendingResult;
         private Exception _pendingError;
+        // A failed native activity query (for example around a domain reload) leaves the run's
+        // state unknown. Retry it for this long, then end in an explicit job failure.
+        private const double NativeQueryRecoveryWindowSeconds = 30.0;
+        private const double NativeQueryFailureLogIntervalSeconds = 5.0;
+        internal const string NativeStateUnconfirmedError =
+            "Unity Test Runner state could not be confirmed, so this job keeps the test run lock to avoid overlapping runs. " +
+            "If Unity is no longer running tests, reload scripts from the Unity Editor or restart it to re-check. " +
+            "run_tests(clear_stuck=true) drops this job from the queue but may not release the test run lock.";
+        internal const string RunErrorMarker = " Run error: ";
+        private double? _nativeQueryFailedSince;
+        private double _nativeQueryFailureLoggedAt;
         private static readonly MethodInfo CancelRunMethod = typeof(TestRunnerApi).GetMethod("CancelTestRun", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
         private static readonly MethodInfo IsRunningMethod =
             typeof(TestRunnerApi).GetMethod("IsRunActive", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null) ??
@@ -191,11 +202,12 @@ namespace MCPForUnity.Editor.Services
             }
 
             _trackedJobId = jobId;
+            _nativeQueryFailedSince = null;
             _unityRunId = unityRunId;
             _nativeRunStarted = nativeRunStarted;
             _initializationTimedOut = initializationTimedOut;
             _pendingResult = pendingResult;
-            _pendingError = pendingError == null ? null : new InvalidOperationException(pendingError);
+            _pendingError = RestorePendingError(pendingError);
             if (Enum.TryParse<TestMode>(mode, out var testMode))
             {
                 TestRunStatus.MarkStarted(testMode);
@@ -248,13 +260,81 @@ namespace MCPForUnity.Editor.Services
             return runner != null && (bool)IsRunningJobMethod.Invoke(runner, null);
         }
 
+        // A query exception means the native state is unknown. Report it as active so a failed
+        // query can never release ownership; the idle monitor bounds the retries.
+        private bool IsNativeRunActiveOrUnknown()
+        {
+            try
+            {
+                bool active = IsNativeRunActive();
+                _nativeQueryFailedSince = null;
+                return active;
+            }
+            catch (Exception ex)
+            {
+                double now = EditorApplication.timeSinceStartup;
+                string reason = ex.GetBaseException().Message;
+                if (!_nativeQueryFailedSince.HasValue)
+                {
+                    _nativeQueryFailedSince = now;
+                    _nativeQueryFailureLoggedAt = now;
+                    McpLog.Warn($"[TestRunnerService] Failed to query native test cleanup; retrying for up to {NativeQueryRecoveryWindowSeconds}s: {reason}");
+                }
+                else if (now - _nativeQueryFailureLoggedAt >= NativeQueryFailureLogIntervalSeconds)
+                {
+                    _nativeQueryFailureLoggedAt = now;
+                    McpLog.Warn($"[TestRunnerService] Native test cleanup query still failing after {now - _nativeQueryFailedSince.Value:0}s: {reason}");
+                }
+                return true;
+            }
+        }
+
+        // Pure predicate (unit-testable): keep retrying a failing native query until it has failed
+        // continuously for the whole window. No recorded failure means keep monitoring.
+        internal static bool ShouldKeepRetryingNativeQuery(double now, double? firstFailureAt, double windowSeconds)
+            => !firstFailureAt.HasValue || now - firstFailureAt.Value < windowSeconds;
+
+        // The persisted job error becomes the pending error again after a domain reload. The
+        // "unconfirmed" text is this service's own annotation, not a run error, so drop it and keep only
+        // the original run error. A later successful check then reports the run's real outcome.
+        internal static Exception RestorePendingError(string persisted)
+        {
+            if (persisted == null) return null;
+            if (persisted.StartsWith(NativeStateUnconfirmedError, StringComparison.Ordinal))
+            {
+                string rest = persisted.Substring(NativeStateUnconfirmedError.Length);
+                persisted = rest.StartsWith(RunErrorMarker, StringComparison.Ordinal) ? rest.Substring(RunErrorMarker.Length) : null;
+                if (string.IsNullOrEmpty(persisted)) return null;
+            }
+            return new InvalidOperationException(persisted);
+        }
+
+        // The native state stayed unknown for the whole window. Stop polling but keep ownership,
+        // and fail the job with a message that tells the client how to clear it.
+        private void StopMonitoringUnconfirmedRun()
+        {
+            EditorApplication.update -= CompleteRunWhenIdle;
+            string message = NativeStateUnconfirmedError;
+            string reason = _pendingError?.Message;
+            if (!string.IsNullOrEmpty(reason)) message += RunErrorMarker + reason;
+            McpLog.Warn($"[TestRunnerService] Stopped querying native test cleanup after {NativeQueryRecoveryWindowSeconds}s of failures. {message}");
+            if (IsTrackingCurrentJob)
+            {
+                TestJobManager.FinalizeCurrentJobFromRunError(message, keepOwnership: true);
+            }
+        }
+
         private void CompleteRunWhenIdle()
         {
             try
             {
-                if (!IsNativeRunActive())
+                if (!IsNativeRunActiveOrUnknown())
                 {
                     CompleteRun(_pendingResult, _pendingError);
+                }
+                else if (!ShouldKeepRetryingNativeQuery(EditorApplication.timeSinceStartup, _nativeQueryFailedSince, NativeQueryRecoveryWindowSeconds))
+                {
+                    StopMonitoringUnconfirmedRun();
                 }
             }
             catch (Exception ex)
@@ -337,6 +417,7 @@ namespace MCPForUnity.Editor.Services
 
                 _leafResults.Clear();
                 _trackedJobId = TestJobManager.CurrentJobId;
+                _nativeQueryFailedSince = null;
                 _runCompletionSource = new TaskCompletionSource<TestRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 // Mark running immediately so readiness snapshots reflect the busy state even before callbacks fire.
                 TestRunStatus.MarkStarted(mode);
@@ -400,6 +481,7 @@ namespace MCPForUnity.Editor.Services
         public void Dispose()
         {
             EditorApplication.update -= CompleteRunWhenIdle;
+            _nativeQueryFailedSince = null;
             try
             {
                 _testRunnerApi?.UnregisterCallbacks(this);
@@ -470,25 +552,18 @@ namespace MCPForUnity.Editor.Services
             {
                 _pendingResult = payload;
                 _pendingError = error;
-                try
+                // A failed query is handled like an active run: the monitor retries it.
+                if (IsNativeRunActiveOrUnknown())
                 {
-                    if (IsNativeRunActive())
+                    // RunFinished/OnError precede native scene and preference teardown.
+                    // Persist the result, but retain ownership until all cleanup is done.
+                    if (IsTrackingCurrentJob)
                     {
-                        // RunFinished/OnError precede native scene and preference teardown.
-                        // Persist the result, but retain ownership until all cleanup is done.
-                        if (IsTrackingCurrentJob)
-                        {
-                            if (error == null) TestJobManager.FinalizeCurrentJobFromRunFinished(payload, keepOwnership: true);
-                            else TestJobManager.FinalizeCurrentJobFromRunError(error.Message, keepOwnership: true);
-                        }
-                        EditorApplication.update -= CompleteRunWhenIdle;
-                        EditorApplication.update += CompleteRunWhenIdle;
-                        return;
+                        if (error == null) TestJobManager.FinalizeCurrentJobFromRunFinished(payload, keepOwnership: true);
+                        else TestJobManager.FinalizeCurrentJobFromRunError(error.Message, keepOwnership: true);
                     }
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"[TestRunnerService] Failed to query native test cleanup: {ex.GetBaseException().Message}");
+                    EditorApplication.update -= CompleteRunWhenIdle;
+                    EditorApplication.update += CompleteRunWhenIdle;
                     return;
                 }
             }

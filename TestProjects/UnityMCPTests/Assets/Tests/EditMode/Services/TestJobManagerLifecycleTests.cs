@@ -492,6 +492,56 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
+        public void UnconfirmedNativeCleanup_FailsJobButKeepsOwnershipUntilStateIsKnown()
+        {
+            var job = AddJob();
+            TestJobManager.OnRunScheduled(job.JobId, "synthetic-unconfirmed-run");
+            var service = RestoreCallbacks();
+            // The native activity query cannot be made to throw here, so end the recovery window directly.
+            typeof(TestRunnerService).GetMethod("StopMonitoringUnconfirmedRun", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(service, null);
+
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            StringAssert.Contains("run_tests(clear_stuck=true)", job.Error);
+            Assert.IsTrue(job.NativeCleanupPending, "A domain reload must resume the cleanup check.");
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId, "An unconfirmed run must keep ownership.");
+            Assert.IsTrue(TestRunStatus.IsRunning);
+
+            // A later callback whose activity query works (the synthetic GUID is idle) releases ownership.
+            service.RunFinished(ResultStub.Suite(new ResultStub("Fixture.Pass", "Passed")));
+            Assert.IsFalse(TestJobManager.HasRunningJob);
+            Assert.IsFalse(TestRunStatus.IsRunning);
+            Assert.AreEqual(TestJobStatus.Succeeded, job.Status);
+            Assert.IsFalse(job.NativeCleanupPending);
+        }
+
+        [Test]
+        public void InitializationTimeout_UnconfirmedCleanupKeepsItsMessage()
+        {
+            var job = AddJob();
+            job.InitializationTimedOut = true;
+            string message = TestRunnerService.NativeStateUnconfirmedError + TestRunnerService.RunErrorMarker + TestJobManager.InitializationTimeoutError;
+
+            TestJobManager.FinalizeCurrentJobFromRunError(message, keepOwnership: true);
+
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            Assert.AreEqual(message, job.Error);
+            Assert.IsTrue(job.InitializationTimedOut, "A domain reload must still resume the timeout cleanup.");
+            Assert.IsTrue(job.NativeCleanupPending);
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId);
+        }
+
+        [Test]
+        public void InitializationTimeout_OtherRunErrorsAreStillReportedAsTheTimeout()
+        {
+            var job = AddJob();
+            job.InitializationTimedOut = true;
+
+            TestJobManager.FinalizeCurrentJobFromRunError("Unity test run failed.", keepOwnership: true);
+
+            Assert.AreEqual(TestJobManager.InitializationTimeoutError, job.Error);
+        }
+
+        [Test]
         public void ResultTree_ExcludesEmptySuitesFromIndividualResults()
         {
             var emptySuite = new ResultStub("Fixture.EmptySuite", "Failed") { IsSuite = true };

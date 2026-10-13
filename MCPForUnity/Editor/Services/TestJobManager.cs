@@ -474,7 +474,11 @@ namespace MCPForUnity.Editor.Services
                     return;
                 }
                 job.Status = TestJobStatus.Failed;
-                job.Error = job.InitializationTimedOut ? InitializationTimeoutError : message;
+                // A message that already carries the timeout text (for example one that also says how to
+                // clear an unconfirmed native cleanup) is kept; any other error is reported as the timeout.
+                job.Error = job.InitializationTimedOut
+                    && (message == null || message.IndexOf(InitializationTimeoutError, StringComparison.Ordinal) < 0)
+                    ? InitializationTimeoutError : message;
                 job.InitializationTimedOut = keepOwnership && job.InitializationTimedOut;
                 job.NativeCleanupPending = keepOwnership;
                 if (!keepOwnership) job.UnityRunId = null;
