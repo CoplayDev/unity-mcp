@@ -19,8 +19,50 @@ namespace MCPForUnityTests.Editor.Windows
         [TearDown]
         public void Cleanup()
         {
+            MCPForUnityEditorWindow.EndPackageOperation();
             if (selection != null) SessionState.EraseString(selection.SessionKey);
             if (window != null) window.Close();
+        }
+
+        [Test]
+        public void PackageOperation_BeginBlocksAnotherBeginUntilEnd()
+        {
+            Assert.IsFalse(MCPForUnityEditorWindow.IsPackageOperationInFlight);
+            Assert.IsTrue(MCPForUnityEditorWindow.TryBeginPackageOperation());
+            Assert.IsTrue(MCPForUnityEditorWindow.IsPackageOperationInFlight);
+            Assert.IsFalse(MCPForUnityEditorWindow.TryBeginPackageOperation());
+            Assert.IsTrue(MCPForUnityEditorWindow.IsPackageOperationInFlight);
+            MCPForUnityEditorWindow.EndPackageOperation();
+            Assert.IsFalse(MCPForUnityEditorWindow.IsPackageOperationInFlight);
+            Assert.IsTrue(MCPForUnityEditorWindow.TryBeginPackageOperation());
+        }
+
+        [Test]
+        public void PackageOperation_EndIsIdempotent()
+        {
+            Assert.IsTrue(MCPForUnityEditorWindow.TryBeginPackageOperation());
+            MCPForUnityEditorWindow.EndPackageOperation();
+            MCPForUnityEditorWindow.EndPackageOperation();
+            Assert.IsFalse(MCPForUnityEditorWindow.IsPackageOperationInFlight);
+            Assert.IsTrue(MCPForUnityEditorWindow.TryBeginPackageOperation());
+        }
+
+        [Test]
+        public void DependenciesBuiltDuringPackageOperation_DisableEveryAction()
+        {
+            var build = typeof(MCPForUnityEditorWindow).GetMethod("BuildDependenciesSection", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsTrue(MCPForUnityEditorWindow.TryBeginPackageOperation());
+            var busy = new VisualElement();
+            build.Invoke(null, new object[] { busy });
+            var busyButtons = busy.Query<Button>().ToList();
+            Assert.GreaterOrEqual(busyButtons.Count, 2);
+            foreach (var button in busyButtons)
+                Assert.IsFalse(button.enabledInHierarchy, button.text + " must be disabled during a package operation.");
+
+            MCPForUnityEditorWindow.EndPackageOperation();
+            var idle = new VisualElement();
+            build.Invoke(null, new object[] { idle });
+            Assert.IsTrue(idle.Q<VisualElement>(className: "section-content").enabledSelf);
         }
 
         [Test]
@@ -142,6 +184,8 @@ namespace MCPForUnityTests.Editor.Windows
                 Assert.IsTrue(selection.TryGetRequest(out installedRequest, out _));
                 complete = done;
             });
+            var otherAction = new Button(() => Assert.Fail("Other dependency actions must stay disabled."));
+            row.parent.Add(otherAction);
             var field = row.Q<TextField>();
             var button = row.Q<Button>(selection.PackageId + "-install");
             var message = row.Q<Label>(selection.PackageId + "-version-message");
@@ -160,7 +204,9 @@ namespace MCPForUnityTests.Editor.Windows
             Assert.AreEqual(installedRequest, bulk[0]);
             Assert.AreEqual("2.4.0", SessionState.GetString(selection.SessionKey, ""));
             Assert.IsFalse(field.enabledInHierarchy, "Version must be stable while its install is pending.");
+            Assert.IsFalse(otherAction.enabledInHierarchy);
             complete();
+            Assert.IsTrue(otherAction.enabledInHierarchy);
             Assert.IsTrue(field.enabledInHierarchy);
             Assert.IsTrue(button.enabledSelf);
         }

@@ -51,6 +51,31 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement assetGenPanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
+        internal static bool IsPackageOperationInFlight { get; private set; }
+
+        internal static bool TryBeginPackageOperation()
+        {
+            if (IsPackageOperationInFlight) return false;
+            IsPackageOperationInFlight = true;
+            UpdatePackageOperationControls();
+            return true;
+        }
+
+        internal static void EndPackageOperation()
+        {
+            IsPackageOperationInFlight = false;
+            UpdatePackageOperationControls();
+        }
+
+        private static void UpdatePackageOperationControls()
+        {
+            foreach (var window in OpenWindows)
+            {
+                if (window != null)
+                    window.depsPanel?.Q<VisualElement>(className: "section-content")?.SetEnabled(!IsPackageOperationInFlight);
+            }
+        }
+
         private bool guiCreated = false;
         private bool toolsLoaded = false;
         private bool resourcesLoaded = false;
@@ -858,18 +883,20 @@ namespace MCPForUnity.Editor.Windows
                     "Install All", "Cancel")) return;
                 installAllButton.SetEnabled(false);
                 installAllButton.text = "Installing...";
-                if (!RoslynInstaller.IsInstalled()) RoslynInstaller.Install(interactive: false);
                 content.SetEnabled(false);
                 try
                 {
+                    if (!RoslynInstaller.IsInstalled()) RoslynInstaller.Install(interactive: false);
                     BatchUpmAdd(requests, () => {
-                        content.SetEnabled(true);
+                        content.SetEnabled(!IsPackageOperationInFlight);
+                        installAllButton.SetEnabled(true);
+                        installAllButton.text = "Install All";
                         refreshDependencies();
                     });
                 }
                 catch (Exception exception)
                 {
-                    content.SetEnabled(true);
+                    content.SetEnabled(!IsPackageOperationInFlight);
                     installAllButton.SetEnabled(true);
                     installAllButton.text = "Install All";
                     Debug.LogError($"[MCP] Install failed: {exception.Message}");
@@ -888,12 +915,23 @@ namespace MCPForUnity.Editor.Windows
                     "Uninstall All", "Cancel")) return;
                 uninstallAllButton.SetEnabled(false);
                 uninstallAllButton.text = "Removing...";
-                UninstallRoslyn();
-                BatchUpmRemove(upmPackages, () =>
+                content.SetEnabled(false);
+                Action restore = () =>
                 {
+                    content.SetEnabled(!IsPackageOperationInFlight);
                     uninstallAllButton.SetEnabled(true);
                     uninstallAllButton.text = "Uninstall All";
-                });
+                };
+                try
+                {
+                    UninstallRoslyn();
+                    BatchUpmRemove(upmPackages, restore);
+                }
+                catch (Exception exception)
+                {
+                    restore();
+                    Debug.LogError($"[MCP] Uninstall failed: {exception.Message}");
+                }
             });
             uninstallAllButton.text = "Uninstall All";
             uninstallAllButton.AddToClassList("action-button");
@@ -957,6 +995,8 @@ namespace MCPForUnity.Editor.Windows
 
             section.Add(content);
             container.Add(section);
+            // Disable after the rows exist: the change then reaches every control in the section.
+            content.SetEnabled(!IsPackageOperationInFlight);
         }
 
         private static PackageVersionSelection AddUpmDependencyRow(VisualElement parent, string name,
@@ -1047,10 +1087,10 @@ namespace MCPForUnity.Editor.Windows
                 {
                     btn.SetEnabled(false);
                     btn.text = "Installing...";
-                    if (selection != null) row.SetEnabled(false);
+                    parent.SetEnabled(false);
                     Action restore = () =>
                     {
-                        row.SetEnabled(true);
+                        parent.SetEnabled(!IsPackageOperationInFlight);
                         btn.text = isInstalled ? "Change Version" : "Install";
                         btn.SetEnabled(selection == null || (selection.TryGetRequest(out var request, out _) && request != null));
                     };
@@ -1077,8 +1117,10 @@ namespace MCPForUnity.Editor.Windows
                         $"Are you sure you want to remove {name}?", "Remove", "Cancel")) return;
                     btn.SetEnabled(false);
                     btn.text = "Removing...";
+                    parent.SetEnabled(false);
                     Action restore = () =>
                     {
+                        parent.SetEnabled(!IsPackageOperationInFlight);
                         btn.SetEnabled(true);
                         btn.text = "Uninstall";
                     };
@@ -1138,16 +1180,41 @@ namespace MCPForUnity.Editor.Windows
         private static void BatchUpmAdd(string[] packageIds, Action onComplete = null)
         {
             if (packageIds.Length == 0) { onComplete?.Invoke(); return; }
-            var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
-            EditorUtility.DisplayProgressBar("Installing Packages", $"Installing {packageIds.Length} package(s)...", 0.5f);
-            PollUpmRequest(request, "install", onComplete);
+            BatchUpmChange(packageIds, null, "install", onComplete);
         }
 
         private static void BatchUpmRemove(string[] packageIds, Action onComplete = null)
         {
-            var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
-            EditorUtility.DisplayProgressBar("Removing Packages", $"Removing {packageIds.Length} package(s)...", 0.5f);
-            PollUpmRequest(request, "remove", onComplete);
+            BatchUpmChange(null, packageIds, "remove", onComplete);
+        }
+
+        private static void BatchUpmChange(string[] packagesToAdd, string[] packagesToRemove, string verb, Action onComplete)
+        {
+            if (!TryBeginPackageOperation())
+            {
+                Debug.LogWarning($"[MCP] Cannot {verb} packages while another package operation is pending.");
+                onComplete?.Invoke();
+                return;
+            }
+            try
+            {
+                var request = UnityEditor.PackageManager.Client.AddAndRemove(packagesToAdd, packagesToRemove);
+                bool installing = packagesToAdd != null;
+                int count = (packagesToAdd ?? packagesToRemove).Length;
+                EditorUtility.DisplayProgressBar(installing ? "Installing Packages" : "Removing Packages",
+                    $"{(installing ? "Installing" : "Removing")} {count} package(s)...", 0.5f);
+                PollUpmRequest(request, verb, onComplete);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[MCP] Package {verb} failed: {exception.Message}");
+                try { EditorUtility.ClearProgressBar(); }
+                finally
+                {
+                    EndPackageOperation();
+                    onComplete?.Invoke();
+                }
+            }
         }
 
         private static void PollUpmRequest(UnityEditor.PackageManager.Requests.AddAndRemoveRequest request, string verb, Action onComplete)
@@ -1155,14 +1222,34 @@ namespace MCPForUnity.Editor.Windows
             EditorApplication.CallbackFunction pollCallback = null;
             pollCallback = () =>
             {
-                if (!request.IsCompleted) return;
-                EditorApplication.update -= pollCallback;
-                EditorUtility.ClearProgressBar();
-                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
-                    Debug.Log($"[MCP] Package {verb} succeeded.");
-                else
-                    Debug.LogError($"[MCP] Package {verb} failed: {request.Error?.message}");
-                onComplete?.Invoke();
+                bool finished = false;
+                try
+                {
+                    if (!request.IsCompleted) return;
+                    finished = true;
+                    if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+                        Debug.Log($"[MCP] Package {verb} succeeded.");
+                    else
+                        Debug.LogError($"[MCP] Package {verb} failed: {request.Error?.message}");
+                }
+                catch (Exception exception)
+                {
+                    finished = true;
+                    Debug.LogError($"[MCP] Package {verb} failed: {exception.Message}");
+                }
+                finally
+                {
+                    if (finished)
+                    {
+                        EditorApplication.update -= pollCallback;
+                        try { EditorUtility.ClearProgressBar(); }
+                        finally
+                        {
+                            EndPackageOperation();
+                            onComplete?.Invoke();
+                        }
+                    }
+                }
             };
             EditorApplication.update += pollCallback;
         }
