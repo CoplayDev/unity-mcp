@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Constants;
@@ -12,6 +13,8 @@ using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MCPForUnityTests.Editor.Clients
 {
@@ -69,6 +72,7 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(expected, configurator.Client.windowsConfigPath);
             Assert.AreEqual(expected, configurator.Client.macConfigPath);
             Assert.AreEqual(expected, configurator.Client.linuxConfigPath);
+            Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agents", "mcp.json"), configurator.AgentsConfigPath);
         }
 
         [Test]
@@ -174,6 +178,76 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(content, File.ReadAllText(configurator.GetConfigPath()));
         }
 
+        [TestCase(null)]
+        [TestCase("  \n")]
+        [TestCase("{}")]
+        [TestCase("{\"mcp\":{}}")]
+        [TestCase("{\"mcp\":{\"servers\":{}}}")]
+        [TestCase("{\"mcp\":{\"servers\":null}}")]
+        // Configure() rewrites the next three as a fresh object, so they hide the .agents servers too.
+        [TestCase("invalid JSON")]
+        [TestCase("{\"mcp\":[]}")]
+        [TestCase("{\"mcp\":{\"servers\":[]}}")]
+        public void ShadowedServers_WhenNativeHasNoServers_ReturnsOnlyOtherServerNames(string nativeJson)
+        {
+            string nativePath = Path.Combine(_tempDir, "config.json");
+            string agentsPath = Path.Combine(_tempDir, "mcp.json");
+            if (nativeJson != null) File.WriteAllText(nativePath, nativeJson);
+            File.WriteAllText(agentsPath, "{\"mcpServers\":{\"local\":{\"env\":{\"TOKEN\":\"secret-env-value\"}},\"remote\":{\"headers\":{\"Authorization\":\"secret-header-value\"}},\"unityMCP\":{}}}");
+
+            var names = ZCodeConfigurator.GetShadowedServerNames(nativePath, agentsPath);
+
+            CollectionAssert.AreEquivalent(new[] { "local", "remote" }, names);
+            StringAssert.DoesNotContain("secret-env-value", string.Join(",", names));
+            StringAssert.DoesNotContain("secret-header-value", string.Join(",", names));
+        }
+
+        [TestCase("{\"mcp\":{\"servers\":{\"other\":{}}}}")]
+        [TestCase("{\"mcp\":{\"servers\":{\"unityMCP\":{}}}}")]
+        public void ShadowedServers_WhenNativeAlreadyHasServers_ReturnsEmpty(string nativeJson)
+        {
+            string nativePath = Path.Combine(_tempDir, "config.json");
+            string agentsPath = Path.Combine(_tempDir, "mcp.json");
+            File.WriteAllText(nativePath, nativeJson);
+            File.WriteAllText(agentsPath, "{\"mcpServers\":{\"other\":{}}}");
+
+            Assert.IsEmpty(ZCodeConfigurator.GetShadowedServerNames(nativePath, agentsPath));
+        }
+
+        [TestCase(null)]
+        [TestCase("invalid JSON")]
+        [TestCase("[]")]
+        [TestCase("{}")]
+        [TestCase("{\"mcpServers\":{}}")]
+        [TestCase("{\"mcpServers\":[]}")]
+        [TestCase("{\"mcpServers\":null}")]
+        [TestCase("{\"mcpServers\":\"wrong shape\"}")]
+        [TestCase("{\"mcpServers\":{\"unityMCP\":{}}}")]
+        public void ShadowedServers_WhenAgentsHasNoOtherServers_ReturnsEmpty(string agentsJson)
+        {
+            string nativePath = Path.Combine(_tempDir, "config.json");
+            string agentsPath = Path.Combine(_tempDir, "mcp.json");
+            if (agentsJson != null) File.WriteAllText(agentsPath, agentsJson);
+
+            Assert.IsEmpty(ZCodeConfigurator.GetShadowedServerNames(nativePath, agentsPath));
+        }
+
+        [Test]
+        public void Configure_WarnsAboutShadowedServersAndLeavesAgentsBytesUnchanged()
+        {
+            EditorConfigurationCache.Instance.SetUseHttpTransport(true);
+            var configurator = new TempZCodeConfigurator(Path.Combine(_tempDir, "config.json"));
+            File.WriteAllText(configurator.AgentsConfigPath, "{\n  \"mcpServers\": {\"other\": {\"env\": {\"TOKEN\": \"secret-env-value\"}}}\n}\n");
+            byte[] original = File.ReadAllBytes(configurator.AgentsConfigPath);
+            LogAssert.Expect(LogType.Warning, new Regex("ZCode now skips.*these servers will stop loading: other\\. .*Settings > MCP Servers.*mcp.servers.*reads.*again if the native file defines no servers"));
+
+            configurator.Configure();
+
+            Assert.AreEqual(McpStatus.Configured, configurator.Status);
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(configurator.AgentsConfigPath));
+            Assert.IsEmpty(ZCodeConfigurator.GetShadowedServerNames(configurator.GetConfigPath(), configurator.AgentsConfigPath));
+        }
+
         private static bool ConfigUsesStdio(McpClient client)
         {
             var migration = typeof(McpClient).Assembly.GetType("MCPForUnity.Editor.Migrations.StdIoVersionMigration");
@@ -186,6 +260,7 @@ namespace MCPForUnityTests.Editor.Clients
             public TempZCodeConfigurator(string path)
             {
                 Client.windowsConfigPath = Client.macConfigPath = Client.linuxConfigPath = path;
+                AgentsConfigPath = Path.Combine(Path.GetDirectoryName(path), "agents-mcp.json");
             }
         }
 
