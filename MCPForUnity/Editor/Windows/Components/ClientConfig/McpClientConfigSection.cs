@@ -589,11 +589,10 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     configPathField.SetValueWithoutNotify(string.Empty);
                     configJsonField.SetValueWithoutNotify(string.Empty);
                     installationStepsLabel.text = "Configuration details are unavailable because the status check failed.";
-                    if (displayedContext == null)
-                    {
-                        claudeCliPath.SetValueWithoutNotify("Unavailable");
-                        clientProjectDirField.SetValueWithoutNotify("Unavailable");
-                    }
+                    // The earlier context belongs to settings that may no longer apply.
+                    displayedContext = null;
+                    claudeCliPath.SetValueWithoutNotify("Unavailable");
+                    clientProjectDirField.SetValueWithoutNotify("Unavailable");
                     ApplyStatusToUi(client);
                 });
         }
