@@ -227,8 +227,9 @@ namespace MCPForUnity.Editor.Helpers
 
         public static void WriteAtomicFile(string path, string contents)
         {
-            string tmp = path + ".tmp";
-            string backup = path + ".backup";
+            string operationId = Guid.NewGuid().ToString("N");
+            string tmp = path + "." + operationId + ".tmp";
+            string backup = path + "." + operationId + ".backup";
             bool writeDone = false;
             try
             {

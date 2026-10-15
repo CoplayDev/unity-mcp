@@ -5,6 +5,7 @@ using System.Linq;
 using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
@@ -144,6 +145,51 @@ namespace MCPForUnityTests.Editor.Clients
             }
 
             CollectionAssert.AreEqual(original, File.ReadAllBytes(configurator.GetConfigPath()));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Configure_PreservesExistingTemporaryAndBackupArtifacts(bool temporaryIsDirectory)
+        {
+            var configurator = new TempWorkBuddyConfigurator(Path.Combine(_tempDir, "mcp.json"));
+            string path = configurator.GetConfigPath();
+            File.WriteAllText(path, "{\"theme\":\"current\",\"mcpServers\":{\"other\":{\"command\":\"other-server\"}}}");
+            const string temporaryContents = "user temporary contents";
+            if (temporaryIsDirectory) Directory.CreateDirectory(path + ".tmp");
+            else File.WriteAllText(path + ".tmp", temporaryContents);
+            File.WriteAllText(path + ".backup", "{\"theme\":\"stale backup\"}");
+            byte[] originalBackup = File.ReadAllBytes(path + ".backup");
+            byte[] originalTemporary = temporaryIsDirectory ? null : File.ReadAllBytes(path + ".tmp");
+            string[] originalEntries = Directory.GetFileSystemEntries(_tempDir);
+
+            configurator.Configure();
+
+            var root = JObject.Parse(File.ReadAllText(path));
+            Assert.AreEqual("current", (string)root["theme"]);
+            Assert.AreEqual("other-server", (string)root["mcpServers"]["other"]["command"]);
+            Assert.IsNotNull(root["mcpServers"]["unityMCP"]);
+            CollectionAssert.AreEqual(originalBackup, File.ReadAllBytes(path + ".backup"));
+            if (temporaryIsDirectory) Assert.IsTrue(Directory.Exists(path + ".tmp"));
+            else CollectionAssert.AreEqual(originalTemporary, File.ReadAllBytes(path + ".tmp"));
+            CollectionAssert.AreEquivalent(originalEntries, Directory.GetFileSystemEntries(_tempDir));
+        }
+
+        [Test]
+        public void AtomicWrite_FailurePreservesExistingBackupAndCleansOwnTemporaryFiles()
+        {
+            string path = Path.Combine(_tempDir, "destination-directory");
+            Directory.CreateDirectory(path);
+            string child = Path.Combine(path, "keep.txt");
+            File.WriteAllText(child, "keep directory contents");
+            File.WriteAllText(path + ".backup", "user backup contents");
+            byte[] originalBackup = File.ReadAllBytes(path + ".backup");
+            string[] originalEntries = Directory.GetFileSystemEntries(_tempDir);
+
+            Assert.Throws<Exception>(() => McpConfigurationHelper.WriteAtomicFile(path, "replacement"));
+
+            Assert.AreEqual("keep directory contents", File.ReadAllText(child));
+            CollectionAssert.AreEqual(originalBackup, File.ReadAllBytes(path + ".backup"));
+            CollectionAssert.AreEquivalent(originalEntries, Directory.GetFileSystemEntries(_tempDir));
         }
 
         [Test]
