@@ -111,6 +111,41 @@ namespace MCPForUnityTests.Editor.Clients
             Assert.AreEqual(McpStatus.NotConfigured, configurator.Status);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Configure_InvalidJsonLeavesExistingFileUnchanged(bool http)
+        {
+            EditorConfigurationCache.Instance.SetUseHttpTransport(http);
+            var configurator = new TempWorkBuddyConfigurator(Path.Combine(_tempDir, "mcp.json"));
+            const string incompleteJson = "{\"theme\":\"dark\",\"mcpServers\":{\"other\":{\"command\":\"other-server\"}}";
+            File.WriteAllText(configurator.GetConfigPath(), incompleteJson);
+            byte[] original = File.ReadAllBytes(configurator.GetConfigPath());
+
+            var error = Assert.Throws<InvalidOperationException>(() => configurator.Configure());
+
+            StringAssert.Contains("Fix its JSON", error.Message);
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(configurator.GetConfigPath()));
+            Assert.IsFalse(File.Exists(configurator.GetConfigPath() + ".tmp"));
+            Assert.IsFalse(File.Exists(configurator.GetConfigPath() + ".backup"));
+        }
+
+        [Test]
+        public void Configure_UnreadableExistingFileIsLeftUnchanged()
+        {
+            var configurator = new TempWorkBuddyConfigurator(Path.Combine(_tempDir, "mcp.json"));
+            const string existingJson = "{\"theme\":\"dark\",\"mcpServers\":{\"other\":{\"command\":\"other-server\"}}}";
+            File.WriteAllText(configurator.GetConfigPath(), existingJson);
+            byte[] original = File.ReadAllBytes(configurator.GetConfigPath());
+
+            using (new FileStream(configurator.GetConfigPath(), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var error = Assert.Throws<InvalidOperationException>(() => configurator.Configure());
+                StringAssert.Contains("Could not read", error.Message);
+            }
+
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(configurator.GetConfigPath()));
+        }
+
         [Test]
         public void IsInstalled_RequiresTheWorkBuddyDirectory()
         {

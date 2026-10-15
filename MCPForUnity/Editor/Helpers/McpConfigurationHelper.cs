@@ -50,6 +50,7 @@ namespace MCPForUnity.Editor.Helpers
                 catch (Exception e)
                 {
                     McpLog.Warn($"Error reading existing config: {e.Message}.");
+                    return "Could not read the existing configuration file. The file was left unchanged.";
                 }
             }
 
@@ -66,14 +67,10 @@ namespace MCPForUnity.Editor.Helpers
                     existingConfig = JsonConvert.DeserializeObject(existingJson) ?? new JObject();
                 }
             }
-            catch
+            catch (JsonException)
             {
-                // If user has partial/invalid JSON (e.g., mid-edit), start from a fresh object
-                if (!string.IsNullOrWhiteSpace(existingJson))
-                {
-                    McpLog.Warn("UnityMCP: Configuration file could not be parsed; rewriting server block.");
-                }
-                existingConfig = new JObject();
+                // A partial edit must not discard unrelated settings or server entries.
+                return "Could not parse the existing configuration file. Fix its JSON and try again. The file was left unchanged.";
             }
 
             // Determine existing entry references (command/args)
