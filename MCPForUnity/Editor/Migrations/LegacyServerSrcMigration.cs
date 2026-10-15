@@ -2,6 +2,7 @@ using System;
 using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 using UnityEditor;
 using UnityEngine;
@@ -44,7 +45,16 @@ namespace MCPForUnity.Editor.Migrations
                         summary.SkippedCount++;
                         continue;
                     }
-                    configurator.CheckStatus(attemptAutoRewrite: false);
+                    var status = configurator.CheckStatus(attemptAutoRewrite: false);
+                    if (configurator is JsonFileMcpConfigurator && status == McpStatus.Error)
+                    {
+                        summary.FailureCount++;
+                        summary.Messages.Add($"⚠ {configurator.DisplayName}: Configuration is invalid; update it manually before migrating.");
+                        continue;
+                    }
+                    // Match the CLI's automatic re-registration path, without changing its explicit toggle.
+                    if (configurator is ClaudeCliMcpConfigurator cli && status == McpStatus.Configured)
+                        cli.Client.SetStatus(McpStatus.IncorrectPath);
                     clientService.ConfigureClient(configurator);
                     summary.SuccessCount++;
                     summary.Messages.Add($"✓ {configurator.DisplayName}: Configured successfully");

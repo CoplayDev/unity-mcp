@@ -144,17 +144,74 @@ namespace MCPForUnityTests.Editor.Clients
         [TestCase("null-args")]
         public void Status_InvalidArguments_AreNotAcceptedAsCustomStdio(string kind)
         {
-            JToken args = kind == "number" ? new JArray(42)
-                : kind == "boolean" ? new JArray(true)
-                : kind == "null-item" ? new JArray(JValue.CreateNull())
-                : kind == "object" ? new JObject()
-                : kind == "matching-source-with-number" ? new JArray("--from", ExpectedSource, 42)
-                : kind == "null-args" ? JValue.CreateNull() : new JValue("--transport stdio");
+            JToken args = InvalidArguments(kind);
             WriteEntry(new JObject { ["command"] = "custom-launcher", ["args"] = args, ["type"] = "stdio" });
             var before = File.ReadAllBytes(_configPath);
             Assert.AreEqual(McpStatus.Error, _configurator.CheckStatus(true));
             Assert.AreEqual(ConfiguredTransport.Unknown, _client.configuredTransport);
             CollectionAssert.AreEqual(before, File.ReadAllBytes(_configPath));
+        }
+
+        [TestCase("number")]
+        [TestCase("boolean")]
+        [TestCase("null-item")]
+        [TestCase("object")]
+        [TestCase("string")]
+        [TestCase("matching-source-with-number")]
+        [TestCase("null-args")]
+        public void Migrations_PreserveInvalidArguments(string kind)
+        {
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
+            foreach (string command in new[] { "custom-launcher", _uvxPath })
+            {
+                WriteEntry(new JObject { ["command"] = command, ["type"] = "stdio",
+                    ["args"] = InvalidArguments(kind) });
+                var before = File.ReadAllBytes(_configPath);
+                var service = new IsolatedClientService(_configurator);
+                Assert.IsFalse(StdIoVersionMigration.RefreshStdioConfiguration(_configurator, service));
+                var summary = LegacyServerSrcMigration.MigrateDetectedClients(service);
+                Assert.AreEqual(1, summary.FailureCount);
+                Assert.AreEqual(0, summary.SuccessCount);
+                Assert.AreEqual(0, service.ConfigureCalls);
+                CollectionAssert.AreEqual(before, File.ReadAllBytes(_configPath));
+            }
+        }
+
+        private static JToken InvalidArguments(string kind) => kind == "number" ? new JArray(42)
+            : kind == "boolean" ? new JArray(true)
+            : kind == "null-item" ? new JArray(JValue.CreateNull())
+            : kind == "object" ? new JObject()
+            : kind == "matching-source-with-number" ? new JArray("--from", ExpectedSource, 42)
+            : kind == "null-args" ? JValue.CreateNull() : new JValue("--transport stdio");
+
+        [Test]
+        public void LegacyMigration_ReregistersConfiguredClaudeCode()
+        {
+            var configurator = new RecordingClaudeConfigurator();
+            var summary = LegacyServerSrcMigration.MigrateDetectedClients(new IsolatedClientService(configurator));
+            Assert.AreEqual(1, summary.SuccessCount);
+            Assert.AreEqual(0, summary.FailureCount);
+            Assert.AreEqual(McpStatus.IncorrectPath, configurator.StatusAtConfigure,
+                "Automatic registration must not dispatch the Configured state to the CLI's Unregister action.");
+            Assert.AreEqual(McpStatus.Configured, configurator.Status);
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
+        }
+
+        private sealed class RecordingClaudeConfigurator : ClaudeCodeConfigurator
+        {
+            public McpStatus StatusAtConfigure { get; private set; }
+            public override bool IsInstalled => true;
+            public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
+            {
+                Assert.IsFalse(attemptAutoRewrite);
+                Client.SetStatus(McpStatus.Configured);
+                return Status;
+            }
+            public override void Configure()
+            {
+                StatusAtConfigure = Status;
+                Client.SetStatus(McpStatus.Configured);
+            }
         }
 
         [TestCase("uvx")]

@@ -130,6 +130,10 @@ namespace MCPForUnity.Editor.Migrations
                 var root = JObject.Parse(File.ReadAllText(configPath));
 
                 var unityNode = McpConfigurationHelper.GetJsonUnityEntry(root, client);
+                var argsToken = unityNode?["args"];
+                if (argsToken != null && (!(argsToken is JArray argsArray)
+                    || argsArray.Any(value => value.Type != JTokenType.String)))
+                    return false;
                 return unityNode?["command"] != null
                     && !McpConfigurationHelper.HasCustomStdioLauncher(unityNode, client);
             }
