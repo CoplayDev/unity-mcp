@@ -266,7 +266,9 @@ namespace MCPForUnity.Editor.Helpers
                 index++;
                 // uv's global options with a separate value; --option=value needs no extra skip.
                 if (option == "--cache-dir" || option == "--color" || option == "--allow-insecure-host"
-                    || option == "--directory" || option == "--project" || option == "--config-file")
+                    || option == "--trusted-host" || option == "--directory" || option == "--project"
+                    || option == "--config-file" || option == "--python-preference" || option == "--python-fetch"
+                    || option == "--preview-features" || option == "--preview-feature")
                     index++;
             }
             return index;

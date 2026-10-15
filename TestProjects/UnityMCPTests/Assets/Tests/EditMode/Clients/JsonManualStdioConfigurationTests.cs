@@ -248,6 +248,62 @@ namespace MCPForUnityTests.Editor.Clients
             CollectionAssert.AreEqual(before, File.ReadAllBytes(_configPath));
         }
 
+        [TestCase("--trusted-host", "example.com")]
+        [TestCase("--python-preference", "only-managed")]
+        [TestCase("--python-fetch", "never")]
+        [TestCase("--preview-features", "python-upgrade")]
+        [TestCase("--preview-feature", "python-upgrade")]
+        public void StatusAndMigrations_UvGlobalValueOptions_RetainPackageValidation(string option, string value)
+        {
+            EditorConfigurationCache.Instance.SetUseHttpTransport(false);
+            foreach (string form in new[] { "before", "between", "equals" })
+            {
+                var args = form == "before" ? new JArray(option, value, "tool", "run")
+                    : form == "between" ? new JArray("tool", option, value, "run")
+                    : new JArray(option + "=" + value, "tool", "run");
+                args.Add("--from");
+                args.Add("mcpforunityserver==98.0.0");
+                args.Add("mcp-for-unity");
+                var entry = new JObject { ["command"] = "uv", ["args"] = args, ["type"] = "stdio" };
+                WriteEntry(entry);
+                var before = File.ReadAllBytes(_configPath);
+                Assert.AreEqual(McpStatus.VersionMismatch, _configurator.CheckStatus(false), option + ": " + form);
+                CollectionAssert.AreEqual(before, File.ReadAllBytes(_configPath));
+
+                var service = new IsolatedClientService(_configurator);
+                Assert.IsTrue(StdIoVersionMigration.RefreshStdioConfiguration(_configurator, service));
+                Assert.AreEqual(1, service.ConfigureCalls);
+                AssertGeneratedSource();
+
+                WriteEntry(entry);
+                service = new IsolatedClientService(_configurator);
+                var summary = LegacyServerSrcMigration.MigrateDetectedClients(service);
+                Assert.AreEqual(1, summary.SuccessCount);
+                Assert.AreEqual(0, summary.FailureCount);
+                Assert.AreEqual(0, summary.SkippedCount);
+                Assert.AreEqual(1, service.ConfigureCalls);
+                AssertGeneratedSource();
+
+                // The same global options must not turn a user-managed uv run script into a package runner.
+                args = form == "before" ? new JArray(option, value, "run", "server.py")
+                    : form == "between" ? new JArray("run", option, value, "server.py")
+                    : new JArray(option + "=" + value, "run", "server.py");
+                args.Add("tool");
+                args.Add("run");
+                args.Add("--from");
+                args.Add("custom-input");
+                WriteEntry(new JObject { ["command"] = "uv", ["args"] = args, ["type"] = "stdio" });
+                before = File.ReadAllBytes(_configPath);
+                AssertCustomPreserved(true);
+                service = new IsolatedClientService(_configurator);
+                Assert.IsFalse(StdIoVersionMigration.RefreshStdioConfiguration(_configurator, service));
+                summary = LegacyServerSrcMigration.MigrateDetectedClients(service);
+                Assert.AreEqual(1, summary.SkippedCount);
+                Assert.AreEqual(0, service.ConfigureCalls);
+                CollectionAssert.AreEqual(before, File.ReadAllBytes(_configPath));
+            }
+        }
+
         [Test]
         public void Status_UvRunScriptWithToolRunArguments_RemainsCustom()
         {
