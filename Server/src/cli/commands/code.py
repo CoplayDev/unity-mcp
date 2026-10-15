@@ -176,7 +176,7 @@ def search(pattern: str, path: str, max_results: int, case_sensitive: bool):
     PATTERN is a regex pattern to search for.
     PATH is the script path (e.g., Assets/Scripts/Player.cs).
 
-    \\b
+    \b
     Examples:
         unity-mcp code search "class.*Player" "Assets/Scripts/Player.cs"
         unity-mcp code search "private.*int" "Assets/Scripts/GameManager.cs"

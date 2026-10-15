@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using NUnit.Framework;
@@ -73,8 +74,11 @@ namespace MCPForUnityTests.Editor.Services
             }
 
             int port = StdioBridgeHost.GetCurrentPort();
-            byte[] command = Encoding.UTF8.GetBytes(
-                "{\"type\":\"read_console\",\"params\":{\"action\":\"get\",\"count\":1}}");
+            // MCP polls this same bridge while the test runs. Identify only our command,
+            // so unrelated get_test_job traffic does not look like a duplicate resend.
+            string commandJson = "{\"type\":\"read_console\",\"test_nonce\":\""
+                + Guid.NewGuid().ToString("N") + "\",\"params\":{\"action\":\"get\",\"count\":1}}";
+            byte[] command = Encoding.UTF8.GetBytes(commandJson);
 
             TcpClient first = null;
             TcpClient second = null;
@@ -90,13 +94,13 @@ namespace MCPForUnityTests.Editor.Services
                 // has to happen before the second connect: a new connection closes stale clients,
                 // and if it wins that race the first frame is never read at all.
                 Thread.Sleep(1500);
-                queuedAfterFirst = StdioBridgeHost.QueuedCommandCount;
+                queuedAfterFirst = CountQueuedPayload(commandJson);
 
                 // A second connection is what the broker opens after giving up on the first.
                 second = Connect(port);
                 SendFrame(second.GetStream(), command);
                 Thread.Sleep(1500);
-                queuedAfterResend = StdioBridgeHost.QueuedCommandCount;
+                queuedAfterResend = CountQueuedPayload(commandJson);
             }
             finally
             {
@@ -110,10 +114,27 @@ namespace MCPForUnityTests.Editor.Services
 
             Assert.AreEqual(1, queuedAfterFirst,
                 "precondition: the first command must be sitting in the queue undrained — "
-                + $"found {queuedAfterFirst} entries, so this run proves nothing about the resend");
+                + $"found {queuedAfterFirst} matching entries, so this run proves nothing about the resend");
             Assert.AreEqual(1, queuedAfterResend,
                 $"the resend should have attached to the in-flight command, but {queuedAfterResend} "
-                + "entries were queued — the command would run that many times");
+                + "matching entries were queued — the command would run that many times");
+        }
+
+        private static int CountQueuedPayload(string commandJson)
+        {
+            const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Static;
+            var queueField = typeof(StdioBridgeHost).GetField("commandQueue", flags);
+            var lockField = typeof(StdioBridgeHost).GetField("lockObj", flags);
+            Assert.NotNull(queueField);
+            Assert.NotNull(lockField);
+            lock (lockField.GetValue(null))
+            {
+                var queue = (IDictionary)queueField.GetValue(null);
+                int count = 0;
+                foreach (QueuedCommand queued in queue.Values)
+                    if (queued.CommandJson == commandJson) count++;
+                return count;
+            }
         }
 
         private static TcpClient Connect(int port)

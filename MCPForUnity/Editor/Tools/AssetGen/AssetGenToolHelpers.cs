@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.AssetGen;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
@@ -61,6 +62,52 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                 list.Add(new { id = info.Id, kind = info.Kind, configured = info.Configured, capabilities = info.Capabilities });
             }
             return new SuccessResponse($"{list.Count} {kind} provider(s).", new { providers = list });
+        }
+
+        /// <summary>Return the same model snapshot as the panel; refreshes run without blocking.</summary>
+        public static object ListModels(ToolParams p, string kind, bool forceRefresh = false)
+        {
+            string provider = p.Get("provider")?.ToLowerInvariant();
+            var providers = AssetGenProviders.List().Where(info => info.Kind == kind && (string.IsNullOrEmpty(provider) || info.Id == provider)).ToList();
+            if (providers.Count == 0) return new ErrorResponse($"Unknown {kind} provider '{provider}'.");
+            if (forceRefresh && !providers.Any(info => info.Id == "fal" || info.Id == "openrouter" && kind == "image"))
+                return new ErrorResponse("Live refresh supports fal and OpenRouter images. Tripo and Meshy use bundled models.");
+            string search = p.Get("search") ?? "";
+            string mode = p.Get("mode");
+            int limit = p.GetInt("limit", 50) ?? 50, offset = p.GetInt("offset", 0) ?? 0;
+            if (limit < 1 || limit > 200 || offset < 0) return new ErrorResponse("Use limit=1..200 and offset>=0.");
+            var models = new List<object>();
+            var catalogs = new List<object>();
+            foreach (var info in providers)
+            {
+                bool fal = info.Id == "fal", router = info.Id == "openrouter" && kind == "image";
+                if (fal) _ = FalModelCatalog.RefreshAsync(kind, forceRefresh);
+                if (router) _ = OpenRouterModelCatalog.RefreshAsync(forceRefresh);
+                foreach (var model in AssetGenModelCatalog.ForProvider(info.Id, kind))
+                {
+                    var modes = model.Modes ?? (kind == "audio" ? new[] { "text" } : new[] { "text", "image" });
+                    if (!string.IsNullOrEmpty(mode) && !modes.Contains(mode)) continue;
+                    if ((model.Id + " " + model.Label + " " + model.UseCase).IndexOf(search, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    models.Add(new
+                    {
+                        id = model.Id, label = model.Label, provider = model.Provider, kind = model.Kind,
+                        use_case = model.UseCase, verified_at = model.VerifiedAt,
+                        status = model.VerifiedAt != null ? "verified" : model.FromRefresh ? "discovered" : "unverified",
+                        capabilities = modes,
+                        max_duration_seconds = model.MaxDurationSeconds, license_type = model.LicenseType,
+                    });
+                }
+                catalogs.Add(new
+                {
+                    provider = info.Id, source = fal ? FalModelCatalog.Source(kind) : router ? OpenRouterModelCatalog.Source : "bundled",
+                    last_checked = fal ? FalModelCatalog.VerifiedAt(kind) : router ? OpenRouterModelCatalog.CheckedAt : null,
+                    stale = fal ? FalModelCatalog.IsStale(kind) : !router || OpenRouterModelCatalog.IsStale,
+                    refreshing = fal ? FalModelCatalog.IsRefreshing(kind) : router && OpenRouterModelCatalog.IsRefreshing,
+                    refresh_error = fal ? FalModelCatalog.LastError(kind) : router ? OpenRouterModelCatalog.LastError : null,
+                });
+            }
+            return new SuccessResponse("Model catalog. Repeat list_models while refreshing. Discovered models require compatibility verification; live endpoints are rechecked before generation.",
+                new { models = models.Skip(offset).Take(limit).ToList(), total = models.Count, offset, limit, has_more = offset < models.Count - limit, catalogs });
         }
     }
 }

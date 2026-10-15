@@ -57,10 +57,10 @@ def particle():
 def particle_info(target: str, search_method: Optional[str], component_index: Optional[int]):
     """Get particle system info.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx particle info "Fire"
-        unity-mcp vfx particle info "-12345" --search-method by_id
+        unity-mcp vfx particle info --search-method by_id -- -12345
         unity-mcp vfx particle info "Effects" --component-index 1
     """
     config = get_config()
@@ -84,7 +84,7 @@ def particle_info(target: str, search_method: Optional[str], component_index: Op
 def particle_play(target: str, with_children: bool, search_method: Optional[str], component_index: Optional[int]):
     """Play a particle system.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx particle play "Fire"
         unity-mcp vfx particle play "Effects" --with-children
@@ -210,7 +210,7 @@ def line():
 def line_info(target: str, search_method: Optional[str], component_index: Optional[int]):
     """Get line renderer info.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx line info "LaserBeam"
         unity-mcp vfx line info "MultiLine" --component-index 1
@@ -236,7 +236,7 @@ def line_info(target: str, search_method: Optional[str], component_index: Option
 def line_set_positions(target: str, positions: str, search_method: Optional[str], component_index: Optional[int]):
     """Set all positions on a line renderer.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx line set-positions "Line" --positions "[[0,0,0], [5,2,0], [10,0,0]]"
     """
@@ -269,7 +269,7 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
 def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[float, float, float], search_method: Optional[str], component_index: Optional[int]):
     """Create a simple line between two points.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx line create-line "MyLine" --start 0 0 0 --end 10 5 0
     """
@@ -301,7 +301,7 @@ def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[
 def line_create_circle(target: str, center: Tuple[float, float, float], radius: float, segments: int, search_method: Optional[str], component_index: Optional[int]):
     """Create a circle shape.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx line create-circle "Circle" --radius 5 --segments 64
         unity-mcp vfx line create-circle "Ring" --center 0 2 0 --radius 3
@@ -381,7 +381,7 @@ def trail_info(target: str, search_method: Optional[str], component_index: Optio
 def trail_set_time(target: str, duration: float, search_method: Optional[str], component_index: Optional[int]):
     """Set trail duration.
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx trail set-time "PlayerTrail" 2.0
     """
@@ -436,14 +436,14 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
 
     For advanced users who need access to all 60+ VFX actions.
 
-    \\b
+    \b
     Actions include:
         particle_*: particle_set_main, particle_set_emission, particle_set_shape, ...
         vfx_*: vfx_set_float, vfx_send_event, vfx_play, ...
         line_*: line_create_arc, line_create_bezier, ...
         trail_*: trail_set_width, trail_set_color, ...
 
-    \\b
+    \b
     Examples:
         unity-mcp vfx raw particle_set_main "Fire" --params '{"duration": 5, "looping": true}'
         unity-mcp vfx raw line_create_arc "Arc" --params '{"radius": 3, "startAngle": 0, "endAngle": 180}'

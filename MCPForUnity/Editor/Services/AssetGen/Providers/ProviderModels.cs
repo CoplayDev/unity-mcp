@@ -31,6 +31,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     /// <summary>Request to generate a 3D model. Shared by every model provider adapter.</summary>
     public sealed class ModelGenRequest
     {
+        internal ModelEntry CatalogEntry;
         public string Provider;
         public string Mode; // text | image
         public string Prompt;
@@ -48,6 +49,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     /// <summary>Request to generate a 2D image. Shared by every image provider adapter.</summary>
     public sealed class ImageGenRequest
     {
+        internal ModelEntry CatalogEntry;
         public string Provider;
         public string Mode; // text | image
         public string Prompt;
@@ -69,6 +71,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     /// </summary>
     public sealed class AudioGenRequest
     {
+        internal ModelEntry CatalogEntry;
         public string Provider; // "fal" for v1
         public string Model; // fal model id, e.g. fal-ai/stable-audio-25/text-to-audio
         public string Prompt;

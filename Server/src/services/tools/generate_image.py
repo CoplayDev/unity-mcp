@@ -30,7 +30,9 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- remove_background: Unsupported in this version; returns an error instead of a job_id.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
-        "- list_providers: List configured image providers and capabilities (no key values)."
+        "- list_providers: List configured image providers and capabilities (no key values).\n"
+        "- list_models: Search/paginate live fal and OpenRouter models, modes and freshness.\n"
+        "- refresh_models: Force discovery. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
         title="Generate Image",
@@ -39,7 +41,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def generate_image(
     ctx: Context,
-    action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers"],
+    action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers", "list_models", "refresh_models"],
                       "Action to perform."],
 
     provider: Annotated[str, "Provider id (fal, openrouter)."] | None = None,
@@ -47,7 +49,7 @@ async def generate_image(
     prompt: Annotated[str, "Text prompt for text->image."] | None = None,
     image_path: Annotated[str, "Path to a source image for image->image mode."] | None = None,
     image_url: Annotated[str, "URL of a source image for image->image."] | None = None,
-    model: Annotated[str, "Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image)."] | None = None,
+    model: Annotated[str, "Provider model id/slug returned by list_models; omit for the GUI-selected default."] | None = None,
     transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "
                            "and OpenRouter have no generation-time transparency, so this only sets the "
                            "Unity import flag — it does not make the model render a transparent background."] | None = None,
@@ -56,6 +58,9 @@ async def generate_image(
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,
+    search: Annotated[str, "Filter list_models by name, id or use case."] | None = None,
+    limit: Annotated[int, "Model page size (1..200; default 50)."] | None = None,
+    offset: Annotated[int, "Model page offset (default 0)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -73,6 +78,9 @@ async def generate_image(
         "name": name,
         "outputFolder": output_folder,
         "jobId": job_id,
+        "search": search,
+        "limit": limit,
+        "offset": offset,
     }
 
     # Remove None values

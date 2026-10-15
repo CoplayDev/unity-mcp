@@ -4,13 +4,13 @@ import click
 from typing import Optional
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_success, print_info
-from cli.utils.connection import run_command, run_list_instances, handle_unity_errors
+from cli.utils.output import print_info
+from cli.utils.connection import run_list_instances, handle_unity_errors
 
 
 @click.group()
 def instance():
-    """Unity instance management - list, select, and view instances."""
+    """Unity instance management - list the connected instances and show the one in use."""
     pass
 
 
@@ -19,7 +19,7 @@ def instance():
 def list_instances():
     """List available Unity instances.
 
-    \\b
+    \b
     Examples:
         unity-mcp instance list
     """
@@ -47,36 +47,11 @@ def list_instances():
             click.echo(f"    Session: {session_id[:8]}...")
 
 
-@instance.command("set")
-@click.argument("instance_id")
-@handle_unity_errors
-def set_instance(instance_id: str):
-    """Set the active Unity instance.
-
-    INSTANCE_ID can be Name@hash or just a hash prefix.
-
-    \\b
-    Examples:
-        unity-mcp instance set "MyProject@abc123"
-        unity-mcp instance set abc123
-    """
-    config = get_config()
-
-    result = run_command("set_active_instance", {
-        "instance": instance_id,
-    }, config)
-    click.echo(format_output(result, config.format))
-    if result.get("success"):
-        data = result.get("data", {})
-        active = data.get("instance", instance_id)
-        print_success(f"Active instance set to: {active}")
-
-
 @instance.command("current")
 def current_instance():
     """Show the currently selected Unity instance.
 
-    \\b
+    \b
     Examples:
         unity-mcp instance current
     """
@@ -90,4 +65,4 @@ def current_instance():
         print_info(
             "No instance explicitly set. Using default (auto-select single instance).")
         print_info("Use 'unity-mcp instance list' to see available instances.")
-        print_info("Use 'unity-mcp instance set <id>' to select one.")
+        print_info("Choose one per call with --instance <Name@hash>, or for a whole shell with UNITY_MCP_INSTANCE.")

@@ -19,7 +19,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 @mcp_for_unity_tool(
     group="asset_gen",
     description=(
-        "Generate 3D models with AI providers (Tripo, Meshy) and import them "
+        "Generate 3D models with AI providers (Tripo, Meshy, fal) and import them "
         "into the Unity project. Bring-your-own-key: provider keys live in the editor's "
         "secure store and never cross the bridge.\n\n"
         "ACTIONS:\n"
@@ -29,7 +29,9 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "tier, model, name, output_folder.\n"
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
-        "- list_providers: List configured 3D providers and capabilities (no key values)."
+        "- list_providers: List configured 3D providers and capabilities (no key values).\n"
+        "- list_models: Search/paginate live fal 3D models and bundled Tripo/Meshy models.\n"
+        "- refresh_models: Refresh fal discovery. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
         title="Generate Model",
@@ -38,10 +40,10 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def generate_model(
     ctx: Context,
-    action: Annotated[Literal["generate", "status", "cancel", "list_providers"],
+    action: Annotated[Literal["generate", "status", "cancel", "list_providers", "list_models", "refresh_models"],
                       "Action to perform."],
 
-    provider: Annotated[str, "Provider id (tripo, meshy)."] | None = None,
+    provider: Annotated[str, "Provider id (tripo, meshy, fal). fal supports GLB output."] | None = None,
     mode: Annotated[str, "Generation mode: text or image."] | None = None,
     prompt: Annotated[str, "Text prompt for text->3D."] | None = None,
     image_path: Annotated[str, "Path to a source image for image->3D."] | None = None,
@@ -55,6 +57,9 @@ async def generate_model(
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,
+    search: Annotated[str, "Filter list_models by name, id or use case."] | None = None,
+    limit: Annotated[int, "Model page size (1..200; default 50)."] | None = None,
+    offset: Annotated[int, "Model page offset (default 0)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -73,6 +78,9 @@ async def generate_model(
         "name": name,
         "outputFolder": output_folder,
         "jobId": job_id,
+        "search": search,
+        "limit": limit,
+        "offset": offset,
     }
 
     # Remove None values

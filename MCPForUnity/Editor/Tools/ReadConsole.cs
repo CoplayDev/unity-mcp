@@ -653,7 +653,7 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         /// <param name="fullMessage">The complete log message including any appended stack trace.</param>
         /// <returns>The message body (line endings normalized to "\n", internal blank lines preserved) and the stack trace, or null when none is found.</returns>
-        private static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
+        internal static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
                 return (fullMessage, null);
@@ -685,6 +685,7 @@ namespace MCPForUnity.Editor.Tools
                 // Check for common stack trace patterns.
                 if (
                     trimmedLine.StartsWith("at ")
+                    || IsNativeStackFrame(trimmedLine)
                     || trimmedLine.StartsWith("UnityEngine.")
                     || trimmedLine.StartsWith("UnityEditor.")
                     || trimmedLine.Contains("(at ")
@@ -702,6 +703,26 @@ namespace MCPForUnity.Editor.Tools
             }
 
             return -1;
+        }
+
+        // Native frames Unity appends when Stack Trace Logging is set to Full, e.g.
+        // "0x00007ffd387f224e (Unity) StackWalker::ShowCallstack".
+        private static bool IsNativeStackFrame(string line)
+        {
+            if (!line.StartsWith("0x", StringComparison.Ordinal))
+                return false;
+
+            int i = 2;
+            while (i < line.Length && Uri.IsHexDigit(line[i]))
+                i++;
+
+            // A pointer-width address, a "(Module)" label and a symbol after it.
+            int digits = i - 2;
+            if ((digits != 8 && digits != 16) || string.CompareOrdinal(line, i, " (", 0, 2) != 0)
+                return false;
+
+            int close = line.IndexOf(") ", i + 2, StringComparison.Ordinal);
+            return close > i + 2 && close + 2 < line.Length;
         }
 
         /* LogEntry.mode bits exploration (based on Unity decompilation/observation):

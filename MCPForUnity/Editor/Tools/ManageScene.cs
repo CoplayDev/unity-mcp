@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers; // For Response class
 using MCPForUnity.Runtime.Helpers; // For ScreenshotUtility
 using Newtonsoft.Json.Linq;
@@ -611,18 +612,9 @@ namespace MCPForUnity.Editor.Tools
                 if (includeImage && Application.isPlaying)
                 {
                     if (!Application.isBatchMode) EnsureGameView();
-
-                    string folderOverride = ScreenshotPreferences.Resolve(cmd.outputFolder);
-                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureComposited(
-                        fileName, resolvedSuperSize, ensureUniqueFileName: true,
-                        includeImage: true, maxResolution: maxResolution,
-                        folderOverride: folderOverride);
-
-                    if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
-                        AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
-                    string cameraName = Camera.main != null ? Camera.main.name : "composited";
-                    string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
-                    return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));
+                    // A Task<object>, not a response: the capture waits for the end of the frame,
+                    // and CommandRegistry awaits a Task<object> that a synchronous handler returns.
+                    return CaptureCompositedScreenshotAsync(cmd, fileName, resolvedSuperSize, maxResolution);
                 }
 
                 if (includeImage)
@@ -751,7 +743,49 @@ namespace MCPForUnity.Editor.Tools
                 data["imageHeight"] = result.ImageHeight;
             }
 
+            if (result.FallbackReason != null)
+            {
+                data["captureSource"] = "camera_fallback";
+                data["fallbackReason"] = result.FallbackReason;
+            }
+
             return data;
+        }
+
+        private static async Task<object> CaptureCompositedScreenshotAsync(
+            SceneCommand cmd,
+            string fileName,
+            int resolvedSuperSize,
+            int maxResolution)
+        {
+            string folderOverride = ScreenshotPreferences.Resolve(cmd.outputFolder);
+            ScreenshotCaptureResult result;
+            try
+            {
+                result = await ScreenshotUtility.CaptureCompositedAsync(
+                    fileName, resolvedSuperSize, ensureUniqueFileName: true,
+                    includeImage: true, maxResolution: maxResolution,
+                    folderOverride: folderOverride).ConfigureAwait(true);
+            }
+            catch (TimeoutException ex)
+            {
+                return new ErrorResponse(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ErrorResponse(ex.Message);
+            }
+
+            if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
+                AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
+
+            // A fallback names the camera that actually rendered, which need not be Camera.main.
+            string cameraName = result.FallbackCameraName
+                ?? (Camera.main != null ? Camera.main.name : "composited");
+            string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
+            if (result.FallbackReason != null)
+                message += " " + result.FallbackReason;
+            return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));
         }
 
         private static object CaptureSceneViewScreenshot(

@@ -130,7 +130,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private sealed class TestCallbacks : ICallbacks
+        private sealed class TestCallbacks : IErrorCallbacks
         {
             public void RunStarted(ITestAdaptor testsToRun)
             {
@@ -140,6 +140,12 @@ namespace MCPForUnity.Editor.Services
 
             public void RunFinished(ITestResultAdaptor result)
             {
+                RestoreThrottling();
+            }
+
+            public void OnError(string message)
+            {
+                // Build/prebuild failures may terminate before RunFinished is delivered.
                 RestoreThrottling();
             }
 

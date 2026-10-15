@@ -8,7 +8,7 @@ using NUnit.Framework;
 namespace MCPForUnityTests.Editor.Clients
 {
     [TestFixture]
-    public class SupportedTransportsTests
+    public class SupportedTransportsTests : TransportPreferenceTestBase
     {
         [Test]
         public void IMcpClientConfigurator_ExposesSupportedTransports()

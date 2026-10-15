@@ -35,9 +35,14 @@ namespace MCPForUnity.Editor.Services
 
         static PlayModeOptionsGuard()
         {
+            RestoreIfIdle();
+        }
+
+        internal static void RestoreIfIdle()
+        {
             // After domain reload or editor restart: if a restore is pending and no test run
             // is active, restore now. TryLoad checks SessionState first, then the marker file.
-            if (TryLoad(out _, out _) && !TestRunStatus.IsRunning)
+            if (TryLoad(out _, out _) && !TestRunStatus.IsRunning && !TestJobManager.HasRunningJob)
             {
                 Restore();
             }
@@ -143,7 +148,7 @@ namespace MCPForUnity.Editor.Services
     /// Concrete implementation of <see cref="ITestRunnerService"/>.
     /// Coordinates Unity Test Runner operations and produces structured results.
     /// </summary>
-    internal sealed class TestRunnerService : ITestRunnerService, ICallbacks, IDisposable
+    internal sealed class TestRunnerService : ITestRunnerService, IErrorCallbacks, IDisposable
     {
         private static readonly TestMode[] AllModes = { TestMode.EditMode, TestMode.PlayMode };
 
@@ -151,12 +156,32 @@ namespace MCPForUnity.Editor.Services
         private readonly SemaphoreSlim _operationLock = new SemaphoreSlim(1, 1);
         private readonly List<ITestResultAdaptor> _leafResults = new List<ITestResultAdaptor>();
         private TaskCompletionSource<TestRunResult> _runCompletionSource;
+        private string _trackedJobId;
 
         public TestRunnerService()
         {
             _testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
+            _testRunnerApi.hideFlags = HideFlags.HideAndDontSave;
             _testRunnerApi.RegisterCallbacks(this);
         }
+
+        internal void ResumeJobAfterReload(string jobId, string mode)
+        {
+            if (_runCompletionSource != null || _trackedJobId != null ||
+                string.IsNullOrEmpty(jobId) || TestJobManager.CurrentJobId != jobId)
+            {
+                return;
+            }
+
+            _trackedJobId = jobId;
+            if (Enum.TryParse<TestMode>(mode, out var testMode))
+            {
+                TestRunStatus.MarkStarted(testMode);
+            }
+        }
+
+        private bool IsTrackingCurrentJob =>
+            !string.IsNullOrEmpty(_trackedJobId) && TestJobManager.CurrentJobId == _trackedJobId;
 
         public async Task<IReadOnlyList<Dictionary<string, string>>> GetTestsAsync(TestMode? mode)
         {
@@ -187,6 +212,13 @@ namespace MCPForUnity.Editor.Services
 
         public async Task<TestRunResult> RunTestsAsync(TestMode mode, TestFilterOptions filterOptions = null)
         {
+            // The pre-reload Task no longer exists, but its Unity run may still be active.
+            // Clearing a job must not let a second run consume the first run's callbacks.
+            if (_trackedJobId != null && _runCompletionSource == null)
+            {
+                throw new InvalidOperationException("A recovered Unity test run is still in progress.");
+            }
+
             await _operationLock.WaitAsync().ConfigureAwait(true);
             Task<TestRunResult> runTask;
             bool adjustedPlayModeOptions = false;
@@ -219,6 +251,7 @@ namespace MCPForUnity.Editor.Services
                 }
 
                 _leafResults.Clear();
+                _trackedJobId = TestJobManager.CurrentJobId;
                 _runCompletionSource = new TaskCompletionSource<TestRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 // Mark running immediately so readiness snapshots reflect the busy state even before callbacks fire.
                 TestRunStatus.MarkStarted(mode);
@@ -252,6 +285,8 @@ namespace MCPForUnity.Editor.Services
             }
             catch
             {
+                _trackedJobId = null;
+                _runCompletionSource = null;
                 // Ensure the status is cleared if we failed to start the run.
                 TestRunStatus.MarkFinished();
                 if (adjustedPlayModeOptions)
@@ -302,6 +337,10 @@ namespace MCPForUnity.Editor.Services
         public void RunStarted(ITestAdaptor testsToRun)
         {
             _leafResults.Clear();
+            if (!IsTrackingCurrentJob)
+            {
+                return;
+            }
             try
             {
                 // Best-effort progress info for async polling (avoid heavy payloads).
@@ -325,31 +364,64 @@ namespace MCPForUnity.Editor.Services
             // is recreated and _runCompletionSource is lost, but TestJobManager state persists via
             // SessionState and the Test Runner still delivers the RunFinished callback.
             var payload = TestRunResult.Create(result, _leafResults);
+            CompleteRun(payload, null);
+        }
 
-            // Clean up state regardless of _runCompletionSource - these methods safely handle
-            // the case where no MCP job exists (e.g., manual test runs via Unity UI).
-            TestRunStatus.MarkFinished();
-            TestJobManager.OnRunFinished();
-            TestJobManager.FinalizeCurrentJobFromRunFinished(payload);
+        public void OnError(string message)
+        {
+            // Build/prebuild failures use IErrorCallbacks instead of RunFinished.
+            CompleteRun(null, new InvalidOperationException(message ?? "Unity test run failed."));
+        }
+
+        private void CompleteRun(TestRunResult payload, Exception error)
+        {
+
+            // A late callback from a cleared job must not finish a newer job or restore
+            // settings belonging to it. Callbacks do not contain an MCP job identifier.
+            bool ownsCurrentJob = IsTrackingCurrentJob;
+            bool canCleanUp = ownsCurrentJob || !TestJobManager.HasRunningJob;
+            if (canCleanUp)
+            {
+                TestRunStatus.MarkFinished();
+            }
+            if (ownsCurrentJob)
+            {
+                if (error == null)
+                {
+                    TestJobManager.OnRunFinished();
+                    TestJobManager.FinalizeCurrentJobFromRunFinished(payload);
+                }
+                else
+                {
+                    TestJobManager.FinalizeCurrentJobFromRunError(error.Message);
+                }
+            }
 
             // If a domain reload destroyed the original RunTestsAsync caller, the finally block
             // that would normally restore EditorSettings never ran. Restore from SessionState.
-            if (_runCompletionSource == null && PlayModeOptionsGuard.IsPending)
+            if (canCleanUp && _trackedJobId != null && _runCompletionSource == null && PlayModeOptionsGuard.IsPending)
             {
                 PlayModeOptionsGuard.Restore();
             }
 
             // Report result to awaiting caller if we have a completion source.
             // The caller's finally block handles restoration in this case.
-            if (_runCompletionSource != null)
+            var completion = _runCompletionSource;
+            _runCompletionSource = null;
+            _trackedJobId = null;
+            if (completion != null)
             {
-                _runCompletionSource.TrySetResult(payload);
-                _runCompletionSource = null;
+                if (error == null) completion.TrySetResult(payload);
+                else completion.TrySetException(error);
             }
         }
 
         public void TestStarted(ITestAdaptor test)
         {
+            if (!IsTrackingCurrentJob)
+            {
+                return;
+            }
             try
             {
                 // Prefer FullName for uniqueness; fall back to Name.
@@ -373,7 +445,7 @@ namespace MCPForUnity.Editor.Services
                 return;
             }
 
-            if (!result.HasChildren)
+            if (!result.HasChildren && result.Test?.IsSuite != true)
             {
                 _leafResults.Add(result);
                 try
@@ -402,7 +474,10 @@ namespace MCPForUnity.Editor.Services
                         // ignore adaptor quirks
                     }
 
-                    TestJobManager.OnLeafTestFinished(fullName, isFailure, message);
+                    if (IsTrackingCurrentJob)
+                    {
+                        TestJobManager.OnLeafTestFinished(fullName, isFailure, message);
+                    }
                 }
                 catch
                 {
@@ -638,7 +713,16 @@ namespace MCPForUnity.Editor.Services
 
         internal static TestRunResult Create(ITestResultAdaptor summary, IReadOnlyList<ITestResultAdaptor> tests)
         {
-            var materializedTests = tests.Select(TestRunTestResult.FromAdaptor).ToList();
+            // RunFinished includes the complete result tree, including tests completed
+            // before a domain reload erased the service's per-test callback list.
+            var resultLeaves = new List<ITestResultAdaptor>();
+            if (summary != null && summary.HasChildren)
+            {
+                CollectResultLeaves(summary, resultLeaves);
+            }
+            var materializedTests = (resultLeaves.Count > 0 ? resultLeaves : tests)
+                .Where(t => t != null && t.Test?.IsSuite != true)
+                .Select(TestRunTestResult.FromAdaptor).ToList();
 
             int passed = summary?.PassCount
                 ?? materializedTests.Count(t => string.Equals(t.State, "Passed", StringComparison.OrdinalIgnoreCase));
@@ -661,6 +745,26 @@ namespace MCPForUnity.Editor.Services
                 summary?.ResultState ?? "Unknown");
 
             return new TestRunResult(summaryPayload, materializedTests);
+        }
+
+        private static void CollectResultLeaves(ITestResultAdaptor result, List<ITestResultAdaptor> leaves)
+        {
+            if (result == null)
+            {
+                return;
+            }
+            if (!result.HasChildren)
+            {
+                if (result.Test?.IsSuite != true) leaves.Add(result);
+                return;
+            }
+            if (result.Children != null)
+            {
+                foreach (var child in result.Children)
+                {
+                    CollectResultLeaves(child, leaves);
+                }
+            }
         }
     }
 

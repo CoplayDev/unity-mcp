@@ -115,6 +115,35 @@ namespace MCPForUnityTests.Editor.Tools
             StringAssert.DoesNotContain("UnityEngine.Debug", message);
         }
 
+        [Test]
+        public void SplitMessageAndStackTrace_StripsNativeFrames()
+        {
+            // A Debug.Log entry with Stack Trace Logging set to Full (issue #1433).
+            string message = string.Join("\n",
+                "[CloudSaveManager] Status: Ready - Cloud save ready",
+                "0x00007ffd387f224e (Unity) StackWalker::ShowCallstack",
+                "0x00007ffd3a025909 (Unity) PlatformStacktrace::GetStacktrace",
+                "0x00007ffd387a2caf (Unity) DebugStringToFile",
+                "0x0000022bc5e78bc8 (Mono JIT Code) UnityEngine.Debug:Log (object)",
+                "CloudSaveManager:Start () (at Assets/Scripts/CloudSaveManager.cs:12)");
+
+            var (body, stackTrace) = ReadConsole.SplitMessageAndStackTrace(message);
+
+            Assert.AreEqual("[CloudSaveManager] Status: Ready - Cloud save ready", body);
+            StringAssert.StartsWith("0x00007ffd387f224e (Unity) StackWalker::ShowCallstack", stackTrace);
+        }
+
+        [Test]
+        public void SplitMessageAndStackTrace_KeepsBodyLineStartingWithHex()
+        {
+            string message = "Packet dump\n0x1F is the header byte\n0x1F (header byte) then payload\nend of dump";
+
+            var (body, stackTrace) = ReadConsole.SplitMessageAndStackTrace(message);
+
+            Assert.AreEqual(message, body);
+            Assert.IsNull(stackTrace);
+        }
+
         // ──────────────────── LogEntry.mode severity mapping (issue #1348) ────────────────────
 
         // 0x804400 and 0x804100 were captured from a real Unity 6000.5.4f1 console via

@@ -9,7 +9,7 @@ namespace MCPForUnityTests.Editor.Services
     /// Unit tests for EditorConfigurationCache.
     /// </summary>
     [TestFixture]
-    public class EditorConfigurationCacheTests
+    public class EditorConfigurationCacheTests : TransportPreferenceTestBase
     {
         private bool _originalUseHttpTransport;
         private bool _originalDebugLogs;
@@ -31,7 +31,6 @@ namespace MCPForUnityTests.Editor.Services
         public void TearDown()
         {
             // Restore original values
-            EditorConfigurationCache.Instance.UnpinStdioForSession();
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalUseHttpTransport);
             EditorPrefs.SetBool(EditorPrefKeys.DebugLogs, _originalDebugLogs);
             EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, _originalUvxPath);
@@ -263,6 +262,42 @@ namespace MCPForUnityTests.Editor.Services
         #endregion
 
         #region Session Pin Tests
+
+        private sealed class TransportPreferenceScopeProbe : TransportPreferenceTestBase { }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        public void ConfigurationFixture_RestoresSessionPinAndHttpPreference(int pinState)
+        {
+            string key = EditorConfigurationCache.SessionKeyForceStdio;
+            if (pinState == 0)
+                SessionState.EraseBool(key);
+            else
+                SessionState.SetBool(key, pinState == 2);
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorConfigurationCache.Instance.Refresh();
+
+            var scope = new TransportPreferenceScopeProbe();
+            scope.SuspendSessionTransportOverride();
+            try
+            {
+                EditorConfigurationCache.Instance.SetUseHttpTransport(true);
+                Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport,
+                    "The HTTP branch must be testable even when the resident harness pinned stdio.");
+            }
+            finally
+            {
+                scope.RestoreSessionTransportOverride();
+            }
+
+            Assert.AreEqual(pinState == 2, SessionState.GetBool(key, false));
+            Assert.AreEqual(pinState != 1, SessionState.GetBool(key, true),
+                "A missing pin must remain missing rather than become an explicit false.");
+            Assert.IsFalse(EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true),
+                "Fixture cleanup must also restore the persisted transport preference.");
+            Assert.IsFalse(EditorConfigurationCache.Instance.UseHttpTransport);
+        }
 
         [Test]
         public void PinStdioForSession_OverridesHttpPreference_WithoutWritingEditorPrefs()

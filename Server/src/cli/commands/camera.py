@@ -6,7 +6,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, handle_unity_errors
-from cli.utils.parsers import parse_json_dict_or_exit
+from cli.utils.parsers import parse_json_dict_or_exit, parse_json_list_or_exit
 from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
@@ -519,8 +519,11 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
         params["captureSource"] = capture_source
     if batch:
         params["batch"] = batch
+    # Unity reads a JSON array as a position and any other value as a GameObject; the
+    # option arrives as text, so "[x,y,z]" is parsed to reach Unity as an array.
     if view_target:
-        params["viewTarget"] = view_target
+        params["viewTarget"] = (parse_json_list_or_exit(view_target, "view-target")
+                                if view_target.lstrip().startswith("[") else view_target)
     if output_folder:
         params["outputFolder"] = output_folder
     result = run_command("manage_camera", params, config)
@@ -529,7 +532,7 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
 
 @camera.command("screenshot-multiview")
 @click.option("--max-resolution", type=int, default=None, help="Max resolution per tile.")
-@click.option("--view-target", default=None, help="Center target for the multiview capture.")
+@click.option("--view-target", default=None, help="Center target: GameObject name/path/ID or [x,y,z].")
 @click.option("--output-folder", default=None,
               help="Output folder, project-relative or absolute inside the project. "
                    "Overrides Editor preference; falls back to Assets/Screenshots when unset.")
@@ -547,7 +550,8 @@ def screenshot_multiview(max_resolution, view_target, output_folder):
     if max_resolution is not None:
         params["maxResolution"] = max_resolution
     if view_target:
-        params["viewTarget"] = view_target
+        params["viewTarget"] = (parse_json_list_or_exit(view_target, "view-target")
+                                if view_target.lstrip().startswith("[") else view_target)
     if output_folder:
         params["outputFolder"] = output_folder
     result = run_command("manage_camera", params, config)

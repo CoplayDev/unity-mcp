@@ -10,13 +10,23 @@ on:
     paths:
       - Server/**
       - tools/**
-      - .github/workflows/python-tests.yml
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   pull_request:
     branches: [main, beta]
     paths:
       - Server/**
       - tools/**
-      - .github/workflows/python-tests.yml
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   workflow_dispatch: {}
   workflow_call:
     inputs:
@@ -66,6 +76,10 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         if: always()
+        # fail_ci_if_error: false does not cover a failed download: v4 crashes on the https
+        # error before it reads that input. This job gates both release pipelines, and a
+        # Codecov outage must not stop a release.
+        continue-on-error: true
         with:
           files: ./Server/coverage.xml
           flags: python

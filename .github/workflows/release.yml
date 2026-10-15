@@ -454,6 +454,23 @@ jobs:
           gh pr view "$PR_NUMBER" --json state,mergeStateStatus,isDraft -q '{state: .state, mergeStateStatus: .mergeStateStatus, isDraft: .isDraft}'
           exit 1
 
+  sync_release_notes:
+    name: Dispatch release-notes sync
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    # The bump job creates the release with GITHUB_TOKEN, and events made with that token
+    # start no workflows, so sync-releases.yml never sees `release: published`.
+    # workflow_dispatch is exempt from that rule.
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch sync-releases.yml on beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh workflow run sync-releases.yml --repo "$GITHUB_REPOSITORY" --ref beta
+
   publish_docker:
     name: Publish Docker image
     needs:

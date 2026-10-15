@@ -18,8 +18,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     {
         private const string QueueBase = "https://queue.fal.run/";
         private const string QueueHost = "queue.fal.run";
-        // FLUX.2 [dev] — current SOTA default (cheaper and better than FLUX.1 dev). Alternatives:
-        // fal-ai/flux-2/flash (fastest/cheapest), fal-ai/flux-2-pro (top quality).
+        // Bundled bootstrap default. The shared live catalog may remove it or offer newer models.
         // internal so the model catalog references it directly (single source of truth, drift-guarded).
         internal const string DefaultModel = "fal-ai/flux-2";
 
@@ -34,15 +33,22 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             bool image = string.Equals(req.Mode, "image", StringComparison.OrdinalIgnoreCase)
                          && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
 
-            var body = new JObject { ["prompt"] = req.Prompt ?? string.Empty, ["num_images"] = 1 };
+            ModelEntry entry = req.CatalogEntry ?? AssetGenModelCatalog.Find(model);
+            var body = new JObject();
+            if (entry == null || entry.PromptField != null) body[entry?.PromptField ?? "prompt"] = req.Prompt ?? string.Empty;
+            if (entry == null || (image ? entry.EditSupportsNumImages : entry.SupportsNumImages)) body["num_images"] = 1;
+            string outputFormat = image ? entry?.EditOutputFormat : entry?.OutputFormat;
+            if (outputFormat != null) body["output_format"] = outputFormat;
             string url;
             if (image)
             {
                 // image→image / editing lives on the model's /edit endpoint and takes an image_urls
                 // array; each entry accepts a hosted URL or an inline base64 data URI (local image_path).
-                url = QueueBase + model + "/edit";
+                if (entry?.FromRefresh == true && string.IsNullOrEmpty(entry.EditModelId))
+                    throw new Exception($"Model '{model}' has no verified image editing endpoint.");
+                url = QueueBase + (entry?.EditModelId ?? model + "/edit");
                 string imageRef = !string.IsNullOrEmpty(req.ImageUrl) ? req.ImageUrl : LocalImage.ToDataUri(req.ImagePath);
-                body["image_urls"] = new JArray(imageRef);
+                body[entry?.ImageInputField ?? "image_urls"] = entry?.ImageInputIsArray != false ? (JToken)new JArray(imageRef) : (JToken)imageRef;
             }
             else
             {
@@ -51,8 +57,18 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             // Forward explicit output dimensions for text→image only; fal's image_size accepts a
             // {width,height} object. (/edit derives size from the source image and may reject it.
             // FLUX has no transparency param — transparent backgrounds aren't a generation-time option.)
+            if (!image && req.Width > 0 && req.Height > 0 && entry?.SupportsImageSize == false)
+                throw new Exception($"Model '{model}' does not support width/height image_size parameters.");
             if (!image && req.Width > 0 && req.Height > 0)
                 body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
+
+            return await SubmitQueueAsync(body, url.Substring(QueueBase.Length), apiKey, http, ct);
+        }
+
+        internal static async Task<string> SubmitQueueAsync(JObject body, string model, string apiKey, IHttpTransport http, CancellationToken ct)
+        {
+            if (!FalModelSchema.SafeId(model)) throw new InvalidOperationException("Invalid fal model ID.");
+            string url = QueueBase + model;
 
             ProviderHttp.RequireHost(url, QueueHost, apiKey, "fal submit");
 
@@ -77,7 +93,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
                 // Queue request URLs are namespaced by owner/app without the action sub-path,
                 // so build from the base model id (not `url`, which may end in /edit).
-                responseUrl = QueueBase + model + "/requests/" + requestId;
+                responseUrl = QueueBase + string.Join("/", model.Split('/'), 0, 2) + "/requests/" + Uri.EscapeDataString(requestId);
             }
             // The response_url is provider-controlled; refuse to later attach the key to any host
             // other than the fal queue.
@@ -85,7 +101,18 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             return responseUrl;
         }
 
-        public async Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
+        public Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
+            => PollQueueAsync(providerJobId, apiKey, http, ct, json =>
+            {
+                var file = json["images"]?[0] ?? json["image"];
+                return new ProviderPollResult
+                {
+                    DownloadUrl = ExtractImageUrl(json),
+                    ResultExt = ImageResultFormat.FromMetadata((string)file?["content_type"], (string)file?["url"]),
+                };
+            });
+
+        internal static async Task<ProviderPollResult> PollQueueAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct, Func<JObject, ProviderPollResult> extract)
         {
             if (string.IsNullOrEmpty(providerJobId)) throw new ArgumentNullException(nameof(providerJobId));
             string responseUrl = providerJobId;
@@ -131,12 +158,13 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             HttpResult resultRes = await http.SendAsync(resultSpec, ct);
             JObject resultJson = ParseOk(resultRes, apiKey, "result");
 
+            result = extract(resultJson);
+            result.State = ProviderPollState.Succeeded;
             result.Progress = 1f;
-            result.DownloadUrl = ExtractImageUrl(resultJson);
             if (string.IsNullOrEmpty(result.DownloadUrl))
             {
                 result.State = ProviderPollState.Failed;
-                result.Error = "fal completed but no image URL was present in the result.";
+                result.Error = "fal completed but no result URL was present in the result.";
             }
             return result;
         }

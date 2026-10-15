@@ -30,6 +30,8 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void SetUp()
         {
             AssetGenJobManager.ResetForTests();
+            AssetGenModelCatalog.ResetForTests(true);
+            AssetGenJobManager.SkipModelVerificationForTests = true;
             Environment.SetEnvironmentVariable(EnvVar, Secret);
             Environment.SetEnvironmentVariable(FalEnvVar, FalSecret);
             _fake = new FakeHttpTransport();
@@ -86,6 +88,30 @@ namespace MCPForUnityTests.Editor.AssetGen
             int guard = 0;
             while (!AssetGenJobManager.TryAdvanceForTests(jobId) && guard++ < 50) { }
             Assert.Less(guard, 50, "state machine did not reach a terminal state");
+        }
+
+        [TestCase(false), TestCase(true)]
+        public void ImageResult_JpegBytesUseJpgExtension_ForDownloadedAndInlineResults(bool inline)
+        {
+            byte[] jpeg = { 255, 216, 255, 224, 0, 16 };
+            string env = "MCPFORUNITY_OPENROUTER_API_KEY";
+            string old = Environment.GetEnvironmentVariable(env);
+            Environment.SetEnvironmentVariable(env, "test-key");
+            try
+            {
+                _fake.Handler = r => r.Method == "POST" ? Json(inline
+                    ? "{\"choices\":[{\"message\":{\"images\":[{\"image_url\":{\"url\":\"data:image/png;base64," + Convert.ToBase64String(jpeg) + "\"}}]}}]}"
+                    : "{\"response_url\":\"https://queue.fal.run/test/image/requests/r1\"}")
+                    : r.Url.EndsWith("/status") ? Json("{\"status\":\"COMPLETED\"}")
+                    : r.Url.Contains("queue.fal.run") ? Json("{\"images\":[{\"url\":\"https://example.com/image.png\",\"content_type\":\"image/png\"}]}")
+                    : new HttpResult { Status = 200, IsSuccess = true, Body = jpeg };
+                var job = AssetGenJobManager.StartImageGeneration(new ImageGenRequest { Provider = inline ? "openrouter" : "fal", Model = "test/image", Prompt = "cat", OutputFolder = TestFolder });
+                Pump(job.JobId);
+                Assert.AreEqual(AssetGenJobState.Done, job.State, job.Error);
+                StringAssert.EndsWith(".jpg", job.AssetPath);
+                Assert.AreEqual("jpg", job.Format);
+            }
+            finally { Environment.SetEnvironmentVariable(env, old); }
         }
 
         [Test]

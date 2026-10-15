@@ -12,6 +12,14 @@ from cli.utils.parsers import parse_json_list_or_exit
 from cli.utils.confirmation import confirm_destructive_action
 
 
+def _name_and_folder(path: str) -> tuple[str, str]:
+    """Split 'Assets/Scripts/Player.cs' into ('Player', 'Assets/Scripts'), the form manage_script takes."""
+    parts = path.replace("\\", "/").rsplit("/", 1)
+    filename = parts[-1]
+    directory = parts[0] if len(parts) > 1 else "Assets"
+    return (filename[:-3] if filename.endswith(".cs") else filename), directory
+
+
 @click.group()
 def script():
     """Script operations - create, read, edit C# scripts."""
@@ -99,10 +107,7 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     """
     config = get_config()
 
-    parts = path.rsplit("/", 1)
-    filename = parts[-1]
-    directory = parts[0] if len(parts) > 1 else "Assets"
-    name = filename[:-3] if filename.endswith(".cs") else filename
+    name, directory = _name_and_folder(path)
 
     params: dict[str, Any] = {
         "action": "read",
@@ -146,10 +151,7 @@ def delete(path: str, force: bool):
 
     confirm_destructive_action("Delete", "script", path, force)
 
-    parts = path.rsplit("/", 1)
-    filename = parts[-1]
-    directory = parts[0] if len(parts) > 1 else "Assets"
-    name = filename[:-3] if filename.endswith(".cs") else filename
+    name, directory = _name_and_folder(path)
 
     params: dict[str, Any] = {
         "action": "delete",
@@ -181,15 +183,24 @@ def edit(path: str, edits: str):
     config = get_config()
 
     edits_list = parse_json_list_or_exit(edits, "edits")
+    name, directory = _name_and_folder(path)
 
-    params: dict[str, Any] = {
-        "uri": path,
+    # Unity refuses an edit that does not name the version of the file it changes.
+    sha_result = run_command("manage_script", {"action": "get_sha", "name": name, "path": directory}, config)
+    sha = (sha_result.get("result", sha_result).get("data") or {}).get("sha256")
+    if not sha:
+        click.echo(format_output(sha_result, config.format))
+        sys.exit(1)
+
+    result = run_command("manage_script", {
+        "action": "apply_text_edits",
+        "name": name,
+        "path": directory,
         "edits": edits_list,
-    }
-
-    result = run_command("apply_text_edits", params, config)
+        "precondition_sha256": sha,
+    }, config)
     click.echo(format_output(result, config.format))
-    if result.get("success"):
+    if result.get("result", result).get("success"):
         print_success(f"Applied edits to: {path}")
 
 
@@ -212,11 +223,11 @@ def validate(path: str, level: str):
     """
     config = get_config()
 
-    params: dict[str, Any] = {
-        "uri": path,
+    name, directory = _name_and_folder(path)
+    result = run_command("manage_script", {
+        "action": "validate",
+        "name": name,
+        "path": directory,
         "level": level,
-        "include_diagnostics": True,
-    }
-
-    result = run_command("validate_script", params, config)
+    }, config)
     click.echo(format_output(result, config.format))

@@ -14,7 +14,7 @@ namespace MCPForUnityTests.Editor.Services
     /// The TryBeginReconnect tests only exercise its deliberate-drop paths, which never
     /// dispatch the async connect.
     /// </summary>
-    public class HttpAutoStartHandlerTests
+    public class HttpAutoStartHandlerTests : TransportPreferenceTestBase
     {
         private FakeTransportClient _fakeClient;
         private TransportManager _savedManager;

@@ -98,12 +98,12 @@ CI (`.github/workflows/docs-generate.yml`) fails the PR if the committed referen
 - Renders the full release history into `releases.md`, grouped by minor version, with each release body in a collapsible `<details>` block.
 - Replaces the block between `<!-- recent-updates:start -->` and `<!-- recent-updates:end -->` in the root `README.md` with the latest five releases.
 
-CI keeps both in sync automatically via `.github/workflows/sync-releases.yml`. Triggers are intentionally narrow so the workflow never blocks outsider PRs:
+CI keeps both in sync automatically via `.github/workflows/sync-releases.yml`. The `beta` ruleset blocks direct pushes, so the workflow opens a PR into `beta` and merges it itself. Triggers are intentionally narrow so the workflow never blocks outsider PRs:
 
 | Trigger | What happens |
 |---|---|
-| `release.{published,edited,unpublished,deleted}` | Sync fires within ~30 seconds and commits directly to `beta` with `[skip ci]`. This is the canonical entry point — the only time the synced files can legitimately go stale. |
-| `workflow_dispatch` | Manual escape hatch (re-run after a one-off UI edit, or to backfill). |
+| `workflow_dispatch` | The canonical entry point: `release.yml` dispatches the sync right after it creates a release. Also the manual escape hatch (re-run after a one-off UI edit, or to backfill). |
+| `release.{published,edited,unpublished,deleted}` | Covers releases a person creates or edits in the GitHub UI. Releases made by `release.yml` never fire it: they are created with `GITHUB_TOKEN`, and events made with that token start no workflows. |
 
 **Not triggered on `pull_request`.** A drift check at PR time would fail outsider PRs that edit README for unrelated reasons (typo fix, citation tweak), and the contributor wouldn't have push access to regenerate. The synced files are maintained by the release pipeline, not by PR authors.
 

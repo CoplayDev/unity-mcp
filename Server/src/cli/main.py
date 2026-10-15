@@ -23,7 +23,6 @@ from cli.utils.connection import (
 class Context:
     def __init__(self):
         self.config: Optional[CLIConfig] = None
-        self.verbose: bool = False
 
 
 pass_context = click.make_pass_decorator(Context, ensure=True)
@@ -96,7 +95,7 @@ click.Group.resolve_command = _resolve_command_with_suggestions  # type: ignore[
 @click.option(
     "--verbose", "-v",
     is_flag=True,
-    help="Enable verbose output."
+    help="Print each command sent to Unity and its raw response to stderr."
 )
 @pass_context
 def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance: Optional[str], verbose: bool):
@@ -108,7 +107,7 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
     Examples:
         unity-mcp status
         unity-mcp gameobject find "Player"
-        unity-mcp scene hierarchy --format json
+        unity-mcp --format json scene hierarchy
         unity-mcp editor play
 
     \b
@@ -125,6 +124,7 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
         timeout=timeout,
         format=format,
         unity_instance=instance,
+        verbose=verbose,
     )
 
     # Security warning for non-localhost connections
@@ -132,7 +132,6 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
 
     set_config(config)
     ctx.config = config
-    ctx.verbose = verbose
 
 
 @cli.command("status")
@@ -253,6 +252,7 @@ def register_commands():
         ("cli.commands.scene", "scene"),
         ("cli.commands.asset", "asset"),
         ("cli.commands.asset_gen", "asset_gen"),
+        ("cli.commands.blender", "blender"),
         ("cli.commands.script", "script"),
         ("cli.commands.code", "code"),
         ("cli.commands.editor", "editor"),
@@ -260,6 +260,7 @@ def register_commands():
         ("cli.commands.material", "material"),
         ("cli.commands.lighting", "lighting"),
         ("cli.commands.animation", "animation"),
+        ("cli.commands.sprite", "sprite"),
         ("cli.commands.audio", "audio"),
         ("cli.commands.ui", "ui"),
         ("cli.commands.instance", "instance"),

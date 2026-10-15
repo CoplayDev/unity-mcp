@@ -29,22 +29,14 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                // Try running python directly first (works with Windows App Execution Aliases)
-                if (TryValidatePython("python3.exe", out string version, out string fullPath) ||
-                    TryValidatePython("python.exe", out version, out fullPath))
+                // Probe every python-like entry on PATH instead of only the first match. A single
+                // name routinely resolves to several files on Windows - the Microsoft Store App
+                // Execution Alias stub, pyenv-win's .bat shims, and real interpreters - and stopping
+                // at the first one made pyenv (and any setup shadowed by the Store stub) report
+                // "Python not found" even though the interpreter works fine from a terminal.
+                foreach (string candidate in EnumeratePythonCandidates())
                 {
-                    status.IsAvailable = true;
-                    status.Version = version;
-                    status.Path = fullPath;
-                    status.Details = $"Found Python {version} in PATH";
-                    return status;
-                }
-
-                // Fallback: try 'where' command
-                if (TryFindInPath("python3.exe", out string pathResult) ||
-                    TryFindInPath("python.exe", out pathResult))
-                {
-                    if (TryValidatePython(pathResult, out version, out fullPath))
+                    if (TryValidatePython(candidate, out string version, out string fullPath))
                     {
                         status.IsAvailable = true;
                         status.Version = version;
@@ -55,12 +47,12 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 }
 
                 // Fallback: try to find python via uv
-                if (TryFindPythonViaUv(out version, out fullPath))
+                if (TryFindPythonViaUv(out string uvVersion, out string uvFullPath))
                 {
                     status.IsAvailable = true;
-                    status.Version = version;
-                    status.Path = fullPath;
-                    status.Details = $"Found Python {version} via uv";
+                    status.Version = uvVersion;
+                    status.Path = uvFullPath;
+                    status.Details = $"Found Python {uvVersion} via uv";
                     return status;
                 }
 
@@ -152,6 +144,54 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         }
 
 
+        /// <summary>
+        /// Every python-like executable reachable from PATH, in priority order and de-duplicated.
+        /// The extension-less names matter: they let 'where' expand through PATHEXT, which is what
+        /// surfaces pyenv-win's python.bat shims next to regular python.exe installs.
+        /// </summary>
+        private IEnumerable<string> EnumeratePythonCandidates()
+        {
+            string augmentedPath = BuildAugmentedPath();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string name in new[] { "python3.exe", "python.exe", "python3", "python" })
+            {
+                foreach (string match in ExecPath.FindAllInPath(name, augmentedPath))
+                {
+                    if (seen.Add(match)) yield return match;
+                }
+            }
+
+            // Last resort: hand the bare names to the process launcher so a working App Execution
+            // Alias that 'where' failed to report still gets a chance to answer --version.
+            foreach (string name in new[] { "python3.exe", "python.exe" })
+            {
+                if (seen.Add(name)) yield return name;
+            }
+        }
+
+        /// <summary>
+        /// Whether a path found in 'uv python list' output looks like a launchable interpreter.
+        /// pyenv-win registers its interpreters as .bat shims, so restricting this to .exe hid
+        /// perfectly valid installs.
+        /// </summary>
+        internal static bool IsPythonExecutable(string path)
+        {
+            string extension = Path.GetExtension(path);
+            if (!extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) &&
+                !extension.Equals(".bat", StringComparison.OrdinalIgnoreCase) &&
+                !extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string name = Path.GetFileNameWithoutExtension(path);
+
+            // pythonw is the console-less variant and never writes a version to stdout/stderr
+            return name.StartsWith("python", StringComparison.OrdinalIgnoreCase) &&
+                   !name.StartsWith("pythonw", StringComparison.OrdinalIgnoreCase);
+        }
+
         private bool TryFindPythonViaUv(out string version, out string fullPath)
         {
             version = null;
@@ -173,8 +213,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     if (parts.Length >= 2)
                     {
                         string potentialPath = parts[parts.Length - 1];
-                        if (File.Exists(potentialPath) &&
-                            (potentialPath.EndsWith("python.exe") || potentialPath.EndsWith("python3.exe")))
+                        if (File.Exists(potentialPath) && IsPythonExecutable(potentialPath))
                         {
                             if (TryValidatePython(potentialPath, out version, out fullPath))
                             {
@@ -201,9 +240,10 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             {
                 string augmentedPath = BuildAugmentedPath();
 
-                // First, try to resolve the absolute path for better UI/logging display
+                // First, try to resolve the absolute path for better UI/logging display.
+                // Already-rooted candidates are passed through: 'where' rejects full paths.
                 string commandToRun = pythonPath;
-                if (TryFindInPath(pythonPath, out string resolvedPath))
+                if (!Path.IsPathRooted(pythonPath) && TryFindInPath(pythonPath, out string resolvedPath))
                 {
                     commandToRun = resolvedPath;
                 }
@@ -285,6 +325,17 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     }
                 }
                 catch { /* Ignore if directory doesn't exist */ }
+            }
+
+            // pyenv-win: shims are what 'python' resolves to in a terminal, but Unity launched from
+            // the Hub does not always inherit the PATH entry that pyenv's installer added.
+            var pyenvRoot = Environment.GetEnvironmentVariable("PYENV");
+            if (string.IsNullOrEmpty(pyenvRoot) && !string.IsNullOrEmpty(homeDir))
+                pyenvRoot = Path.Combine(homeDir, ".pyenv", "pyenv-win");
+            if (!string.IsNullOrEmpty(pyenvRoot))
+            {
+                additions.Add(Path.Combine(pyenvRoot, "shims"));
+                additions.Add(Path.Combine(pyenvRoot, "bin"));
             }
 
             // User scripts

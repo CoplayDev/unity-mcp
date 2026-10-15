@@ -27,7 +27,7 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
 
     The JSON file should contain an array of command objects with 'tool' and 'params' keys.
 
-    \\b
+    \b
     File format:
         [
             {"tool": "manage_gameobject", "params": {"action": "create", "name": "Cube1"}},
@@ -35,7 +35,7 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
             {"tool": "manage_components", "params": {"action": "add", "target": "Cube1", "componentType": "Rigidbody"}}
         ]
 
-    \\b
+    \b
     Examples:
         unity-mcp batch run commands.json
         unity-mcp batch run setup.json --parallel
@@ -92,7 +92,7 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
 def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     """Execute commands from inline JSON.
 
-    \\b
+    \b
     Examples:
         unity-mcp batch inline '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'
 
@@ -124,7 +124,7 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
 def batch_template(output: Optional[str]):
     """Generate a sample batch commands file.
 
-    \\b
+    \b
     Examples:
         unity-mcp batch template > commands.json
         unity-mcp batch template -o my_batch.json

@@ -12,6 +12,7 @@
 6. [Common Mistakes and Corrections](#common-mistakes-and-corrections)
 7. [Output Formats](#output-formats)
 8. [Command Reference by Category](#command-reference-by-category)
+9. [Complete Command Reference](#complete-command-reference)
 
 ---
 
@@ -150,7 +151,7 @@ Global options come **BEFORE** the command group:
 | `--format` | `-f` | Output format: `text`, `json`, `table` | `text` |
 | `--timeout` | `-t` | Command timeout in seconds | `30` |
 | `--instance` | `-i` | Target Unity instance (hash or Name@hash) | auto |
-| `--verbose` | `-v` | Enable verbose output | `false` |
+| `--verbose` | `-v` | Print each command sent to Unity and its raw response to stderr | `false` |
 
 **✅ Correct:**
 ```bash
@@ -288,14 +289,15 @@ When targeting GameObjects, specify how to search:
 # By name (default)
 unity-mcp gameobject modify "Player" --position 0 0 0
 
-# By instance ID (use --search-method)
-unity-mcp gameobject modify "-81840" --search-method by_id --position 0 0 0
+# By instance ID (use --search-method). IDs are often negative, and a bare -81840
+# reads as an option ("No such option: -8"): put options first, then -- before the ID
+unity-mcp gameobject modify --search-method by_id --position 0 0 0 -- -81840
 
 # By path
 unity-mcp gameobject modify "/Canvas/Panel/Button" --search-method by_path --active
 
-# By tag
-unity-mcp gameobject find "Player" --search-method by_tag
+# By tag (gameobject find takes --method, not --search-method)
+unity-mcp gameobject find "Player" --method by_tag
 ```
 
 ---
@@ -346,6 +348,19 @@ unity-mcp status
 unity-mcp instances
 ```
 
+### Instance Commands
+
+```bash
+# List connected Unity instances
+unity-mcp instance list
+
+# Target one instance: per call with --instance, or for a whole shell with UNITY_MCP_INSTANCE
+unity-mcp --instance "ProjectName@abc123" editor play
+
+# Show current instance
+unity-mcp instance current
+```
+
 ### Scene Commands
 
 ```bash
@@ -378,7 +393,7 @@ unity-mcp camera screenshot --file-name "my_screenshot" --super-size 2
 # Find GameObjects
 unity-mcp gameobject find "Player"
 unity-mcp gameobject find "Enemy" --method by_tag
-unity-mcp gameobject find "-81840" --method by_id
+unity-mcp gameobject find --method by_id -- -81840  # -- before a negative ID
 unity-mcp gameobject find "Rigidbody" --method by_component
 
 # Create GameObject
@@ -474,6 +489,22 @@ unity-mcp script delete "Assets/Scripts/MyScript.cs"
 unity-mcp script validate "Assets/Scripts/MyScript.cs"
 ```
 
+### Shader Commands
+
+```bash
+# Create shader
+unity-mcp shader create "MyShader" --path "Assets/Shaders"
+
+# Read shader
+unity-mcp shader read "Assets/Shaders/Custom.shader"
+
+# Update from file
+unity-mcp shader update "Assets/Shaders/Custom.shader" --file local.shader
+
+# Delete shader
+unity-mcp shader delete "Assets/Shaders/Old.shader" --force
+```
+
 ### Material Commands
 
 ```bash
@@ -511,7 +542,7 @@ unity-mcp editor stop
 unity-mcp editor console                    # Read console
 unity-mcp editor console --count 20         # Last 20 entries
 unity-mcp editor console --clear            # Clear console
-unity-mcp editor console --types error,warning  # Filter by type
+unity-mcp editor console --type error --type warning  # Filter: error, warning, log or all
 
 # Menu items
 unity-mcp editor menu "Edit/Preferences"
@@ -543,6 +574,65 @@ unity-mcp custom_tool list
 # Execute a custom tool by name
 unity-mcp editor custom-tool "MyBuildTool"
 unity-mcp editor custom-tool "Deploy" --params '{"target": "Android"}'
+```
+
+### VFX Commands
+
+VFX Graph tooling is tested against com.unity.visualeffectgraph 12.1.13 with URP/HDRP; other versions may be unsupported.
+
+```bash
+# Particle systems
+unity-mcp vfx particle info "Fire"
+unity-mcp vfx particle play "Fire" --with-children
+unity-mcp vfx particle stop "Fire"
+
+# Line renderers
+unity-mcp vfx line info "LaserBeam"
+unity-mcp vfx line create-line "Line" --start 0 0 0 --end 10 5 0
+unity-mcp vfx line create-circle "Circle" --radius 5
+
+# Trail renderers
+unity-mcp vfx trail info "PlayerTrail"
+unity-mcp vfx trail set-time "Trail" 2.0
+
+# Raw VFX actions (access all 60+ actions)
+unity-mcp vfx raw particle_set_main "Fire" --params '{"duration": 5}'
+```
+
+### ProBuilder Commands
+
+Requires the com.unity.probuilder package in your Unity project.
+
+```bash
+# Create shapes
+unity-mcp probuilder create-shape Cube
+unity-mcp probuilder create-shape Torus --name "MyTorus" --params '{"rows": 16, "columns": 16}'
+unity-mcp probuilder create-shape Stair --position 0 0 5 --params '{"steps": 10}'
+
+# Create from polygon footprint
+unity-mcp probuilder create-poly --points "[[0,0,0],[5,0,0],[5,0,5],[0,0,5]]" --height 3
+
+# Get mesh info
+unity-mcp probuilder info "MyCube"
+
+# Raw ProBuilder actions
+unity-mcp probuilder raw extrude_faces "MyCube" --params '{"faceIndices": [0], "distance": 1.0}'
+unity-mcp probuilder raw bevel_edges "MyCube" --params '{"edgeIndices": [0,1], "amount": 0.2}'
+unity-mcp probuilder raw set_face_material "MyCube" --params '{"faceIndices": [0], "materialPath": "Assets/Materials/Red.mat"}'
+```
+
+### Batch Commands
+
+```bash
+# Execute from JSON file
+unity-mcp batch run commands.json
+unity-mcp batch run commands.json --parallel --fail-fast
+
+# Execute inline JSON
+unity-mcp batch inline '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'
+
+# Generate template
+unity-mcp batch template > my_commands.json
 ```
 
 ### Prefab Commands
@@ -606,11 +696,16 @@ unity-mcp audio volume "MusicPlayer" 0.5
 ### Animation Commands
 
 ```bash
-# Control Animator (target must have Animator component)
-unity-mcp animation play "Character" "Walk"
-unity-mcp animation set-parameter "Character" "Speed" 1.5 --type float
-unity-mcp animation set-parameter "Character" "IsRunning" true --type bool
-unity-mcp animation set-parameter "Character" "Jump" "" --type trigger
+# Control Animator (target or one of its children must have an Animator component)
+unity-mcp animation animator play "Character" "Walk"
+unity-mcp animation animator set-parameter "Character" "Speed" 1.5 --type float
+unity-mcp animation animator set-parameter "Character" "IsRunning" true --type bool
+unity-mcp animation animator set-parameter "Character" "Jump" "" --type trigger
+
+# Clips and controllers
+unity-mcp animation clip create "Assets/Animations/Bounce.anim" --length 2.0 --loop
+unity-mcp animation clip info "Assets/Animations/Walk.anim"
+unity-mcp animation controller info "Assets/Animations/Player.controller"
 ```
 
 ### Camera Commands
@@ -802,6 +897,26 @@ unity-mcp texture delete "Assets/Textures/Old.png"
 unity-mcp texture delete "Assets/Textures/Old.png" --force
 ```
 
+### Sprite Commands
+
+```bash
+# Read a sheet's size, import settings and slices (the image itself is the file)
+unity-mcp sprite info "Assets/Sprites/Hero.png"
+
+# Slice into a grid: --cols/--rows, or --frame-width/--frame-height
+unity-mcp sprite slice "Assets/Sprites/Hero.png" --cols 6 --rows 4
+
+# High-resolution art: --filter-mode bilinear or trilinear (the default, point, suits pixel art)
+unity-mcp sprite slice "Assets/Sprites/Painted.png" --cols 8 --filter-mode bilinear
+
+# Clips from the slices, then a controller from the clips
+unity-mcp sprite setup-clips "Assets/Sprites/Hero.png" --clips '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'
+unity-mcp sprite setup-controller "Assets/Animators/Hero.controller" --clips '[{"name": "walk", "path": "Assets/Sprites/walk.anim"}]'
+
+# All of it in one step (--add-to-scene needs --scene-target, an existing GameObject)
+unity-mcp sprite full-setup "Assets/Sprites/Hero.png" --cols 6 --rows 4 --clips '[{"name": "idle", "start_frame": 0, "end_frame": 5}, {"name": "walk", "start_frame": 6, "end_frame": 11}]' --controller-path "Assets/Animators/Hero.controller" --add-to-scene --scene-target Hero
+```
+
 ### Code Commands
 
 ```bash
@@ -813,6 +928,62 @@ unity-mcp code read "Assets/Scripts/Player.cs" --start-line 10 --line-count 20
 unity-mcp code search "class.*Player" "Assets/Scripts/Player.cs"
 unity-mcp code search "TODO|FIXME" "Assets/Scripts/Utils.cs"
 unity-mcp code search "void Update" "Assets/Scripts/Game.cs" --max-results 20
+```
+
+### Build Commands
+
+```bash
+unity-mcp build platform                       # Read the active platform
+unity-mcp build platform android               # Switch platform
+unity-mcp build scenes                         # Read the build scene list
+unity-mcp build run --target windows64 --development
+unity-mcp build batch --targets windows64,linux64,webgl
+unity-mcp build status                         # Last build report
+unity-mcp build settings product_name --value "My Game"
+```
+
+### Physics Commands
+
+```bash
+unity-mcp physics ping                         # Physics system status
+unity-mcp physics get-settings
+unity-mcp physics raycast --origin "0,5,0" --direction "0,-1,0" --max-distance 10
+unity-mcp physics overlap --shape sphere --position "0,0,0" --size 2
+unity-mcp physics get-rigidbody "Player"
+unity-mcp physics simulate --steps 10          # Step physics in edit mode
+unity-mcp physics validate                     # Check the scene for common mistakes
+```
+
+### Profiler Commands
+
+```bash
+unity-mcp profiler start                       # Optionally --log-file to record a .raw
+unity-mcp profiler status
+unity-mcp profiler frame-timing
+unity-mcp profiler get-counters --category Render
+unity-mcp profiler memory-snapshot             # Requires com.unity.memoryprofiler
+unity-mcp profiler stop
+```
+
+### Reflection and Docs Commands
+
+```bash
+unity-mcp reflect search NavMesh               # Find Unity types by name
+unity-mcp reflect type NavMeshAgent            # Member summary
+unity-mcp reflect member Physics Raycast       # One member in detail
+unity-mcp docs get Physics Raycast             # Unity documentation page
+```
+
+### Asset Generation and Blender Commands
+
+```bash
+unity-mcp asset-gen list-models --kind image
+unity-mcp asset-gen generate-image --provider fal --prompt "a stone texture"
+unity-mcp asset-gen generate-model --provider tripo --mode text --prompt "a red chair"
+unity-mcp asset-gen status --job-id abc123
+unity-mcp asset-gen import-model-file --source-path "C:/exports/house.fbx" --output-folder Assets/Models
+unity-mcp blender status                       # Is Blender reachable?
+unity-mcp blender import-model --selection-only --target-size 2
 ```
 
 ### Raw Commands
@@ -829,6 +1000,52 @@ unity-mcp raw manage_camera '{"action": "screenshot", "include_image": true}'
 unity-mcp raw manage_graphics '{"action": "volume_get_info", "target": "PostProcessing"}'
 unity-mcp raw manage_packages '{"action": "list_packages"}'
 ```
+
+---
+
+## Complete Command Reference
+
+| Group | Subcommands |
+|-------|-------------|
+| (top level) | `instances`, `raw`, `status` |
+| `animation` | `raw` |
+| `animation animator` | `crossfade`, `get-parameter`, `info`, `play`, `set-enabled`, `set-parameter`, `set-speed` |
+| `animation clip` | `add-curve`, `add-event`, `assign`, `create`, `create-preset`, `info`, `remove-event`, `set-curve`, `set-vector-curve` |
+| `animation controller` | `add-blend-tree-child`, `add-layer`, `add-parameter`, `add-state`, `add-transition`, `assign`, `create`, `create-blend-tree-1d`, `create-blend-tree-2d`, `info`, `remove-layer`, `set-layer-weight` |
+| `asset` | `create`, `delete`, `duplicate`, `import`, `info`, `mkdir`, `move`, `rename`, `search` |
+| `asset-gen` | `generate-audio`, `generate-image`, `generate-model`, `import-model`, `import-model-file`, `list-models`, `status` |
+| `audio` | `play`, `stop`, `volume` |
+| `batch` | `inline`, `run`, `template` |
+| `blender` | `check-updates`, `compare-screenshot`, `import-model`, `object-info`, `run-python`, `scene-info`, `screenshot`, `setup-bloom`, `status`, `sync-addon` |
+| `build` | `batch`, `cancel`, `platform`, `profiles`, `run`, `scenes`, `settings`, `status` |
+| `camera` | `add-extension`, `brain-status`, `create`, `ensure-brain`, `force`, `list`, `ping`, `release`, `remove-extension`, `screenshot`, `screenshot-multiview`, `set-aim`, `set-blend`, `set-body`, `set-lens`, `set-noise`, `set-priority`, `set-target` |
+| `code` | `clear-history`, `execute`, `history`, `read`, `replay`, `search` |
+| `component` | `add`, `modify`, `remove`, `set` |
+| `custom_tool` | `list` |
+| `docs` | `get` |
+| `editor` | `add-layer`, `add-tag`, `console`, `custom-tool`, `deploy`, `menu`, `pause`, `play`, `poll-test`, `redo`, `refresh`, `remove-layer`, `remove-tag`, `restore`, `stop`, `tests`, `tool`, `undo` |
+| `gameobject` | `create`, `delete`, `duplicate`, `find`, `modify`, `move` |
+| `graphics` | `bake-cancel`, `bake-clear`, `bake-create-probes`, `bake-create-reflection`, `bake-reflection-probe`, `bake-set-settings`, `bake-settings`, `bake-start`, `bake-status`, `feature-add`, `feature-configure`, `feature-list`, `feature-remove`, `feature-reorder`, `feature-toggle`, `ping`, `pipeline-info`, `pipeline-set-quality`, `pipeline-set-settings`, `pipeline-settings`, `skybox-info`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-reflection`, `skybox-set-sun`, `stats`, `stats-debug-mode`, `stats-memory`, `volume-add-effect`, `volume-create`, `volume-create-profile`, `volume-info`, `volume-list-effects`, `volume-remove-effect`, `volume-set-effect`, `volume-set-properties` |
+| `instance` | `current`, `list` |
+| `lighting` | `create` |
+| `material` | `assign`, `create`, `info`, `set-color`, `set-property`, `set-renderer-color` |
+| `packages` | `add`, `add-registry`, `embed`, `info`, `list`, `list-registries`, `ping`, `remove`, `remove-registry`, `resolve`, `search`, `status` |
+| `physics` | `add-joint`, `apply-force`, `assign-material`, `configure-joint`, `configure-material`, `configure-rigidbody`, `create-material`, `get-collision-matrix`, `get-rigidbody`, `get-settings`, `linecast`, `overlap`, `ping`, `raycast`, `raycast-all`, `remove-joint`, `set-collision-matrix`, `set-settings`, `shapecast`, `simulate`, `validate` |
+| `prefab` | `close`, `create`, `hierarchy`, `info`, `modify`, `open`, `save` |
+| `probuilder` | `auto-smooth`, `bevel-edges`, `center-pivot`, `create-poly`, `create-shape`, `delete-faces`, `extrude-edges`, `extrude-faces`, `freeze-transform`, `info`, `move-vertices`, `raw`, `repair`, `select-faces`, `set-material`, `set-pivot`, `set-smoothing`, `subdivide`, `validate`, `weld-vertices` |
+| `profiler` | `frame-debugger-disable`, `frame-debugger-enable`, `frame-debugger-events`, `frame-timing`, `get-counters`, `memory-compare`, `memory-list`, `memory-snapshot`, `object-memory`, `set-areas`, `start`, `status`, `stop` |
+| `reflect` | `member`, `search`, `type` |
+| `scene` | `active`, `build-settings`, `close`, `create`, `hierarchy`, `load`, `loaded`, `move-to`, `open-additive`, `save`, `set-active`, `validate` |
+| `script` | `create`, `delete`, `edit`, `read`, `validate` |
+| `shader` | `create`, `delete`, `read`, `update` |
+| `sprite` | `full-setup`, `info`, `setup-clips`, `setup-controller`, `slice` |
+| `texture` | `create`, `delete`, `modify`, `set-import-settings`, `sprite` |
+| `tool` | `list` |
+| `ui` | `create-button`, `create-canvas`, `create-image`, `create-text` |
+| `vfx` | `raw` |
+| `vfx line` | `clear`, `create-circle`, `create-line`, `info`, `set-positions` |
+| `vfx particle` | `clear`, `info`, `pause`, `play`, `restart`, `stop` |
+| `vfx trail` | `clear`, `info`, `set-time` |
 
 ---
 
@@ -919,7 +1136,7 @@ unity-mcp [GLOBAL_OPTIONS] command subcommand [ARGS] [OPTIONS]
    unity-mcp gameobject modify --help
    ```
 
-2. **Use verbose mode** to see what's happening:
+2. **Use verbose mode** to see each command sent to Unity and its raw response (on stderr):
 
    ```bash
    unity-mcp -v scene hierarchy

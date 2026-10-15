@@ -20,6 +20,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     return new TripoAdapter();
                 case "meshy":
                     return new MeshyAdapter();
+                case "fal":
+                    return new FalModelAdapter();
                 default:
                     throw new NotSupportedException($"Unknown model provider '{id}'.");
             }
@@ -66,10 +68,11 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             {
                 new ProviderInfo { Id = "tripo", Kind = "model", Configured = IsConfigured("tripo"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "meshy", Kind = "model", Configured = IsConfigured("meshy"), Capabilities = new[] { "text", "image" } },
+                new ProviderInfo { Id = "fal", Kind = "model", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "sketchfab", Kind = "marketplace", Configured = IsConfigured("sketchfab"), Capabilities = new[] { "search", "import" } },
                 new ProviderInfo { Id = "fal", Kind = "image", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },
-                // fal appears twice by design — once per kind (image + audio) — sharing the single "fal" key.
+                // fal's three asset kinds share one secure-store key.
                 new ProviderInfo { Id = "fal", Kind = "audio", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "music", "sfx" } },
             };
         }

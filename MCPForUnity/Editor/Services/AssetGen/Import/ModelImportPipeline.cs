@@ -227,7 +227,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Import
             bool found = Type.GetType("GLTFast.GltfImport, glTFast") != null;
             if (!found)
             {
-                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                foreach (var asm in MCPForUnity.Runtime.Helpers.UnityAssembliesCompat.GetLoadedAssemblies())
                 {
                     try { if (asm.GetType("GLTFast.GltfImport") != null) { found = true; break; } }
                     catch { /* dynamic/!resolvable assembly */ }

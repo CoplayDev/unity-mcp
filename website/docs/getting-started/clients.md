@@ -26,13 +26,14 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **Gemini CLI** | HTTP | yes | yes | yes | Auto-connects. |
 | **OpenClaw** | HTTP / stdio | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport choice. |
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
+| **Pi** | stdio / HTTP | yes | yes | yes | Needs an MCP extension (Pi ships no MCP client of its own): `pi install npm:pi-mcp-adapter`. Writes the shared `~/.config/mcp/mcp.json`. |
 
 ## How to pick
 
 - **You want it to just work**: Claude Desktop. Stdio means no port conflicts and no firewall prompts.
 - **You're building a multi-agent or remote workflow**: anything HTTP. Multiple clients can share one Python server; see [Multi-Instance Routing](/guides/multi-instance).
 - **You're already in your IDE**: Cursor, VS Code Copilot, or Cline — keeps you in flow.
-- **You want a terminal**: Claude Code, Copilot CLI, Codex, Gemini CLI, or Qwen Code.
+- **You want a terminal**: Claude Code, Copilot CLI, Codex, Gemini CLI, Qwen Code, or Pi.
 
 ## Manual configuration
 
@@ -45,6 +46,8 @@ A few clients need an MCP toggle flipped on after the configurator writes their 
 - **Cursor** → Settings → MCP → enable the `unityMCP` server
 - **Antigravity** → Settings → MCP servers → enable
 - **OpenClaw** → enable the `openclaw-mcp-bridge` plugin
+- **Pi** → install an MCP extension first (`pi install npm:pi-mcp-adapter`) and restart Pi; Pi has no
+  built-in MCP client, so the config file alone does nothing
 
 Everything else just connects on next launch.
 

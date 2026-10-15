@@ -25,6 +25,13 @@ genuine provider keys and an interactive Editor before shipping.
 - [ ] `generate_model(provider=tripo, mode=text, prompt="...", format=glb)`, poll status.
 - [ ] Confirm the GLB imports correctly (no missing-importer error).
 
+## Automatic model discovery
+
+- [ ] Open Asset Generation: search live fal image/audio/3D and OpenRouter image choices; catalogs refresh every 24 hours while open.
+- [ ] Run `unity-mcp asset-gen list-models --kind model --provider fal --refresh`; repeat while `catalogs[].refreshing` is true. Use `--search`, `--mode`, `--limit` and `--offset` to browse.
+- [ ] Confirm failed refreshes preserve cached choices, missing models preserve the saved ID, and background refreshes preserve unsaved key input.
+- [ ] Set `MCPFORUNITY_RUN_LIVE_CATALOG=1` and run both catalog fixtures' `LivePublicCatalog*` tests. They check public discovery and compatibility without paid generation.
+
 ## fal.ai (default 2D image)
 
 - [ ] Enter the fal key.

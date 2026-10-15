@@ -19,7 +19,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
     /// no regressions during the decomposition into focused components.
     /// </summary>
     [TestFixture]
-    public class ServerManagementServiceCharacterizationTests
+    public class ServerManagementServiceCharacterizationTests : TransportPreferenceTestBase
     {
         private ServerManagementService _service;
         private bool _savedUseHttpTransport;

@@ -14,7 +14,7 @@ namespace MCPForUnityTests.Editor.Services
     /// Uses fake transports and a zero-delay retry schedule so every path completes
     /// synchronously (UTF 1.1 cannot run async tests).
     /// </summary>
-    public class HttpBridgeReloadHandlerTests
+    public class HttpBridgeReloadHandlerTests : TransportPreferenceTestBase
     {
         private static readonly TimeSpan[] ZeroSchedule =
         {

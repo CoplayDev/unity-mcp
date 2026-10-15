@@ -31,9 +31,11 @@ namespace MCPForUnity.Editor.Tools.AssetGen
                     case "status": return AssetGenToolHelpers.Status(p, "Image", 2.0);
                     case "cancel": return AssetGenToolHelpers.Cancel(p);
                     case "list_providers": return AssetGenToolHelpers.ListProviders("image");
+                    case "list_models": return AssetGenToolHelpers.ListModels(p, "image");
+                    case "refresh_models": return AssetGenToolHelpers.ListModels(p, "image", true);
                     case "": return new ErrorResponse("'action' parameter is required.");
                     default:
-                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, remove_background, status, cancel, list_providers.");
+                        return new ErrorResponse($"Unknown action: '{action}'. Supported: generate, remove_background, status, cancel, list_providers, list_models, refresh_models.");
                 }
             }
             catch (NotSupportedException nse)

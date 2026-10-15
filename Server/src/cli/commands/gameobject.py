@@ -51,7 +51,7 @@ def find(search_term: str, method: str, include_inactive: bool, limit: int, curs
     Examples:
         unity-mcp gameobject find "Player"
         unity-mcp gameobject find "Enemy" --method by_tag
-        unity-mcp gameobject find "-81840" --method by_id
+        unity-mcp gameobject find --method by_id -- -81840
         unity-mcp gameobject find "Rigidbody" --method by_component
         unity-mcp gameobject find "/Canvas/Panel" --method by_path
     """
@@ -291,7 +291,7 @@ def modify(
     Examples:
         unity-mcp gameobject modify "Player" --position 0 5 0
         unity-mcp gameobject modify "Enemy" --name "Boss" --tag "Boss"
-        unity-mcp gameobject modify "-81840" --search-method by_id --active
+        unity-mcp gameobject modify --search-method by_id --active -- -81840
         unity-mcp gameobject modify "/Canvas/Panel" --search-method by_path --inactive
         unity-mcp gameobject modify "Cube" --add-components "Rigidbody,BoxCollider"
         unity-mcp gameobject modify "Ground" --static
@@ -352,7 +352,7 @@ def delete(target: str, search_method: Optional[str], force: bool):
     \b
     Examples:
         unity-mcp gameobject delete "OldObject"
-        unity-mcp gameobject delete "-81840" --search-method by_id
+        unity-mcp gameobject delete --search-method by_id -- -81840
         unity-mcp gameobject delete "TempObjects" --search-method by_tag --force
     """
     config = get_config()
@@ -406,7 +406,7 @@ def duplicate(
     Examples:
         unity-mcp gameobject duplicate "Player"
         unity-mcp gameobject duplicate "Enemy" --name "Enemy2" --offset 5 0 0
-        unity-mcp gameobject duplicate "-81840" --search-method by_id
+        unity-mcp gameobject duplicate --search-method by_id -- -81840
     """
     config = get_config()
 

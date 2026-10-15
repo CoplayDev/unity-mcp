@@ -67,7 +67,10 @@ scripts/local-test/
 tools/.unity-check-logs/
 
 # Ignore the .claude directory, since it might contain local/project-level setting such as deny and allowlist.
-/.claude
+# Except .claude/skills: the Editor installs the unity-mcp skill from there, and while the whole
+# directory was ignored, `git add` skipped new skill files without a word.
+/.claude/*
+!/.claude/skills/
 .mcp.json
 
 # Superpowers skill working artifacts (specs, plans, SDD ledger)

@@ -25,11 +25,11 @@
 <details>
 <summary><strong>最近更新</strong></summary>
 
-* **[v10.0.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.0)**（2026-06-30）
-* **[v9.7.3](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.3)**（2026-06-15）
-* **[v9.7.1](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.1)**（2026-05-24）
-* **[v9.7.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.7.0)**（2026-05-22）
-* **[v9.6.8](https://github.com/CoplayDev/unity-mcp/releases/tag/v9.6.8)**（2026-04-27）
+* **[v10.3.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.3.0)**（2026-10-04）
+* **[v10.2.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.2.0)**（2026-09-01）
+* **[v10.1.2](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.1.2)**（2026-08-02）
+* **[v10.1.0](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.1.0)**（2026-07-13）
+* **[v10.0.2](https://github.com/CoplayDev/unity-mcp/releases/tag/v10.0.2)**（2026-07-13）
 
 完整更新历史见 [发布说明](https://coplaydev.github.io/unity-mcp/releases)。
 
@@ -39,7 +39,7 @@
 
 ## 它能做什么
 
-用自然语言从任意 MCP 客户端操作 Unity 编辑器：搭场景、建 GameObject、写改 C# 脚本、调材质和着色器、跑测试、看性能、出包。47 个 MCP 工具入口，任意客户端可用，免费、MIT 开源。
+用自然语言从任意 MCP 客户端操作 Unity 编辑器：搭场景、建 GameObject、写改 C# 脚本、调材质和着色器、跑测试、看性能、出包。50 个 MCP 工具入口，任意客户端可用，免费、MIT 开源。
 
 **[查看完整工具目录 →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
 

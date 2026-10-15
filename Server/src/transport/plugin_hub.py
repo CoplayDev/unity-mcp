@@ -17,6 +17,7 @@ from core.config import config
 from core.constants import API_KEY_HEADER
 from models.models import MCPResponse
 from transport.plugin_registry import PluginRegistry
+from transport.blender_timeout import blender_command_timeout, SERVER_RESPONSE_GRACE
 from services.api_key_service import ApiKeyService
 
 if TYPE_CHECKING:
@@ -292,7 +293,12 @@ class PluginHub(WebSocketEndpoint):
         # - long-running commands: allow caller to request a longer timeout via params
         unity_timeout_s = float(cls.COMMAND_TIMEOUT)
         server_wait_s = float(cls.COMMAND_TIMEOUT)
-        if command_type in cls._FAST_FAIL_COMMANDS:
+        if command_type == "blender_bridge":
+            # The socket's default is 180s even when the caller omits the field.
+            # Importing/placing its result in Unity happens after that socket call.
+            unity_timeout_s = blender_command_timeout(params)
+            server_wait_s = unity_timeout_s + SERVER_RESPONSE_GRACE
+        elif command_type in cls._FAST_FAIL_COMMANDS:
             fast_timeout = float(cls.FAST_FAIL_TIMEOUT)
             unity_timeout_s = fast_timeout
             server_wait_s = fast_timeout

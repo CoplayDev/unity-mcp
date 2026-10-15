@@ -19,7 +19,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
     /// Covers: MCPSetupWindow, EditorPrefsWindow, McpConnectionSection, and component patterns
     /// </summary>
     [TestFixture]
-    public class WindowsCharacterizationTests
+    public class WindowsCharacterizationTests : TransportPreferenceTestBase
     {
         #region Section 1: EditorPrefsWindow Tests (3 tests)
 
@@ -704,19 +704,19 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
         #region Section 9: McpAssetGenSection model-selection structure (reflection, no instantiation)
 
         /// <summary>
-        /// The Asset Gen section builds per-provider model dropdowns and a fal audio row. We assert
-        /// the private builders exist and keep the three-phase lifecycle, without instantiating the
-        /// section (its ctor requires the real UXML tree) — matching this suite's reflection style.
+        /// The Asset Gen section builds per-provider model dropdowns and shared-key fal rows (audio, 3D).
+        /// We assert the private builders exist and keep the three-phase lifecycle, without instantiating
+        /// the section (its ctor requires the real UXML tree) — matching this suite's reflection style.
         /// </summary>
         [Test]
-        public void McpAssetGenSection_HasModelDropdownAndAudioRowBuilders()
+        public void McpAssetGenSection_HasModelDropdownAndSharedFalRowBuilders()
         {
             var type = typeof(MCPForUnity.Editor.Windows.Components.AssetGen.McpAssetGenSection);
 
             Assert.IsNotNull(type.GetMethod("AddModelDropdown", BindingFlags.NonPublic | BindingFlags.Instance),
                 "expected a per-provider model dropdown builder");
-            Assert.IsNotNull(type.GetMethod("AddAudioRow", BindingFlags.NonPublic | BindingFlags.Instance),
-                "expected a fal audio row builder");
+            Assert.IsNotNull(type.GetMethod("AddSharedFalRow", BindingFlags.NonPublic | BindingFlags.Instance),
+                "expected a shared-key fal row builder for audio and 3D");
 
             // AddProviderRow takes (parent, id, displayName, kind) so each row knows its catalog kind.
             var addRow = type.GetMethod("AddProviderRow", BindingFlags.NonPublic | BindingFlags.Instance);

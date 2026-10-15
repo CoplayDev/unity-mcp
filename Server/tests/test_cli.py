@@ -476,6 +476,13 @@ class TestCameraCommands:
             assert params["viewTarget"] == "Canvas"
             assert params["includeImage"] is True
 
+    def test_camera_screenshot_position_view_target_reaches_unity_as_an_array(self, runner, mock_unity_response):
+        # Unity reads a JSON array as a position; the text "[0, 1, 2]" would be looked up as a GameObject name.
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, ["camera", "screenshot", "--view-target", "[0, 1, 2]"])
+            assert result.exit_code == 0, result.output
+            assert mock_run.call_args[0][1]["viewTarget"] == [0, 1, 2]
+
     def test_camera_ping_prints_output(self, runner, mock_unity_response):
         """The camera group must actually emit its result.
 
@@ -918,6 +925,38 @@ class TestMaterialCommands:
 class TestScriptCommands:
     """Tests for Script CLI commands."""
 
+    # validate_script and apply_text_edits are server-side MCP tools: Unity has no
+    # command by either name, so the CLI must call manage_script's actions itself.
+    def test_script_validate_calls_manage_script_validate(self, runner, mock_unity_response):
+        # A Windows path splits into the same name and folder as a forward-slash one.
+        with patch("cli.commands.script.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, ["script", "validate", "Assets\\Scripts\\Player.cs", "--level", "standard"])
+            assert result.exit_code == 0, result.output
+            assert mock_run.call_args[0][:2] == ("manage_script", {
+                "action": "validate", "name": "Player", "path": "Assets/Scripts", "level": "standard"})
+
+    def test_script_edit_reads_the_sha_then_applies_the_edits_with_it(self, runner):
+        # Unity refuses an edit that does not name the version of the file it changes.
+        edits = [{"startLine": 1, "startCol": 1, "endLine": 1, "endCol": 1, "newText": "// x"}]
+        replies = [{"status": "success", "result": {"success": True, "data": {"sha256": "abc123"}}},
+                   {"status": "success", "result": {"success": True}}]
+        with patch("cli.commands.script.run_command", side_effect=replies) as mock_run:
+            result = runner.invoke(cli, ["script", "edit", "Assets/Scripts/Player.cs", "--edits", json.dumps(edits)])
+            assert result.exit_code == 0, result.output
+            assert [c[0][1] for c in mock_run.call_args_list] == [
+                {"action": "get_sha", "name": "Player", "path": "Assets/Scripts"},
+                {"action": "apply_text_edits", "name": "Player", "path": "Assets/Scripts",
+                 "edits": edits, "precondition_sha256": "abc123"},
+            ]
+
+    def test_script_edit_exits_with_an_error_when_the_sha_lookup_fails(self, runner):
+        missing = {"status": "error", "error": "Script 'Player.cs' not found."}
+        with patch("cli.commands.script.run_command", return_value=missing) as mock_run:
+            result = runner.invoke(cli, ["script", "edit", "Assets/Scripts/Player.cs", "--edits", "[]"])
+            assert result.exit_code == 1, result.output
+            assert "not found" in result.output
+            assert mock_run.call_count == 1
+
     def test_script_create(self, runner, mock_unity_response):
         """Test script create command."""
         with patch("cli.commands.script.run_command", return_value=mock_unity_response):
@@ -996,6 +1035,21 @@ class TestGlobalOptions:
             with patch("cli.main.run_list_instances", return_value={"instances": []}):
                 result = runner.invoke(cli, ["--timeout", "60", "status"])
                 assert result.exit_code == 0
+
+    def test_verbose_prints_request_and_response(self, runner, mock_unity_response):
+        """Test -v prints the command sent to Unity and the raw response to stderr."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = json.dumps(mock_unity_response)
+        mock_response.json.return_value = mock_unity_response
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            result = runner.invoke(cli, ["-v", "scene", "active"])
+        assert result.exit_code == 0
+        assert '{"type": "manage_scene", "params": {"action": "get_active"}}' in result.stderr
+        assert '"message": "Operation successful"' in result.stderr
 
 
 # =============================================================================
@@ -1125,13 +1179,6 @@ class TestInstanceCommands:
             result = runner.invoke(cli, ["instance", "list"])
             assert result.exit_code == 0
             assert "TestProject" in result.output
-
-    def test_instance_set(self, runner, mock_unity_response):
-        """Test setting active instance."""
-        with patch("cli.commands.instance.run_command", return_value=mock_unity_response):
-            result = runner.invoke(
-                cli, ["instance", "set", "TestProject@abc123"])
-            assert result.exit_code == 0
 
     def test_instance_current(self, runner):
         """Test showing current instance."""

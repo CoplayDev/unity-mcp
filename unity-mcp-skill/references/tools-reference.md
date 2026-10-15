@@ -1,6 +1,8 @@
 # Unity-MCP Tools Reference
 
-Complete reference for all MCP tools. Each tool includes parameters, types, and usage examples.
+Every built-in MCP tool, with its main actions, parameters, and usage examples. For a tool's full parameter table, open its generated page: `https://coplaydev.github.io/unity-mcp/reference/tools/<group>/<tool>` (tools with no group, such as `manage_tools`, are under `core`).
+
+Each section names the tool's group when it is not `core`. A tool outside `core` can be hidden (over HTTP, only `core` starts enabled); enable its group with `manage_tools(action="activate", group="<group>")`.
 
 > **Template warning:** Examples in this file are skill templates and may be inaccurate for some Unity versions, packages, or project setups. Validate parameters and payload shapes against your active tool schema and runtime behavior.
 
@@ -14,7 +16,10 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [Material & Shader Tools](#material--shader-tools)
 - [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
+- [Build Tools](#build-tools)
 - [Testing Tools](#testing-tools)
+- [Search Tools](#search-tools)
+- [Custom Tools](#custom-tools)
 - [Camera Tools](#camera-tools)
 - [Graphics Tools](#graphics-tools)
 - [Package Tools](#package-tools)
@@ -22,6 +27,10 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [ProBuilder Tools](#probuilder-tools)
 - [Profiler Tools](#profiler-tools)
 - [Docs Tools](#docs-tools)
+- [Animation Tools](#animation-tools)
+- [VFX Tools](#vfx-tools)
+- [Scripting Extension Tools](#scripting-extension-tools)
+- [Asset Generation Tools](#asset-generation-tools)
 
 ---
 
@@ -98,13 +107,36 @@ refresh_unity(
 )
 ```
 
+### manage_tools
+
+Show, enable, or hide tool groups for the current session. Always visible (no group).
+
+```python
+manage_tools(action="list_groups")                  # every group, whether it is on, and its tools
+manage_tools(action="activate", group="animation")  # "deactivate" hides a group again
+manage_tools(action="sync")                         # re-read the tool toggles in the Unity editor
+manage_tools(action="reset")                        # back to the defaults
+```
+
+Groups: `core`, `animation`, `asset_gen`, `docs`, `probuilder`, `profiling`, `scripting_ext`, `testing`, `ui`, `vfx`. The `mcpforunity://tool-groups` resource lists the same catalog read-only. [Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/core/manage_tools)
+
+### debug_request_context
+
+Diagnostics: returns the request's `client_id`, `session_id` and meta, the session's active Unity instance, and the server version. No parameters; always visible (no group).
+
+```python
+debug_request_context()
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/core/debug_request_context)
+
 ---
 
 ## Scene Tools
 
 ### manage_scene
 
-Scene CRUD operations, hierarchy queries, screenshots, and scene view control.
+Scene CRUD operations, hierarchy queries, multi-scene editing, validation, and scene view control. Screenshots are `manage_camera` actions (see [Camera Tools](#camera-tools)); build-settings scenes are `manage_build(action="scenes")`.
 
 ```python
 # Get hierarchy (paginated)
@@ -114,55 +146,6 @@ manage_scene(
     cursor=0,                    # int, pagination cursor
     parent=None,                 # str|int, optional - filter by parent
     include_transform=False      # bool - include local transforms
-)
-
-# Screenshot (file only — saves to Assets/Screenshots/)
-manage_camera(action="screenshot")
-
-# Screenshot with inline image (base64 PNG returned to AI)
-manage_scene(
-    action="screenshot",
-    camera="MainCamera",         # str, optional - camera name, path, or instance ID
-    include_image=True,          # bool, default False - return base64 PNG inline
-    max_resolution=512           # int, optional - downscale cap (default 640)
-)
-
-# Batch surround — contact sheet of 6 fixed angles (front/back/left/right/top/bird_eye)
-manage_scene(
-    action="screenshot",
-    batch="surround",            # str - "surround" for 6-angle contact sheet
-    max_resolution=256           # int - per-tile resolution cap
-)
-# Returns: single composite contact sheet image with labeled tiles
-
-# Batch surround centered on a specific target
-manage_scene(
-    action="screenshot",
-    batch="surround",
-    view_target="Player",        # str|int|list[float] - center surround on this target
-    max_resolution=256
-)
-
-# Batch orbit — configurable multi-angle grid around a target
-manage_scene(
-    action="screenshot",
-    batch="orbit",               # str - "orbit" for configurable angle grid
-    view_target="Player",        # str|int|list[float] - target to orbit around
-    orbit_angles=8,              # int, default 8 - number of azimuth steps
-    orbit_elevations=[0, 30],    # list[float], default [0, 30, -15] - vertical angles in degrees
-    orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
-    orbit_fov=60,                # float, default 60 - camera FOV in degrees
-    max_resolution=256           # int - per-tile resolution cap
-)
-# Returns: single composite contact sheet (angles × elevations tiles in a grid)
-
-# Positioned screenshot (temp camera at viewpoint, no file saved)
-manage_scene(
-    action="screenshot",
-    view_target="Enemy",         # str|int|list[float] - target to aim at
-    view_position=[0, 10, -10],  # list[float], optional - camera position
-    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides view_target aim)
-    max_resolution=512
 )
 
 # Frame scene view on target
@@ -177,6 +160,20 @@ manage_scene(action="get_build_settings") # Build settings
 manage_scene(action="create", name="NewScene", path="Assets/Scenes/")
 manage_scene(action="load", path="Assets/Scenes/Main.unity")
 manage_scene(action="save")
+
+# Scene templates: "empty" (no objects), "default", "3d_basic", "2d_basic"
+manage_scene(action="create", name="Level1", path="Assets/Scenes/", template="3d_basic")
+
+# Multi-scene editing
+manage_scene(action="load", path="Assets/Scenes/Level2.unity", additive=True)  # keep current scene
+manage_scene(action="get_loaded_scenes")
+manage_scene(action="set_active_scene", scene_name="Level2")
+manage_scene(action="move_to_scene", target="Player", scene_name="Level2")     # moves a root GameObject
+manage_scene(action="close_scene", scene_name="Level2", remove_scene=True)     # remove_scene=False only unloads
+
+# Validation: missing scripts, broken prefabs
+manage_scene(action="validate")
+manage_scene(action="validate", auto_repair=True)  # also removes missing scripts (undoable)
 ```
 
 ### find_gameobjects
@@ -334,6 +331,8 @@ manage_components(
 # - "Assets/Prefabs/My.prefab" → String shorthand for asset paths
 # - "ObjectName"               → String shorthand for scene name lookup
 # - 12345                      → Integer shorthand for instanceID
+# - {"guid": "...", "spriteName": "Hero_0"} or {"guid": "...", "fileID": 12345}
+#                              → Sprite sub-asset of a sliced sheet (single-sprite textures resolve from guid/path alone)
 ```
 
 ---
@@ -444,7 +443,7 @@ Get file hash without content (for preconditions).
 
 ```python
 get_sha(uri="mcpforunity://path/Assets/Scripts/MyScript.cs")
-# Returns: {"sha256": "...", "lengthBytes": 1234, "lastModifiedUtc": "..."}
+# Returns: {"sha256": "...", "lengthBytes": 1234}
 ```
 
 ### delete_script
@@ -454,6 +453,26 @@ Delete a script file.
 ```python
 delete_script(uri="mcpforunity://path/Assets/Scripts/OldScript.cs")
 ```
+
+### manage_script
+
+Legacy whole-file router with three actions: `create`, `read`, `delete`. `name` is the class name without `.cs`; `path` is its folder under `Assets/`. There is no update action: edit with `script_apply_edits` or `apply_text_edits`.
+
+```python
+manage_script(action="read", name="PlayerController", path="Assets/Scripts")  # returns the file contents
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/core/manage_script)
+
+### manage_script_capabilities
+
+Lists the edit ops `script_apply_edits` supports (structured and text), the max edit payload size, and the active guards. No parameters; always visible (no group).
+
+```python
+manage_script_capabilities()
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/core/manage_script_capabilities)
 
 ---
 
@@ -500,7 +519,7 @@ manage_asset(action="delete", path="Assets/OldAsset.asset")
 
 ### manage_prefabs
 
-Headless prefab operations.
+Prefab assets: headless edits with `modify_contents`, or interactive editing in a prefab stage.
 
 ```python
 # Get prefab info
@@ -539,6 +558,8 @@ manage_prefabs(
     prefab_path="Assets/Prefabs/Player.prefab",
     create_child={"name": "SpawnPoint", "primitive_type": "Sphere", "position": [0, 2, 0]}
 )
+# A list creates several children in one save; "source_prefab_path" instead of
+# "primitive_type" nests a prefab instance: {"name": "Gun", "source_prefab_path": "Assets/Prefabs/Gun.prefab"}
 
 # Set component properties on prefab contents
 manage_prefabs(
@@ -547,6 +568,11 @@ manage_prefabs(
     target="ChildObject",
     component_properties={"Rigidbody": {"mass": 5.0}, "MyScript": {"health": 100}}
 )
+
+# Interactive: open a prefab stage, edit with manage_gameobject/manage_components, save, close
+manage_prefabs(action="open_prefab_stage", prefab_path="Assets/Prefabs/Enemy.prefab")
+manage_prefabs(action="save_prefab_stage")
+manage_prefabs(action="close_prefab_stage")  # back to the main scene
 ```
 
 ---
@@ -607,7 +633,7 @@ manage_material(
 
 ### manage_texture
 
-Create procedural textures.
+Create procedural textures. Group: `vfx`.
 
 ```python
 manage_texture(
@@ -637,13 +663,24 @@ manage_texture(
 )
 ```
 
+### manage_shader
+
+Create, read, update, or delete `.shader` files. Group: `vfx`. `name` is the file name without `.shader`; `path` is its folder under `Assets/`. To use the shader, pass the name declared in its `Shader "..."` line to `manage_material`.
+
+```python
+manage_shader(action="create", name="UnlitTint", path="Assets/Shaders",
+              contents='Shader "Custom/UnlitTint" { ... }')
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/vfx/manage_shader)
+
 ---
 
 ## UI Tools
 
 ### manage_ui
 
-Manage Unity UI Toolkit elements: UXML documents, USS stylesheets, UIDocument components, and visual tree inspection.
+Manage Unity UI Toolkit elements: UXML documents, USS stylesheets, UIDocument components, and visual tree inspection. Group: `ui`.
 
 ```python
 # Create a UXML file
@@ -715,7 +752,7 @@ manage_ui(
 
 ### manage_editor
 
-Control Unity Editor state.
+Control Unity Editor state, undo/redo. Prefab stages are `manage_prefabs` actions.
 
 ```python
 manage_editor(action="play")               # Enter play mode
@@ -730,9 +767,8 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
-manage_prefabs(action="open_prefab_stage", prefab_path="Assets/Prefabs/Enemy.prefab")
-manage_prefabs(action="save_prefab_stage")   # Save changes in the open prefab stage
-manage_prefabs(action="close_prefab_stage")  # Exit prefab editing mode back to main scene
+manage_editor(action="undo")               # Returns the name of the undone step
+manage_editor(action="redo")
 
 # Package deployment (no confirmation dialog — designed for LLM-driven iteration)
 manage_editor(action="deploy_package")     # Copy configured MCPForUnity source into installed package
@@ -774,7 +810,25 @@ read_console(action="clear")
 
 ---
 
+## Build Tools
+
+### manage_build
+
+Player builds, platform switching, player settings, build-settings scenes, build profiles, and batch builds. Actions: `build`, `status`, `platform`, `settings`, `scenes`, `profiles`, `batch`, `cancel`. `build` and `batch` return a `job_id`; poll it with `status`, stop it with `cancel`. `platform`, `settings` (with `property`) and `scenes` read when the value is omitted and write when it is given. `profiles` and `profile` need Unity 6+.
+
+```python
+manage_build(action="scenes", scenes='["Assets/Scenes/Menu.unity", "Assets/Scenes/Level1.unity"]')  # replaces the list
+manage_build(action="build", target="windows64", output_path="Builds/Win/Game.exe", development="true")
+manage_build(action="status", job_id="<job_id>")
+```
+
+Targets: `windows64`, `osx`, `linux64`, `android`, `ios`, `webgl`, `uwp`, `tvos`, `visionos`. Switching `platform` reimports assets. [Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/core/manage_build)
+
+---
+
 ## Testing Tools
+
+Group: `testing`.
 
 ### run_tests
 
@@ -963,6 +1017,19 @@ manage_camera(action="screenshot", capture_source="scene_view", view_target="Can
 
 # Multi-view screenshot (6-angle contact sheet)
 manage_camera(action="screenshot_multiview", max_resolution=480)
+
+# Batch surround centered on a target: one contact sheet of 6 labeled angles
+manage_camera(action="screenshot", batch="surround", view_target="Player", max_resolution=256)
+
+# Batch orbit: grid of orbit_angles x orbit_elevations tiles around a target
+manage_camera(action="screenshot", batch="orbit", view_target="Player",
+              orbit_angles=8,              # azimuth steps (default 8, max 36)
+              orbit_elevations=[0, 30],    # degrees (default [0, 30, -15])
+              orbit_distance=10,           # optional, auto-fit if omitted
+              orbit_fov=60, max_resolution=256)
+
+# Positioned capture: temp camera at a viewpoint (view_rotation overrides the view_target aim)
+manage_camera(action="screenshot", view_target="Enemy", view_position=[0, 10, -10], max_resolution=512)
 
 # List all cameras
 manage_camera(action="list_cameras")
@@ -1313,7 +1380,7 @@ manage_physics(action="simulate_step", steps=10, step_size=0.02)
 
 ### manage_probuilder
 
-Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` package. When available, **prefer ProBuilder over primitive GameObjects** for editable geometry, multi-material faces, or complex shapes.
+Unified tool for ProBuilder mesh operations. Group: `probuilder`. Requires `com.unity.probuilder` package. When available, **prefer ProBuilder over primitive GameObjects** for editable geometry, multi-material faces, or complex shapes.
 
 **Parameters:**
 
@@ -1582,3 +1649,158 @@ unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
 unity_docs(action="lookup", query="VolumeProfile",
            package="com.unity.render-pipelines.universal", pkg_version="17.0")
 ```
+
+---
+
+## Animation Tools
+
+Group: `animation`.
+
+### manage_animation
+
+Animator control, AnimatorController authoring, and AnimationClip creation. Actions by prefix:
+
+- `animator_*` (a scene object's Animator): `get_info`, `get_parameter`, `play`, `crossfade`, `set_parameter`, `set_speed`, `set_enabled`
+- `controller_*` (`.controller` assets): `create`, `get_info`, `assign`, `add_state`, `add_transition`, `add_parameter`, `add_layer`, `remove_layer`, `set_layer_weight`, `create_blend_tree_1d`, `create_blend_tree_2d`, `add_blend_tree_child`
+- `clip_*` (`.anim` assets): `create`, `get_info`, `add_curve`, `set_curve`, `set_vector_curve`, `create_preset`, `assign`, `add_event`, `remove_event`
+
+Top-level parameters are `target`, `search_method`, `clip_path` and `controller_path`; everything else goes in `properties` (camelCase or snake_case keys).
+
+```python
+manage_animation(action="controller_add_transition", controller_path="Assets/Animators/Player.controller",
+                 properties={"fromState": "Idle", "toState": "Walk", "hasExitTime": False,
+                             "conditions": [{"parameter": "Speed", "mode": "greater", "threshold": 0.1}]})
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/animation/manage_animation)
+
+### manage_sprite
+
+Turns a 2D sprite sheet into sliced sprites, AnimationClips and an AnimatorController. Actions: `get_info`, `slice_sheet`, `setup_clips`, `setup_controller`, `full_setup`.
+
+- `get_info` returns the sheet's import settings and slices and, for PNG/JPEG, the sheet as an image: count the grid from it before slicing.
+- `slice_sheet` cuts a grid (`cols`/`rows` or `frame_width`/`frame_height`) and replaces the sheet's existing slices; `filter_mode` defaults to `point`.
+- `full_setup` runs slice, clips, controller. Clip names decide the controller: `idle` is the default state, `walk`/`run` share a `Speed` blend tree, `jump`/`attack`/`hurt`-type names become trigger states.
+- Without `overwrite=True`, an existing clip is skipped and an existing controller fails the call.
+
+```python
+manage_sprite(action="full_setup", path="Assets/Sprites/hero.png", cols=6, rows=2,
+              clips=[{"name": "idle", "start_frame": 0, "end_frame": 5},
+                     {"name": "walk", "start_frame": 6, "end_frame": 11}],
+              add_to_scene=True, scene_target="Hero")
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/animation/manage_sprite)
+
+---
+
+## VFX Tools
+
+### manage_vfx
+
+ParticleSystem, VisualEffect (VFX Graph), LineRenderer and TrailRenderer components. Group: `vfx`. Action prefixes: `particle_*` (create, modules, bursts, playback), `vfx_*` (VFX Graph assets, exposed properties, events; needs `com.unity.visualeffectgraph`), `line_*` (positions, width, color, and shapes such as `line_create_circle`), `trail_*`; plus `ping`. Settings go in `properties` (camelCase or snake_case keys); `component_index` picks one of several components of the same type.
+
+```python
+manage_vfx(action="particle_create", target="Sparks", properties={"position": [0, 1, 0]})  # creates the GameObject if missing
+manage_vfx(action="particle_set_main", target="Sparks",
+           properties={"startLifetime": 0.8, "startSpeed": 6, "startSize": 0.1, "maxParticles": 200})
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/vfx/manage_vfx)
+
+---
+
+## Scripting Extension Tools
+
+Group: `scripting_ext`.
+
+### execute_code
+
+Runs a C# method body inside the editor, compiled in memory (no script file). `System`, `System.Collections.Generic`, `System.Linq`, `System.Reflection`, `UnityEngine` and `UnityEditor` are imported; `return` a value to get it back. Actions: `execute`, `get_history`, `replay` (`index`), `clear_history`. `safety_checks` (default on) blocks known dangerous calls but is not a sandbox. `compiler`: `auto` (Roslyn if installed, else CodeDom with C# 6), `roslyn`, `codedom`.
+
+```python
+execute_code(action="execute", code="return Selection.gameObjects.Select(g => g.name).ToArray();")
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/scripting_ext/execute_code)
+
+### manage_scriptable_object
+
+Creates ScriptableObject assets and edits their serialized fields by property path. `create` takes `type_name` (namespace-qualified), `folder_path`, `asset_name` and optional `overwrite`; `modify` takes `target` (`{"path": ...}` or `{"guid": ...}`) and optional `dry_run`. Both apply `patches`: `{"propertyPath": ..., "op": "set" (default) or "array_resize", "value": ...}`; an object reference uses `"ref": {"guid": ...}` in place of `"value"`.
+
+```python
+manage_scriptable_object(action="modify", target={"path": "Assets/Data/Goblin.asset"},
+                         patches=[{"propertyPath": "maxHealth", "value": 50},
+                                  {"propertyPath": "drops", "op": "array_resize", "value": 2}])
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/scripting_ext/manage_scriptable_object)
+
+---
+
+## Asset Generation Tools
+
+Group: `asset_gen`. Bring your own key: provider keys are entered in the Unity editor (MCP for Unity window, Generative tab) and never cross the bridge; `list_providers` shows which are configured. Generation and Sketchfab imports are async: `generate`/`import` return a `job_id`, `status` reports progress and then the imported `assetPath`, and `cancel` stops the job.
+
+### generate_image
+
+Text-to-image or image-to-image with fal.ai or OpenRouter, imported as a texture or sprite. Actions: `generate`, `status`, `cancel`, `list_providers`, `list_models`, `refresh_models` (`remove_background` is not supported yet). `generate` takes `provider` (`fal`, `openrouter`), `mode` (`text` or `image`), `prompt` or `image_path`/`image_url`, and optional `model` (from `list_models`), `width`, `height`, `transparent`, `name`, `output_folder`.
+
+```python
+generate_image(action="generate", provider="fal", mode="text", prompt="mossy stone wall, hand-painted",
+               width=1024, height=1024, output_folder="Assets/Generated")
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/generate_image)
+
+### generate_model
+
+Text-to-3D or image-to-3D with Tripo, Meshy or fal, imported as a model. Actions as `generate_image`, without `remove_background`. `generate` takes `provider` (`tripo`, `meshy`, `fal`; fal outputs GLB), `mode`, `prompt` or an image, and optional `format` (`glb`, `fbx`, `obj`, `usdz`), `target_size` (meters, largest side), `texture`, `tier`, `model`.
+
+```python
+generate_model(action="generate", provider="tripo", mode="text", prompt="low-poly treasure chest",
+               format="glb", target_size=1.0)
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/generate_model)
+
+### generate_audio
+
+Sound effects and music from a text prompt with fal.ai, imported as an AudioClip. Actions as `generate_model`. `generate` takes `prompt` and optional `model` and `duration` (seconds, clamped per model).
+
+```python
+generate_audio(action="generate", provider="fal", prompt="short bright coin pickup chime", duration=2)
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/generate_audio)
+
+### import_model
+
+Search Sketchfab and import a downloadable model. Actions: `search` (`query`, `categories`, `downloadable`, `count`, `cursor`), `preview` (`uid`: license, face counts, thumbnails), `import` (`uid`, `target_size`, `name`, `output_folder`), `status`, `cancel`, `list_providers`.
+
+```python
+import_model(action="search", query="wooden barrel", downloadable=True, count=5)
+import_model(action="import", uid="<uid from search>", target_size=1.0)
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/import_model)
+
+### import_model_file
+
+Imports a model file already on disk (`.fbx`, `.obj`, `.glb`, `.gltf`, or a `.zip` holding a model and its sidecar files) through the import pipeline the generators use. No `action` parameter and no key. A rigged FBX/OBJ needs `animation_type="generic"` or `"humanoid"`, or it imports without clips; glTF needs the glTFast package.
+
+```python
+import_model_file(source_path="C:/Exports/robot.fbx", animation_type="humanoid", target_size=1.8)
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/import_model_file)
+
+### blender_bridge
+
+Drives a running Blender that has the BlenderMCP addon connected (default `127.0.0.1:9876`) directly from Unity. Actions: `status`, `scene_info`, `object_info`, `screenshot`, `run_python`, `import_model`, `compare_screenshot`, `setup_bloom`, `check_updates`, `sync_addon`. `import_model` exports from Blender (glb by default), imports the file, places it at `position`, and scales its largest side to `target_size` meters.
+
+```python
+blender_bridge(action="import_model", object_names=["Robot"], target_size=2.0, position=[0, 0, 0])
+```
+
+[Full parameters](https://coplaydev.github.io/unity-mcp/reference/tools/asset_gen/blender_bridge)

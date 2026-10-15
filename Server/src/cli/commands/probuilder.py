@@ -64,10 +64,11 @@ def probuilder():
 def create_shape(shape_type: str, name: Optional[str], position, rotation, params: str):
     """Create a ProBuilder shape with real dimensions.
 
-    \\b
+    \b
     Shape types: Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch,
                  Stair, CurvedStair, Door, Prism
 
+    \b
     Each shape accepts type-specific dimension parameters:
       Cube/Prism:      width, height, depth (or size for uniform)
       Cylinder:        radius, height, segments/axisDivisions, heightCuts
@@ -81,7 +82,7 @@ def create_shape(shape_type: str, name: Optional[str], position, rotation, param
       Arch:            radius, width, depth, angle, radialCuts
       Door:            width, height, depth, ledgeHeight, legWidth
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder create-shape Cube
         unity-mcp probuilder create-shape Cube --params '{"width": 2, "height": 3, "depth": 1}'
@@ -119,7 +120,7 @@ def create_shape(shape_type: str, name: Optional[str], position, rotation, param
 def create_poly(points: str, height: float, name: Optional[str], flip_normals: bool):
     """Create a ProBuilder mesh from a 2D polygon footprint.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder create-poly --points "[[0,0,0],[5,0,0],[5,0,5],[0,0,5]]" --height 3
     """
@@ -158,7 +159,7 @@ def extrude_faces(target: str, faces: str, distance: float, method: str,
                   search_method: Optional[str]):
     """Extrude faces of a ProBuilder mesh.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder extrude-faces "MyCube" --faces '[0]' --distance 1.0
         unity-mcp probuilder extrude-faces "MyCube" --faces '[0,1,2]' --method IndividualFaces
@@ -194,11 +195,11 @@ def extrude_edges(target: str, edges: str, distance: float, as_group: bool,
                   search_method: Optional[str]):
     """Extrude edges of a ProBuilder mesh.
 
-    \\b
+    \b
     Edges can be specified as flat indices into the unique edge list,
     or as vertex pairs [{a: 0, b: 1}, ...].
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder extrude-edges "MyCube" --edges '[0,1]' --distance 0.5
         unity-mcp probuilder extrude-edges "MyCube" --edges '[{"a":0,"b":1}]' --distance 1
@@ -232,7 +233,7 @@ def extrude_edges(target: str, edges: str, distance: float, as_group: bool,
 def bevel_edges(target: str, edges: str, amount: float, search_method: Optional[str]):
     """Bevel edges of a ProBuilder mesh.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder bevel-edges "MyCube" --edges '[0,1,2]' --amount 0.2
         unity-mcp probuilder bevel-edges "MyCube" --edges '[{"a":0,"b":1}]' --amount 0.15
@@ -263,7 +264,7 @@ def bevel_edges(target: str, edges: str, amount: float, search_method: Optional[
 def delete_faces(target: str, faces: str, search_method: Optional[str]):
     """Delete faces from a ProBuilder mesh.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder delete-faces "MyCube" --faces '[0,1]'
     """
@@ -292,7 +293,7 @@ def delete_faces(target: str, faces: str, search_method: Optional[str]):
 def subdivide(target: str, faces: Optional[str], search_method: Optional[str]):
     """Subdivide faces of a ProBuilder mesh.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder subdivide "MyCube"
         unity-mcp probuilder subdivide "MyCube" --faces '[0,1]'
@@ -328,7 +329,7 @@ def select_faces(target: str, direction: Optional[str], tolerance: float,
                  search_method: Optional[str]):
     """Select faces by criteria (direction, grow, flood, loop).
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder select-faces "MyCube" --direction up
         unity-mcp probuilder select-faces "MyCube" --direction forward --tolerance 0.9
@@ -364,7 +365,7 @@ def select_faces(target: str, direction: Optional[str], tolerance: float,
 def move_vertices(target: str, vertices: str, offset, search_method: Optional[str]):
     """Move vertices by an offset.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder move-vertices "MyCube" --vertices '[0,1,2,3]' --offset 0 1 0
     """
@@ -396,7 +397,7 @@ def weld_vertices(target: str, vertices: str, radius: float,
                   search_method: Optional[str]):
     """Weld vertices within a proximity radius.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder weld-vertices "MyCube" --vertices '[0,1,2,3]' --radius 0.1
     """
@@ -428,7 +429,7 @@ def set_material(target: str, faces: str, material: str,
                  search_method: Optional[str]):
     """Assign a material to specific faces.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder set-material "MyCube" --faces '[0,1]' --material "Assets/Materials/Red.mat"
     """
@@ -463,14 +464,14 @@ def set_material(target: str, faces: str, material: str,
 def mesh_info(target: str, include: str, search_method: Optional[str]):
     """Get ProBuilder mesh info.
 
-    \\b
+    \b
     Edge data now includes world-space vertex positions and uses deduplicated edges.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder info "MyCube"
         unity-mcp probuilder info "MyCube" --include faces
-        unity-mcp probuilder info "-12345" --search-method by_id --include all
+        unity-mcp probuilder info --search-method by_id --include all -- -12345
     """
     config = get_config()
     request: dict[str, Any] = {"action": "get_mesh_info", "target": target, "include": include}
@@ -493,7 +494,7 @@ def mesh_info(target: str, include: str, search_method: Optional[str]):
 def auto_smooth(target: str, angle: float, search_method: Optional[str]):
     """Auto-assign smoothing groups by angle threshold.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder auto-smooth "MyCube"
         unity-mcp probuilder auto-smooth "MyCube" --angle 45
@@ -522,7 +523,7 @@ def auto_smooth(target: str, angle: float, search_method: Optional[str]):
 def set_smoothing(target: str, faces: str, group: int, search_method: Optional[str]):
     """Set smoothing group on specific faces.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder set-smoothing "MyCube" --faces '[0,1,2]' --group 1
         unity-mcp probuilder set-smoothing "MyCube" --faces '[3,4,5]' --group 0
@@ -556,7 +557,7 @@ def set_smoothing(target: str, faces: str, group: int, search_method: Optional[s
 def center_pivot(target: str, search_method: Optional[str]):
     """Move pivot point to mesh bounds center.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder center-pivot "MyCube"
     """
@@ -579,7 +580,7 @@ def center_pivot(target: str, search_method: Optional[str]):
 def set_pivot(target: str, position, search_method: Optional[str]):
     """Set pivot to an arbitrary world position.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder set-pivot "MyCube" --position 0 0 0
         unity-mcp probuilder set-pivot "MyCube" --position 1.5 0 2.3
@@ -606,7 +607,7 @@ def set_pivot(target: str, position, search_method: Optional[str]):
 def freeze_transform(target: str, search_method: Optional[str]):
     """Bake position/rotation/scale into vertex data, reset transform.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder freeze-transform "MyCube"
     """
@@ -628,7 +629,7 @@ def freeze_transform(target: str, search_method: Optional[str]):
 def validate_mesh(target: str, search_method: Optional[str]):
     """Check mesh health (degenerate triangles, unused vertices).
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder validate "MyCube"
     """
@@ -648,7 +649,7 @@ def validate_mesh(target: str, search_method: Optional[str]):
 def repair_mesh(target: str, search_method: Optional[str]):
     """Auto-fix degenerate triangles and unused vertices.
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder repair "MyCube"
     """
@@ -676,7 +677,7 @@ def repair_mesh(target: str, search_method: Optional[str]):
 def pb_raw(action: str, target: Optional[str], params: str, search_method: Optional[str]):
     """Execute any ProBuilder action directly.
 
-    \\b
+    \b
     Actions include:
         create_shape, create_poly_shape,
         extrude_faces, extrude_edges, bevel_edges, subdivide,
@@ -691,7 +692,7 @@ def pb_raw(action: str, target: Optional[str], params: str, search_method: Optio
         set_smoothing, auto_smooth,
         center_pivot, set_pivot, freeze_transform, validate_mesh, repair_mesh
 
-    \\b
+    \b
     Examples:
         unity-mcp probuilder raw extrude_faces "MyCube" --params '{"faceIndices": [0], "distance": 1.0}'
         unity-mcp probuilder raw bevel_edges "MyCube" --params '{"edges": [{"a":0,"b":1}], "amount": 0.2}'

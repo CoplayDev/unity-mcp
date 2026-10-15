@@ -607,7 +607,7 @@ def modify(path: str, set_pixels: Optional[str], texture_type: Optional[str], sp
 def delete(path: str, force: bool):
     """Delete a texture.
 
-    \\b
+    \b
     Examples:
         unity-mcp texture delete "Assets/Textures/Old.png"
         unity-mcp texture delete "Assets/Textures/Old.png" --force

@@ -60,7 +60,7 @@ def hierarchy(
         unity-mcp scene hierarchy
         unity-mcp scene hierarchy --max-depth 3
         unity-mcp scene hierarchy --parent "Canvas" --include-transform
-        unity-mcp scene hierarchy --format json
+        unity-mcp --format json scene hierarchy
     """
     config = get_config()
 

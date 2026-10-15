@@ -15,9 +15,9 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             string stateName = @params["stateName"]?.ToString();
             if (string.IsNullOrEmpty(stateName))
@@ -28,7 +28,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             Undo.RecordObject(animator, "Play Animation State");
             animator.Play(stateName, layer);
 
-            return new { success = true, message = $"Playing state '{stateName}' on '{go.name}'" };
+            return new { success = true, message = $"Playing state '{stateName}' on {AnimatorResolver.Describe(go, animator)}" };
         }
 
         public static object Crossfade(JObject @params)
@@ -37,9 +37,9 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             string stateName = @params["stateName"]?.ToString();
             if (string.IsNullOrEmpty(stateName))
@@ -51,7 +51,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             Undo.RecordObject(animator, "Crossfade Animation State");
             animator.CrossFade(stateName, duration, layer);
 
-            return new { success = true, message = $"Crossfading to '{stateName}' over {duration}s on '{go.name}'" };
+            return new { success = true, message = $"Crossfading to '{stateName}' over {duration}s on {AnimatorResolver.Describe(go, animator)}" };
         }
 
         public static object SetParameter(JObject @params)
@@ -60,9 +60,9 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             string paramName = @params["parameterName"]?.ToString();
             if (string.IsNullOrEmpty(paramName))
@@ -103,23 +103,23 @@ namespace MCPForUnity.Editor.Tools.Animation
                     case "float":
                         float fVal = valueToken?.ToObject<float>() ?? 0f;
                         animator.SetFloat(paramName, fVal);
-                        return new { success = true, message = $"Set float '{paramName}' = {fVal}" };
+                        return new { success = true, message = $"Set float '{paramName}' = {fVal}" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "int":
                     case "integer":
                         int iVal = valueToken?.ToObject<int>() ?? 0;
                         animator.SetInteger(paramName, iVal);
-                        return new { success = true, message = $"Set int '{paramName}' = {iVal}" };
+                        return new { success = true, message = $"Set int '{paramName}' = {iVal}" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "bool":
                     case "boolean":
                         bool bVal = valueToken?.ToObject<bool>() ?? false;
                         animator.SetBool(paramName, bVal);
-                        return new { success = true, message = $"Set bool '{paramName}' = {bVal}" };
+                        return new { success = true, message = $"Set bool '{paramName}' = {bVal}" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "trigger":
                         animator.SetTrigger(paramName);
-                        return new { success = true, message = $"Set trigger '{paramName}'" };
+                        return new { success = true, message = $"Set trigger '{paramName}'" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     default:
                         return new { success = false, message = $"Unknown parameter type: {paramType}. Valid: float, int, bool, trigger" };
@@ -130,7 +130,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                 // Edit mode: modify the AnimatorController asset's default parameter values
                 var controller = animator.runtimeAnimatorController as AnimatorController;
                 if (controller == null)
-                    return new { success = false, message = $"No AnimatorController assigned to Animator on '{go.name}'. Cannot set parameter defaults in Edit mode." };
+                    return new { success = false, message = $"No AnimatorController assigned to the Animator on {AnimatorResolver.Describe(go, animator)}. Cannot set parameter defaults in Edit mode." };
 
                 var allParams = controller.parameters;
                 int paramIndex = -1;
@@ -156,7 +156,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                         controller.parameters = allParams;
                         EditorUtility.SetDirty(controller);
                         AssetDatabase.SaveAssets();
-                        return new { success = true, message = $"Set float '{paramName}' = {fVal} (default value, Edit mode)" };
+                        return new { success = true, message = $"Set float '{paramName}' = {fVal} (default value, Edit mode)" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "int":
                     case "integer":
@@ -165,7 +165,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                         controller.parameters = allParams;
                         EditorUtility.SetDirty(controller);
                         AssetDatabase.SaveAssets();
-                        return new { success = true, message = $"Set int '{paramName}' = {iVal} (default value, Edit mode)" };
+                        return new { success = true, message = $"Set int '{paramName}' = {iVal} (default value, Edit mode)" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "bool":
                     case "boolean":
@@ -174,10 +174,10 @@ namespace MCPForUnity.Editor.Tools.Animation
                         controller.parameters = allParams;
                         EditorUtility.SetDirty(controller);
                         AssetDatabase.SaveAssets();
-                        return new { success = true, message = $"Set bool '{paramName}' = {bVal} (default value, Edit mode)" };
+                        return new { success = true, message = $"Set bool '{paramName}' = {bVal} (default value, Edit mode)" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     case "trigger":
-                        return new { success = true, message = $"Trigger '{paramName}' noted (triggers are runtime-only, no default to set)" };
+                        return new { success = true, message = $"Trigger '{paramName}' noted (triggers are runtime-only, no default to set)" + AnimatorResolver.ResolvedSuffix(go, animator) };
 
                     default:
                         return new { success = false, message = $"Unknown parameter type: {paramType}. Valid: float, int, bool, trigger" };
@@ -191,16 +191,16 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             float speed = @params["speed"]?.ToObject<float>() ?? 1f;
 
             Undo.RecordObject(animator, "Set Animator Speed");
             animator.speed = speed;
 
-            return new { success = true, message = $"Set animator speed to {speed} on '{go.name}'" };
+            return new { success = true, message = $"Set animator speed to {speed} on {AnimatorResolver.Describe(go, animator)}" };
         }
 
         public static object SetEnabled(JObject @params)
@@ -209,16 +209,16 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             bool enabled = @params["enabled"]?.ToObject<bool>() ?? true;
 
             Undo.RecordObject(animator, "Set Animator Enabled");
             animator.enabled = enabled;
 
-            return new { success = true, message = $"Animator {(enabled ? "enabled" : "disabled")} on '{go.name}'" };
+            return new { success = true, message = $"Animator {(enabled ? "enabled" : "disabled")} on {AnimatorResolver.Describe(go, animator)}" };
         }
     }
 }

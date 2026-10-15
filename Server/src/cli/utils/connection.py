@@ -2,9 +2,11 @@
 
 import asyncio
 import functools
+import json
 import sys
 from typing import Any, Callable, Dict, Optional, TypeVar
 
+import click
 import httpx
 
 from cli.utils.config import get_config, CLIConfig
@@ -98,6 +100,9 @@ async def send_command(
     if cfg.unity_instance:
         payload["unity_instance"] = cfg.unity_instance
 
+    if cfg.verbose:
+        click.echo(f"> POST {url} {json.dumps(payload)}", err=True)
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -105,6 +110,8 @@ async def send_command(
                 json=payload,
                 timeout=timeout or cfg.timeout,
             )
+            if cfg.verbose:
+                click.echo(f"< {response.status_code} {response.text}", err=True)
             response.raise_for_status()
             return response.json()
     except httpx.ConnectError as e:

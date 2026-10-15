@@ -1,81 +1,39 @@
 # LLM Prompt for Updating Documentation
 
-Copy and paste this prompt into your LLM when you need to update documentation after adding/removing/modifying MCP tools or resources.
-
-## Example Usage
-
-After adding a new tool called "manage_new_feature" and a new resource called "feature_resource", you would:
-1. Copy the prompt in the section below
-2. Paste it into your LLM
-3. The LLM will analyze the codebase and update all documentation files
-4. Review the changes and run the check script to verify
-
-This ensures all documentation stays in sync across the repository.
+Copy and paste this prompt into your LLM after you add, remove, rename or change an MCP tool or resource. Review its changes, then make sure the checks in step 5 pass.
 
 ---
 
 ## Prompt
 
-I've just made changes to MCP tools or resources in this Unity MCP repository. Please update all documentation files to keep them in sync.
+I've just changed MCP tools or resources in this MCP for Unity repository. Please update the documentation to match.
 
-Here's what you need to do:
+1. **Read the current tools and resources**:
+   - `Server/src/services/tools/`: tools (`@mcp_for_unity_tool`, including its `group`)
+   - `Server/src/services/resources/`: resources (`@mcp_for_unity_resource`)
+   - `Server/src/cli/commands/`: the Click CLI commands that mirror the tools
 
-1. **Check the current tools and resources** by examining:
-   - `Server/src/services/tools/` - Python tool implementations (look for @mcp_for_unity_tool decorators)
-   - `Server/src/services/resources/` - Python resource implementations (look for @mcp_for_unity_resource decorators)
-
-2. **Update these files**:
-   
-   a) **manifest.json** (root directory)
-      - Update the "tools" array (lines 27-57)
-      - Each tool needs: {"name": "tool_name", "description": "Brief description"}
-      - Keep tools in alphabetical order
-      - Note: Resources are not listed in manifest.json, only tools
-   
-   b) **README.md** (root directory)
-      - Update "Available Tools" section (around line 78-79)
-      - Format: `tool1` • `tool2` • `tool3`
-      - Keep the same order as manifest.json
-   
-   c) **README.md** - Resources section
-      - Update "Available Resources" section (around line 81-82)
-      - Format: `resource1` • `resource2` • `resource3`
-      - Resources come from Server/src/services/resources/ files
-      - Keep resources in alphabetical order
-   
-   d) **docs/i18n/README-zh.md**
-      - Find and update the "可用工具" (Available Tools) section
-      - Find and update the "可用资源" (Available Resources) section
-      - Keep tool/resource names in English, but you can translate descriptions if helpful
-
-   e) **README.md** — "Recent Updates" section
-      - Add a new entry at the top of the list for the current version
-      - Format: `* **vX.Y.Z (beta)** — Brief summary of what changed`
-      - Keep only 4 entries visible; move the oldest to the "Older releases" nested details block
-      - Remove `(beta)` from the previous entry that was beta
-      - Update `manifest.json` version field to match
-
-   f) **docs/i18n/README-zh.md** — "最近更新" section
-      - Mirror the same changes as the English "Recent Updates" section
-      - Translate the summary text to Chinese
-      - Same 4-entry rotation rule applies
-
-   g) **unity-mcp-skill** - Skill Update
-      - Detect if this feature needs extra care via Skills
-      - If so, update the .md files based on the updates
-
-3. **Important formatting rules**:
-   - Use backticks around tool/resource names
-   - Separate items with • (bullet point)
-   - Keep lists on single lines when possible
-   - Maintain alphabetical ordering
-   - Tools and resources are listed separately in documentation
-
-4. **After updating**, run this check to verify:
+2. **Regenerate the reference pages.** `website/docs/reference/tools/**` and `website/docs/reference/resources/index.md` are generated from the registry:
    ```bash
-   python3 tools/check_docs_sync.py
+   cd Server && uv run python ../tools/generate_docs_reference.py
    ```
-   It should show "All documentation is synchronized!"
+   Do not hand-edit them, except for usage examples between `<!-- examples:start -->` and `<!-- examples:end -->`, which the generator keeps.
+
+3. **Update the hand-maintained files**:
+   - **manifest.json**: the `tools` array must list exactly the registered tools as `{"name", "description"}` entries; put new ones in alphabetical position. Resources are not listed. `Server/tests/test_manifest_tools.py` fails when a tool is missing, extra or listed twice, but it compares names only: when a tool's purpose changes, check its one-line description by hand.
+   - **Tool groups**: if a tool adds a group or changes what a group covers, update the group's blurb in `TOOL_GROUPS` (`Server/src/services/registry/tool_registry.py`; it feeds the generated group pages, the `tool_groups` resource and `manage_tools`) and the group lists in `website/docs/guides/tool-groups.md` and `website/docs/contributing/dev-setup.md`.
+   - **Tool count**: `README.md`, `docs/i18n/README-zh.md` and `website/docs/guides/tool-groups.md` state how many tools ship. Update the number if it changed.
+   - **CLI docs**: the group table in `website/docs/reference/cli.md` and the "Complete Command Reference" table in `website/docs/guides/cli.md` must match the Click command tree (`cd Server && uv run unity-mcp --help`, then `--help` on each group).
+   - **Skill**: if agents need new guidance for the change, update the skill. It has two copies, `unity-mcp-skill/` and `.claude/skills/unity-mcp-skill/`; keep both copies identical.
+
+4. **Leave the release notes alone.** `README.md` has no tool or resource lists; it links to the website catalog. Its "Recent Updates" block (the latest 5 releases) and `website/docs/releases.md` are generated from GitHub Releases, whose notes GitHub builds from merged PR titles. After each release, `release.yml` dispatches `.github/workflows/sync-releases.yml`, which runs `tools/sync_release_notes.py` and merges the result into `beta` through its own PR. The "最近更新" block in `docs/i18n/README-zh.md` is not synced; it is updated by hand at release time.
+
+5. **After updating**, run these checks:
+   ```bash
+   cd Server
+   uv run python ../tools/generate_docs_reference.py --check
+   uv run pytest tests/test_manifest_tools.py
+   ```
 
 Please show me the exact changes you're making to each file, and explain any discrepancies you find.
 

@@ -40,7 +40,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
     \b
     Examples:
         unity-mcp component add "Player" Rigidbody
-        unity-mcp component add "-81840" BoxCollider --search-method by_id
+        unity-mcp component add --search-method by_id -- -81840 BoxCollider
         unity-mcp component add "Enemy" Rigidbody --properties '{"mass": 5.0, "useGravity": true}'
     """
     config = get_config()
@@ -89,7 +89,7 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
     \b
     Examples:
         unity-mcp component remove "Player" Rigidbody
-        unity-mcp component remove "-81840" BoxCollider --search-method by_id --force
+        unity-mcp component remove --search-method by_id --force -- -81840 BoxCollider
         unity-mcp component remove "Player" BoxCollider --component-index 1
     """
     config = get_config()
@@ -138,7 +138,7 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     Examples:
         unity-mcp component set "Player" Rigidbody mass 5.0
         unity-mcp component set "Enemy" Transform position "[0, 5, 0]"
-        unity-mcp component set "-81840" Light intensity 2.5 --search-method by_id
+        unity-mcp component set --search-method by_id -- -81840 Light intensity 2.5
         unity-mcp component set "Player" BoxCollider size "[2,2,2]" --component-index 1
     """
     config = get_config()

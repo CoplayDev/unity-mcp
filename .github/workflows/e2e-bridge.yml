@@ -15,6 +15,8 @@ on:
       - "Server/src/**"
       - "Server/tests/e2e/**"
       - "tools/local_harness.py"
+      - "tools/ci_unity_license.py"
+      - "tools/tests/test_ci_unity_license.py"
       - ".github/workflows/e2e-bridge.yml"
 
 permissions:
@@ -50,7 +52,9 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         run: |
           set -e
-          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
+          # Only absent secrets skip a fork run. Partial configuration must fail
+          # explicitly in prepare, rather than silently look like missing access.
+          if [ -n "$UNITY_LICENSE$UNITY_EMAIL$UNITY_PASSWORD$UNITY_SERIAL" ]; then
             echo "unity_ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "unity_ok=false" >> "$GITHUB_OUTPUT"
@@ -90,89 +94,39 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           uv pip install -e Server
 
-      # --- License staging (mirrors claude-nl-suite.yml) ---
-      - name: Decide license sources
-        id: lic
-        shell: bash
+      # Activate with the same pinned GameCI implementation that runs our tests.
+      # Personal account credentials do not require a professional serial key.
+      - name: Prepare Unity license and activation helpers
+        id: prepare_license
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
-        run: |
-          set -eu
-          use_ulf=false; use_ebl=false
-          [[ -n "${UNITY_LICENSE:-}" ]] && use_ulf=true
-          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" && -n "${UNITY_SERIAL:-}" ]] && use_ebl=true
-          echo "use_ulf=$use_ulf" >> "$GITHUB_OUTPUT"
-          echo "use_ebl=$use_ebl" >> "$GITHUB_OUTPUT"
+        run: python3 tools/ci_unity_license.py prepare
 
-      - name: Stage Unity .ulf license (from secret)
-        if: steps.lic.outputs.use_ulf == 'true'
-        id: ulf
+      - name: Activate Unity license
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-        shell: bash
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/unity-license-ulf" "$RUNNER_TEMP/unity-local/Unity"
-          f="$RUNNER_TEMP/unity-license-ulf/Unity_lic.ulf"
-          if printf "%s" "$UNITY_LICENSE" | base64 -d - >/dev/null 2>&1; then
-            printf "%s" "$UNITY_LICENSE" | base64 -d - > "$f"
-          else
-            printf "%s" "$UNITY_LICENSE" > "$f"
-          fi
-          chmod 600 "$f" || true
-          if grep -qi '<Signature>' "$f"; then
-            cp -f "$f" "$RUNNER_TEMP/unity-local/Unity/Unity_lic.ulf"
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Activate Unity (EBL via container)
-        if: steps.lic.outputs.use_ebl == 'true'
-        shell: bash
-        env:
-          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/unity-config" "$RUNNER_TEMP/unity-local"
-          docker run --rm --network host \
-            -e HOME=/root -e UNITY_EMAIL -e UNITY_PASSWORD -e UNITY_SERIAL \
-            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
-            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
-            "$UNITY_IMAGE" bash -lc '
-              # No -x here: xtrace would echo the expanded -password/-serial arguments into
-              # the job log, and GitHub secret masking is a last line of defence, not a design.
-              set -euo pipefail
-              /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
-                -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -serial "$UNITY_SERIAL" -quit || true
-            '
+        run: python3 tools/ci_unity_license.py activate
 
       - name: Warm up project (import Library once)
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
-          ULF_OK: ${{ steps.ulf.outputs.ok }}
         run: |
           set -euxo pipefail
-          manual_args=()
-          if [[ "${ULF_OK:-false}" == "true" ]]; then
-            manual_args=(-manualLicenseFile "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
-          fi
           docker run --rm --network host \
             -e HOME=/root \
+            -v "$RUNNER_TEMP/unity-machine-id:/etc/machine-id:ro" \
             -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" \
             -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
             -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
             -v "$RUNNER_TEMP/unity-cache:/root/.cache/unity3d" \
             "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
               -projectPath "${{ github.workspace }}/TestProjects/UnityMCPTests" \
-              "${manual_args[@]}" -quit
+              -quit
 
       - name: Clean old MCP status
         run: |
@@ -184,32 +138,32 @@ jobs:
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
-          ULF_OK: ${{ steps.ulf.outputs.ok }}
         run: |
           set -euxo pipefail
           # In --ci mode the harness drives the DockerLauncher: it runs the same
           # docker container (repo .unity-mcp status dir, docker liveness/teardown,
           # log redaction), waits on the status file, derives the instance, then
           # runs the smoke + EditMode + PlayMode legs over the bridge.
-          license_args=()
-          if [[ "${ULF_OK:-false}" == "true" ]]; then
-            license_args=(--editor-arg -manualLicenseFile \
-              --editor-arg "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
-          fi
           python3 tools/local_harness.py --ci \
             --legs smoke,editmode,playmode \
             --project-path TestProjects/UnityMCPTests \
-            --reports reports \
-            "${license_args[@]}"
+            --reports reports
 
-      - name: Unity logs on failure
-        if: failure()
-        run: docker logs unity-mcp --tail 200 | sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/Ig' || true
+      - name: Return Unity license seat
+        if: always() && steps.prepare_license.outcome == 'success'
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: python3 tools/ci_unity_license.py return
 
       - name: Upload E2E report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-bridge-report
-          path: reports/junit-*.xml
+          # The harness snapshots redacted Editor logs before removing its container.
+          path: |
+            reports/junit-*.xml
+            reports/unity-editor-*.log
           if-no-files-found: ignore

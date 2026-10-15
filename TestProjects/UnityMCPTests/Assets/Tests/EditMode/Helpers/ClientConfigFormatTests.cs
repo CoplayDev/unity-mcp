@@ -17,7 +17,7 @@ namespace MCPForUnityTests.Editor.Helpers
     // uses an "mcp" container, type:"remote" for HTTP servers, and an "enabled" flag. Writing the
     // old format left the server showing as "stdio" + disabled. These tests pin the new Kilo format
     // while guarding that Cline keeps "streamableHttp" and generic clients keep plain "http".
-    public class ClientConfigFormatTests
+    public class ClientConfigFormatTests : TransportPreferenceTestBase
     {
         private const string UseHttpTransportPrefKey = EditorPrefKeys.UseHttpTransport;
 

@@ -14,9 +14,9 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             var parameters = new List<object>();
             for (int i = 0; i < animator.parameterCount; i++)
@@ -73,6 +73,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                 data = new
                 {
                     gameObject = go.name,
+                    animatorGameObject = animator.gameObject.name,
                     enabled = animator.enabled,
                     speed = animator.speed,
                     hasController = animator.runtimeAnimatorController != null,
@@ -95,9 +96,9 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (go == null)
                 return new { success = false, message = "Target GameObject not found" };
 
-            var animator = go.GetComponent<Animator>();
+            var animator = AnimatorResolver.Find(go, out var animatorCandidates);
             if (animator == null)
-                return new { success = false, message = $"No Animator component on '{go.name}'" };
+                return AnimatorResolver.NotResolvedError(go, animatorCandidates);
 
             string paramName = @params["parameterName"]?.ToString();
             if (string.IsNullOrEmpty(paramName))

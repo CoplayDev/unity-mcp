@@ -28,8 +28,34 @@ def _emit(result, config, verb):
             print_info(f"{verb} started. Poll with: unity-mcp asset-gen status --job-id {job_id}")
 
 
+@asset_gen.command("list-models")
+@click.option("--kind", type=click.Choice(["audio", "image", "model"]), required=True,
+              help="Asset kind to discover.")
+@click.option("--provider", default=None, help="Restrict results to one provider.")
+@click.option("--refresh", is_flag=True, help="Force live catalog discovery.")
+@click.option("--search", default=None, help="Filter models by name, id or use case.")
+@click.option("--mode", type=click.Choice(["text", "image"]), default=None, help="Filter models by input mode.")
+@click.option("--limit", type=click.IntRange(1, 200), default=None, help="Page size (default 50).")
+@click.option("--offset", type=click.IntRange(min=0), default=None, help="Page offset (default 0).")
+@handle_unity_errors
+def list_models(kind: str, provider: Optional[str], refresh: bool, search: Optional[str], mode: Optional[str], limit: Optional[int], offset: Optional[int]):
+    """List compatible models, capabilities, and catalog freshness.
+
+    If catalogs[].refreshing is true, repeat this command without --refresh later.
+    Discovered entries are checked for compatibility before generation.
+    """
+    if refresh and provider is not None and not (provider == "fal" or provider == "openrouter" and kind == "image"):
+        raise click.UsageError("--refresh supports fal and OpenRouter images.")
+    params = {"action": "refresh_models" if refresh else "list_models"}
+    if provider is not None:
+        params["provider"] = provider
+    params.update({k: v for k, v in {"search": search, "mode": mode, "limit": limit, "offset": offset}.items() if v is not None})
+    config = get_config()
+    click.echo(format_output(run_command(f"generate_{kind}", params, config), config.format))
+
+
 @asset_gen.command("generate-model")
-@click.option("--provider", default=None, help="Provider id (tripo, meshy).")
+@click.option("--provider", default=None, help="Provider id (tripo, meshy, fal).")
 @click.option("--mode", default=None, help="Generation mode: text or image.")
 @click.option("--prompt", default=None, help="Text prompt for text->3D.")
 @click.option("--image-path", default=None, help="Source image path for image->3D.")

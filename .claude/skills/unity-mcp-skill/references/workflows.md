@@ -107,17 +107,18 @@ batch_execute(commands=[
 ])
 ```
 
-### Script Overwrites with `manage_script(action="update")`
+### Script Overwrites with `replace_class`
 
-When a generated script needs to be rewritten (e.g., to add auto-wiring logic), use `update` instead of deleting and recreating:
+When a generated script needs to be rewritten (e.g., to add auto-wiring logic), replace its class in place instead of deleting and recreating the file: a recreated script gets a new GUID, so components already using it lose their reference. `create_script` refuses to overwrite an existing file, and `manage_script` has no update action.
 
 ```python
-manage_script(
-    action="update",
-    path="Assets/Scripts/MyScript.cs",
-    contents="using UnityEngine;\n\npublic class MyScript : MonoBehaviour { ... }"
+script_apply_edits(
+    name="MyScript",
+    path="Assets/Scripts",
+    edits=[{"op": "replace_class", "className": "MyScript",
+            "replacement": "public class MyScript : MonoBehaviour { ... }"}]
 )
-# manage_script update auto-triggers import + compile — just wait and check console
+# script_apply_edits auto-triggers import + compile — just wait and check console
 # Read mcpforunity://editor/state → wait until is_compiling == false
 read_console(types=["error"], count=10)
 ```
@@ -1905,6 +1906,8 @@ refresh_unity(mode="force", compile="request", wait_for_ready=True)
 
 ## API Verification Workflows
 
+> These tools live in the opt-in `docs` group. Activate it first: `manage_tools(action="activate", group="docs")`
+
 ### Full API Verification Before Writing Code
 
 Use `unity_reflect` and `unity_docs` to verify Unity APIs before writing C# code. This prevents hallucinated or outdated API references.
@@ -1934,7 +1937,7 @@ unity_docs(action="get_doc", class_name="NavMeshAgent", member_name="SetDestinat
 Use `unity_docs` `lookup` action to search multiple APIs in a single call:
 
 ```python
-# Search ScriptReference + Manual + package docs in parallel
+# Search ScriptReference + Manual in parallel (+ package docs if package/pkg_version provided)
 unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
 
 # Include package docs in the search

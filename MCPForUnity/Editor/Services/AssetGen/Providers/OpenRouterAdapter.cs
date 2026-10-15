@@ -10,8 +10,9 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
-    /// OpenRouter image provider via the (synchronous) chat-completions endpoint with an
-    /// image-capable multimodal model. The image is returned inline (base64 data URL), so the
+    /// OpenRouter's synchronous Image API with verified per-endpoint capabilities.
+    /// Legacy direct callers without a catalog profile retain the chat response contract. The
+    /// image is returned inline, so the
     /// work happens in <see cref="SubmitAsync"/> and <see cref="PollAsync"/> returns it immediately.
     /// One adapter instance handles a single job (the job manager captures it for submit+poll).
     /// </summary>
@@ -26,11 +27,13 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         private byte[] _inlineData;
         private string _downloadUrl;
         private string _error;
+        private string _resultExt;
 
         public async Task<string> SubmitAsync(ImageGenRequest req, string apiKey, IHttpTransport http, CancellationToken ct)
         {
             if (req == null) throw new ArgumentNullException(nameof(req));
             if (http == null) throw new ArgumentNullException(nameof(http));
+            _inlineData = null; _downloadUrl = null; _error = null; _resultExt = null;
 
             string model = string.IsNullOrEmpty(req.Model) ? DefaultModel : req.Model;
 
@@ -59,11 +62,28 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     ["content"] = content
                 })
             };
+            bool imageApi = req.CatalogEntry?.RouterProviderTag != null;
+            if (imageApi)
+            {
+                var profile = req.CatalogEntry;
+                body = new JObject
+                {
+                    ["model"] = model, ["prompt"] = req.Prompt ?? "",
+                    ["provider"] = new JObject { ["only"] = new JArray(profile.RouterProviderTag), ["allow_fallbacks"] = false },
+                };
+                if (image) body["input_references"] = new JArray(new JObject { ["type"] = "image_url", ["image_url"] = new JObject { ["url"] = imageRef } });
+                if (profile.OutputFormat != null) body["output_format"] = profile.OutputFormat;
+                if (req.Width > 0 && req.Height > 0)
+                {
+                    if (profile.RouterParameters?["size"] == null) throw new InvalidOperationException("This OpenRouter endpoint does not accept explicit pixel dimensions.");
+                    body["size"] = req.Width + "x" + req.Height;
+                }
+            }
 
             var spec = new HttpRequestSpec
             {
                 Method = "POST",
-                Url = Endpoint,
+                Url = imageApi ? "https://openrouter.ai/api/v1/images" : Endpoint,
                 ContentType = "application/json",
                 Body = Encoding.UTF8.GetBytes(body.ToString(Formatting.None))
             };
@@ -71,6 +91,16 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
             HttpResult res = await http.SendAsync(spec, ct);
             JObject json = ParseOk(res, apiKey);
+            if (imageApi)
+            {
+                var file = json["data"]?[0];
+                _resultExt = ImageResultFormat.FromMetadata((string)file?["media_type"]);
+                try { _inlineData = Convert.FromBase64String((string)file?["b64_json"] ?? ""); }
+                catch { _error = "OpenRouter returned invalid image bytes."; }
+                if (_inlineData?.Length == 0) _error = "OpenRouter returned no image.";
+                if (_resultExt == "svg" || _resultExt == "webp") _error = "This Unity importer requires PNG or JPEG output.";
+                return "ready";
+            }
 
             string url = ExtractImageUrl(json);
             if (string.IsNullOrEmpty(url))
@@ -85,10 +115,12 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 if (comma < 0) { _error = "OpenRouter returned an unrecognized image payload."; return "ready"; }
                 try { _inlineData = Convert.FromBase64String(url.Substring(comma + "base64,".Length)); }
                 catch { _error = "OpenRouter image was not valid base64."; }
+                _resultExt = ImageResultFormat.FromMetadata(url.Substring(5, Math.Max(0, url.IndexOf(';') - 5)));
             }
             else
             {
                 _downloadUrl = url;
+                _resultExt = ImageResultFormat.FromMetadata(null, url);
             }
             return "ready";
         }
@@ -106,6 +138,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 result.State = ProviderPollState.Succeeded;
                 result.InlineData = _inlineData;
                 result.DownloadUrl = _downloadUrl;
+                result.ResultExt = _resultExt;
             }
             return Task.FromResult(result);
         }
