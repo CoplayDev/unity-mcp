@@ -95,3 +95,58 @@ def test_undo_omits_none_params(mock_unity):
     assert "layerName" not in params
 
 
+
+
+@pytest.mark.parametrize("width,height", [(2400, 1080), (1080, 2400), (10, 10), (8192, 8192)])
+def test_set_game_view_size_forwards_dimensions_and_instance(mock_unity, width, height):
+    result = asyncio.run(manage_editor(SimpleNamespace(), action="set_game_view_size", width=width, height=height))
+    assert result["success"] is True
+    assert mock_unity["unity_instance"] == "unity-instance-1"
+    assert mock_unity["params"] == {"action": "set_game_view_size", "width": width, "height": height}
+
+
+@pytest.mark.parametrize("invalid", [None, 0, -1, 9, 8193, 2**63, True, 1080.5, "1080"])
+@pytest.mark.parametrize("dimension", ["width", "height"])
+def test_set_game_view_size_rejects_invalid_before_transport(mock_unity, dimension, invalid):
+    dimensions = {"width": 2400, "height": 1080, dimension: invalid}
+    result = asyncio.run(manage_editor(SimpleNamespace(), action="set_game_view_size", **dimensions))
+    assert result["success"] is False
+    assert dimension in result["message"]
+    assert "params" not in mock_unity
+
+
+def test_get_game_view_size_forwards_without_dimensions(mock_unity):
+    result = asyncio.run(manage_editor(SimpleNamespace(), action="get_game_view_size"))
+    assert result["success"] is True
+    assert mock_unity["params"] == {"action": "get_game_view_size"}
+
+
+@pytest.mark.parametrize("action", ["get_game_view_size", "play"])
+def test_dimensions_are_not_silently_ignored(mock_unity, action):
+    result = asyncio.run(manage_editor(SimpleNamespace(), action=action, width=2400, height=1080))
+    assert result["success"] is False
+    assert "params" not in mock_unity
+
+
+@pytest.mark.parametrize("response", [
+    {"success": True, "data": {"requested_size": {"width": 2400, "height": 1080}, "render_size": {"width": 1200, "height": 540}, "matches_requested": False}},
+    {"success": False, "code": "game_view_size_readback_timeout", "data": {"preset_may_have_changed": True, "settled": False}},
+])
+def test_size_readback_and_partial_failure_are_preserved(monkeypatch, mock_unity, response):
+    monkeypatch.setattr(manage_editor_mod, "send_with_unity_instance", AsyncMock(return_value=response))
+    result = asyncio.run(manage_editor(SimpleNamespace(), action="set_game_view_size", width=2400, height=1080))
+    assert result["success"] == response["success"]
+    assert result["data"] == response["data"]
+    if not response["success"]:
+        assert result["code"] == response["code"]
+
+
+def test_dimension_schema_rejects_coercion():
+    from typing import get_type_hints
+    from pydantic import TypeAdapter, ValidationError
+
+    adapter = TypeAdapter(get_type_hints(manage_editor, include_extras=True)["width"])
+    for invalid in [True, 1080.0, "1080", 9, 8193]:
+        with pytest.raises(ValidationError):
+            adapter.validate_python(invalid)
+    assert adapter.validate_python(2400) == 2400
