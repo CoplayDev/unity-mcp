@@ -520,6 +520,8 @@ manage_asset(action="delete", path="Assets/OldAsset.asset")
 ### manage_prefabs
 
 Prefab assets: headless edits with `modify_contents`, or interactive editing in a prefab stage.
+Scene-instance overrides: list before applying or reverting so you can select the
+object, component and exact serialized property. Applying writes a prefab asset.
 
 ```python
 # Get prefab info
@@ -573,7 +575,35 @@ manage_prefabs(
 manage_prefabs(action="open_prefab_stage", prefab_path="Assets/Prefabs/Enemy.prefab")
 manage_prefabs(action="save_prefab_stage")
 manage_prefabs(action="close_prefab_stage")  # back to the main scene
+
+# Inspect overrides with both instanceValue and prefabValue, grouped by component
+manage_prefabs(action="list_overrides", target="HUD", child_path="Health",
+               component_type="RectTransform", property_prefix="m_Anchor")
+
+# Revert one property; unrelated properties and children keep their overrides
+manage_prefabs(action="revert_overrides", target="HUD", child_path="Health",
+               component_type="RectTransform", property_path="m_AnchorMin.x")
+
+# Apply one property to its source prefab (prefab_path can select an ancestor)
+manage_prefabs(action="apply_overrides", target="Player", component_type="Rigidbody",
+               property_path="m_Mass")
+
+# Select a structural override using its kind and index from list_overrides
+manage_prefabs(action="revert_overrides", target="Player",
+               override_type="added_component", override_index=0)
 ```
+
+`target` accepts a scene name, hierarchy path or instance ID, including inactive
+objects. Writes without filters change property overrides on that object and its
+components; descendants require an explicit target, `child_path` or `override_index`.
+`property_prefix` filters listings only. Structural kinds are `added_component`,
+`removed_component`, `added_gameobject` and `removed_gameobject`; ambiguous selections
+require an index. Indices belong to the current listing and can change after writes.
+Removed GameObject support is reported by `removedGameObjectsSupported`; older
+editors without the API return an empty list. Default overrides are excluded unless
+`include_default_overrides=True`; writes also require an exact `property_path`.
+Unsupported serialized value types return availability flags rather than a guessed
+value. Scene-only references cannot be applied to prefab assets.
 
 ---
 

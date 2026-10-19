@@ -42,6 +42,66 @@ def mock_unity(monkeypatch):
 # ── component_properties ─────────────────────────────────────────────
 
 
+class TestManagePrefabInstanceOverrides:
+    @pytest.mark.parametrize("action", ["list_overrides", "revert_overrides", "apply_overrides"])
+    def test_scene_target_is_required(self, mock_unity, action):
+        result = asyncio.run(manage_prefabs(SimpleNamespace(), action=action))
+        assert result["success"] is False
+        assert "target" in result["message"]
+        assert mock_unity == {}
+
+    def test_list_filters_and_zero_index_reach_unity(self, mock_unity):
+        result = asyncio.run(manage_prefabs(
+            SimpleNamespace(), action="list_overrides", target="HUD",
+            child_path="Health", component_type="RectTransform",
+            property_prefix="m_Anchor", override_type="property", override_index=0,
+            include_default_overrides=True,
+        ))
+        assert result["success"] is True
+        assert mock_unity["params"] == {
+            "action": "list_overrides", "target": "HUD", "childPath": "Health",
+            "componentType": "RectTransform", "propertyPrefix": "m_Anchor",
+            "overrideType": "property", "overrideIndex": 0, "includeDefaultOverrides": True,
+        }
+
+    @pytest.mark.parametrize("action", ["revert_overrides", "apply_overrides"])
+    def test_precise_property_writes_reach_unity(self, mock_unity, action):
+        result = asyncio.run(manage_prefabs(
+            SimpleNamespace(), action=action, target="1234", component_type="Rigidbody",
+            property_path="m_Mass", prefab_path="Assets/Player.prefab",
+        ))
+        assert result["success"] is True
+        assert mock_unity["params"] == {
+            "action": action, "target": "1234", "componentType": "Rigidbody",
+            "propertyPath": "m_Mass", "prefabPath": "Assets/Player.prefab",
+        }
+
+    @pytest.mark.parametrize("kind", ["added_component", "removed_component", "added_gameobject", "removed_gameobject"])
+    def test_structural_selection_reaches_unity(self, mock_unity, kind):
+        asyncio.run(manage_prefabs(
+            SimpleNamespace(), action="revert_overrides", target="Player",
+            override_type=kind, override_index=0,
+        ))
+        assert mock_unity["params"]["overrideType"] == kind
+        assert mock_unity["params"]["overrideIndex"] == 0
+
+    @pytest.mark.parametrize("action", ["revert_overrides", "apply_overrides"])
+    def test_prefix_cannot_accidentally_broaden_writes(self, mock_unity, action):
+        result = asyncio.run(manage_prefabs(
+            SimpleNamespace(), action=action, target="HUD", property_prefix="m_Anchor",
+        ))
+        assert result["success"] is False
+        assert "property_path" in result["message"]
+        assert mock_unity == {}
+
+    def test_negative_override_index_is_rejected_before_send(self, mock_unity):
+        result = asyncio.run(manage_prefabs(
+            SimpleNamespace(), action="apply_overrides", target="HUD", override_index=-1,
+        ))
+        assert result["success"] is False
+        assert mock_unity == {}
+
+
 class TestManagePrefabsComponentProperties:
     """Tests for the component_properties parameter on manage_prefabs."""
 
