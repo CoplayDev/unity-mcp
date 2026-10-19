@@ -176,7 +176,7 @@ Some clients cannot be handled by the generic JSON configurator alone.
 ### DeepSeek Harness (native DSH bundle)
 
 - Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, registered as a Cordis row — not a JSON/TOML config file.
-- Setup is manual, like the other UI-driven clients. The snippet renders a configuration-only bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/` with a `package.json` manifest and a `cordis.patch.yml` row) plus the `dsh plugin add` / `dsh plugin remove` commands. After a DSH reload the tools surface as `mcp__unityMCP__<tool>`.
+- Setup is manual, like the other UI-driven clients. The snippet renders a configuration-only bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/` with a `package.json` manifest and a `cordis.patch.yml` row) plus the `dsh plugin add` / `dsh plugin remove` commands. Run them with DSH closed (its `desktop` profile is Electron-managed) using the Desktop-installed `dsh`, then reopen it. After a DSH reload the tools surface as `mcp__unityMCP__<tool>`.
 - The row shape (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
   ```yaml
   - insert:

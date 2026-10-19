@@ -59,7 +59,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
         {
             "Install DeepSeek Harness and run any 'dsh' command once (creates ~/.dsh)",
             "Create the two files shown in the Manual Configuration snippet below",
-            "Run the 'dsh plugin add' command from the snippet",
+            "Quit DeepSeek Harness, run the 'dsh plugin add' command from the snippet, then reopen it",
             "Restart DeepSeek Harness; Unity tools appear as mcp__unityMCP__<tool>",
             "DSH's plugin manager can enable/disable or remove the bundle afterwards"
         };
@@ -71,8 +71,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 string bundleDir = BundleDir();
                 string profile = ProfileName();
                 var sb = new StringBuilder();
-                sb.AppendLine("# DeepSeek Harness setup. $DSH_HOME defaults to ~/.dsh;");
-                sb.AppendLine("# the profile below is 'desktop', swap it if you use another one.");
+                sb.AppendLine("# DeepSeek Harness setup. $DSH_HOME defaults to ~/.dsh.");
+                sb.AppendLine("# 'desktop' is the Desktop app's own profile: quit DeepSeek Harness, run the");
+                sb.AppendLine("# commands below, then reopen it. With a standalone dsh (npm install), pick");
+                sb.AppendLine("# another profile name instead; 'desktop' is reserved for the Desktop app.");
                 sb.AppendLine();
                 sb.AppendLine("# --- " + bundleDir + "/package.json ---");
                 sb.AppendLine("{");
