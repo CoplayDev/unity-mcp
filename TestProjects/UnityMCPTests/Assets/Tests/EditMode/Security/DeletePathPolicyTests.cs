@@ -1,9 +1,12 @@
 using System.IO;
 using System.Linq;
+using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using UnityEditor;
 
 namespace MCPForUnityTests.Editor.Security
 {
@@ -243,6 +246,26 @@ namespace MCPForUnityTests.Editor.Security
             StringAssert.Contains("FileInfo", error);
         }
 
+        [Test]
+        public void Source_MethodGroup_IsRejected()
+        {
+            // A method group has no inspectable path argument.
+            string error = Check(@"System.Action d = System.IO.File.Delete; d(""Assets/Scripts/Player.cs"");");
+
+            Assert.IsNotNull(error);
+            StringAssert.Contains("cannot be checked", error);
+        }
+
+        [Test]
+        public void Source_CommentBetweenDeleteAndParen_IsRejected()
+        {
+            // The old "substring" check caught this form; the member-reference check must too.
+            string error = Check(@"File.Delete/**/(""Assets/Scripts/Player.cs"");");
+
+            Assert.IsNotNull(error);
+            StringAssert.Contains("cannot be checked", error);
+        }
+
         // ──────────────────── End-to-end through the tool ────────────────────
 
         [Test]
@@ -254,18 +277,38 @@ namespace MCPForUnityTests.Editor.Security
             string file = Path.Combine(directory, "mcp-delete-allowlist-test.tmp");
             File.WriteAllText(file, "delete me");
 
-            // Absolute literal: the compiled snippet's working directory is not part of
-            // this contract, and the allowlist accepts any literal inside the root.
-            string literal = file.Replace('\\', '/');
-            var result = MCPForUnityTests.Editor.TestUtilities.ToJObject(
-                ExecuteCode.HandleCommand(new JObject
-                {
-                    ["action"] = "execute",
-                    ["code"] = $"System.IO.File.Delete(\"{literal}\");\nreturn null;",
-                }));
+            bool hadPreference = EditorPrefs.HasKey(EditorPrefKeys.ExecuteCodeDeleteRoots);
+            string previousPreference = EditorPrefs.GetString(
+                EditorPrefKeys.ExecuteCodeDeleteRoots, string.Empty);
 
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            Assert.IsFalse(File.Exists(file), "File should have been deleted through execute_code.");
+            try
+            {
+                // The developer's saved allowlist must not decide whether this test passes.
+                ExecuteCodePrefs.ResetAllowedDeleteRoots();
+
+                // Absolute literal: the compiled snippet's working directory is not part of
+                // this contract, and the allowlist accepts any literal inside the root.
+                string literal = file.Replace('\\', '/');
+                var result = MCPForUnityTests.Editor.TestUtilities.ToJObject(
+                    ExecuteCode.HandleCommand(new JObject
+                    {
+                        ["action"] = "execute",
+                        ["code"] = $"System.IO.File.Delete(\"{literal}\");\nreturn null;",
+                    }));
+
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsFalse(File.Exists(file), "File should have been deleted through execute_code.");
+            }
+            finally
+            {
+                if (File.Exists(file))
+                    File.Delete(file);
+
+                if (hadPreference)
+                    EditorPrefs.SetString(EditorPrefKeys.ExecuteCodeDeleteRoots, previousPreference);
+                else
+                    EditorPrefs.DeleteKey(EditorPrefKeys.ExecuteCodeDeleteRoots);
+            }
         }
 
         [Test]
@@ -280,6 +323,22 @@ namespace MCPForUnityTests.Editor.Security
 
             Assert.IsFalse(result.Value<bool>("success"), result.ToString());
             StringAssert.Contains("Blocked pattern", result.Value<string>("error"));
+        }
+
+        [Test]
+        public void ExecuteCode_BlocksCurrentDirectorySwitch()
+        {
+            // Without this block a snippet could validate "Builds/x" against the project
+            // root and then change CWD to Assets before deleting it.
+            var result = MCPForUnityTests.Editor.TestUtilities.ToJObject(
+                ExecuteCode.HandleCommand(new JObject
+                {
+                    ["action"] = "execute",
+                    ["code"] = "System.IO.Directory.SetCurrentDirectory(\"Assets\");\nreturn null;",
+                }));
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("CurrentDirectory", result.Value<string>("error"));
         }
 
         private static string Check(string code)

@@ -71,6 +71,9 @@ namespace MCPForUnity.Editor.Tools
             "AssetDatabase.DeleteAsset",
             "AssetDatabase.MoveAssetToTrash",
             "EditorApplication.Exit",
+            // Changing the working directory between the delete-allowlist check and
+            // execution would make a validated relative path resolve somewhere else.
+            "CurrentDirectory",
             "Process.Start",
             "Process.Kill",
             "while(true)",

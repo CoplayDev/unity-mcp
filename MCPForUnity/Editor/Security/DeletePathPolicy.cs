@@ -38,8 +38,11 @@ namespace MCPForUnity.Editor.Security
         /// <summary>Roots that can never be deleted, even if configured.</summary>
         internal static readonly string[] HardDeniedRoots = { "Assets" };
 
+        // Match the member reference itself, not just a direct call. A method group
+        // (`Action d = File.Delete;`) or a delegate construction has no inspectable
+        // path argument, so the loop below rejects it instead of silently skipping it.
         private static readonly Regex DeleteInvocation = new Regex(
-            @"\b(?:System\s*\.\s*IO\s*\.\s*)?(?:File|Directory)\s*\.\s*Delete\s*\(",
+            @"\b(?:System\s*\.\s*IO\s*\.\s*)?(?:File|Directory)\s*\.\s*Delete\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         private static readonly Regex StaticIoImport = new Regex(
@@ -315,7 +318,16 @@ namespace MCPForUnity.Editor.Security
 
             foreach (Match match in DeleteInvocation.Matches(code))
             {
-                if (!TryReadFirstArgument(code, match.Index + match.Length, out string literal, out string error))
+                int argumentStart = SkipWhitespace(code, match.Index + match.Length);
+                if (argumentStart >= code.Length || code[argumentStart] != '(')
+                {
+                    return Blocked(
+                        "Delete calls must be followed by a parenthesized string literal. Method groups, " +
+                        "delegate references and comments between the member name and argument list cannot be " +
+                        "checked against the delete allowlist; call File.Delete(\"literal path\") directly.");
+                }
+
+                if (!TryReadFirstArgument(code, argumentStart + 1, out string literal, out string error))
                     return Blocked(error);
 
                 if (!TryResolve(literal, out string fullPath, out string resolveError))
