@@ -175,10 +175,9 @@ Some clients cannot be handled by the generic JSON configurator alone.
 
 ### DeepSeek Harness (native DSH bundle)
 
-- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, configured as Cordis rows — not a JSON/TOML config file.
-- Configure writes a **configuration-only DSH bundle** to `$DSH_HOME/bundles/<profile>/unity-mcp/` (the `DSH_HOME` environment variable wins, default `~/.dsh`) containing a `package.json` manifest (`dsh.bundle.patch` → `./cordis.patch.yml`) and the patch itself, then installs it into a DSH profile with `dsh plugin --profile <name> add <bundle-dir>`. The bundle path is profile-qualified because `dsh plugin add` symlinks the directory into the profile — one shared directory would let one profile's Unregister dangle another profile's link. The profile is `desktop` by default; set `DSH_PROFILE` to target another profile.
-- Installing as a bundle (instead of editing `$DSH_HOME/cordis.patch.yml`) keeps the row **profile-scoped and removable** through DSH's own plugin manager (`dsh plugin --profile <name> remove @local/unity-mcp-dsh`). The root home patch applies to *every* profile and collides with rows from other sources, so it is only used for one-shot experiments (`dsh web --patch <file>`) and migration cleanup.
-- The row shape inside the bundle's `cordis.patch.yml` (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
+- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, registered as a Cordis row — not a JSON/TOML config file.
+- Setup is manual, like the other UI-driven clients. The snippet renders a configuration-only bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/` with a `package.json` manifest and a `cordis.patch.yml` row) plus the `dsh plugin add` / `dsh plugin remove` commands. After a DSH reload the tools surface as `mcp__unityMCP__<tool>`.
+- The row shape (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
   ```yaml
   - insert:
       - id: unitymcp
@@ -187,11 +186,10 @@ Some clients cannot be handled by the generic JSON configurator alone.
           serverName: unityMCP
           transport: streamable-http   # or stdio with command/args
           url: http://127.0.0.1:<port>/mcp
+          failOnStartupError: true
   ```
-- Bundle contents are wholly managed (files are overwritten in place). `DshConfigHelper` (`MCPForUnity/Editor/Helpers/DshConfigHelper.cs`) still owns the block shape and any marker-fenced surgery on *foreign* patch files: the package has no YAML parser, and user patch files may contain YAML features this helper does not parse (e.g. `!!js` JS-expression tags, anchors) plus unrelated server rows that must never be corrupted. Configure/Unregister also migrate away a legacy managed block left in `$DSH_HOME/cordis.patch.yml` by earlier versions, so exactly one row exists.
-- After a DSH reload/restart, Unity tools surface as `mcp__unityMCP__<tool>` (DSH's server-qualified MCP naming).
-- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists). Configure refuses to run when the target profile does not exist, because `dsh plugin add` silently initializes a missing profile as a bare, unusable one.
-- Status checks never rewrite anything: bundle install is a user action only, so opening a project never modifies DSH configuration.
+- Installing as a bundle (instead of editing `$DSH_HOME/cordis.patch.yml`, a global layer that collides with rows from other sources) keeps the row profile-scoped, and DSH's own plugin manager owns enable/disable and removal afterwards.
+- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
 
 ---
 

@@ -27,7 +27,7 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **OpenClaw** | HTTP / stdio | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport choice. |
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
 | **Pi** | stdio / HTTP | yes | yes | yes | Needs an MCP extension (Pi ships no MCP client of its own): `pi install npm:pi-mcp-adapter`. Writes the shared `~/.config/mcp/mcp.json`. |
-| **DeepSeek Harness** | HTTP / stdio | no (manual Configure) | yes | yes | Installs a configuration-only DSH bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/`) into a DSH profile via `dsh plugin add`. Tools appear as `mcp__unityMCP__<tool>`. |
+| **DeepSeek Harness** | HTTP / stdio | no (manual Configure) | yes | yes | Manual setup: the snippet holds a configuration-only DSH bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/`) installed with `dsh plugin add`. Tools appear as `mcp__unityMCP__<tool>`. |
 
 ## How to pick
 
