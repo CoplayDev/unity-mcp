@@ -261,7 +261,7 @@ namespace MCPForUnityTests.Editor.Security
                 ExecuteCode.HandleCommand(new JObject
                 {
                     ["action"] = "execute",
-                    ["code"] = $"System.IO.File.Delete(\"{literal}\");",
+                    ["code"] = $"System.IO.File.Delete(\"{literal}\");\nreturn null;",
                 }));
 
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
@@ -275,7 +275,7 @@ namespace MCPForUnityTests.Editor.Security
                 ExecuteCode.HandleCommand(new JObject
                 {
                     ["action"] = "execute",
-                    ["code"] = "System.IO.File.Delete(\"Assets/should-not-be-deleted.txt\");",
+                    ["code"] = "System.IO.File.Delete(\"Assets/should-not-be-deleted.txt\");\nreturn null;",
                 }));
 
             Assert.IsFalse(result.Value<bool>("success"), result.ToString());
