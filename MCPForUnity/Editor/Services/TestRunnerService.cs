@@ -98,7 +98,19 @@ namespace MCPForUnity.Editor.Services
                 string reverted = RevertTemporaryValues(text, originalEnabled, originalOptions);
                 if (reverted != text)
                 {
-                    File.WriteAllText(EditorSettingsPath, reverted);
+                    string tempPath = EditorSettingsPath + ".tmp";
+                    try
+                    {
+                        File.WriteAllText(tempPath, reverted);
+                        File.Replace(tempPath, EditorSettingsPath, null);
+                    }
+                    finally
+                    {
+                        if (File.Exists(tempPath))
+                        {
+                            File.Delete(tempPath);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
