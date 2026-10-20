@@ -170,8 +170,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         /// <summary>
         /// Synchronous teardown for use in beforeAssemblyReload where async is not possible.
-        /// Skips the graceful WebSocket close handshake and just disposes resources immediately.
-        /// The server handles ungraceful disconnects via its ping timeout.
+        /// Sends a bounded close-output frame when possible, then disposes immediately so
+        /// domain reload cannot leave an unfinished close handshake behind.
         /// </summary>
         public void ForceStop()
         {
@@ -180,7 +180,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             if (_socket != null)
             {
-                try { _socket.Abort(); } catch { }
+                if (_sendLock.Wait(0))
+                {
+                    try { CloseForDomainReload(_socket, TimeSpan.FromMilliseconds(100)); }
+                    finally { _sendLock.Release(); }
+                }
+                else
+                {
+                    try { _socket.Abort(); } catch { }
+                }
+
                 try { _socket.Dispose(); } catch { }
                 _socket = null;
             }
@@ -195,6 +204,37 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             try { _lifecycleCts?.Dispose(); } catch { }
             _lifecycleCts = null;
+        }
+
+        internal static void CloseForDomainReload(WebSocket socket, TimeSpan timeout)
+        {
+            if (socket == null)
+            {
+                return;
+            }
+
+            try
+            {
+                WebSocketState state = socket.State;
+                if (state == WebSocketState.Open || state == WebSocketState.CloseReceived)
+                {
+                    using var closeCts = new CancellationTokenSource(timeout);
+                    socket.CloseOutputAsync(
+                        WebSocketCloseStatus.EndpointUnavailable,
+                        "Domain reload",
+                        closeCts.Token).GetAwaiter().GetResult();
+                    return;
+                }
+
+                if (state != WebSocketState.Closed && state != WebSocketState.Aborted)
+                {
+                    socket.Abort();
+                }
+            }
+            catch
+            {
+                try { socket.Abort(); } catch { }
+            }
         }
 
         public async Task<bool> VerifyAsync()

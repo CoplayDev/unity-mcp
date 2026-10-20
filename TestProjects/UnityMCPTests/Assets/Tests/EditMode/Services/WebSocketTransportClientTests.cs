@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Services.Transport.Transports;
 using NUnit.Framework;
 
@@ -80,6 +83,75 @@ namespace MCPForUnityTests.Editor.Services
                 Assert.AreEqual("/custom/path", candidate.AbsolutePath);
                 Assert.AreEqual("?mode=test", candidate.Query);
             }
+        }
+
+        [Test]
+        public void CloseForDomainReload_OpenSocket_SendsBoundedCloseOutput()
+        {
+            var socket = new RecordingWebSocket();
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromSeconds(1));
+
+            Assert.IsTrue(socket.CloseOutputCalled);
+            Assert.AreEqual(WebSocketCloseStatus.EndpointUnavailable, socket.RequestedCloseStatus);
+            Assert.AreEqual("Domain reload", socket.RequestedCloseDescription);
+            Assert.IsFalse(socket.AbortCalled);
+        }
+
+        [Test]
+        public void CloseForDomainReload_CloseFailure_AbortsSocket()
+        {
+            var socket = new RecordingWebSocket { ThrowOnCloseOutput = true };
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromSeconds(1));
+
+            Assert.IsTrue(socket.CloseOutputCalled);
+            Assert.IsTrue(socket.AbortCalled);
+        }
+
+        [Test]
+        public void CloseForDomainReload_CloseReceived_CompletesCloseOutput()
+        {
+            var socket = new RecordingWebSocket { SocketState = WebSocketState.CloseReceived };
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromSeconds(1));
+
+            Assert.IsTrue(socket.CloseOutputCalled);
+            Assert.IsFalse(socket.AbortCalled);
+        }
+
+        [Test]
+        public void CloseForDomainReload_CloseTimeout_AbortsSocket()
+        {
+            var socket = new RecordingWebSocket { WaitForCancellation = true };
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromMilliseconds(10));
+
+            Assert.IsTrue(socket.CloseOutputCalled);
+            Assert.IsTrue(socket.AbortCalled);
+        }
+
+        [Test]
+        public void CloseForDomainReload_ConnectingSocket_AbortsImmediately()
+        {
+            var socket = new RecordingWebSocket { SocketState = WebSocketState.Connecting };
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromSeconds(1));
+
+            Assert.IsFalse(socket.CloseOutputCalled);
+            Assert.IsTrue(socket.AbortCalled);
+        }
+
+        [TestCase(WebSocketState.Closed)]
+        [TestCase(WebSocketState.Aborted)]
+        public void CloseForDomainReload_TerminalSocket_DoesNothing(WebSocketState state)
+        {
+            var socket = new RecordingWebSocket { SocketState = state };
+
+            WebSocketTransportClient.CloseForDomainReload(socket, TimeSpan.FromSeconds(1));
+
+            Assert.IsFalse(socket.CloseOutputCalled);
+            Assert.IsFalse(socket.AbortCalled);
         }
 
         private static List<Uri> InvokeBuildConnectionCandidateUris(Uri endpoint)
@@ -181,6 +253,75 @@ namespace MCPForUnityTests.Editor.Services
             }
 
             return host.Trim('[', ']');
+        }
+
+        private sealed class RecordingWebSocket : WebSocket
+        {
+            public bool ThrowOnCloseOutput { get; set; }
+            public bool WaitForCancellation { get; set; }
+            public WebSocketState SocketState { get; set; } = WebSocketState.Open;
+            public bool CloseOutputCalled { get; private set; }
+            public bool AbortCalled { get; private set; }
+            public WebSocketCloseStatus RequestedCloseStatus { get; private set; }
+            public string RequestedCloseDescription { get; private set; }
+
+            public override WebSocketCloseStatus? CloseStatus => null;
+            public override string CloseStatusDescription => null;
+            public override WebSocketState State => SocketState;
+            public override string SubProtocol => null;
+
+            public override void Abort()
+            {
+                AbortCalled = true;
+            }
+
+            public override Task CloseAsync(
+                WebSocketCloseStatus closeStatus,
+                string statusDescription,
+                CancellationToken cancellationToken)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override Task CloseOutputAsync(
+                WebSocketCloseStatus closeStatus,
+                string statusDescription,
+                CancellationToken cancellationToken)
+            {
+                CloseOutputCalled = true;
+                RequestedCloseStatus = closeStatus;
+                RequestedCloseDescription = statusDescription;
+                if (ThrowOnCloseOutput)
+                {
+                    throw new InvalidOperationException("close failed");
+                }
+                if (WaitForCancellation)
+                {
+                    return Task.Delay(Timeout.Infinite, cancellationToken);
+                }
+
+                return Task.CompletedTask;
+            }
+
+            public override void Dispose()
+            {
+            }
+
+            public override Task<WebSocketReceiveResult> ReceiveAsync(
+                ArraySegment<byte> buffer,
+                CancellationToken cancellationToken)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override Task SendAsync(
+                ArraySegment<byte> buffer,
+                WebSocketMessageType messageType,
+                bool endOfMessage,
+                CancellationToken cancellationToken)
+            {
+                throw new NotSupportedException();
+            }
         }
     }
 }
