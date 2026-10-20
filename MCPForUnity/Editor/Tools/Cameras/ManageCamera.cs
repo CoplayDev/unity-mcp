@@ -29,11 +29,13 @@ namespace MCPForUnity.Editor.Tools.Cameras
                             success = true,
                             message = CameraHelpers.HasCinemachine
                                 ? "Cinemachine is available."
-                                : "Cinemachine not installed. Basic Camera operations available.",
+                                : CameraHelpers.GetUnavailableCinemachineMessage() + " Basic Camera operations available.",
                             data = new
                             {
                                 cinemachine = CameraHelpers.HasCinemachine,
-                                version = CameraHelpers.GetCinemachineVersion()
+                                installed = CameraHelpers.IsCinemachineInstalled,
+                                version = CameraHelpers.GetCinemachineVersion(),
+                                supportedApiMajor = 3
                             }
                         };
 
@@ -79,7 +81,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 if (!CameraHelpers.HasCinemachine)
                 {
                     return new ErrorResponse(
-                        $"Action '{action}' requires the Cinemachine package (com.unity.cinemachine). "
+                        $"Action '{action}' is unavailable. " + CameraHelpers.GetUnavailableCinemachineMessage() + " "
                         + CameraHelpers.GetFallbackSuggestion(action));
                 }
 
