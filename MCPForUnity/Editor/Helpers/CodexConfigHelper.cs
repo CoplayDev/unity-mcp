@@ -17,26 +17,29 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class CodexConfigHelper
     {
-        private static void AddUvxModeFlags(TomlArray args)
+        private static void AddUvxModeFlags(TomlArray args, WindowRefreshContext context = null)
         {
             if (args == null) return;
-            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
+            foreach (var flag in context?.DevFlagList ?? AssetPathUtility.GetUvxDevFlagsList())
                 args.Add(new TomlString { Value = flag });
         }
 
         public static string BuildCodexServerBlock(string uvPath)
+            => BuildCodexServerBlock(uvPath, null);
+
+        internal static string BuildCodexServerBlock(string uvPath, WindowRefreshContext context)
         {
             var table = new TomlTable();
             var mcpServers = new TomlTable();
             var unityMCP = new TomlTable();
 
             // Check transport preference
-            bool useHttpTransport = EditorPrefs.GetBool(MCPForUnity.Editor.Constants.EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = context?.UseHttp ?? EditorPrefs.GetBool(MCPForUnity.Editor.Constants.EditorPrefKeys.UseHttpTransport, true);
 
             if (useHttpTransport)
             {
                 // HTTP mode: Use url field
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = context?.RpcUrl ?? HttpEndpointUtility.GetMcpRpcUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
 
                 // Enable Codex's Rust MCP client for HTTP/SSE transport
@@ -45,14 +48,15 @@ namespace MCPForUnity.Editor.Helpers
             else
             {
                 // Stdio mode: Use command and args
-                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                string uvxPath = uvPath;
+                string packageName = "mcp-for-unity";
 
                 unityMCP["command"] = uvxPath;
 
                 var args = new TomlArray();
-                AddUvxModeFlags(args);
+                AddUvxModeFlags(args, context);
                 // Use centralized helper for beta server / prerelease args
-                foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
+                foreach (var arg in context?.FromArgs ?? AssetPathUtility.GetBetaServerFromArgsList())
                 {
                     args.Add(new TomlString { Value = arg });
                 }
@@ -63,11 +67,10 @@ namespace MCPForUnity.Editor.Helpers
                 unityMCP["args"] = args;
 
                 // Add Windows-specific environment configuration for stdio mode
-                var platformService = MCPServiceLocator.Platform;
-                if (platformService.IsWindows())
+                if (context != null ? context.Platform == RuntimePlatform.WindowsEditor : MCPServiceLocator.Platform.IsWindows())
                 {
                     var envTable = new TomlTable { IsInline = true };
-                    envTable["SystemRoot"] = new TomlString { Value = platformService.GetSystemRoot() };
+                    envTable["SystemRoot"] = new TomlString { Value = context?.SystemRoot ?? MCPServiceLocator.Platform.GetSystemRoot() };
                     unityMCP["env"] = envTable;
                 }
 

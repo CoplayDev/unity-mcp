@@ -16,12 +16,13 @@ namespace MCPForUnity.Editor.Helpers
         // Resolve Claude CLI absolute path. Pref → env → common locations → PATH.
         internal static string ResolveClaude()
         {
-            try
-            {
-                string pref = EditorPrefs.GetString(PrefClaude, string.Empty);
-                if (!string.IsNullOrEmpty(pref) && File.Exists(pref)) return pref;
-            }
-            catch { }
+            return ResolveClaude(EditorPrefs.GetString(PrefClaude, string.Empty));
+        }
+
+        // Worker-safe overload: caller captures EditorPrefs before starting discovery.
+        internal static string ResolveClaude(string pref)
+        {
+            if (!string.IsNullOrEmpty(pref) && File.Exists(pref)) return pref;
 
             string env = Environment.GetEnvironmentVariable("CLAUDE_CLI");
             if (!string.IsNullOrEmpty(env) && File.Exists(env)) return env;
