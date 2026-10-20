@@ -373,6 +373,84 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(result["data"]["result"]);
         }
 
+        // ──────────────────── Wrapper aliases and line mapping (issue #1439) ────────────────────
+
+        // The wrapper imports both System and UnityEngine, so a bare Object or Random used to be
+        // an ambiguous reference (CS0104) under both backends.
+        [TestCase("codedom")]
+        [TestCase("auto")]
+        public void Execute_BareObject_ResolvesToUnityEngineObject(string compiler)
+        {
+            var result = Execute(
+                "var go = new GameObject(\"mcp-probe\");\n" +
+                "Object.DestroyImmediate(go);\n" +
+                "return go == null;", compiler);
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.IsTrue(result["data"]["result"].Value<bool>());
+        }
+
+        [TestCase("codedom")]
+        [TestCase("auto")]
+        public void Execute_BareRandom_ResolvesToUnityEngineRandom(string compiler)
+        {
+            var result = Execute("return Random.Range(0, 1);", compiler);
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(0, result["data"]["result"].Value<int>());
+        }
+
+        [TestCase("codedom")]
+        [TestCase("auto")]
+        public void Execute_ObjectKeywordAndSystemRandom_StillCompile(string compiler)
+        {
+            var result = Execute(
+                "object boxed = new System.Random(1).Next(1);\n" +
+                "return boxed is int;", compiler);
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.IsTrue(result["data"]["result"].Value<bool>());
+        }
+
+        // Both backends clamp reported lines to at least 1, so the error sits on line 3 to catch
+        // a wrapper offset that is too large as well as one that is too small.
+        [TestCase("codedom")]
+        [TestCase("auto")]
+        public void Execute_CompilationError_ReportsUserLineNumber(string compiler)
+        {
+            var result = Execute(
+                "int a = 1;\n" +
+                "int b = 2;\n" +
+                "int c = \"not an int\";\n" +
+                "return a + b + c;", compiler);
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            var errors = result["data"]["errors"].ToObject<string[]>();
+            Assert.That(errors, Has.Some.StartsWith("Line 3:"), result.ToString());
+        }
+
+        [TestCase("codedom")]
+        [TestCase("auto")]
+        public void Execute_CodedomCompileFailure_IncludesRoslynHint(string compiler)
+        {
+            var result = Execute(
+                "int n = 2;\n" +
+                "return n switch { 1 => \"one\", _ => \"other\" };", compiler);
+
+            if (result["data"]?["compiler"]?.Value<string>() == "roslyn")
+            {
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsNull(result["data"]["hint"]);
+                return;
+            }
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("codedom", result["data"]["compiler"].Value<string>());
+            var hint = result["data"]["hint"]?.Value<string>();
+            Assert.IsNotNull(hint, result.ToString());
+            StringAssert.Contains(RoslynCompiler.IsAvailable ? "compiler='auto'" : "Install Roslyn", hint);
+        }
+
         [Test]
         public void FilterAssemblyPathsForCodeDom_WithNetstandard_PreservesSystemSecurity()
         {
@@ -543,6 +621,16 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 ["action"] = "execute",
                 ["code"] = code
+            }));
+        }
+
+        private static JObject Execute(string code, string compiler)
+        {
+            return ToJObject(ExecuteCode.HandleCommand(new JObject
+            {
+                ["action"] = "execute",
+                ["code"] = code,
+                ["compiler"] = compiler
             }));
         }
 
