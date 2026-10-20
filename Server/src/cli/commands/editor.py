@@ -18,14 +18,38 @@ def editor():
 
 
 @editor.command("play")
+@click.option("--wait-until", type=click.Choice(["scene_loaded", "first_frame"]), help="Wait for a startup milestone; first_frame includes Start methods.")
+@click.option("--on-ready-code", help="C# body executed once after first-frame startup.")
+@click.option("--wait-timeout", type=click.FloatRange(min=1, max=300), default=None, help="Startup wait in seconds (1-300; default 30). Requires a startup option.")
 @handle_unity_errors
-def play():
-    """Enter play mode."""
+def play(wait_until: Optional[str], on_ready_code: Optional[str], wait_timeout: Optional[float]) -> None:
+    """Enter play mode, optionally wait for startup and run a C# body once."""
     config = get_config()
-    result = run_command("manage_editor", {"action": "play"}, config)
+    if wait_timeout is not None and wait_until is None and on_ready_code is None:
+        raise click.UsageError("--wait-timeout requires --wait-until or --on-ready-code.")
+    params: dict[str, Any] = {"action": "play"}
+    if wait_until is not None:
+        params["waitUntil"] = wait_until
+    if on_ready_code is not None:
+        params["onReadyCode"] = on_ready_code
+    if wait_until is not None or on_ready_code is not None:
+        params["waitTimeout"] = wait_timeout if wait_timeout is not None else 30
+        result = run_command("manage_editor", params, config, timeout=int(params["waitTimeout"]) + 5)
+    else:
+        result = run_command("manage_editor", params, config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
         print_success("Entered play mode")
+
+
+@editor.command("play-status")
+@click.argument("job_id")
+@handle_unity_errors
+def play_status(job_id: str) -> None:
+    """Read a startup job after a timeout or lost reply; does not rerun code."""
+    config = get_config()
+    result = run_command("manage_editor", {"action": "get_play_mode_startup", "jobId": job_id}, config)
+    click.echo(format_output(result, config.format))
 
 
 @editor.command("pause")

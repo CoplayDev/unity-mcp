@@ -53,17 +53,14 @@ namespace MCPForUnity.Editor.Tools
                 case "play":
                     try
                     {
-                        if (!EditorApplication.isPlaying)
-                        {
-                            EditorApplication.isPlaying = true;
-                            return new SuccessResponse("Entered play mode.");
-                        }
-                        return new SuccessResponse("Already in play mode.");
+                        return PlayModeStartupService.Start(@params);
                     }
                     catch (Exception e)
                     {
                         return new ErrorResponse($"Error entering play mode: {e.Message}");
                     }
+                case "get_play_mode_startup":
+                    return PlayModeStartupService.Get(@params["jobId"]?.ToString());
                 case "pause":
                     try
                     {
@@ -83,7 +80,8 @@ namespace MCPForUnity.Editor.Tools
                 case "stop":
                     try
                     {
-                        if (EditorApplication.isPlaying)
+                        PlayModeStartupService.CancelWaiting();
+                        if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
                         {
                             EditorApplication.isPlaying = false;
                             return new SuccessResponse("Exited play mode.");
@@ -171,7 +169,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
+                        $"Unknown action: '{action}'. Supported actions: play, get_play_mode_startup, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
                     );
             }
         }
