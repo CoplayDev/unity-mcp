@@ -142,7 +142,7 @@ namespace MCPForUnity.Editor.Helpers
 
         private static Rect GetSceneViewViewportPixelRect(SceneView sceneView)
         {
-            float pixelsPerPoint = EditorGUIUtility.pixelsPerPoint;
+            float pixelsPerPoint = GetWindowPixelsPerPoint(sceneView);
             Rect viewportLocalPoints = GetViewportLocalRectPoints(sceneView, pixelsPerPoint);
             if (viewportLocalPoints.width <= 0f || viewportLocalPoints.height <= 0f)
                 throw new InvalidOperationException("Failed to resolve Scene view viewport rect.");
@@ -177,11 +177,52 @@ namespace MCPForUnity.Editor.Helpers
                 Mathf.Min(windowRect.height, viewportHeight));
         }
 
-        private static Texture2D CaptureViewRect(SceneView sceneView, Rect viewportRectPixels)
+        /// <summary>Uses native backing scale rather than panel zoom, falling back to the current Editor scale.</summary>
+        internal static float GetWindowPixelsPerPoint(EditorWindow window)
         {
-            object hostView = GetHostView(sceneView);
+            // The native backing scale measures physical pixels. UI Toolkit's
+            // scaledPixelsPerPoint also includes panel zoom, which must not resize
+            // a capture of the whole Editor window.
+            var host = GetHostView(window);
+            var method = host?.GetType().GetMethod("GetBackingScaleFactor",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method?.Invoke(host, null) is float scale && scale > 0
+                && !float.IsNaN(scale) && !float.IsInfinity(scale))
+                return scale;
+            return EditorGUIUtility.pixelsPerPoint;
+        }
+
+        /// <summary>Reads a bounded window content rectangle in physical pixels without a desktop-capture fallback.</summary>
+        internal static Texture2D CaptureWindowPixels(EditorWindow window, int width, int height)
+        {
+            if (window == null) throw new ArgumentNullException(nameof(window));
+            if (width <= 0 || height <= 0 || (long)width * height > 16777216)
+                throw new ArgumentOutOfRangeException(nameof(width), "Empty or excessive capture area.");
+            InvokeMethodIfExists(GetHostView(window), "RepaintImmediately");
+            // GrabPixels uses physical pixels. A point-sized source rectangle can
+            // crop fractional-DPI buffers. Readback orientation depends on the GPU API.
+            return CaptureViewRect(window, new Rect(0, 0, width, height));
+        }
+
+        /// <summary>Offsets for host borders, normalizes GPU orientation, and restores render-target state on every exit.</summary>
+        private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels)
+        {
+            object hostView = GetHostView(window);
             if (hostView == null)
-                throw new InvalidOperationException("Failed to resolve Scene view host view.");
+                throw new InvalidOperationException("Failed to resolve Editor window host view.");
+
+            // GrabPixels reads the host buffer, whose dock tabs and borders are
+            // outside EditorWindow.position. Resolve content margins from the
+            // host rather than assuming the content begins at buffer (0, 0).
+            PropertyInfo borderProperty = hostView.GetType().GetProperty("borderSize",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (!(borderProperty?.GetValue(hostView) is RectOffset borders))
+                throw new MissingMemberException($"{hostView.GetType().FullName}.borderSize");
+            float scale = GetWindowPixelsPerPoint(window);
+            viewportRectPixels.x += Mathf.Round(borders.left * scale);
+            // The native pixel rectangle starts at the bottom of the host buffer;
+            // readback is normalized separately below for the active graphics API.
+            viewportRectPixels.y += Mathf.Round(borders.bottom * scale);
 
             // GrabPixels is an internal extern on GUIView (parent of HostView), present since at least Unity 2021.1.
             // See: UnityCsReference/Editor/Mono/GUIView.bindings.cs — `internal extern void GrabPixels(RenderTexture, Rect)`
@@ -200,6 +241,7 @@ namespace MCPForUnity.Editor.Helpers
             int height = Mathf.RoundToInt(viewportRectPixels.height);
 
             RenderTexture rt = null;
+            Texture2D texture = null;
             RenderTexture previousActive = RenderTexture.active;
             try
             {
@@ -214,11 +256,13 @@ namespace MCPForUnity.Editor.Helpers
                 grabPixels.Invoke(hostView, new object[] { rt, viewportRectPixels });
 
                 RenderTexture.active = rt;
-                var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
-                FlipTextureVertically(texture);
-                return texture;
+                if (SystemInfo.graphicsUVStartsAtTop) FlipTextureVertically(texture);
+                var result = texture;
+                texture = null;
+                return result;
             }
             catch (TargetInvocationException ex)
             {
@@ -228,6 +272,7 @@ namespace MCPForUnity.Editor.Helpers
             finally
             {
                 RenderTexture.active = previousActive;
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
                 if (rt != null)
                 {
                     rt.Release();
@@ -236,7 +281,8 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
-        private static object GetHostView(EditorWindow window)
+        /// <summary>Resolves the native host identity used for buffer capture and dock-tab restoration across supported Editors.</summary>
+        internal static object GetHostView(EditorWindow window)
         {
             if (window == null)
                 return null;

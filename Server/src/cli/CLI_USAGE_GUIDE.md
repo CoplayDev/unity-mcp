@@ -532,6 +532,13 @@ unity-mcp material set-renderer-color "Cube" 1 0 0 1
 
 ### Editor Commands
 
+Use `editor windows` to list open Editor tabs, then
+`editor screenshot --window-id ID` to save a unique full-size PNG under the
+selected project's `Library/McpEditorScreenshots`. Only one of `--window-id`,
+`--window-title`, or `--window-type` is accepted. Without a selector, the current
+keyboard-focused window is captured. Screenshots may contain private Editor data.
+The previous tab and focus are restored by default. Requires a graphical Editor.
+
 ```bash
 # Play mode control
 unity-mcp editor play

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any
+from typing import Any, Literal
 
 _TRUTHY = {"true", "1", "yes", "on"}
 _FALSY = {"false", "0", "no", "off"}
@@ -402,14 +402,21 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
     return None, f"color must be a list, dict, hex string, or JSON string, got {type(value).__name__}"
 
 
-def extract_screenshot_images(response: dict[str, Any]) -> "ToolResult | None":
+def extract_screenshot_images(
+    response: dict[str, Any],
+    *,
+    image_audience: list[Literal["user", "assistant"]] | None = None,
+) -> "ToolResult | None":
     """If a Unity response contains inline base64 images, return a ToolResult
     with TextContent + ImageContent blocks. Returns None for normal text-only responses.
 
-    Shared screenshot handling (used by manage_camera).
+    Shared screenshot handling. image_audience is an optional client display
+    hint, not a privacy or visibility guarantee.
     """
     from fastmcp.server.server import ToolResult
     from mcp.types import TextContent, ImageContent
+
+    image_options = {"annotations": {"audience": image_audience}} if image_audience is not None else {}
 
     if not isinstance(response, dict) or not response.get("success"):
         return None
@@ -439,7 +446,7 @@ def extract_screenshot_images(response: dict[str, Any]) -> "ToolResult | None":
             b64 = s.get("imageBase64")
             if b64:
                 blocks.append(TextContent(type="text", text=f"[Angle: {s.get('angle', '?')}]"))
-                blocks.append(ImageContent(type="image", data=b64, mimeType="image/png"))
+                blocks.append(ImageContent(type="image", data=b64, mimeType="image/png", **image_options))
         return ToolResult(content=blocks)
 
     # Single image (include_image or positioned capture) or contact sheet
@@ -451,7 +458,7 @@ def extract_screenshot_images(response: dict[str, Any]) -> "ToolResult | None":
     return ToolResult(
         content=[
             TextContent(type="text", text=json.dumps(text_result)),
-            ImageContent(type="image", data=image_b64, mimeType="image/png"),
+            ImageContent(type="image", data=image_b64, mimeType="image/png", **image_options),
         ],
     )
 
