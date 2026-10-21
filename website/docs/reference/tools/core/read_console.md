@@ -18,13 +18,13 @@ Gets messages from or clears the Unity Editor console. Defaults to 10 most recen
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['get', 'clear'] \| None` | — | Get or clear the Unity Editor console. Defaults to 'get' if omitted. |
+| `action` | `Literal['get', 'clear'] \| None` | — | Get or clear the Unity Editor console. Defaults to 'get' if omitted. Also accepts a JSON-encoded string. |
 | `types` | `list[Literal['error', 'warning', 'log', 'all']] \| str \| None` | — | Message types to get (accepts list or JSON string) |
 | `count` | `int \| str \| None` | — | Max messages to return in non-paging mode (accepts int or string, e.g., 5 or '5'). Ignored when paging with page_size/cursor. |
 | `filter_text` | `str \| None` | — | Text filter for messages |
 | `page_size` | `int \| str \| None` | — | Page size for paginated console reads. Defaults to 50 when omitted. |
 | `cursor` | `int \| str \| None` | — | Opaque cursor for paging (0-based offset). Defaults to 0. |
-| `format` | `Literal['plain', 'detailed', 'json'] \| None` | — | Output format |
+| `format` | `Literal['plain', 'detailed', 'json'] \| None` | — | Output format. Also accepts a JSON-encoded string. |
 | `include_stacktrace` | `bool \| str \| None` | — | Include stack traces in output (accepts true/false or 'true'/'false') |
 
 ## Returns

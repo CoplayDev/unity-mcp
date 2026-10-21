@@ -18,7 +18,7 @@ Execute a Unity menu item by path.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `menu_path` | `str \| None` | — | Menu path for 'execute' or 'exists' (e.g., 'File/Save Project') |
+| `menu_path` | `str \| None` | — | Menu path (e.g., 'File/Save Project'). Also accepts a JSON-encoded string. |
 
 ## Returns
 
