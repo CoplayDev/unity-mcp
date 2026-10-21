@@ -196,6 +196,84 @@ namespace MCPForUnity.Editor.Helpers
             Directory.CreateDirectory(Path.GetDirectoryName(configPath));
         }
 
+        internal static JObject GetJsonUnityEntry(JObject root, McpClient client)
+        {
+            string container = string.IsNullOrEmpty(client.ServerContainerKey)
+                ? "mcpServers" : client.ServerContainerKey;
+            return (client.IsVsCodeLayout
+                ? root["servers"]?["unityMCP"] ?? root["mcp"]?["servers"]?["unityMCP"]
+                : root[container]?["unityMCP"]) as JObject;
+        }
+
+        internal static string GetConfiguredHttpUrl(JObject entry)
+        {
+            foreach (string key in new[] { "url", "serverUrl", "httpUrl" })
+            {
+                var value = entry[key];
+                if (value != null && value.Type != JTokenType.Null
+                    && !string.IsNullOrWhiteSpace(value.ToString()))
+                    return value.ToString();
+            }
+            return null;
+        }
+
+        internal static bool HasCustomStdioLauncher(JObject entry, McpClient client)
+        {
+            var command = entry?["command"];
+            if (command?.Type != JTokenType.String
+                || string.IsNullOrWhiteSpace(command.Value<string>())
+                || GetConfiguredHttpUrl(entry) != null)
+                return false;
+
+            var argsToken = entry["args"];
+            if (argsToken != null && (!(argsToken is JArray argsArray)
+                || argsArray.Any(value => value.Type != JTokenType.String)))
+                return false;
+
+            var type = entry["type"];
+            if (type != null && (type.Type != JTokenType.String
+                || !(string.Equals(type.Value<string>(), "stdio", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(type.Value<string>(), client.StdioTypeValue, StringComparison.OrdinalIgnoreCase))))
+                return false;
+
+            string executable = Path.GetFileName(command.Value<string>().Trim().Replace('\\', '/'));
+            if (string.Equals(executable, "uvx", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(executable, "uvx.exe", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            bool uv = string.Equals(executable, "uv", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(executable, "uv.exe", StringComparison.OrdinalIgnoreCase);
+            return !(uv && IsUvToolRun(argsToken as JArray));
+        }
+
+        private static bool IsUvToolRun(JArray args)
+        {
+            if (args == null) return false;
+            int index = SkipUvGlobalOptions(args, 0);
+            if (index >= args.Count || !string.Equals(args[index].Value<string>(), "tool", StringComparison.OrdinalIgnoreCase))
+                return false;
+            index = SkipUvGlobalOptions(args, index + 1);
+            return index < args.Count && string.Equals(args[index].Value<string>(), "run", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int SkipUvGlobalOptions(JArray args, int index)
+        {
+            while (index < args.Count)
+            {
+                string option = args[index].Value<string>();
+                if (option == "--") return index + 1;
+                if (!option.StartsWith("-", StringComparison.Ordinal)) break;
+                index++;
+                // uv's global options with a separate value; --option=value needs no extra skip.
+                if (option == "--cache-dir" || option == "--color" || option == "--allow-insecure-host"
+                    || option == "--trusted-host" || option == "--directory" || option == "--project"
+                    || option == "--config-file" || option == "--python-preference" || option == "--python-fetch"
+                    || option == "--preview-features" || option == "--preview-feature")
+                    index++;
+            }
+            return index;
+        }
+
         public static string ExtractUvxUrl(string[] args)
         {
             if (args == null) return null;
