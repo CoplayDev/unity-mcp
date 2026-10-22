@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -173,6 +174,30 @@ namespace MCPForUnity.Editor.Tools.Animation
             float exitTime = @params["exitTime"]?.ToObject<float>() ?? 0.75f;
             transition.exitTime = exitTime;
 
+            // Optional fields: only override Unity's defaults when supplied, so a faithful
+            // remove+re-add round-trip (paired with get_info) loses nothing. Names match the
+            // keys emitted by GetInfo.
+            if (@params["offset"] != null)
+                transition.offset = @params["offset"].ToObject<float>();
+            if (@params["hasFixedDuration"] != null)
+                transition.hasFixedDuration = @params["hasFixedDuration"].ToObject<bool>();
+            if (@params["canTransitionToSelf"] != null)
+                transition.canTransitionToSelf = @params["canTransitionToSelf"].ToObject<bool>();
+            if (@params["orderedInterruption"] != null)
+                transition.orderedInterruption = @params["orderedInterruption"].ToObject<bool>();
+            if (@params["interruptionSource"] != null)
+            {
+                if (Enum.TryParse<TransitionInterruptionSource>(@params["interruptionSource"].ToString(), true, out var src))
+                    transition.interruptionSource = src;
+            }
+            if (@params["mute"] != null)
+                transition.mute = @params["mute"].ToObject<bool>();
+            if (@params["solo"] != null)
+                transition.solo = @params["solo"].ToObject<bool>();
+            string transitionName = @params["name"]?.ToString();
+            if (!string.IsNullOrEmpty(transitionName))
+                transition.name = transitionName;
+
             // Add conditions
             JToken conditionsToken = @params["conditions"];
             int conditionCount = 0;
@@ -224,6 +249,73 @@ namespace MCPForUnity.Editor.Tools.Animation
                     duration,
                     conditionCount
                 }
+            };
+        }
+
+        // Removes transitions from 'fromState' (or AnyState) to 'toState' in a layer.
+        // If 'toState' is omitted, removes ALL outgoing transitions from 'fromState'.
+        // Use with add_transition to "edit" a transition: remove then re-add with new timing.
+        public static object RemoveTransition(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            string fromStateName = @params["fromState"]?.ToString();
+            if (string.IsNullOrEmpty(fromStateName))
+                return new { success = false, message = "'fromState' is required" };
+            string toStateName = @params["toState"]?.ToString(); // optional
+
+            int layerIndex = @params["layerIndex"]?.ToObject<int>() ?? 0;
+            if (layerIndex < 0 || layerIndex >= controller.layers.Length)
+                return new { success = false, message = $"Layer index {layerIndex} out of range" };
+
+            var rootStateMachine = controller.layers[layerIndex].stateMachine;
+
+            bool isAnyState = string.Equals(fromStateName, "AnyState", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(fromStateName, "Any", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(fromStateName, "Any State", StringComparison.OrdinalIgnoreCase);
+
+            int removed = 0;
+
+            if (isAnyState)
+            {
+                foreach (var t in rootStateMachine.anyStateTransitions.ToArray())
+                {
+                    if (string.IsNullOrEmpty(toStateName) || (t.destinationState != null && t.destinationState.name == toStateName))
+                    {
+                        rootStateMachine.RemoveAnyStateTransition(t);
+                        removed++;
+                    }
+                }
+                fromStateName = "AnyState";
+            }
+            else
+            {
+                AnimatorState fromState = null;
+                foreach (var cs in rootStateMachine.states)
+                    if (cs.state.name == fromStateName) fromState = cs.state;
+                if (fromState == null)
+                    return new { success = false, message = $"State '{fromStateName}' not found in layer {layerIndex}" };
+
+                foreach (var t in fromState.transitions.ToArray())
+                {
+                    if (string.IsNullOrEmpty(toStateName) || (t.destinationState != null && t.destinationState.name == toStateName))
+                    {
+                        fromState.RemoveTransition(t);
+                        removed++;
+                    }
+                }
+            }
+
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+
+            return new
+            {
+                success = true,
+                message = $"Removed {removed} transition(s) from '{fromStateName}'" + (string.IsNullOrEmpty(toStateName) ? "" : $" to '{toStateName}'") + ".",
+                data = new { fromState = fromStateName, toState = toStateName, removed }
             };
         }
 
@@ -329,10 +421,18 @@ namespace MCPForUnity.Editor.Tools.Animation
 
                         transitions.Add(new
                         {
+                            name = t.name,
                             destinationState = t.destinationState?.name,
                             hasExitTime = t.hasExitTime,
                             exitTime = t.exitTime,
                             duration = t.duration,
+                            offset = t.offset,
+                            hasFixedDuration = t.hasFixedDuration,
+                            canTransitionToSelf = t.canTransitionToSelf,
+                            orderedInterruption = t.orderedInterruption,
+                            interruptionSource = t.interruptionSource.ToString(),
+                            mute = t.mute,
+                            solo = t.solo,
                             conditionCount = t.conditions.Length,
                             conditions
                         });
@@ -420,6 +520,178 @@ namespace MCPForUnity.Editor.Tools.Animation
                     controllerPath = AssetDatabase.GetAssetPath(controller)
                 }
             };
+        }
+
+        // Reads per-state properties for every state (recurses into sub-state-machines).
+        // Returns [{ name, instanceId, layer, x, y, speed, motionInstanceId, motionName,
+        // motionType }]. 'instanceId' round-trips into set_state_properties for an exact
+        // match (duplicate names are fine); 'motionInstanceId' lets a caller transfer a
+        // Motion (incl. FBX-embedded clips) to another state BY REFERENCE - no asset path.
+        // Pass 'layerIndex' to scope to one layer; results are paged (page_size/cursor).
+        public static object GetStateProperties(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            int? layerFilter = @params["layerIndex"]?.ToObject<int>();
+            if (layerFilter.HasValue && (layerFilter < 0 || layerFilter >= controller.layers.Length))
+                return new { success = false, message = $"Layer index {layerFilter} out of range (controller has {controller.layers.Length} layers)" };
+
+            var nodes = new List<object>();
+            for (int li = 0; li < controller.layers.Length; li++)
+            {
+                if (layerFilter.HasValue && li != layerFilter.Value)
+                    continue;
+                CollectProperties(controller.layers[li].stateMachine, li, nodes);
+            }
+
+            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
+            var paged = PaginationResponse<object>.Create(nodes, pagination);
+
+            return new
+            {
+                success = true,
+                message = $"Read {paged.Items.Count} of {paged.TotalCount} state(s).",
+                data = new
+                {
+                    count = paged.TotalCount,
+                    nodes = paged.Items,
+                    pageSize = paged.PageSize,
+                    cursor = paged.Cursor,
+                    nextCursor = paged.NextCursor,
+                    hasMore = paged.HasMore
+                }
+            };
+        }
+
+        private static void CollectProperties(AnimatorStateMachine sm, int layer, List<object> outList)
+        {
+            var children = sm.states;
+            for (int i = 0; i < children.Length; i++)
+            {
+                var st = children[i].state;
+                var motion = st.motion;
+                outList.Add(new
+                {
+                    name = st.name,
+                    instanceId = st.GetInstanceIDString(),
+                    layer,
+                    x = children[i].position.x,
+                    y = children[i].position.y,
+                    speed = st.speed,
+                    motionInstanceId = motion != null ? motion.GetInstanceIDString() : null,
+                    motionName = motion != null ? motion.name : null,
+                    motionType = motion != null ? motion.GetType().Name : null
+                });
+            }
+            foreach (var sub in sm.stateMachines)
+                CollectProperties(sub.stateMachine, layer, outList);
+        }
+
+        // Sets per-state properties from a 'states' array of { instanceId, [x], [y],
+        // [speed], [motionInstanceId] }. instanceId and motionInstanceId are STRING handles
+        // (from GetInstanceIDString) - opaque ids carried as strings so large values survive
+        // JSON transport. States are matched by 'instanceId' for an exact, unambiguous hit.
+        // Each field is OPTIONAL - only provided fields are written, so the same call can move
+        // nodes, retime speed, and/or assign motion. 'motionInstanceId' is resolved to a Motion
+        // via UnityObjectIdCompat.InstanceIDFromString and assigned BY REFERENCE (works for FBX
+        // sub-asset clips - no asset-path lookup). Recurses into sub-state-machines and
+        // reassigns stateMachine.states so edits persist.
+        public static object SetStateProperties(JObject @params)
+        {
+            var controller = LoadController(@params);
+            if (controller == null)
+                return ControllerNotFoundError(@params);
+
+            if (!(@params["states"] is JArray arr) || arr.Count == 0)
+                return new { success = false, message = "'states' array is required: [{ instanceId, x?, y?, speed?, motionInstanceId? }, ...]" };
+
+            var want = new Dictionary<string, JObject>();
+            foreach (var token in arr)
+            {
+                if (!(token is JObject entry))
+                    continue;
+                string instanceId = entry["instanceId"]?.ToString();
+                if (!string.IsNullOrEmpty(instanceId))
+                    want[instanceId] = entry;
+            }
+            if (want.Count == 0)
+                return new { success = false, message = "No valid entries (each needs an 'instanceId')." };
+
+            var matched = new HashSet<string>();
+            var motionFailures = new List<object>();
+            Undo.RecordObject(controller, "Set State Properties");
+            for (int li = 0; li < controller.layers.Length; li++)
+                ApplyProperties(controller.layers[li].stateMachine, want, matched, motionFailures);
+
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+
+            var unmatched = want.Keys.Where(k => !matched.Contains(k)).ToList();
+            return new
+            {
+                success = true,
+                message = $"Updated {matched.Count} state(s); {unmatched.Count} id(s) unmatched; {motionFailures.Count} motion ref(s) failed.",
+                data = new
+                {
+                    matched = matched.Count,
+                    requested = want.Count,
+                    unmatched,
+                    motionFailures
+                }
+            };
+        }
+
+        private static void ApplyProperties(AnimatorStateMachine sm, Dictionary<string, JObject> want, HashSet<string> matched, List<object> motionFailures)
+        {
+            var children = sm.states;
+            for (int i = 0; i < children.Length; i++)
+            {
+                string id = children[i].state.GetInstanceIDString();
+                if (string.IsNullOrEmpty(id) || !want.TryGetValue(id, out var entry))
+                    continue;
+
+                var st = children[i].state;
+
+                // Position (x and/or y) - keep the unspecified axis unchanged.
+                if (entry["x"] != null || entry["y"] != null)
+                {
+                    var pos = children[i].position;
+                    float x = entry["x"]?.ToObject<float>() ?? pos.x;
+                    float y = entry["y"]?.ToObject<float>() ?? pos.y;
+                    children[i].position = new Vector3(x, y, 0f);
+                }
+
+                // Speed
+                if (entry["speed"] != null)
+                    st.speed = entry["speed"].ToObject<float>();
+
+                // Motion by reference (resolve string handle -> Motion object). empty/null/"0" clears it.
+                if (entry["motionInstanceId"] != null)
+                {
+                    var token = entry["motionInstanceId"];
+                    string refId = token.Type == JTokenType.Null ? null : token.ToString();
+                    if (string.IsNullOrEmpty(refId) || refId == "0")
+                    {
+                        st.motion = null;
+                    }
+                    else
+                    {
+                        var obj = UnityObjectIdCompat.InstanceIDFromString(refId) as Motion;
+                        if (obj != null)
+                            st.motion = obj;
+                        else
+                            motionFailures.Add(new { instanceId = id, motionInstanceId = refId });
+                    }
+                }
+
+                matched.Add(id);
+            }
+            sm.states = children; // reassign so edits persist
+
+            foreach (var sub in sm.stateMachines)
+                ApplyProperties(sub.stateMachine, want, matched, motionFailures);
         }
 
         private static AnimatorController LoadController(JObject @params)
