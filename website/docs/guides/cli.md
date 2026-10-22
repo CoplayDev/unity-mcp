@@ -297,6 +297,10 @@ unity-mcp asset search "*.mat" --path "Assets/Materials"
 # Get asset info
 unity-mcp asset info "Assets/Materials/Red.mat"
 
+# Browse built AssetBundles (read-only, project-local paths)
+unity-mcp asset bundles "Builds/AssetBundles" --limit 25
+unity-mcp asset bundle-info "Builds/AssetBundles/characters" --page 1
+
 # Create folder
 unity-mcp asset mkdir "Assets/NewFolder"
 
@@ -560,7 +564,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `animation animator` | `crossfade`, `get-parameter`, `info`, `play`, `set-enabled`, `set-parameter`, `set-speed` |
 | `animation clip` | `add-curve`, `add-event`, `assign`, `create`, `create-preset`, `info`, `remove-event`, `set-curve`, `set-vector-curve` |
 | `animation controller` | `add-blend-tree-child`, `add-layer`, `add-parameter`, `add-state`, `add-transition`, `assign`, `create`, `create-blend-tree-1d`, `create-blend-tree-2d`, `info`, `remove-layer`, `set-layer-weight` |
-| `asset` | `create`, `delete`, `duplicate`, `import`, `info`, `mkdir`, `move`, `rename`, `search` |
+| `asset` | `bundle-info`, `bundles`, `create`, `delete`, `duplicate`, `import`, `info`, `mkdir`, `move`, `rename`, `search` |
 | `asset-gen` | `generate-audio`, `generate-image`, `generate-model`, `import-model`, `import-model-file`, `list-models`, `status` |
 | `audio` | `play`, `stop`, `volume` |
 | `batch` | `inline`, `run`, `template` |

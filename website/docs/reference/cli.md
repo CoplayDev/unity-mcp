@@ -57,7 +57,7 @@ The CLI mirrors the MCP tool catalog. Each command sends one or more MCP tool ca
 | `unity-mcp gameobject` | Find/create/modify/move/duplicate/delete GameObjects | [`manage_gameobject`](/reference/tools/core/manage_gameobject), [`find_gameobjects`](/reference/tools/core/find_gameobjects) (`find`), [`manage_components`](/reference/tools/core/manage_components) (`create --components`) |
 | `unity-mcp component` | Add/remove/configure components | [`manage_components`](/reference/tools/core/manage_components) |
 | `unity-mcp script` | Create/read/edit/validate/delete C# scripts | [`manage_script`](/reference/tools/core/manage_script) |
-| `unity-mcp asset` | Asset import/create/modify/search | [`manage_asset`](/reference/tools/core/manage_asset) |
+| `unity-mcp asset` | Asset import/create/modify/search; browse built AssetBundles | [`manage_asset`](/reference/tools/core/manage_asset) |
 | `unity-mcp asset-gen` | Generate images, 3D models and audio; import models | [`generate_image`](/reference/tools/asset_gen/generate_image), [`generate_model`](/reference/tools/asset_gen/generate_model), [`generate_audio`](/reference/tools/asset_gen/generate_audio), [`import_model`](/reference/tools/asset_gen/import_model), [`import_model_file`](/reference/tools/asset_gen/import_model_file) |
 | `unity-mcp blender` | Talk to a running Blender through the Blender Bridge | [`blender_bridge`](/reference/tools/asset_gen/blender_bridge) |
 | `unity-mcp material` | Material CRUD + shader props | [`manage_material`](/reference/tools/core/manage_material) |
