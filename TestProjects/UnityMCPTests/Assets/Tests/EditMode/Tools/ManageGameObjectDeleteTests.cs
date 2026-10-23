@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools.GameObjects;
@@ -372,6 +373,35 @@ namespace MCPForUnityTests.Editor.Tools
             // Clean up only survivors from tracking
             if (!target1Deleted) testObjects.Remove(target1);
             if (!target2Deleted) testObjects.Remove(target2);
+        }
+
+        #endregion
+
+        #region Undo Tests
+
+        [Test]
+        public void Delete_RegistersUndo_RestoresOnUndo()
+        {
+            var target = CreateTestObject("UndoRoundtrip");
+
+            var p = new JObject
+            {
+                ["action"] = "delete",
+                ["target"] = "UndoRoundtrip",
+                ["searchMethod"] = "by_name"
+            };
+
+            var result = ManageGameObject.HandleCommand(p);
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+            Assert.IsTrue(resultObj.Value<bool>("success"), resultObj.ToString());
+            Assert.IsNull(GameObject.Find("UndoRoundtrip"), "Object should be deleted before undo");
+            testObjects.Remove(target);
+
+            Undo.PerformUndo();
+
+            var restored = GameObject.Find("UndoRoundtrip");
+            Assert.IsNotNull(restored, "Undo should restore deleted GameObject");
+            testObjects.Add(restored);
         }
 
         #endregion

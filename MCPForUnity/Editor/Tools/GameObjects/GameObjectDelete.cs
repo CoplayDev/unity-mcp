@@ -26,10 +26,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 {
                     string goName = targetGo.name;
                     int goId = targetGo.GetInstanceIDCompat();
-                    // Note: Undo.DestroyObjectImmediate doesn't work reliably in test context,
-                    // so we use Object.DestroyImmediate. This means delete isn't undoable.
-                    // TODO: Investigate Undo.DestroyObjectImmediate behavior in Unity 2022+
-                    Object.DestroyImmediate(targetGo);
+                    Undo.DestroyObjectImmediate(targetGo);
                     deletedObjects.Add(new { name = goName, instanceID = goId });
                 }
             }
