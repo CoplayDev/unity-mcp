@@ -157,6 +157,96 @@ async def test_manage_components_set_property_json_string(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("property_name", "raw_value", "expected_value"),
+    [
+        (
+            "position",
+            "[1.0, 2.0, 3.0]",
+            [1.0, 2.0, 3.0],
+        ),
+        (
+            "color",
+            '{"r": 1.0, "g": 1.0, "b": 0.0, "a": 1.0}',
+            {"r": 1.0, "g": 1.0, "b": 0.0, "a": 1.0},
+        ),
+    ],
+)
+async def test_manage_components_set_property_single_structured_json_value(
+    monkeypatch,
+    property_name,
+    raw_value,
+    expected_value,
+):
+    """Test JSON-string single values are normalized before dispatch.
+
+    The Python-side contract is intentionally generic:
+    - array-shaped JSON should become Python lists
+    - object-shaped JSON should become Python dicts
+
+    Detailed Unity struct compatibility is covered by Unity-side tests.
+    """
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"instanceID": 12345}}
+
+    monkeypatch.setattr(
+        manage_comp_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_comp_mod.manage_components(
+        ctx=DummyContext(),
+        action="set_property",
+        target="TestObject",
+        component_type="Transform",
+        property=property_name,
+        value=raw_value,
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["property"] == property_name
+    assert captured["params"]["value"] == expected_value
+
+
+@pytest.mark.asyncio
+async def test_manage_components_set_property_single_plain_string_value_stays_string(monkeypatch):
+    """Test ordinary string values are forwarded unchanged.
+
+    This guards the conservative behavior of parse_json_payload: plain strings
+    should not be coerced just because structured JSON-string values are now supported.
+    """
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"instanceID": 12345}}
+
+    monkeypatch.setattr(
+        manage_comp_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_comp_mod.manage_components(
+        ctx=DummyContext(),
+        action="set_property",
+        target="GameManager",
+        component_type="ExampleComponent",
+        property="displayName",
+        value="Player One",
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["property"] == "displayName"
+    assert captured["params"]["value"] == "Player One"
+    assert isinstance(captured["params"]["value"], str)
+
+
+@pytest.mark.asyncio
 async def test_manage_components_add_with_properties(monkeypatch):
     """Test adding a component with initial properties."""
     captured = {}
