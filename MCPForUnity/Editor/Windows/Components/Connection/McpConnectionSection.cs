@@ -702,7 +702,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     {
                         await bridgeService.StopAsync();
                     }
-                    bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
+                    bool stopped = await MCPServiceLocator.Server.StopLocalHttpServerAsync();
                     if (stopped)
                     {
                         McpLog.Info("Server stopped");

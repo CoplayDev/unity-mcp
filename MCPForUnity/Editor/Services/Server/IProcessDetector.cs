@@ -39,7 +39,7 @@ namespace MCPForUnity.Editor.Services.Server
         int GetCurrentProcessId();
 
         /// <summary>
-        /// Checks if a process exists on Unix systems.
+        /// Checks whether a process exists on the current platform.
         /// </summary>
         /// <param name="pid">The process ID to check</param>
         /// <returns>True if the process exists</returns>
