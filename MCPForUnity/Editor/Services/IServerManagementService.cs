@@ -49,6 +49,11 @@ namespace MCPForUnity.Editor.Services
         bool StopLocalHttpServer();
 
         /// <summary>
+        /// Requests cooperative shutdown before falling back to guarded process termination.
+        /// </summary>
+        System.Threading.Tasks.Task<bool> StopLocalHttpServerAsync();
+
+        /// <summary>
         /// Stop the Unity-managed local HTTP server if a handshake/pidfile exists,
         /// even if the current transport selection has changed.
         /// </summary>
