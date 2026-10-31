@@ -252,6 +252,25 @@ entirely when background tests already run reliably.
 
 ---
 
+## Commands time out while other editors are busy
+
+Over HTTP, the shared server gives Unity 30 seconds per command, and 2 seconds for
+`read_console`, `get_editor_state` and `ping`. On a machine where several editors
+compile, import or run tests at once, an editor that is only slow can miss those
+limits (`Command '<name>' timed out after 30 seconds`, or
+`Unity did not respond to 'read_console'`). Raise them in the environment that
+launches the shared server, then restart it:
+
+| Variable | Default | Maximum | Applies to |
+|---|---|---|---|
+| `UNITY_MCP_COMMAND_TIMEOUT_S` | 30 | 3600 | every other command without its own `timeout_seconds` (`blender_bridge` keeps its own budget) |
+| `UNITY_MCP_FAST_FAIL_TIMEOUT_S` | 2 | 120 | `read_console`, `get_editor_state`, `ping` |
+
+A command that asks for a longer `timeout_seconds` still gets it. Values above the
+maximum are clamped; a value that does not parse keeps the default.
+
+---
+
 ## FAQ — Claude Code
 
 **Q: Unity can't find `claude` even though Terminal can.**
