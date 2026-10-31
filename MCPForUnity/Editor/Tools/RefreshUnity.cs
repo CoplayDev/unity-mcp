@@ -50,15 +50,57 @@ namespace MCPForUnity.Editor.Tools
             bool compileRequested = false;
             int compileCountBefore = EditorStateCache.CompileCount;
 
+            // Validated before anything acts on it: an unknown value would reach the reload path and
+            // replace the open scene with the disk version, losing unsaved edits to a typo.
+            string sceneMode = @params?["on_external_scene_change"]?.ToString();
+            if (!SceneExternalChangeGuard.TryNormalizeMode(sceneMode, out _))
+            {
+                return new ErrorResponse(
+                    $"invalid on_external_scene_change '{sceneMode}': expected auto, reload or keep_editor",
+                    new { reason = "invalid_parameter", parameter = "on_external_scene_change" });
+            }
+
+            // Best-effort semantics: if_dirty currently behaves like force unless future dirty signals are added.
+            bool shouldRefresh = string.Equals(mode, "force", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(mode, "if_dirty", StringComparison.OrdinalIgnoreCase);
+            bool scriptsOnly = string.Equals(scope, "scripts", StringComparison.OrdinalIgnoreCase);
+            bool scopeAll = string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase);
+            // Mirrors the two AssetDatabase.Refresh calls below.
+            bool willRefreshAssets = (shouldRefresh && !scriptsOnly) || scopeAll;
+
+            // An open scene whose file changed on disk makes Unity raise a modal "Scene(s) Have Been
+            // Modified" prompt during the refresh, stalling the Editor until a human answers it.
+            // Reconcile disk and memory first so the prompt never has a reason to appear. Only when
+            // assets will actually be refreshed: a script-only request can't raise the prompt, and
+            // must not be blocked by, or overwrite, a scene it never touches.
+            var sceneOutcome = new SceneExternalChangeGuard.Outcome();
+            if (willRefreshAssets)
+            {
+                try
+                {
+                    sceneOutcome = SceneExternalChangeGuard.Reconcile(sceneMode);
+                }
+                catch (Exception ex)
+                {
+                    return new ErrorResponse($"scene_reconcile_failed: {ex.Message}");
+                }
+            }
+
+            if (sceneOutcome.Blocked)
+            {
+                return new ErrorResponse(sceneOutcome.Error, new
+                {
+                    reason = "open_scene_changed_on_disk",
+                    changed_scenes = sceneOutcome.ChangedScenes,
+                    refresh_triggered = false,
+                });
+            }
+
             try
             {
-                // Best-effort semantics: if_dirty currently behaves like force unless future dirty signals are added.
-                bool shouldRefresh = string.Equals(mode, "force", StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(mode, "if_dirty", StringComparison.OrdinalIgnoreCase);
-
                 if (shouldRefresh)
                 {
-                    if (string.Equals(scope, "scripts", StringComparison.OrdinalIgnoreCase))
+                    if (scriptsOnly)
                     {
                         // For scripts, requesting compilation is usually the meaningful action.
                         // We avoid a heavyweight full refresh by default.
@@ -76,7 +118,7 @@ namespace MCPForUnity.Editor.Tools
                     compileRequested = true;
                 }
 
-                if (string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase) && !refreshTriggered)
+                if (scopeAll && !refreshTriggered)
                 {
                     // If the caller asked for "all" and we skipped refresh above (e.g., scripts-only path),
                     // do a lightweight refresh now. Use ForceSynchronousImport to ensure the refresh
@@ -155,12 +197,19 @@ namespace MCPForUnity.Editor.Tools
                 ? "compiling"
                 : (EditorApplication.isUpdating ? "asset_import" : "idle");
 
+            // No baseline is recorded here. Reconcile already recorded one on every path that
+            // continues to this point; recording again after the refresh would stamp the disk's
+            // current mtime onto a scene edited externally *during* the refresh, marking an edit
+            // nobody reloaded as handled, so a later save could overwrite it.
+
             return new SuccessResponse("Refresh requested.", new
             {
                 refresh_triggered = refreshTriggered,
                 compile_requested = compileRequested,
                 compile_started = compileStarted,
                 resulting_state = resultingState,
+                reloaded_scenes = sceneOutcome.ReloadedScenes,
+                overwritten_scenes = sceneOutcome.OverwrittenScenes,
                 hint = shouldWaitForReady
                     ? "Unity refresh completed; editor should be ready."
                     : "If Unity enters compilation/domain reload, poll the mcpforunity://editor/state resource until data.advice.ready_for_tools is true."

@@ -47,6 +47,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private Task _keepAliveTask;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
 
+        /// <summary>
+        /// Caps how many dispatcher-bound commands may be in flight at once. The main thread runs
+        /// them one at a time regardless, so this only bounds how much work piles up waiting for it.
+        /// Control commands (liveness, answer_dialog) bypass this gate.
+        /// </summary>
+        private const int MaxConcurrentExecutes = 16;
+        private readonly SemaphoreSlim _executeGate = new(MaxConcurrentExecutes, MaxConcurrentExecutes);
+
         private Uri _endpointUri;
         private string _sessionId;
         private string _projectHash;
@@ -387,7 +395,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     {
                         continue;
                     }
-                    await HandleMessageAsync(message, token).ConfigureAwait(false);
+
+                    // Handled detached so the loop keeps reading while a command is in flight.
+                    // Awaiting here meant one command waiting on the Unity main thread stopped every
+                    // later frame from even being read — including the liveness probe that exists to
+                    // report the stall, and the server's pings. Command execution itself is still
+                    // ordered by TransportCommandDispatcher's queue, and sends are serialised by
+                    // _sendLock, so only the read side becomes concurrent.
+                    _ = HandleMessageSafeAsync(message, token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -452,6 +467,27 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             finally
             {
                 System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
+        }
+
+        /// <summary>
+        /// Run <see cref="HandleMessageAsync"/> without letting a failure escape onto the detached
+        /// task, where it would surface as an unobserved exception rather than a log line. A single
+        /// bad message must not take down the receive loop.
+        /// </summary>
+        private async Task HandleMessageSafeAsync(string message, CancellationToken token)
+        {
+            try
+            {
+                await HandleMessageAsync(message, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutting down.
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[WebSocket] Message handling failed: {ex.Message}");
             }
         }
 
@@ -619,9 +655,42 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             string responseJson;
             try
             {
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
-                responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                if (OffMainThreadCommands.IsOffMainThreadCommand(commandName))
+                {
+                    // Answered off the main thread: these report on (or clear) a blocked main thread,
+                    // so they must not queue behind it. Deliberately outside _executeGate — a
+                    // saturated gate is one of the states they exist to report on. Run on the pool
+                    // rather than inline so the dialog probe's window scan does not hold the
+                    // receive loop either.
+                    responseJson = await Task.Run(
+                        () => OffMainThreadCommands.Handle(commandName, parameters),
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Detaching the receive loop removed the backpressure that awaiting it used to
+                    // provide, so admission is bounded here instead: without it a burst queues
+                    // unboundedly into the dispatcher while the main thread works through it one
+                    // command at a time.
+                    //
+                    // The timeout is armed before waiting for admission and covers both, so a
+                    // command cannot sit in the queue past its budget and then execute for a caller
+                    // that already gave up — which would apply side effects nobody is waiting for.
+                    // Expiring here is also what bounds the queue: a waiting handler releases its
+                    // payload at its own deadline rather than accumulating.
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+
+                    await _executeGate.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+                    try
+                    {
+                        responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _executeGate.Release();
+                    }
+                }
             }
             catch (OperationCanceledException)
             {

@@ -8,12 +8,12 @@ from .test_helpers import DummyContext
 
 @pytest.mark.asyncio
 async def test_returns_immediately_in_pytest(monkeypatch):
-    """_in_pytest() detects PYTEST_CURRENT_TEST and returns (True, 0.0) immediately."""
+    """_in_pytest() detects PYTEST_CURRENT_TEST and returns (True, 0.0, None) immediately."""
     # PYTEST_CURRENT_TEST is set by pytest automatically, so this should short-circuit.
     from services.tools.refresh_unity import wait_for_editor_ready
 
     ctx = DummyContext()
-    ready, elapsed = await wait_for_editor_ready(ctx, timeout_s=5.0)
+    ready, elapsed, blocked = await wait_for_editor_ready(ctx, timeout_s=5.0)
     assert ready is True
     assert elapsed == 0.0
 
@@ -37,7 +37,7 @@ async def test_polls_until_ready(monkeypatch):
     monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
 
     ctx = DummyContext()
-    ready, elapsed = await mod.wait_for_editor_ready(ctx, timeout_s=10.0)
+    ready, elapsed, blocked = await mod.wait_for_editor_ready(ctx, timeout_s=10.0)
     assert ready is True
     assert call_count >= 3
     assert elapsed > 0
@@ -56,7 +56,7 @@ async def test_timeout_returns_false(monkeypatch):
     monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
 
     ctx = DummyContext()
-    ready, elapsed = await mod.wait_for_editor_ready(ctx, timeout_s=0.6)
+    ready, elapsed, blocked = await mod.wait_for_editor_ready(ctx, timeout_s=0.6)
     assert ready is False
     assert elapsed >= 0.5
 
@@ -74,7 +74,7 @@ async def test_stale_only_treated_as_ready(monkeypatch):
     monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
 
     ctx = DummyContext()
-    ready, elapsed = await mod.wait_for_editor_ready(ctx, timeout_s=5.0)
+    ready, elapsed, blocked = await mod.wait_for_editor_ready(ctx, timeout_s=5.0)
     assert ready is True
 
 
@@ -97,7 +97,7 @@ async def test_exception_during_poll_keeps_trying(monkeypatch):
     monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
 
     ctx = DummyContext()
-    ready, elapsed = await mod.wait_for_editor_ready(ctx, timeout_s=10.0)
+    ready, elapsed, blocked = await mod.wait_for_editor_ready(ctx, timeout_s=10.0)
     assert ready is True
     assert call_count >= 3
 

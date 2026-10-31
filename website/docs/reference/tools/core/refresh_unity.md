@@ -22,6 +22,7 @@ Request a Unity asset database refresh and optionally a script compilation. Can 
 | `scope` | `Literal['assets', 'scripts', 'all']` | — | Refresh scope |
 | `compile` | `Literal['none', 'request']` | — | Whether to request compilation |
 | `wait_for_ready` | `bool` | — | If true, wait until mcpforunity://editor/state reports data.advice.ready_for_tools true |
+| `on_external_scene_change` | `Literal['auto', 'reload', 'keep_editor']` | — | When an open scene changed on disk: auto reloads only if nothing is lost, reload takes the disk version, keep_editor overwrites it |
 
 ## Returns
 

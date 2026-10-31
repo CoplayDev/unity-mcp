@@ -646,6 +646,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 continue;
                             }
 
+                            // Answered on this socket thread for the same reason ping is: they
+                            // report on (or clear) a blocked main thread and must not queue behind it.
+                            if (OffMainThreadCommands.TryHandleRaw(commandText, out string offMainThreadResponse))
+                            {
+                                await WriteFrameAsync(stream, System.Text.Encoding.UTF8.GetBytes(offMainThreadResponse));
+                                continue;
+                            }
+
                             // A command already in flight from a different connection means the
                             // broker gave up waiting, reconnected and resent it. Running it a
                             // second time would duplicate side effects (issue #1130), so attach
