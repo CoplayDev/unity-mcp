@@ -19,9 +19,17 @@ namespace MCPForUnity.Editor.Tools
         private const int MaxCodeLength = 50000;
         private const int MaxHistoryEntries = 50;
         private const int MaxHistoryCodePreview = 500;
-        internal const int WrapperLineOffset = 10;
+        // Must equal the number of lines WrapUserCode emits before the user's code.
+        internal const int WrapperLineOffset = 12;
         private const string WrapperClassName = "MCPDynamicCode";
         private const string WrapperMethodName = "Execute";
+
+        private const string CodeDomHint =
+            "Compiled with the legacy CodeDom compiler, which does not support C# 8+ syntax (switch expressions, ??=, 'is not'). ";
+        private const string CodeDomInstallRoslynHint =
+            CodeDomHint + "Install Roslyn from the Dependencies section of the MCP for Unity window, or use older syntax.";
+        private const string CodeDomRetryRoslynHint =
+            CodeDomHint + "Roslyn is installed, so retry with compiler='auto'.";
 
         private const string ActionExecute = "execute";
         private const string ActionGetHistory = "get_history";
@@ -226,7 +234,12 @@ namespace MCPForUnity.Editor.Tools
                 case "codedom":
                     compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var codedomErrors);
                     if (compiled == null)
-                        return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(codedomErrors), compiler = "codedom" });
+                        return new ErrorResponse("Compilation failed", new
+                        {
+                            errors = OffsetErrors(codedomErrors),
+                            compiler = "codedom",
+                            hint = RoslynCompiler.IsAvailable ? CodeDomRetryRoslynHint : CodeDomInstallRoslynHint,
+                        });
                     usedCompiler = "codedom";
                     break;
 
@@ -242,7 +255,12 @@ namespace MCPForUnity.Editor.Tools
                     {
                         compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var autoFallbackErrors);
                         if (compiled == null)
-                            return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(autoFallbackErrors), compiler = "codedom" });
+                            return new ErrorResponse("Compilation failed", new
+                            {
+                                errors = OffsetErrors(autoFallbackErrors),
+                                compiler = "codedom",
+                                hint = CodeDomInstallRoslynHint,
+                            });
                         usedCompiler = "codedom";
                     }
                     break;
@@ -517,6 +535,8 @@ namespace MCPForUnity.Editor.Tools
             sb.AppendLine("using System.Reflection;");
             sb.AppendLine("using UnityEngine;");
             sb.AppendLine("using UnityEditor;");
+            sb.AppendLine("using Object = UnityEngine.Object;");
+            sb.AppendLine("using Random = UnityEngine.Random;");
             sb.AppendLine($"public static class {WrapperClassName}");
             sb.AppendLine("{");
             sb.AppendLine($"    public static object {WrapperMethodName}()");
