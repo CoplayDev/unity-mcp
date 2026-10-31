@@ -62,6 +62,9 @@ def _read_bounded_wait_env(name: str, default_s: float, max_s: float) -> float:
 _active_mcp_sessions: weakref.WeakSet = weakref.WeakSet()
 _session_tracking_installed = False
 
+# How long one MCP session may take to accept a tools/list_changed notification.
+_TOOL_LIST_NOTIFY_TIMEOUT_S = 5.0
+
 
 def _install_session_tracking() -> None:
     """Patch *MiddlewareServerSession* to track active MCP client sessions."""
@@ -540,18 +543,24 @@ class PluginHub(WebSocketEndpoint):
         # (e.g. new Claude Code conversations) see the correct tool set.
         self._sync_server_tool_visibility(payload.tools)
 
-        # Notify any already-connected MCP clients (e.g. CC over stdio) that
-        # the tool list has changed so they re-fetch.
-        await cls._notify_mcp_tool_list_changed()
-
         try:
             from services.custom_tool_service import CustomToolService
 
             service = CustomToolService.get_instance()
-            service.register_global_tools(payload.tools)
+            # Which project registers, and which are connected: a changed schema replaces the served one only
+            # when no other connected project registered it.
+            # (list_sessions would refuse here in remote-hosted mode, where tool names span users.)
+            session = await registry.get_session(session_id)
+            service.register_global_tools(
+                payload.tools,
+                owner=registry.owner_key(session) if session else None,
+                live_owners=await registry.owner_keys(),
+            )
         except RuntimeError as exc:
-            logger.debug(
-                "Skipping global custom tool registration: CustomToolService not initialized yet (%s)",
+            # Not a debug-level event: every custom tool the plugin registered is silently unavailable, and
+            # the only symptom the author sees is that none of their tools exist.
+            logger.warning(
+                "Custom tools NOT exposed — CustomToolService is not initialized (%s)",
                 exc,
             )
         except Exception as exc:
@@ -560,6 +569,11 @@ class PluginHub(WebSocketEndpoint):
                 "custom tools may not be available globally",
                 exc_info=exc,
             )
+
+        # Notify any already-connected MCP clients (e.g. CC over stdio) that
+        # the tool list has changed so they re-fetch - after the custom tools
+        # are registered, so a re-fetch sees their new signatures.
+        await cls._notify_mcp_tool_list_changed()
 
     @classmethod
     def _sync_server_tool_visibility(cls, registered_tools: list) -> None:
@@ -648,8 +662,13 @@ class PluginHub(WebSocketEndpoint):
         if not sessions:
             return
         for session in sessions:
+            # Bounded per session: a stalled client must not hold up the others, nor the registration
+            # that triggered the notification.
             try:
-                await session.send_tool_list_changed()
+                await asyncio.wait_for(session.send_tool_list_changed(), timeout=_TOOL_LIST_NOTIFY_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.debug("MCP session did not take the tool list change within %.0fs; skipped",
+                             _TOOL_LIST_NOTIFY_TIMEOUT_S)
             except Exception:
                 logger.debug(
                     "Failed to notify MCP session of tool list change",

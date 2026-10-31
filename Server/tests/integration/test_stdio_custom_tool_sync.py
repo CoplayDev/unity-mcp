@@ -74,6 +74,7 @@ async def test_sync_registers_custom_tools():
 
     mock_service = MagicMock()
     mock_service.register_global_tools = MagicMock()
+    mock_service.hub_owner_keys = AsyncMock(return_value=None)
 
     with patch(
         "transport.legacy.unity_connection.async_send_command_with_retry",
@@ -268,3 +269,32 @@ async def test_no_resync_when_not_reconnected():
         await async_send_command_with_retry("manage_gameobject", {"action": "list"})
 
     mock_resync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_passes_the_connected_hub_owners():
+    """A disconnected hub session's declaration must not keep Unity's changed schema out: the sync registration
+    is judged against the hub sessions still connected."""
+    response = _make_unity_response([CUSTOM_TOOL])
+
+    mock_service = MagicMock()
+    mock_service.register_global_tools = MagicMock()
+    mock_service.hub_owner_keys = AsyncMock(return_value={"aaaa1111"})
+
+    with patch(
+        "transport.legacy.unity_connection.async_send_command_with_retry",
+        new_callable=AsyncMock,
+        return_value=response,
+    ), patch(
+        "transport.plugin_hub.PluginHub._sync_server_tool_visibility",
+    ), patch(
+        "transport.plugin_hub.PluginHub._notify_mcp_tool_list_changed",
+        new_callable=AsyncMock,
+    ), patch(
+        "services.custom_tool_service.CustomToolService.get_instance",
+        return_value=mock_service,
+    ):
+        from services.tools import sync_tool_visibility_from_unity
+        await sync_tool_visibility_from_unity(notify=False)
+
+    assert mock_service.register_global_tools.call_args.kwargs.get("live_owners") == {"aaaa1111"}
