@@ -311,3 +311,49 @@ class TestManageGameObjectComponentsToAdd:
         assert mock_unity["params"]["componentsToAdd"] == [
             {"typeName": "BoxCollider", "properties": {"size": [2, 2, 2]}}
         ]
+
+
+# ── save_as_prefab default path ───────────────────────────────────────
+
+
+class TestManageGameObjectPrefabPath:
+
+    def test_save_as_prefab_without_folder_uses_default_folder(self, mock_unity):
+        """Without prefab_path or prefab_folder, the path must not start with 'None/'."""
+        result = asyncio.run(
+            manage_gameobject(
+                SimpleNamespace(),
+                action="create",
+                name="Enemy",
+                save_as_prefab=True,
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["prefabPath"] == "Assets/Prefabs/Enemy.prefab"
+        assert "prefabFolder" not in mock_unity["params"]
+
+    def test_save_as_prefab_with_folder_uses_given_folder(self, mock_unity):
+        result = asyncio.run(
+            manage_gameobject(
+                SimpleNamespace(),
+                action="create",
+                name="Enemy",
+                save_as_prefab=True,
+                prefab_folder="Assets/Enemies",
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["prefabPath"] == "Assets/Enemies/Enemy.prefab"
+
+    def test_save_as_prefab_with_path_keeps_path(self, mock_unity):
+        result = asyncio.run(
+            manage_gameobject(
+                SimpleNamespace(),
+                action="create",
+                name="Enemy",
+                save_as_prefab=True,
+                prefab_path="Assets/Custom/Boss.prefab",
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["prefabPath"] == "Assets/Custom/Boss.prefab"
