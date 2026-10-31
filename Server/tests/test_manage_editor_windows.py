@@ -91,6 +91,17 @@ def test_file_only_capture_and_unity_errors_are_preserved(transport):
     assert call(action="screenshot") == transport.return_value
 
 
+@pytest.mark.parametrize("response", [None, "bridge unavailable", ["unexpected", "response"]])
+def test_invalid_transport_response_returns_structured_error(transport, response):
+    """Unexpected bridge payloads return an error instead of an image or exception."""
+    transport.return_value = response
+
+    result = call(action="screenshot")
+
+    assert result == {"success": False, "message": str(response)}
+    transport.assert_awaited_once()
+
+
 def test_native_mcp_protocol_returns_image_and_rejects_unknown_arguments():
     # The integration suite installs FastMCP stubs during collection. A child
     # process verifies real wire types without changing that suite's environment.
