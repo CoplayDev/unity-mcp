@@ -756,6 +756,9 @@ Control Unity Editor state, undo/redo. Prefab stages are `manage_prefabs` action
 
 ```python
 manage_editor(action="play")               # Enter play mode
+manage_editor(action="play", wait_until="first_frame", wait_timeout=60)
+response = manage_editor(action="play", on_ready_code="return UnityEngine.Time.frameCount;")
+manage_editor(action="get_play_mode_startup", job_id=response["data"]["job_id"])
 manage_editor(action="pause")              # Pause play mode
 manage_editor(action="stop")               # Exit play mode
 
@@ -774,6 +777,8 @@ manage_editor(action="redo")
 manage_editor(action="deploy_package")     # Copy configured MCPForUnity source into installed package
 manage_editor(action="restore_package")    # Revert to pre-deployment backup
 ```
+
+**Play startup:** `scene_loaded` waits for loading; `first_frame` also waits for `Start` and a completed frame. `on_ready_code` always waits for first-frame startup and runs once with `execute_code`'s compiler and safety checks, returning `data.on_ready_result`. Waits default to 30 seconds (1–300 supported). After a timeout or disconnected reply, poll the returned `job_id` on the same Unity instance; do not submit the code again. A timeout does not stop Play Mode. Pending code expires; code already executing may still finish. Jobs survive domain reloads without changing Enter Play Mode settings, with results retained for the latest 16 jobs in the current Editor session.
 
 **Deploy workflow:** Set the source path in MCP for Unity Advanced Settings first. `deploy_package` copies the source into the project's package location, creates a backup, and triggers `AssetDatabase.Refresh`. Follow with `refresh_unity(wait_for_ready=True)` to wait for recompilation.
 
