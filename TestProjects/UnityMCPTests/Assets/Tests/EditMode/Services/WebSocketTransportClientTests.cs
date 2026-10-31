@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Services.Transport.Transports;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MCPForUnityTests.Editor.Services
 {
@@ -14,6 +17,23 @@ namespace MCPForUnityTests.Editor.Services
         private const string CandidateBuilderMethodName = "BuildConnectionCandidateUris";
         private const string WebSocketTransportClientTypeName = "MCPForUnity.Editor.Services.Transport.Transports.WebSocketTransportClient";
         private static readonly MethodInfo BuildConnectionCandidateUrisMethod = ResolveCandidateBuilderMethod();
+
+        [Test]
+        public void LogConnectFailure_Reconnect_IsAWarning()
+        {
+            // A failed reconnect while a shared server restarts must not log an error, which would
+            // fail every running test that asserts a clean console in every connected Editor.
+            LogAssert.Expect(LogType.Warning, new Regex("server unreachable"));
+            WebSocketTransportClient.LogConnectFailure("[WebSocket] server unreachable", isReconnect: true);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void LogConnectFailure_FirstConnect_IsAnError()
+        {
+            LogAssert.Expect(LogType.Error, new Regex("server unreachable"));
+            WebSocketTransportClient.LogConnectFailure("[WebSocket] server unreachable", isReconnect: false);
+        }
 
         [Test]
         public void BuildConnectionCandidateUris_NullEndpoint_ReturnsEmptyList()
