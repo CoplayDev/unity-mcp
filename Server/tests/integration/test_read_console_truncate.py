@@ -16,6 +16,26 @@ def setup_console_tools():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("value, expected", [(None, True), (True, True), (False, False), ("true", True), ("false", False)])
+async def test_read_console_include_mcp_logs(monkeypatch, value, expected):
+    read_console = setup_console_tools()["read_console"]
+    captured = {}
+
+    async def fake_send(_cmd, params, **_kwargs):
+        captured.update(params)
+        return {"success": True, "data": []}
+
+    import services.tools.read_console as read_console_mod
+    monkeypatch.setattr(read_console_mod, "async_send_command_with_retry", fake_send)
+
+    kwargs = {} if value is None else {"include_mcp_logs": value}
+    result = await read_console(ctx=DummyContext(), **kwargs)
+
+    assert result["success"]
+    assert captured["includeMcpLogs"] is expected
+
+
+@pytest.mark.asyncio
 async def test_read_console_full_default(monkeypatch):
     tools = setup_console_tools()
     read_console = tools["read_console"]

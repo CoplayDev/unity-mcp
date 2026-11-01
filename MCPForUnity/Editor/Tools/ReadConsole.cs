@@ -192,6 +192,7 @@ namespace MCPForUnity.Editor.Tools
                     string filterText = p.Get("filterText");
                     string format = p.Get("format", "plain").ToLower();
                     bool includeStacktrace = p.GetBool("includeStacktrace", false);
+                    bool includeMcpLogs = p.GetBool("includeMcpLogs", true);
 
                     if (types.Contains("all"))
                     {
@@ -205,7 +206,8 @@ namespace MCPForUnity.Editor.Tools
                         cursor,
                         filterText,
                         format,
-                        includeStacktrace
+                        includeStacktrace,
+                        includeMcpLogs
                     );
                 }
                 else
@@ -349,7 +351,8 @@ namespace MCPForUnity.Editor.Tools
             int? cursor,
             string filterText,
             string format,
-            bool includeStacktrace
+            bool includeStacktrace,
+            bool includeMcpLogs
         )
         {
             List<object> formattedEntries = new List<object>();
@@ -407,6 +410,11 @@ namespace MCPForUnity.Editor.Tools
                     if (string.IsNullOrEmpty(message))
                     {
                         continue; // Skip empty messages
+                    }
+
+                    if (!includeMcpLogs && McpLog.IsMcpLogMessage(message))
+                    {
+                        continue;
                     }
 
                     // (Calibration removed)

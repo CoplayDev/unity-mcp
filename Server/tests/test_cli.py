@@ -600,6 +600,13 @@ class TestEditorCommands:
             result = runner.invoke(cli, ["editor", "console", "--clear"])
             assert result.exit_code == 0
 
+    @pytest.mark.parametrize("options, expected", [([], True), (["--no-mcp-logs"], False), (["--mcp-logs"], True)])
+    def test_editor_console_mcp_logs(self, runner, mock_unity_response, options, expected):
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response) as command:
+            result = runner.invoke(cli, ["editor", "console", *options])
+            assert result.exit_code == 0, result.output
+            assert command.call_args.args[1]["include_mcp_logs"] is expected
+
     def test_editor_add_tag(self, runner, mock_unity_response):
         """Test editor add-tag command."""
         with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
