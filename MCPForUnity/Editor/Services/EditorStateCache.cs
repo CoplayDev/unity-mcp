@@ -281,12 +281,19 @@ namespace MCPForUnity.Editor.Services
                 // [InitializeOnLoad] ctor re-subscribes, so the flag is per-domain.
                 // The timestamps beside it are not per-domain — see the SessionState
                 // note on CompileStartedKey.
+                //
+                // Both handlers hand the snapshot the state the event just reported
+                // instead of letting it read EditorApplication.isCompiling. Unity
+                // raises these events for AssemblyBuilder builds from inside its walk
+                // over the live builder list, and isCompiling walks that same list;
+                // the nested walk drops the finished builder and the outer one throws
+                // "Collection was modified" (issue #1485, seen with Project Auditor).
                 UnityEditor.Compilation.CompilationPipeline.compilationStarted += _ =>
                 {
                     _pipelineCompilationRunning = true;
                     SetSessionUnixMs(CompileStartedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     SessionState.SetInt(CompileCountKey, SessionState.GetInt(CompileCountKey, 0) + 1);
-                    ForceUpdate("compilation_started");
+                    ForceUpdate("compilation_started", isCompiling: true);
                 };
                 UnityEditor.Compilation.CompilationPipeline.compilationFinished += _ =>
                 {
@@ -295,7 +302,7 @@ namespace MCPForUnity.Editor.Services
                     // observable at all: the write lands while this domain is alive and
                     // is read back by the next one.
                     SetSessionUnixMs(CompileFinishedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                    ForceUpdate("compilation_finished");
+                    ForceUpdate("compilation_finished", isCompiling: false);
                 };
 
                 AssemblyReloadEvents.beforeAssemblyReload += () =>
@@ -397,20 +404,20 @@ namespace MCPForUnity.Editor.Services
             ForceUpdate("tick");
         }
 
-        private static void ForceUpdate(string reason)
+        private static void ForceUpdate(string reason, bool? isCompiling = null)
         {
             lock (LockObj)
             {
-                _cached = BuildSnapshot(reason);
+                _cached = BuildSnapshot(reason, isCompiling);
             }
         }
 
-        private static JObject BuildSnapshot(string reason)
+        private static JObject BuildSnapshot(string reason, bool? knownIsCompiling = null)
         {
             _sequence++;
             _observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            bool isCompiling = GetActualIsCompiling();
+            bool isCompiling = knownIsCompiling ?? GetActualIsCompiling();
             _lastIsCompiling = isCompiling;
 
             var scene = EditorSceneManager.GetActiveScene();
