@@ -1,10 +1,12 @@
 using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Runtime.Helpers;
 using Microsoft.CSharp;
@@ -214,6 +216,15 @@ namespace MCPForUnity.Editor.Tools
 
             switch (compiler)
             {
+                case "csc":
+                    if (!BundledCscCompiler.IsAvailable)
+                        return new ErrorResponse("The Editor's bundled Roslyn compiler was not found (Data/DotNetSdkRoslyn/csc.dll on Data/NetCoreRuntime). Use compiler='roslyn' or 'codedom'.");
+                    compiled = BundledCscCompiler.Compile(wrappedSource, assemblyPaths, out var cscErrors, out _);
+                    if (compiled == null)
+                        return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(cscErrors), compiler = "csc" });
+                    usedCompiler = "csc";
+                    break;
+
                 case "roslyn":
                     if (!RoslynCompiler.IsAvailable)
                         return new ErrorResponse("Roslyn (Microsoft.CodeAnalysis) is not available. Install it via NuGet or use compiler='codedom'.");
@@ -231,6 +242,22 @@ namespace MCPForUnity.Editor.Tools
                     break;
 
                 default: // "auto"
+                    // The Editor's own Roslyn first: out of process, so a domain reload costs it nothing,
+                    // where the in-process Microsoft.CodeAnalysis is re-JIT-compiled by Mono after every
+                    // reload (~8 s on the first call). Only a compiler that could not run falls through;
+                    // its compile errors are the answer.
+                    if (BundledCscCompiler.IsAvailable)
+                    {
+                        compiled = BundledCscCompiler.Compile(wrappedSource, assemblyPaths, out var autoCscErrors, out bool cscCouldNotRun);
+                        if (compiled != null)
+                        {
+                            usedCompiler = "csc";
+                            break;
+                        }
+                        if (!cscCouldNotRun)
+                            return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(autoCscErrors), compiler = "csc" });
+                        McpLog.Warn($"[ExecuteCode] The bundled compiler could not run, falling back: {string.Join("; ", autoCscErrors)}");
+                    }
                     if (RoslynCompiler.IsAvailable)
                     {
                         compiled = RoslynCompiler.Compile(wrappedSource, assemblyPaths, out var autoErrors);
@@ -857,6 +884,153 @@ namespace MCPForUnity.Editor.Tools
                 while (root.InnerException != null) root = root.InnerException;
                 errors.Add($"Roslyn compilation error: {root.GetType().Name}: {root.Message}");
                 return null;
+            }
+        }
+    }
+    /// <summary>
+    /// Compiles with the Roslyn compiler the Editor ships for its own script compilation
+    /// (<c>Data/DotNetSdkRoslyn/csc.dll</c> on <c>Data/NetCoreRuntime/dotnet</c>), out of process, through
+    /// its compiler server (<c>-shared</c>, VBCSCompiler), and loads the DLL it writes.
+    /// <para>Why: the in-process Microsoft.CodeAnalysis backend runs on the Editor's Mono, which JIT-compiles
+    /// Roslyn from scratch in every domain, so the first execute_code after each script change or domain
+    /// reload spent ~8 s in its first compile (measured on 6000.3; later compiles ~0.8 s). The bundled
+    /// compiler runs on .NET with Roslyn precompiled, and its server is a separate process that a domain
+    /// reload doesn't touch: ~0.4 s for a fresh process, ~0.1 s through the warm server, with the same
+    /// references. It also gives the latest C# without the NuGet install.</para>
+    /// </summary>
+    internal static class BundledCscCompiler
+    {
+        private const int TimeoutMs = 60000;
+
+        // file.cs(12,34): error CS0103: The name 'x' does not exist in the current context
+        private static readonly Regex DiagnosticLine = new Regex(
+            @"^(?<file>.*?)\((?<line>\d+),(?<col>\d+)\): (?<severity>error|warning) (?<id>\w+): (?<message>.*)$",
+            RegexOptions.Compiled);
+
+        // error CS0006: Metadata file 'x.dll' could not be found
+        private static readonly Regex BareErrorLine = new Regex(@"^(?:.*: )?error (?<id>\w+): (?<message>.*)$", RegexOptions.Compiled);
+
+        private static bool? _available;
+        private static string _dotnetPath;
+        private static string _cscPath;
+
+        internal static bool IsAvailable
+        {
+            get
+            {
+                if (_available == null)
+                {
+                    string data = UnityEditor.EditorApplication.applicationContentsPath;
+                    string dotnet = Path.Combine(data, "NetCoreRuntime",
+                        Application.platform == RuntimePlatform.WindowsEditor ? "dotnet.exe" : "dotnet");
+                    string csc = Path.Combine(data, "DotNetSdkRoslyn", "csc.dll");
+                    _available = File.Exists(dotnet) && File.Exists(csc);
+                    _dotnetPath = dotnet;
+                    _cscPath = csc;
+                }
+                return _available.Value;
+            }
+        }
+
+        /// <summary>
+        /// Returns the loaded assembly, or null with <paramref name="errors"/>. <paramref name="couldNotRun"/>
+        /// tells a compiler that never produced a verdict (didn't start, timed out, failed without
+        /// diagnostics) from code that doesn't compile, so "auto" can fall back on the first only.
+        /// </summary>
+        internal static Assembly Compile(string source, string[] assemblyPaths, out List<string> errors, out bool couldNotRun)
+        {
+            errors = new List<string>();
+            couldNotRun = false;
+
+            string dir = Path.Combine(Path.GetTempPath(), "mcp-csc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string sourcePath = Path.Combine(dir, "MCPDynamic.cs");
+            string outputPath = Path.Combine(dir, "MCPDynamic.dll");
+            string responsePath = Path.Combine(dir, "MCPDynamic.rsp");
+
+            try
+            {
+                File.WriteAllText(sourcePath, source, new UTF8Encoding(false));
+                var rsp = new StringBuilder();
+                // References go through a response file: ~300 /r: flags overflow the command line.
+                rsp.AppendLine("-nologo -utf8output -target:library -langversion:latest -nostdlib+ -debug- -nowarn:CS1701,CS1702");
+                rsp.AppendLine("-out:\"" + outputPath + "\"");
+                foreach (var path in assemblyPaths)
+                    rsp.AppendLine("-r:\"" + path + "\"");
+                rsp.AppendLine("\"" + sourcePath + "\"");
+                File.WriteAllText(responsePath, rsp.ToString(), new UTF8Encoding(false));
+
+                var psi = new ProcessStartInfo(_dotnetPath, $"\"{_cscPath}\" -noconfig -shared @\"{responsePath}\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
+                    WorkingDirectory = dir,
+                };
+
+                string output;
+                int exitCode;
+                using (var process = Process.Start(psi))
+                {
+                    if (process == null)
+                    {
+                        couldNotRun = true;
+                        errors.Add("The bundled compiler process did not start.");
+                        return null;
+                    }
+                    var stdout = process.StandardOutput.ReadToEndAsync();
+                    var stderr = process.StandardError.ReadToEndAsync();
+                    if (!process.WaitForExit(TimeoutMs))
+                    {
+                        try { process.Kill(); } catch { /* already gone */ }
+                        couldNotRun = true;
+                        errors.Add($"The bundled compiler did not finish within {TimeoutMs / 1000} s.");
+                        return null;
+                    }
+                    process.WaitForExit();
+                    output = stdout.Result + "\n" + stderr.Result;
+                    exitCode = process.ExitCode;
+                }
+
+                foreach (var raw in output.Split('\n'))
+                {
+                    string line = raw.TrimEnd('\r');
+                    var m = DiagnosticLine.Match(line);
+                    if (m.Success)
+                    {
+                        if (m.Groups["severity"].Value != "error")
+                            continue;
+                        int userLine = Math.Max(1, int.Parse(m.Groups["line"].Value) - ExecuteCode.WrapperLineOffset);
+                        errors.Add($"Line {userLine}: {m.Groups["message"].Value}");
+                        continue;
+                    }
+                    var bare = BareErrorLine.Match(line);
+                    if (bare.Success)
+                        errors.Add($"{bare.Groups["id"].Value}: {bare.Groups["message"].Value}");
+                }
+
+                if (exitCode == 0 && File.Exists(outputPath))
+                    return UnityAssembliesCompat.LoadFromBytes(File.ReadAllBytes(outputPath));
+
+                if (errors.Count == 0)
+                {
+                    couldNotRun = true;
+                    errors.Add($"The bundled compiler exited with code {exitCode} without diagnostics: {output.Trim()}");
+                }
+                return null;
+            }
+            catch (Exception e)
+            {
+                couldNotRun = true;
+                errors.Add($"The bundled compiler could not run: {e.GetType().Name}: {e.Message}");
+                return null;
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { /* best effort */ }
             }
         }
     }

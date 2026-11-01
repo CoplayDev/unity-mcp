@@ -338,6 +338,66 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(result.Value<bool>("success"), result.ToString());
         }
 
+        // ──────────────────── Bundled csc backend ────────────────────
+
+        private static JObject ExecuteWith(string compiler, string code)
+        {
+            return ToJObject(ExecuteCode.HandleCommand(new JObject
+            {
+                ["action"] = "execute",
+                ["code"] = code,
+                ["compiler"] = compiler
+            }));
+        }
+
+        [Test]
+        public void Execute_CscBackend_CompilesAndRuns()
+        {
+            Assume.That(BundledCscCompiler.IsAvailable, "This Editor has no bundled Roslyn compiler.");
+            var result = ExecuteWith("csc", "return UnityEngine.Application.unityVersion.Length > 0 ? 7 : 0;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(7, result["data"]["result"].Value<int>());
+            Assert.AreEqual("csc", result["data"]["compiler"].Value<string>());
+        }
+
+        // The bundled compiler takes the latest language version: tuples, patterns and switch
+        // expressions that CodeDom (C# 6) rejects.
+        [Test]
+        public void Execute_CscBackend_CompilesModernSyntax()
+        {
+            Assume.That(BundledCscCompiler.IsAvailable, "This Editor has no bundled Roslyn compiler.");
+            var result = ExecuteWith("csc",
+                "var t = (name: \"a\", n: 2);\n" +
+                "static int Twice(int v) => v * 2;\n" +
+                "return t is (string s, int k) ? s + (k switch { 2 => Twice(k), _ => 0 }) : null;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("a4", result["data"]["result"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_CscBackend_CompileErrorReportsUserLine()
+        {
+            Assume.That(BundledCscCompiler.IsAvailable, "This Editor has no bundled Roslyn compiler.");
+            var result = ExecuteWith("csc", "int ok = 1;\nint bad = \"not an int\";\nreturn ok;");
+
+            Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+            StringAssert.Contains("Compilation failed", result.Value<string>("error"));
+            Assert.AreEqual("csc", result["data"]["compiler"].Value<string>());
+            StringAssert.StartsWith("Line 2:", result["data"]["errors"][0].Value<string>());
+        }
+
+        [Test]
+        public void Execute_Auto_PrefersBundledCsc()
+        {
+            Assume.That(BundledCscCompiler.IsAvailable, "This Editor has no bundled Roslyn compiler.");
+            var result = ExecuteWith("auto", "return 40 + 2;");
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual("csc", result["data"]["compiler"].Value<string>());
+        }
+
         // ──────────────────── CodeDom backend ────────────────────
 
         // Regression for CoplayDev/unity-mcp#1144: large projects (~100+ asmdefs) blew past the
