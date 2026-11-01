@@ -62,6 +62,22 @@ def pytest_collection_modifyitems(session, config, items):  # noqa: ARG001
 
 
 @pytest.fixture(autouse=True)
+def isolate_plugin_hub_disconnect_state(tmp_path, monkeypatch):
+    """Keep PluginHub disconnect tracking off the real ~/.unity-mcp and between tests."""
+    monkeypatch.setenv("UNITY_MCP_STATE_DIR", str(tmp_path / "unity-mcp-state"))
+    try:
+        from transport.plugin_hub import PluginHub
+    except Exception:
+        yield
+        return
+    PluginHub._recent_disconnects.clear()
+    PluginHub._recent_disconnects_loaded = False
+    yield
+    PluginHub._recent_disconnects.clear()
+    PluginHub._recent_disconnects_loaded = False
+
+
+@pytest.fixture(autouse=True)
 def restore_global_config():
     """Restore global config/env mutations between tests."""
     from core.config import config as global_config

@@ -69,6 +69,108 @@ async def test_plugin_hub_waits_for_reconnection_during_reload():
 
 
 @pytest.mark.asyncio
+async def test_plugin_hub_refuses_sole_survivor_after_recent_disconnect():
+    """A recently-disconnected bridge blocks auto-routing to the sole remaining session."""
+    import time as time_module
+
+    from transport.plugin_hub import PluginHub, InstanceSelectionRequiredError
+    from transport.plugin_registry import PluginRegistry, PluginSession
+
+    mock_registry = AsyncMock(spec=PluginRegistry)
+    now = datetime.now()
+    survivor = PluginSession(
+        session_id="sess-playground",
+        project_name="Playground",
+        project_hash="aaa111",
+        unity_version="6000.0.0f1",
+        registered_at=now,
+        connected_at=now,
+    )
+
+    async def mock_list_sessions(**kwargs):
+        return {"sess-playground": survivor}
+
+    mock_registry.list_sessions = mock_list_sessions
+    mock_registry.get_session_id_by_hash = AsyncMock(return_value="sess-playground")
+
+    original_registry = PluginHub._registry
+    original_lock = PluginHub._lock
+    original_recent = dict(PluginHub._recent_disconnects)
+    PluginHub._registry = mock_registry
+    PluginHub._lock = asyncio.Lock()
+    PluginHub._recent_disconnects["bbb222"] = ("Sandbox", time_module.monotonic())
+
+    try:
+        # Unpinned call: refuse to guess while Sandbox may be restarting.
+        with pytest.raises(InstanceSelectionRequiredError) as excinfo:
+            await PluginHub._resolve_session_id(unity_instance=None)
+        assert "Sandbox@bbb222" in str(excinfo.value)
+        assert excinfo.value.available_instances == ["Playground@aaa111"]
+
+        # Explicit targeting is unaffected.
+        session_id = await PluginHub._resolve_session_id(unity_instance="aaa111")
+        assert session_id == "sess-playground"
+
+        # Once the disconnect record clears (re-register or grace expiry),
+        # sole-instance auto-routing resumes.
+        PluginHub._recent_disconnects.clear()
+        session_id = await PluginHub._resolve_session_id(unity_instance=None)
+        assert session_id == "sess-playground"
+    finally:
+        PluginHub._registry = original_registry
+        PluginHub._lock = original_lock
+        PluginHub._recent_disconnects.clear()
+        PluginHub._recent_disconnects.update(original_recent)
+
+
+@pytest.mark.asyncio
+async def test_recent_disconnects_survive_server_restart():
+    """Disconnect records persist to disk and are reloaded by a fresh server process."""
+    import time as time_module
+
+    from transport.plugin_hub import PluginHub
+
+    # "Old" server process records a drop and mirrors it to disk.
+    PluginHub._recent_disconnects_loaded = True
+    PluginHub._recent_disconnects["bbb222"] = ("Sandbox", time_module.monotonic())
+    PluginHub._save_recent_disconnects()
+
+    # Simulate a server restart: in-memory state gone, lazy load re-arms.
+    PluginHub._recent_disconnects.clear()
+    PluginHub._recent_disconnects_loaded = False
+
+    assert PluginHub.recently_disconnected_instances() == ["Sandbox@bbb222"]
+
+    # Re-registration clears the record on disk too.
+    PluginHub._clear_recent_disconnect("bbb222")
+    PluginHub._recent_disconnects.clear()
+    PluginHub._recent_disconnects_loaded = False
+
+    assert PluginHub.recently_disconnected_instances() == []
+
+
+@pytest.mark.parametrize("content", [b"\xff\xfe not utf-8", b"{not json", b"[1, 2]"])
+def test_damaged_recent_disconnects_file_is_ignored(content):
+    """A damaged state file is skipped: the persistence layer never affects routing."""
+    from transport.plugin_hub import PluginHub
+
+    target = PluginHub._recent_disconnects_file()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+
+    assert PluginHub.recently_disconnected_instances() == []
+
+
+def test_state_dir_override_expands_home(monkeypatch, tmp_path):
+    from transport.plugin_hub import PluginHub
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("UNITY_MCP_STATE_DIR", "~/unity-mcp-state")
+
+    assert PluginHub._state_dir() == tmp_path / "unity-mcp-state"
+
+
+@pytest.mark.asyncio
 async def test_plugin_hub_fails_after_timeout():
     """Test that PluginHub._resolve_session_id eventually times out if plugin never reconnects."""
     from transport.plugin_hub import PluginHub
