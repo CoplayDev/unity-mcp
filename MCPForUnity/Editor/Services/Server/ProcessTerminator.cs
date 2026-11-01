@@ -46,13 +46,13 @@ namespace MCPForUnity.Editor.Services.Server
                 string stdout, stderr;
                 if (Application.platform == RuntimePlatform.WindowsEditor)
                 {
-                    // taskkill without /F first; fall back to /F if needed.
-                    bool ok = ExecPath.TryRun("taskkill", $"/PID {pid} /T", Application.dataPath, out stdout, out stderr);
-                    if (!ok)
+                    if (!_processDetector.ProcessExists(pid))
                     {
-                        ok = ExecPath.TryRun("taskkill", $"/F /PID {pid} /T", Application.dataPath, out stdout, out stderr);
+                        return false;
                     }
-                    return ok;
+                    // The service handles cooperative HTTP shutdown; this is its Windows process fallback.
+                    RunTaskKill(pid, force: true);
+                    return WaitForProcessExit(pid, timeoutMilliseconds: 1000);
                 }
                 else
                 {
@@ -63,15 +63,9 @@ namespace MCPForUnity.Editor.Services.Server
                     if (!File.Exists(killPath)) killPath = "kill";
                     ExecPath.TryRun(killPath, $"-15 {pid}", Application.dataPath, out stdout, out stderr);
 
-                    // Wait briefly for graceful shutdown.
-                    var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
-                    while (DateTime.UtcNow < deadline)
+                    if (WaitForProcessExit(pid))
                     {
-                        if (!_processDetector.ProcessExists(pid))
-                        {
-                            return true;
-                        }
-                        System.Threading.Thread.Sleep(100);
+                        return true;
                     }
 
                     // Escalate.
@@ -84,6 +78,26 @@ namespace MCPForUnity.Editor.Services.Server
                 McpLog.Error($"Error killing process {pid}: {ex.Message}");
                 return false;
             }
+        }
+
+        internal virtual bool WaitForProcessExit(int pid, int timeoutMilliseconds = 8000)
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(timeoutMilliseconds);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (!_processDetector.ProcessExists(pid))
+                {
+                    return true;
+                }
+                System.Threading.Thread.Sleep(100);
+            }
+            return false;
+        }
+
+        internal virtual bool RunTaskKill(int pid, bool force)
+        {
+            string arguments = force ? $"/F /PID {pid} /T" : $"/PID {pid} /T";
+            return ExecPath.TryRun("taskkill", arguments, Application.dataPath, out _, out _);
         }
     }
 }
