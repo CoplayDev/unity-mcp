@@ -131,6 +131,32 @@ async def test_sync_skips_builtin_tools():
 
 
 @pytest.mark.asyncio
+async def test_sync_records_published_tools_when_visibility_update_fails():
+    """Pending notifications should retry even if visibility sync is transiently unavailable."""
+    response = _make_unity_response([BUILTIN_TOOL])
+
+    with patch(
+        "transport.legacy.unity_connection.async_send_command_with_retry",
+        new_callable=AsyncMock,
+        return_value=response,
+    ), patch(
+        "transport.plugin_hub.PluginHub._sync_server_tool_visibility",
+        return_value=False,
+    ), patch(
+        "transport.plugin_hub.PluginHub._record_and_notify_tool_list_change",
+        new_callable=AsyncMock,
+    ) as mock_record_and_notify, patch(
+        "services.custom_tool_service.CustomToolService.get_instance",
+    ) as mock_get_instance:
+        from services.tools import sync_tool_visibility_from_unity
+        result = await sync_tool_visibility_from_unity(notify=True)
+
+    assert result["synced"] is True
+    mock_get_instance.assert_not_called()
+    mock_record_and_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_sync_skips_when_no_extended_metadata():
     """When Unity returns old-format data (no is_built_in), skip custom tool registration."""
     response = _make_unity_response([BUILTIN_TOOL, CUSTOM_TOOL], include_extended=False)
