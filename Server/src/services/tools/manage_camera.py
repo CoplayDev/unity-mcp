@@ -35,10 +35,12 @@ ALL_ACTIONS = SETUP_ACTIONS + CREATION_ACTIONS + CONFIGURATION_ACTIONS + EXTENSI
     group="core",
     description=(
         "Manage cameras (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; "
-        "unlocks presets, pipelines, and blending when Cinemachine is installed. "
-        "Use ping to check Cinemachine availability.\n\n"
+        "unlocks presets, pipelines, and blending with the Cinemachine 3 camera API. "
+        "Use ping to check the installed package version and native API availability. "
+        "Keep Cinemachine 2 projects on their installed version; use execute_code with that version's API. "
+        "Use manage_packages get_package_info before writing version-specific code.\n\n"
         "SETUP:\n"
-        "- ping: Check if Cinemachine is available\n"
+        "- ping: Report Cinemachine installation, package version, and native Cinemachine 3 API support\n"
         "- ensure_brain: Ensure CinemachineBrain exists on main camera\n"
         "- get_brain_status: Get Brain state (active camera, blend, etc.)\n\n"
         "CAMERA CREATION:\n"
