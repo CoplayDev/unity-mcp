@@ -41,6 +41,10 @@ namespace MCPForUnity.Editor.Services
         public string Error { get; set; }
         public TestRunResult Result { get; set; }
         public long InitTimeoutMs { get; set; }
+        public string UnityRunId { get; set; }
+        public bool InitializationTimedOut { get; set; }
+        public bool NativeRunStarted { get; set; }
+        public bool NativeCleanupPending { get; set; }
     }
 
     /// <summary>
@@ -51,6 +55,7 @@ namespace MCPForUnity.Editor.Services
     {
         // Keep this small to avoid ballooning payloads during polling.
         private const int FailureCap = 25;
+        internal const string InitializationTimeoutError = "Test job failed to initialize (tests did not start within timeout)";
         private const long StuckThresholdMs = 60_000;
         private const long DefaultInitializationTimeoutMs = 15_000; // 15 seconds default; override per-job via run_tests init_timeout param
         private const long MaxInitializationTimeoutMs = 600_000; // 10 minutes hard cap
@@ -87,7 +92,8 @@ namespace MCPForUnity.Editor.Services
             lock (LockObj)
             {
                 if (string.IsNullOrEmpty(_currentJobId) ||
-                    !Jobs.TryGetValue(_currentJobId, out job) || job.Status != TestJobStatus.Running)
+                    !Jobs.TryGetValue(_currentJobId, out job) ||
+                    (job.Status != TestJobStatus.Running && !job.InitializationTimedOut && !job.NativeCleanupPending))
                 {
                     return;
                 }
@@ -99,7 +105,8 @@ namespace MCPForUnity.Editor.Services
                 // Re-register callbacks now, before the Test Runner resumes after reload.
                 if (MCPServiceLocator.Tests is TestRunnerService service)
                 {
-                    service.ResumeJobAfterReload(job.JobId, job.Mode);
+                    service.ResumeJobAfterReload(job.JobId, job.Mode, job.UnityRunId,
+                        job.InitializationTimedOut, job.NativeRunStarted, job.NativeCleanupPending, job.Result, job.Error);
                 }
             }
             catch (Exception ex)
@@ -179,6 +186,11 @@ namespace MCPForUnity.Editor.Services
             public List<TestJobFailure> failures_so_far { get; set; }
             public string error { get; set; }
             public long init_timeout_ms { get; set; }
+            public string unity_run_id { get; set; }
+            public bool initialization_timed_out { get; set; }
+            public bool native_run_started { get; set; }
+            public bool native_cleanup_pending { get; set; }
+            public TestRunResult pending_result { get; set; }
         }
 
         private static TestJobStatus ParseStatus(string status)
@@ -242,8 +254,12 @@ namespace MCPForUnity.Editor.Services
                             FailuresSoFar = pj.failures_so_far ?? new List<TestJobFailure>(),
                             Error = pj.error,
                             InitTimeoutMs = pj.init_timeout_ms,
-                            // Intentionally not persisted to avoid ballooning SessionState.
-                            Result = null
+                            UnityRunId = pj.unity_run_id,
+                            InitializationTimedOut = pj.initialization_timed_out,
+                            NativeRunStarted = pj.native_run_started,
+                            NativeCleanupPending = pj.native_cleanup_pending,
+                            // Persist terminal results only while native cleanup is pending.
+                            Result = pj.pending_result
                         };
                     }
 
@@ -315,7 +331,12 @@ namespace MCPForUnity.Editor.Services
                             last_finished_unix_ms = j.LastFinishedUnixMs,
                             failures_so_far = (j.FailuresSoFar ?? new List<TestJobFailure>()).Take(FailureCap).ToList(),
                             error = j.Error,
-                            init_timeout_ms = j.InitTimeoutMs
+                            init_timeout_ms = j.InitTimeoutMs,
+                            unity_run_id = j.UnityRunId,
+                            initialization_timed_out = j.InitializationTimedOut,
+                            native_run_started = j.NativeRunStarted,
+                            native_cleanup_pending = j.NativeCleanupPending,
+                            pending_result = j.NativeCleanupPending ? j.Result : null
                         })
                         .ToList();
 
@@ -401,7 +422,17 @@ namespace MCPForUnity.Editor.Services
             return jobId;
         }
 
-        public static void FinalizeCurrentJobFromRunFinished(TestRunResult resultPayload)
+        internal static void OnRunScheduled(string jobId, string unityRunId)
+        {
+            lock (LockObj)
+            {
+                if (string.IsNullOrEmpty(jobId) || _currentJobId != jobId || !Jobs.TryGetValue(jobId, out var job)) return;
+                job.UnityRunId = unityRunId;
+            }
+            PersistToSessionState(force: true);
+        }
+
+        public static void FinalizeCurrentJobFromRunFinished(TestRunResult resultPayload, bool keepOwnership = false)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lock (LockObj)
@@ -413,10 +444,13 @@ namespace MCPForUnity.Editor.Services
 
                 job.LastUpdateUnixMs = now;
                 job.FinishedUnixMs = now;
-                job.Status = resultPayload != null && resultPayload.Failed > 0
+                job.Status = job.InitializationTimedOut || (resultPayload != null && resultPayload.Failed > 0)
                     ? TestJobStatus.Failed
                     : TestJobStatus.Succeeded;
-                job.Error = null;
+                job.Error = job.InitializationTimedOut ? InitializationTimeoutError : null;
+                job.InitializationTimedOut = keepOwnership && job.InitializationTimedOut;
+                job.NativeCleanupPending = keepOwnership;
+                if (!keepOwnership) job.UnityRunId = null;
                 job.Result = resultPayload;
                 if (resultPayload != null)
                 {
@@ -425,12 +459,12 @@ namespace MCPForUnity.Editor.Services
                 }
                 job.CurrentTestFullName = null;
                 job.CurrentTestStartedUnixMs = null;
-                _currentJobId = null;
+                if (!keepOwnership) _currentJobId = null;
             }
             PersistToSessionState(force: true);
         }
 
-        internal static void FinalizeCurrentJobFromRunError(string message)
+        internal static void FinalizeCurrentJobFromRunError(string message, bool keepOwnership = false)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lock (LockObj)
@@ -440,12 +474,19 @@ namespace MCPForUnity.Editor.Services
                     return;
                 }
                 job.Status = TestJobStatus.Failed;
-                job.Error = message;
+                // A message that already carries the timeout text (for example one that also says how to
+                // clear an unconfirmed native cleanup) is kept; any other error is reported as the timeout.
+                job.Error = job.InitializationTimedOut
+                    && (message == null || message.IndexOf(InitializationTimeoutError, StringComparison.Ordinal) < 0)
+                    ? InitializationTimeoutError : message;
+                job.InitializationTimedOut = keepOwnership && job.InitializationTimedOut;
+                job.NativeCleanupPending = keepOwnership;
+                if (!keepOwnership) job.UnityRunId = null;
                 job.LastUpdateUnixMs = now;
                 job.FinishedUnixMs = now;
                 job.CurrentTestFullName = null;
                 job.CurrentTestStartedUnixMs = null;
-                _currentJobId = null;
+                if (!keepOwnership) _currentJobId = null;
             }
             PersistToSessionState(force: true);
         }
@@ -460,6 +501,7 @@ namespace MCPForUnity.Editor.Services
                     return;
                 }
 
+                job.NativeRunStarted = true;
                 job.LastUpdateUnixMs = now;
                 job.TotalTests = totalTests;
                 job.CompletedTests = 0;
@@ -483,7 +525,7 @@ namespace MCPForUnity.Editor.Services
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lock (LockObj)
             {
-                if (string.IsNullOrEmpty(_currentJobId) || !Jobs.TryGetValue(_currentJobId, out var job))
+                if (string.IsNullOrEmpty(_currentJobId) || !Jobs.TryGetValue(_currentJobId, out var job) || job.Status != TestJobStatus.Running)
                 {
                     return;
                 }
@@ -500,7 +542,7 @@ namespace MCPForUnity.Editor.Services
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lock (LockObj)
             {
-                if (string.IsNullOrEmpty(_currentJobId) || !Jobs.TryGetValue(_currentJobId, out var job))
+                if (string.IsNullOrEmpty(_currentJobId) || !Jobs.TryGetValue(_currentJobId, out var job) || job.Status != TestJobStatus.Running)
                 {
                     return;
                 }
@@ -551,6 +593,7 @@ namespace MCPForUnity.Editor.Services
 
             TestJob jobToReturn = null;
             bool shouldPersist = false;
+            bool cancelRun = false;
             lock (LockObj)
             {
                 if (!Jobs.TryGetValue(jobId, out var job))
@@ -569,16 +612,20 @@ namespace MCPForUnity.Editor.Services
                     {
                         McpLog.Warn($"[TestJobManager] Job {jobId} failed to initialize within {initTimeout}ms, auto-failing");
                         job.Status = TestJobStatus.Failed;
-                        job.Error = "Test job failed to initialize (tests did not start within timeout)";
+                        job.Error = InitializationTimeoutError;
                         job.FinishedUnixMs = now;
                         job.LastUpdateUnixMs = now;
                         if (_currentJobId == jobId)
                         {
-                            _currentJobId = null;
-                            // Keep TestRunStatus in sync: when initialization times out, neither
-                            // RunStarted nor RunFinished fires, so the running flag would otherwise leak.
-                            // Only clear it if this job is still the active one — a newer job may have taken over.
-                            TestRunStatus.MarkFinished();
+                            cancelRun = !string.IsNullOrEmpty(job.UnityRunId);
+                            job.InitializationTimedOut = cancelRun;
+                            if (!cancelRun)
+                            {
+                                _currentJobId = null;
+                                TestRunStatus.MarkFinished();
+                            }
+                            // A scheduled Unity run still owns its callbacks and operation lock.
+                            // Reject a new job until cancellation has finished cleaning up.
                         }
                         shouldPersist = true;
                     }
@@ -587,6 +634,10 @@ namespace MCPForUnity.Editor.Services
                 jobToReturn = job;
             }
 
+            if (cancelRun && MCPServiceLocator.Tests is TestRunnerService service)
+            {
+                service.CancelForInitializationTimeout(jobId);
+            }
             if (shouldPersist)
             {
                 PersistToSessionState(force: true);
