@@ -244,6 +244,14 @@ namespace MCPForUnity.Editor.Helpers
             return $"mcpforunityserver=={version}";
         }
 
+        /// <summary>Pure refresh variant: resolves a captured override without writing preferences.</summary>
+        internal static string ResolveMcpServerPackageSource(string sourceOverride, string version)
+        {
+            if (!string.IsNullOrEmpty(sourceOverride)) return ResolveLocalServerPath(sourceOverride);
+            if (string.IsNullOrEmpty(version) || version == "unknown") return "mcpforunityserver";
+            return IsSemVerPreRelease(version) ? "mcpforunityserver>=0.0.0a0" : $"mcpforunityserver=={version}";
+        }
+
         /// <summary>
         /// Validates and auto-corrects a local server source path to ensure it points to the
         /// directory containing pyproject.toml. If the path points to a parent directory

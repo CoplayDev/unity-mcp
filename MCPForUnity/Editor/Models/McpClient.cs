@@ -24,6 +24,13 @@ namespace MCPForUnity.Editor.Models
         public string HttpUrlProperty = "url"; // The property name for the HTTP URL in the config
         public Dictionary<string, object> DefaultUnityFields = new();
 
+        internal McpClient CopyForStatusRefresh()
+        {
+            var copy = (McpClient)MemberwiseClone();
+            copy.DefaultUnityFields = new Dictionary<string, object>(DefaultUnityFields);
+            return copy;
+        }
+
         // Helper method to convert the enum to a display string
         public string GetStatusDisplayString()
         {

@@ -127,7 +127,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
             McpConfigurationHelper.WriteAtomicFile(path, root.ToString(Formatting.Indented));
             client.SetStatus(McpStatus.Configured);
-            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+            client.configuredTransport = CurrentTransport;
         }
 
         public override string GetManualSnippet()
@@ -269,23 +269,23 @@ namespace MCPForUnity.Editor.Clients.Configurators
             return normalized;
         }
 
-        private static JObject BuildUnityServerEntry()
+        private JObject BuildUnityServerEntry()
         {
-            ConfiguredTransport transport = HttpEndpointUtility.GetCurrentServerTransport();
+            ConfiguredTransport transport = CurrentTransport;
             if (transport == ConfiguredTransport.Stdio)
             {
-                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                var (uvxPath, _, packageName) = UvxCommandParts;
                 if (string.IsNullOrWhiteSpace(uvxPath))
                 {
                     throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
                 }
 
                 var args = new JArray();
-                foreach (string value in AssetPathUtility.GetUvxDevFlagsList())
+                foreach (string value in UvxDevFlagList)
                 {
                     args.Add(value);
                 }
-                foreach (string value in AssetPathUtility.GetBetaServerFromArgsList())
+                foreach (string value in UvxFromArgs)
                 {
                     args.Add(value);
                 }
@@ -309,7 +309,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             return new JObject
             {
                 ["enabled"] = true,
-                ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
+                ["url"] = RpcUrl,
                 ["transport"] = HttpTransportName,
                 ["toolPrefix"] = ServerName,
                 ["requestTimeoutMs"] = 30000
@@ -323,7 +323,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 return false;
             }
 
-            ConfiguredTransport expectedTransport = HttpEndpointUtility.GetCurrentServerTransport();
+            ConfiguredTransport expectedTransport = CurrentTransport;
             ConfiguredTransport configuredTransport = ResolveTransport(server);
             if (configuredTransport != expectedTransport)
             {
@@ -353,8 +353,8 @@ namespace MCPForUnity.Editor.Clients.Configurators
             {
                 string configuredUrl = server["url"]?.ToString();
                 if (string.IsNullOrWhiteSpace(configuredUrl) ||
-                    (!UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()) &&
-                     !UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl())))
+                    (!UrlsEqual(configuredUrl, LocalRpcUrl) &&
+                     !UrlsEqual(configuredUrl, RemoteRpcUrl)))
                 {
                     return false;
                 }
@@ -382,12 +382,12 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 return ConfiguredTransport.Stdio;
             }
 
-            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl()))
+            if (UrlsEqual(configuredUrl, RemoteRpcUrl))
             {
                 return ConfiguredTransport.HttpRemote;
             }
 
-            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()))
+            if (UrlsEqual(configuredUrl, LocalRpcUrl))
             {
                 return ConfiguredTransport.Http;
             }

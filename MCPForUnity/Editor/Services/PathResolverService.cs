@@ -14,9 +14,44 @@ namespace MCPForUnity.Editor.Services
     /// <summary>
     /// Implementation of path resolver service with override support
     /// </summary>
-    public class PathResolverService : IPathResolverService
+    public class PathResolverService : IPathResolverService, IWindowPathResolver
     {
         private bool _hasUvxPathFallback;
+        private readonly object windowResolutionLock = new object();
+        private string windowResolutionKey;
+        private DateTime windowResolvedAt;
+        private WindowPathResolution windowResolution;
+
+        public Func<WindowPathResolution> CaptureWindowResolution()
+        {
+            string uvxOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+            string claudeOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
+            string key = string.Join("\n", uvxOverride, claudeOverride,
+                Environment.GetEnvironmentVariable("PATH"), Environment.GetEnvironmentVariable("CLAUDE_CLI"));
+            return () =>
+            {
+                lock (windowResolutionLock)
+                {
+                    if (key == windowResolutionKey && DateTime.UtcNow - windowResolvedAt < TimeSpan.FromSeconds(30))
+                        return windowResolution;
+                    bool hasOverride = !string.IsNullOrEmpty(uvxOverride);
+                    bool validOverride = hasOverride && TryValidateUvxExecutable(uvxOverride, out _);
+                    string uvx = validOverride ? uvxOverride : ResolveUvxFromSystem();
+                    if (!hasOverride && string.IsNullOrEmpty(uvx)) uvx = "uvx";
+                    windowResolution = new WindowPathResolution
+                    {
+                        HasOverride = hasOverride, OverridePath = uvxOverride, UvxPath = uvx,
+                        HasFallback = hasOverride && !validOverride && !string.IsNullOrEmpty(uvx),
+                        UvxValid = validOverride || (!string.IsNullOrEmpty(uvx) && TryValidateUvxExecutable(uvx, out _)),
+                        ClaudePath = !string.IsNullOrEmpty(claudeOverride)
+                            ? (File.Exists(claudeOverride) ? claudeOverride : null) : ExecPath.ResolveClaude(string.Empty)
+                    };
+                    windowResolutionKey = key;
+                    windowResolvedAt = DateTime.UtcNow;
+                    return windowResolution;
+                }
+            };
+        }
 
         public bool HasUvxPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, null));
         public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, null));

@@ -478,10 +478,12 @@ namespace MCPForUnity.Editor.Services
         }
 
         public bool IsLocalHttpServerReachable()
+            => IsLocalHttpServerReachable(HttpEndpointUtility.GetLocalBaseUrl());
+
+        internal static bool IsLocalHttpServerReachable(string httpUrl)
         {
             try
             {
-                string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
                 if (!IsLocalUrl(httpUrl))
                 {
                     return false;

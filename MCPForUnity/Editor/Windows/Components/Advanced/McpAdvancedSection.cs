@@ -45,6 +45,8 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private Label healthStatus;
         private Button testConnectionButton;
 
+        private EditorAsyncRefresh<WindowRefreshContext> pathRefresh;
+
         // Events
         public event Action OnGitUrlChanged;
         public event Action OnHttpServerCommandUpdateRequested;
@@ -327,93 +329,38 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
         public void UpdatePathOverrides()
         {
-            var pathService = MCPServiceLocator.Paths;
+            // Displaying preferences must not invoke their save/configuration callbacks.
+            gitUrlOverride.SetValueWithoutNotify(EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, ""));
+            autoStartOnLoadToggle?.SetValueWithoutNotify(EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false));
+            debugLogsToggle.SetValueWithoutNotify(EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false));
+            logRecordToggle?.SetValueWithoutNotify(McpLogRecord.IsEnabled);
+            devModeForceRefreshToggle.SetValueWithoutNotify(EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false));
+            allowLanHttpBindToggle?.SetValueWithoutNotify(EditorPrefs.GetBool(EditorPrefKeys.AllowLanHttpBind, false));
+            allowInsecureRemoteHttpToggle?.SetValueWithoutNotify(EditorPrefs.GetBool(EditorPrefKeys.AllowInsecureRemoteHttp, false));
 
-            bool hasOverride = pathService.HasUvxPathOverride;
-            bool hasFallback = pathService.HasUvxPathFallback;
-            string uvxPath = hasOverride ? pathService.GetUvxPath() : null;
+            var context = WindowRefreshContext.Capture();
+            pathRefresh ??= new EditorAsyncRefresh<WindowRefreshContext>(Root, 30);
+            pathRefresh.Request(context.Key, context.Resolve, (result, _) => ApplyPathRefresh(result),
+                () => WindowRefreshContext.Capture().Key == context.Key);
+        }
 
-            // Determine display text based on override and fallback status
-            if (hasOverride)
-            {
-                if (hasFallback)
-                {
-                    // Override path invalid, using system fallback
-                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                    uvxPathOverride.value = $"Invalid override path: {overridePath} (fallback to uvx path) {uvxPath}";
-                }
-                else if (!string.IsNullOrEmpty(uvxPath))
-                {
-                    // Override path valid
-                    uvxPathOverride.value = uvxPath;
-                }
-                else
-                {
-                    // Override set but invalid, no fallback available
-                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                    uvxPathOverride.value = $"Invalid override path: {overridePath}, no uv found";
-                }
-            }
-            else
-            {
-                uvxPathOverride.value = "uvx (uses PATH)";
-            }
-
+        private void ApplyPathRefresh(WindowRefreshContext context)
+        {
+            var paths = context.Paths;
+            string display = !paths.HasOverride ? "uvx (uses PATH)" : paths.HasFallback
+                ? $"Invalid override path: {paths.OverridePath} (fallback to uvx path) {paths.UvxPath}"
+                : !string.IsNullOrEmpty(paths.UvxPath) ? paths.UvxPath
+                : $"Invalid override path: {paths.OverridePath}, no uv found";
+            uvxPathOverride.SetValueWithoutNotify(display);
             uvxPathStatus.RemoveFromClassList("valid");
             uvxPathStatus.RemoveFromClassList("invalid");
             uvxPathStatus.RemoveFromClassList("warning");
-
-            if (hasOverride)
-            {
-                if (hasFallback)
-                {
-                    // Using fallback - show as warning (yellow)
-                    uvxPathStatus.AddToClassList("warning");
-                }
-                else
-                {
-                    // Override mode: validate the override path
-                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                    if (pathService.TryValidateUvxExecutable(overridePath, out _))
-                    {
-                        uvxPathStatus.AddToClassList("valid");
-                    }
-                    else
-                    {
-                        uvxPathStatus.AddToClassList("invalid");
-                    }
-                }
-            }
-            else
-            {
-                // PATH mode: validate system uvx
-                string systemUvxPath = pathService.GetUvxPath();
-                if (!string.IsNullOrEmpty(systemUvxPath) && pathService.TryValidateUvxExecutable(systemUvxPath, out _))
-                {
-                    uvxPathStatus.AddToClassList("valid");
-                }
-                else
-                {
-                    uvxPathStatus.AddToClassList("invalid");
-                }
-            }
-
-            gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            if (autoStartOnLoadToggle != null)
-                autoStartOnLoadToggle.value = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-            debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            if (logRecordToggle != null)
-                logRecordToggle.value = McpLogRecord.IsEnabled;
-            devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            if (allowLanHttpBindToggle != null)
-            {
-                allowLanHttpBindToggle.value = EditorPrefs.GetBool(EditorPrefKeys.AllowLanHttpBind, false);
-            }
-            if (allowInsecureRemoteHttpToggle != null)
-            {
-                allowInsecureRemoteHttpToggle.value = EditorPrefs.GetBool(EditorPrefKeys.AllowInsecureRemoteHttp, false);
-            }
-            UpdateDeploymentSection();
+            uvxPathStatus.AddToClassList(paths.HasFallback ? "warning" : paths.UvxValid ? "valid" : "invalid");
+            deploySourcePath.SetValueWithoutNotify(context.DeploySource ?? string.Empty);
+            deployTargetLabel.text = $"Target: {context.DeployTarget}";
+            deployBackupLabel.text = context.HasBackup
+                ? $"Last backup: {context.BackupPath.Replace('\\', '/')}" : "Last backup: none";
+            deployRestoreButton?.SetEnabled(context.HasBackup);
         }
 
         private void OnBrowseUvxClicked()
@@ -508,25 +455,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
         private void UpdateDeploymentSection()
         {
-            var deployService = MCPServiceLocator.Deployment;
-
-            string sourcePath = deployService.GetStoredSourcePath();
-            deploySourcePath.value = sourcePath ?? string.Empty;
-
-            deployTargetLabel.text = $"Target: {deployService.GetTargetDisplayPath()}";
-
-            string backupPath = deployService.GetLastBackupPath();
-            if (deployService.HasBackup())
-            {
-                // Use forward slashes to avoid backslash escape sequence issues in UI text
-                deployBackupLabel.text = $"Last backup: {backupPath?.Replace('\\', '/')}";
-            }
-            else
-            {
-                deployBackupLabel.text = "Last backup: none";
-            }
-
-            deployRestoreButton?.SetEnabled(deployService.HasBackup());
+            UpdatePathOverrides();
         }
 
         private void OnBrowseScreenshotsFolderClicked()
