@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import json
+from os import PathLike
 import sqlite3
 from threading import RLock
 from typing import Any
@@ -50,11 +51,24 @@ class TeamSummary:
 class EventLedger:
     """SQLite-backed ledger suitable for simulation and a later API adapter."""
 
-    def __init__(self, connection: sqlite3.Connection):
-        """Initialize the ledger and migrate an existing database if needed."""
+    def __init__(
+        self,
+        connection: sqlite3.Connection | None = None,
+        *,
+        database_path: str | PathLike[str] | None = None,
+    ):
+        """Initialize from a supplied connection or an explicitly owned database path.
+
+        Supplied connections are preserved; configure ``check_same_thread=False``
+        when the ledger will be accessed from multiple threads.
+        """
+        if connection is None and database_path is None:
+            raise ValueError("provide either connection or database_path")
+        if connection is not None and database_path is not None:
+            raise ValueError("provide either connection or database_path, not both")
         self._lock = RLock()
-        database_path = connection.execute("PRAGMA database_list").fetchone()[2]
-        if database_path:
+        if connection is None:
+            assert database_path is not None
             self._connection = sqlite3.connect(database_path, check_same_thread=False)
         else:
             self._connection = connection

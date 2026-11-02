@@ -22,6 +22,10 @@ def create_overseer_app(
     """Create an authenticated, read-only API backed by an existing ledger."""
     if not api_key:
         raise ValueError("api_key is required")
+    try:
+        api_key_bytes = api_key.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError("api_key must contain only ASCII characters") from None
     app = FastAPI(title="Overseer Control Plane", version="1.0")
     scoped_team_ids = (
         frozenset(authorized_team_ids) if authorized_team_ids is not None else None
@@ -30,7 +34,7 @@ def create_overseer_app(
     def serialize(value: object) -> object:
         """Convert ledger values into JSON-compatible response values."""
         if isinstance(value, Decimal):
-            return float(value)
+            return str(value)
         if isinstance(value, dict):
             return {key: serialize(item) for key, item in value.items()}
         if isinstance(value, list):
@@ -39,7 +43,15 @@ def create_overseer_app(
 
     def authorize(requested_team_id: str | None, presented_key: str | None) -> None:
         """Validate the API key and optional team scope for an endpoint request."""
-        if presented_key is None or not compare_digest(presented_key, api_key):
+        if presented_key is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        try:
+            presented_key_bytes = presented_key.encode("ascii")
+        except UnicodeEncodeError:
+            raise HTTPException(
+                status_code=401, detail="authentication required"
+            ) from None
+        if not compare_digest(presented_key_bytes, api_key_bytes):
             raise HTTPException(status_code=401, detail="authentication required")
         if scoped_team_ids is not None:
             if requested_team_id is None or requested_team_id not in scoped_team_ids:

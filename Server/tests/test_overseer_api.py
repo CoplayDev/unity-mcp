@@ -48,7 +48,7 @@ def test_simulation_records_full_lifecycle_for_valid_amounts():
 
 
 def test_api_exposes_simulation_events_and_financial_summary():
-    ledger = EventLedger(sqlite3.connect(":memory:"))
+    ledger = EventLedger(database_path=":memory:")
     run_support_ticket_simulation(ledger, ticket_id="T-42")
     client = TestClient(create_overseer_app(ledger, api_key="test-key"))
 
@@ -57,13 +57,15 @@ def test_api_exposes_simulation_events_and_financial_summary():
     summary = client.get("/summaries?team_id=support", headers=headers).json()
 
     assert len(events) == 4
+    events_by_type = {event["event_type"]: event for event in events}
+    assert events_by_type["model_usage"]["amount"] == "31.25"
     assert summary == [
         {
             "team_id": "support",
             "currency": "USD",
-            "revenue": 499,
-            "costs": 31.25,
-            "profit": 467.75,
+            "revenue": "499",
+            "costs": "31.25",
+            "profit": "467.75",
             "activity_count": 4,
             "pending_approvals": 0,
         }
@@ -71,7 +73,7 @@ def test_api_exposes_simulation_events_and_financial_summary():
 
 
 def test_api_only_returns_pending_approvals():
-    ledger = EventLedger(sqlite3.connect(":memory:"))
+    ledger = EventLedger(database_path=":memory:")
     pending = ledger.record(
         category="cost",
         event_type="refund_requested",
@@ -92,6 +94,23 @@ def test_api_only_returns_pending_approvals():
 
     assert len(approvals) == 1
     assert approvals[0]["id"] == pending.id
+
+
+def test_api_serializes_large_decimal_amounts_as_valid_json_strings():
+    ledger = EventLedger(database_path=":memory:")
+    ledger.record(
+        category="revenue",
+        event_type="large_payment",
+        team_id="support",
+        agent_id="billing-agent",
+        amount=Decimal("1E+400"),
+    )
+    client = TestClient(create_overseer_app(ledger, api_key="test-key"))
+
+    response = client.get("/events", headers={"X-Overseer-Api-Key": "test-key"})
+
+    assert response.status_code == 200
+    assert response.json()[0]["amount"] == "1E+400"
 
 
 def test_api_requires_authentication_and_enforces_team_scope():
@@ -125,3 +144,21 @@ def test_api_requires_authentication_and_enforces_team_scope():
             client.get(path, headers={"X-Overseer-Api-Key": "test-key"}).status_code
             == 403
         )
+
+
+def test_api_rejects_non_ascii_configured_api_key():
+    with pytest.raises(ValueError, match="ASCII"):
+        create_overseer_app(EventLedger(sqlite3.connect(":memory:")), api_key="clé")
+
+
+def test_api_rejects_non_ascii_presented_api_key_without_server_error():
+    client = TestClient(
+        create_overseer_app(
+            EventLedger(database_path=":memory:"),
+            api_key="test-key",
+        )
+    )
+
+    response = client.get("/events", headers={"X-Overseer-Api-Key": b"cl\xe9"})
+
+    assert response.status_code == 401

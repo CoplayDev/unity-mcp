@@ -74,6 +74,13 @@ def test_uses_supplied_unnamed_memory_connection():
     assert connection.execute("SELECT COUNT(*) FROM ledger_events").fetchone()[0] == 2
 
 
+def test_requires_exactly_one_connection_source(tmp_path):
+    with pytest.raises(ValueError, match="either connection or database_path"):
+        EventLedger()
+    with pytest.raises(ValueError, match="either connection or database_path"):
+        EventLedger(sqlite3.connect(":memory:"), database_path=tmp_path / "ledger.db")
+
+
 def test_exact_money_is_currency_aware_and_pending_amounts_are_excluded(ledger):
     ledger.record(
         category="revenue",
@@ -264,7 +271,10 @@ def test_rejects_unsafe_or_ambiguous_events(ledger):
         )
 
 
-def test_serializes_concurrent_worker_thread_access(ledger):
+def test_serializes_concurrent_worker_thread_access(tmp_path):
+    database_path = tmp_path / "concurrent.db"
+    ledger = EventLedger(database_path=database_path)
+
     def record_event(index):
         ledger.record(
             category="activity",
@@ -277,3 +287,6 @@ def test_serializes_concurrent_worker_thread_access(ledger):
         list(executor.map(record_event, range(40)))
 
     assert len(ledger.list_events(team_id="support")) == 40
+    with sqlite3.connect(database_path) as connection:
+        count = connection.execute("SELECT COUNT(*) FROM ledger_events").fetchone()[0]
+    assert count == 40
