@@ -19,8 +19,10 @@ from services.tools.preflight import preflight
 @mcp_for_unity_tool(
     description=(
         "Performs asset operations (import, create, modify, delete, etc.) in Unity.\n\n"
+        "For search, set `path` to an existing folder (e.g. 'Assets') and put asset names or "
+        "AssetDatabase queries in `search_pattern` (e.g. 'Player t:Prefab').\n"
         "Tip (payload safety): for `action=\"search\"`, prefer paging (`page_size`, `page_number`) and keep "
-        "`generate_preview=false` (previews can add large base64 blobs)."
+        "`generate_preview=false` (previews can add large base64 blobs). Only the requested page's assets are loaded."
     ),
     annotations=ToolAnnotations(
         title="Manage Asset",
@@ -30,7 +32,7 @@ from services.tools.preflight import preflight
 async def manage_asset(
     ctx: Context,
     action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Perform CRUD operations on assets."],
-    path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets')."],
+    path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat'). For search, use an existing folder such as 'Assets'."],
     asset_type: Annotated[str,
                           "Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object."] | None = None,
     properties: Annotated[dict[str, Any] | str,
@@ -41,15 +43,15 @@ async def manage_asset(
                                 "Generate a preview/thumbnail for the asset when supported. "
                                 "Warning: previews may include large base64 payloads; keep false unless needed."] = False,
     search_pattern: Annotated[str,
-                              "Search pattern (e.g., '*.prefab' or AssetDatabase filters like 't:MonoScript'). "
+                              "Asset name or AssetDatabase query (e.g., 'Player t:Prefab' or 't:MonoScript'). "
                               "Recommended: put queries like 't:MonoScript' here and set path='Assets'."] | None = None,
     filter_type: Annotated[str, "Filter type for search"] | None = None,
     filter_date_after: Annotated[str,
                                  "Date after which to filter"] | None = None,
     page_size: Annotated[int | float | str,
-                         "Page size for pagination. Recommended: 25 (smaller for LLM-friendly responses)."] | None = None,
+                         "Positive page size for pagination. Recommended: 25 (smaller for LLM-friendly responses)."] | None = None,
     page_number: Annotated[int | float | str,
-                           "Page number for pagination (1-based)."] | None = None,
+                           "Positive page number for pagination (1-based)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -69,9 +71,8 @@ async def manage_asset(
     page_number = coerce_int(page_number)
 
     # --- Payload-safe normalization for common LLM mistakes (search) ---
-    # Unity's C# handler treats `path` as a folder scope. If a model mistakenly puts a query like
-    # "t:MonoScript" into `path`, Unity will consider it an invalid folder and fall back to searching
-    # the entire project, which is token-heavy. Normalize such cases into search_pattern + Assets scope.
+    # Unity's C# handler requires `path` to be a valid folder scope. Normalize queries like
+    # "t:MonoScript" misplaced in `path` into search_pattern + Assets scope before validation.
     action_l = (action or "").lower()
     if action_l == "search":
         try:
