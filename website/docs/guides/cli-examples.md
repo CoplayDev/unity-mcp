@@ -54,6 +54,8 @@ unity-mcp instance current                 # Show current instance
 unity-mcp editor play|pause|stop           # Control play mode
 unity-mcp editor console [--clear]         # Get/clear console logs
 unity-mcp editor refresh [--compile]       # Refresh assets
+unity-mcp editor game-view-size           # Read actual Game View size
+unity-mcp editor game-view-size --width 2400 --height 1080  # Set visible Game View
 unity-mcp editor menu "Edit/Project Settings..."  # Execute menu item
 unity-mcp editor add-tag "TagName"         # Add tag
 unity-mcp editor add-layer "LayerName"     # Add layer

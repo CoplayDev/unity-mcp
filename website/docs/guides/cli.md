@@ -157,6 +157,10 @@ unity-mcp editor play
 unity-mcp editor pause
 unity-mcp editor stop
 
+# Read or set the visible Game View resolution
+unity-mcp editor game-view-size
+unity-mcp editor game-view-size --width 2400 --height 1080
+
 # Refresh assets
 unity-mcp editor refresh
 unity-mcp editor refresh --compile
@@ -180,6 +184,14 @@ unity-mcp editor custom-tool "Deploy" --params '{"target": "Android"}'
 unity-mcp tool list
 unity-mcp custom_tool list
 ```
+
+For fixed Game View dimensions, supply both `--width` and `--height` as integers
+from 10 through 8192. Make the Game View visible; when multiple Game Views are
+open, focus the intended one. The command reuses an MCP-owned preset in shared
+Editor preferences and preserves other presets. Check `render_size`, `settled`
+and `matches_requested` in the response: the selected preset alone does not prove
+Unity rendered the requested size. A readback timeout can leave the new preset
+selected. See [Game View size details](../reference/tools/core/manage_editor.md#verify-a-mobile-layout-at-a-fixed-resolution).
 
 ### Testing
 

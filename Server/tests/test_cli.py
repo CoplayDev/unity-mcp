@@ -1596,3 +1596,31 @@ class TestTextureCommands:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestGameViewSizeCommand:
+    def test_get_size(self, runner, mock_unity_response):
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response) as run:
+            result = runner.invoke(cli, ["editor", "game-view-size"])
+            assert result.exit_code == 0, result.output
+            assert run.call_args.args[:2] == ("manage_editor", {"action": "get_game_view_size"})
+
+    @pytest.mark.parametrize("width,height", [(2400, 1080), (1080, 2400), (10, 8192)])
+    def test_set_size(self, runner, mock_unity_response, width, height):
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response) as run:
+            result = runner.invoke(cli, ["editor", "game-view-size", "--width", str(width), "--height", str(height)])
+            assert result.exit_code == 0, result.output
+            assert run.call_args.args[:2] == ("manage_editor", {"action": "set_game_view_size", "width": width, "height": height})
+
+    @pytest.mark.parametrize("options", [
+        ["--width", "2400"], ["--height", "1080"],
+        ["--width", "9", "--height", "1080"],
+        ["--width", "2400", "--height", "8193"],
+        ["--width", "1080.5", "--height", "1080"],
+        ["--width", "true", "--height", "1080"],
+    ])
+    def test_invalid_size_does_not_contact_unity(self, runner, options):
+        with patch("cli.commands.editor.run_command") as run:
+            result = runner.invoke(cli, ["editor", "game-view-size", *options])
+            assert result.exit_code != 0
+            run.assert_not_called()
