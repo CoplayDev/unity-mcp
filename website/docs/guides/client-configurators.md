@@ -173,6 +173,24 @@ Some clients cannot be handled by the generic JSON configurator alone.
 - The bridge exposes a single proxy tool such as `unityMCP__call`, which then forwards to Unity MCP tool names.
 - OpenClaw support follows the currently selected MCP for Unity transport (via `openclaw-mcp-bridge`).
 
+### DeepSeek Harness (native DSH bundle)
+
+- Uses a custom configurator (`DeepSeekHarnessConfigurator`) because DeepSeek Harness (`dsh`) consumes MCP servers through its `@deepseek-ai/dsh-mcp-client` plugin, registered as a Cordis row — not a JSON/TOML config file.
+- Setup is manual, like the other UI-driven clients. The snippet renders a configuration-only bundle (`$DSH_HOME/bundles/<profile>/unity-mcp/` with a `package.json` manifest and a `cordis.patch.yml` row) plus the `dsh plugin add` / `dsh plugin remove` commands. Run them with DSH closed (its `desktop` profile is Electron-managed) using the Desktop-installed `dsh`, then reopen it. After a DSH reload the tools surface as `mcp__unityMCP__<tool>`.
+- The row shape (confirmed against DSH's `mcp-memory` guide and plugin-manager patch schema):
+  ```yaml
+  - insert:
+      - id: unitymcp
+        name: '@deepseek-ai/dsh-mcp-client'
+        config:
+          serverName: unityMCP
+          transport: streamable-http   # or stdio with command/args
+          url: http://127.0.0.1:<port>/mcp
+          failOnStartupError: true
+  ```
+- Installing as a bundle (instead of editing `$DSH_HOME/cordis.patch.yml`, a global layer that collides with rows from other sources) keeps the row profile-scoped, and DSH's own plugin manager owns enable/disable and removal afterwards.
+- Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
+
 ---
 
 ## Adding a new MCP client (typical JSON case)
