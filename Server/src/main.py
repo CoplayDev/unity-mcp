@@ -286,7 +286,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         logger.info("MCP for Unity Server shut down")
 
 
-def _build_instructions(project_scoped_tools: bool) -> str:
+def _build_instructions(project_scoped_tools: bool, custom_instructions: str | None = None) -> str:
     if project_scoped_tools:
         custom_tools_note = (
             "I have a dynamic tool system. Always check the mcpforunity://custom-tools resource first "
@@ -298,7 +298,7 @@ def _build_instructions(project_scoped_tools: bool) -> str:
             "No project-scoped custom tools resource is available."
         )
 
-    return f"""
+    instructions = f"""
 This server provides tools to interact with the Unity Game Engine Editor.
 
 {custom_tools_note}
@@ -362,6 +362,10 @@ Payload sizing & paging (important):
   - Use paging (`page_size`, `page_number`) and keep `page_size` modest (e.g. **25-50**) to avoid token-heavy responses.
   - Keep `generate_preview=false` unless you explicitly need thumbnails (previews may include large base64 payloads).
 """
+    additional = custom_instructions.strip() if custom_instructions else ""
+    if additional:
+        return f"{instructions.rstrip()}\n\nAdditional instructions:\n{additional}\n"
+    return instructions
 
 
 def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
@@ -373,11 +377,11 @@ def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, s
     return None, instance_token
 
 
-def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
+def create_mcp_server(project_scoped_tools: bool, custom_instructions: str | None = None) -> FastMCP:
     mcp = FastMCP(
         name="mcp-for-unity-server",
         lifespan=server_lifespan,
-        instructions=_build_instructions(project_scoped_tools),
+        instructions=_build_instructions(project_scoped_tools, custom_instructions),
     )
 
     global custom_tool_service
@@ -667,6 +671,7 @@ Environment Variables:
   UNITY_MCP_HTTP_URL   HTTP server URL (default: http://127.0.0.1:8080)
   UNITY_MCP_HTTP_HOST   HTTP server host (overrides URL host)
   UNITY_MCP_HTTP_PORT   HTTP server port (overrides URL port)
+  UNITY_MCP_INSTRUCTIONS_FILE   UTF-8 file containing additional server instructions
 
 Examples:
   # Use specific Unity project as default
@@ -688,6 +693,14 @@ Examples:
         metavar="INSTANCE",
         help="Default Unity instance to target (project name, hash, or 'Name@hash'). "
              "Overrides UNITY_MCP_DEFAULT_INSTANCE environment variable."
+    )
+    parser.add_argument(
+        "--instructions-file",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Read additional server instructions from a UTF-8 text file at startup. "
+             "Appends to built-in instructions; overrides UNITY_MCP_INSTRUCTIONS_FILE."
     )
     parser.add_argument(
         "--transport",
@@ -793,6 +806,15 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    custom_instructions = None
+    instructions_file = args.instructions_file or os.environ.get("UNITY_MCP_INSTRUCTIONS_FILE")
+    if instructions_file:
+        try:
+            with open(os.path.expanduser(instructions_file), encoding="utf-8-sig") as f:
+                custom_instructions = f.read().strip()
+        except (OSError, UnicodeError):
+            parser.error("Cannot read --instructions-file as UTF-8 text.")
 
     # Set environment variables from command line args
     if args.default_instance:
@@ -916,7 +938,7 @@ Examples:
         except Exception:
             logger.debug("Could not discover Unity instances for project-scoped tool default", exc_info=True)
 
-    mcp = create_mcp_server(project_scoped_tools)
+    mcp = create_mcp_server(project_scoped_tools, custom_instructions=custom_instructions)
 
     # Determine transport mode
     if config.transport_mode == 'http':
