@@ -27,6 +27,7 @@ const sidebars = {
         'guides/claude-code-cli',
         'guides/client-configurators',
         'guides/multi-instance',
+        'guides/http-client-sessions',
         'guides/tool-groups',
         'guides/cli',
         'guides/cli-examples',
