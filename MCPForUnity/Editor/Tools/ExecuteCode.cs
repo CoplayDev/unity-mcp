@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Security;
 using MCPForUnity.Runtime.Helpers;
 using Microsoft.CSharp;
 using Newtonsoft.Json.Linq;
@@ -61,14 +62,18 @@ namespace MCPForUnity.Editor.Tools
             RoslynCompiler.ResetCache();
         }
 
+        // Always blocked, regardless of the delete allowlist. File.Delete and
+        // Directory.Delete are handled separately by DeletePathPolicy so that literal
+        // paths under regenerable folders (Builds/, Temp/, ...) are not false positives.
         private static readonly HashSet<string> _blockedPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "System.IO.File.Delete",
-            "System.IO.Directory.Delete",
             "FileUtil.DeleteFileOrDirectory",
             "AssetDatabase.DeleteAsset",
             "AssetDatabase.MoveAssetToTrash",
             "EditorApplication.Exit",
+            // Changing the working directory between the delete-allowlist check and
+            // execution would make a validated relative path resolve somewhere else.
+            "CurrentDirectory",
             "Process.Start",
             "Process.Kill",
             "while(true)",
@@ -122,6 +127,11 @@ namespace MCPForUnity.Editor.Tools
                 var violation = CheckBlockedPatterns(code);
                 if (violation != null)
                     return new ErrorResponse($"Blocked pattern detected: {violation}");
+
+                var deleteViolation = DeletePathPolicy.CheckSource(
+                    code, ExecuteCodePrefs.AllowedDeleteRoots);
+                if (deleteViolation != null)
+                    return new ErrorResponse(deleteViolation);
             }
 
             try
