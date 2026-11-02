@@ -237,3 +237,48 @@ async def test_send_mutation_keeps_error_when_verify_returns_none(monkeypatch):
     ctx = DummyContext()
     resp = await send_mutation(ctx, None, "manage_script", {}, verify_after_disconnect=fake_verify)
     assert resp.get("success") is False
+
+
+@pytest.mark.asyncio
+async def test_asset_refresh_blocks_until_ready(monkeypatch):
+    """An asset refresh in progress is real work: the poll keeps waiting through it.
+    (The set of busy reasons used to say "asset_import", which editor_state never emits.)"""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    from services.tools import refresh_unity as mod
+
+    answers = [
+        {"data": {"advice": {"ready_for_tools": False, "blocking_reasons": ["asset_refresh"]}}},
+        {"data": {"advice": {"ready_for_tools": False, "blocking_reasons": ["asset_refresh"]}}},
+        {"data": {"advice": {"ready_for_tools": True, "blocking_reasons": []}}},
+    ]
+    calls = 0
+
+    async def fake_get_editor_state(ctx):
+        nonlocal calls
+        calls += 1
+        return answers[min(calls, len(answers)) - 1]
+
+    monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
+
+    ready, _ = await mod.wait_for_editor_ready(DummyContext(), timeout_s=10.0)
+    assert ready is True
+    assert calls == 3
+
+
+@pytest.mark.asyncio
+async def test_stale_status_alone_counts_as_ready(monkeypatch):
+    """stale_status only means the snapshot is old (an unfocused editor updates it rarely); compile
+    and reload state are set by events, so a stale snapshot with nothing else blocking is ready.
+    Treating it as busy would time every refresh out on an unfocused editor."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    from services.tools import refresh_unity as mod
+
+    async def fake_get_editor_state(ctx):
+        return {"data": {"advice": {"ready_for_tools": False, "blocking_reasons": ["stale_status"]}}}
+
+    monkeypatch.setattr(mod.editor_state, "get_editor_state", fake_get_editor_state)
+
+    ready, _ = await mod.wait_for_editor_ready(DummyContext(), timeout_s=2.0)
+    assert ready is True
