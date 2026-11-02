@@ -9,10 +9,8 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Once per Editor session, sweeps registered configurators and re-runs CheckStatus(attemptAutoRewrite: true)
-    /// for any installed client that already has a config on disk. Catches the case where the user updated the
-    /// MCP for Unity package while the Editor was closed — without this sweep, stale package versions in client
-    /// configs would persist until the user opens the MCP window.
+    /// Once per Editor session, sweeps registered configurators and refreshes existing UnityMCP entries that
+    /// drifted while the Editor was closed. Missing registrations stay user-driven through Configure buttons.
     /// </summary>
     [InitializeOnLoad]
     public static class StartupConfigRewrite
@@ -43,10 +41,14 @@ namespace MCPForUnity.Editor.Services
                 try
                 {
                     if (!c.IsInstalled) continue;
-                    // Always let CheckStatus read the current state from disk before deciding —
+                    // Always let CheckStatus read the current state from disk before deciding.
                     // the in-memory Status can be NotConfigured on a fresh editor load even
                     // though the file already has a valid config.
                     var before = c.Status;
+                    var current = c.CheckStatus(attemptAutoRewrite: false);
+                    if (current != McpStatus.VersionMismatch && current != McpStatus.IncorrectPath)
+                        continue;
+
                     var after = c.CheckStatus(attemptAutoRewrite: true);
                     if (before != after && after == McpStatus.Configured) rewrote++;
                 }
