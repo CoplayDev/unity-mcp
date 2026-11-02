@@ -151,12 +151,18 @@ namespace MCPForUnity.Editor.Helpers
             return string.IsNullOrEmpty(client?.ServerContainerKey) ? "mcpServers" : client.ServerContainerKey;
         }
 
-        private static JObject EnsureObject(JObject parent, string name)
+        private static JObject EnsureObject(JObject parent, string path)
         {
-            if (parent[name] is JObject o) return o;
-            var created = new JObject();
-            parent[name] = created;
-            return created;
+            foreach (string name in path.Split('.'))
+            {
+                if (!(parent[name] is JObject child))
+                {
+                    child = new JObject();
+                    parent[name] = child;
+                }
+                parent = child;
+            }
+            return parent;
         }
 
         private static IList<string> BuildUvxArgs(string fromUrl, string packageName)

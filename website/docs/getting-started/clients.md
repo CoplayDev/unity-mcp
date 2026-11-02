@@ -28,6 +28,24 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
 | **Pi** | stdio / HTTP | yes | yes | yes | Needs an MCP extension (Pi ships no MCP client of its own): `pi install npm:pi-mcp-adapter`. Writes the shared `~/.config/mcp/mcp.json`. |
 
+## ZCode
+
+Select **ZCode** in the Unity MCP window and click **Configure**. The configurator
+writes the native user-level `~/.zcode/cli/config.json`, with UnityMCP under
+`mcp.servers`. It preserves other MCP servers and unrelated ZCode settings, and
+supports the selected HTTP or stdio transport.
+
+In ZCode, open **Settings → MCP Servers** and enable `unityMCP`, then reconnect or
+restart the session if needed. ZCode gives native `.zcode` settings priority over
+`.agents/mcp.json`, so auto-configuration uses the native file. A workspace-level
+`.zcode/config.json` remains project-specific. See the [official ZCode MCP guide](https://zcode.z.ai/en/docs/mcp-services).
+
+Once `~/.zcode/cli/config.json` defines any server, ZCode skips
+`~/.agents/mcp.json` entirely. To keep servers from that file, add them in
+**ZCode Settings → MCP Servers**, or merge them into `mcp.servers` of the native
+config. ZCode reads `~/.agents/mcp.json` again when the native file defines no
+servers; the configurator leaves the `.agents` file unchanged.
+
 ## How to pick
 
 - **You want it to just work**: Claude Desktop. Stdio means no port conflicts and no firewall prompts.
@@ -45,6 +63,7 @@ A few clients need an MCP toggle flipped on after the configurator writes their 
 
 - **Cursor** → Settings → MCP → enable the `unityMCP` server
 - **Antigravity** → Settings → MCP servers → enable
+- **ZCode** → Settings → MCP Servers → enable the `unityMCP` server
 - **OpenClaw** → enable the `openclaw-mcp-bridge` plugin
 - **Pi** → install an MCP extension first (`pi install npm:pi-mcp-adapter`) and restart Pi; Pi has no
   built-in MCP client, so the config file alone does nothing

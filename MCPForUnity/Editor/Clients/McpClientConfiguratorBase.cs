@@ -184,7 +184,7 @@ namespace MCPForUnity.Editor.Clients
                         unityToken = client.IsVsCodeLayout
                             ? rootConfig["servers"]?["unityMCP"]
                                 ?? rootConfig["mcp"]?["servers"]?["unityMCP"]
-                            : rootConfig[containerKey]?["unityMCP"];
+                            : rootConfig.SelectToken(containerKey)?["unityMCP"];
                     }
 
                     if (unityToken is JObject unityObj)
@@ -397,7 +397,7 @@ namespace MCPForUnity.Editor.Clients
                 {
                     string containerKey = string.IsNullOrEmpty(client.ServerContainerKey)
                         ? "mcpServers" : client.ServerContainerKey;
-                    if ((root[containerKey] as JObject)?.Remove("unityMCP") == true) removed = true;
+                    if ((root.SelectToken(containerKey) as JObject)?.Remove("unityMCP") == true) removed = true;
                 }
 
                 if (removed)
