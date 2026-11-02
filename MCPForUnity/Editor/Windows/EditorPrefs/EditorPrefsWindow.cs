@@ -50,8 +50,6 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.ValidationLevel, EditorPrefType.Int },
             { EditorPrefKeys.LastUpdateCheck, EditorPrefType.String },
             { EditorPrefKeys.LastStdIoUpgradeVersion, EditorPrefType.Int },
-            { EditorPrefKeys.LastLocalHttpServerPid, EditorPrefType.Int },
-            { EditorPrefKeys.LastLocalHttpServerPort, EditorPrefType.Int },
             
             // String prefs
             { EditorPrefKeys.EditorWindowActivePanel, EditorPrefType.String },
@@ -72,10 +70,6 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
             { EditorPrefKeys.LastAssetStoreUpdateCheck, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownAssetStoreVersion, EditorPrefType.String },
-            { EditorPrefKeys.LastLocalHttpServerStartedUtc, EditorPrefType.String },
-            { EditorPrefKeys.LastLocalHttpServerPidArgsHash, EditorPrefType.String },
-            { EditorPrefKeys.LastLocalHttpServerPidFilePath, EditorPrefType.String },
-            { EditorPrefKeys.LastLocalHttpServerInstanceToken, EditorPrefType.String },
         };
 
         // Templates

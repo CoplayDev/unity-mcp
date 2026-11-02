@@ -45,5 +45,28 @@ namespace MCPForUnityTests.Editor.Services
                 || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH"));
             Assert.AreEqual(expected, McpEditorShutdownCleanup.ShouldRunCleanup());
         }
+
+        [Test]
+        public void ShouldStopManagedServer_NoOtherInstances_Stops()
+        {
+            // Last one out: the launching editor is the only Unity instance left on the server.
+            Assert.IsTrue(McpEditorShutdownCleanup.ShouldStopManagedServer(otherConnectedInstances: 0));
+        }
+
+        [Test]
+        public void ShouldStopManagedServer_OtherInstancesConnected_LeavesServerRunning()
+        {
+            // Two editors share one HTTP-local server; the launcher quitting must not disconnect the other.
+            Assert.IsFalse(McpEditorShutdownCleanup.ShouldStopManagedServer(otherConnectedInstances: 1));
+            Assert.IsFalse(McpEditorShutdownCleanup.ShouldStopManagedServer(otherConnectedInstances: 3));
+        }
+
+        [Test]
+        public void ShouldStopManagedServer_ProbeFailed_LeavesServerRunning()
+        {
+            // null = the server did not answer within the quit-time budget. Fail toward not killing:
+            // a stray headless process is recoverable, a torn-down shared server is not.
+            Assert.IsFalse(McpEditorShutdownCleanup.ShouldStopManagedServer(otherConnectedInstances: null));
+        }
     }
 }

@@ -2,7 +2,9 @@ namespace MCPForUnity.Editor.Services.Server
 {
     /// <summary>
     /// Interface for managing PID files and handshake state for the local HTTP server.
-    /// Handles persistence of server process information across Unity domain reloads.
+    /// Handshake and tracking state is keyed per project and per port, and the launch
+    /// marker is per editor process, so concurrent editors sharing one server (or running
+    /// servers on different ports) never act on each other's state.
     /// </summary>
     public interface IPidFileManager
     {
@@ -28,36 +30,41 @@ namespace MCPForUnity.Editor.Services.Server
         bool TryReadPid(string pidFilePath, out int pid);
 
         /// <summary>
-        /// Attempts to extract the port number from a PID file path.
-        /// </summary>
-        /// <param name="pidFilePath">Path to the PID file</param>
-        /// <param name="port">Output: the port number</param>
-        /// <returns>True if the port was extracted successfully</returns>
-        bool TryGetPortFromPidFilePath(string pidFilePath, out int port);
-
-        /// <summary>
         /// Deletes a PID file.
         /// </summary>
         /// <param name="pidFilePath">Path to the PID file to delete</param>
         void DeletePidFile(string pidFilePath);
 
         /// <summary>
-        /// Stores the handshake information (PID file path and instance token) in EditorPrefs.
+        /// Stores the handshake for a server this editor process just launched: the PID file path and
+        /// instance token go to EditorPrefs (per project, per port; survives editor restarts so the
+        /// server can still be stopped deterministically later), and the port is recorded in
+        /// SessionState as the launch marker (survives domain reloads, dies with this editor process).
         /// </summary>
+        /// <param name="port">Port the server was launched on</param>
         /// <param name="pidFilePath">Path to the PID file</param>
         /// <param name="instanceToken">Unique instance token for the server</param>
-        void StoreHandshake(string pidFilePath, string instanceToken);
+        void StoreHandshake(int port, string pidFilePath, string instanceToken);
 
         /// <summary>
-        /// Attempts to retrieve stored handshake information from EditorPrefs.
+        /// Attempts to retrieve the stored handshake for a port (this project's slot only).
         /// </summary>
+        /// <param name="port">Port to look up</param>
         /// <param name="pidFilePath">Output: stored PID file path</param>
         /// <param name="instanceToken">Output: stored instance token</param>
         /// <returns>True if valid handshake information was found</returns>
-        bool TryGetHandshake(out string pidFilePath, out string instanceToken);
+        bool TryGetHandshake(int port, out string pidFilePath, out string instanceToken);
 
         /// <summary>
-        /// Stores PID tracking information in EditorPrefs.
+        /// Returns the port of the server this editor process launched, if any. False for servers
+        /// launched by other editors, by an earlier run of this editor, or externally.
+        /// </summary>
+        /// <param name="port">Output: the launched port</param>
+        /// <returns>True if this editor process launched a server</returns>
+        bool TryGetLaunchedPort(out int port);
+
+        /// <summary>
+        /// Stores PID tracking information in EditorPrefs (per project, per port).
         /// </summary>
         /// <param name="pid">The process ID</param>
         /// <param name="port">The port number</param>
@@ -74,15 +81,18 @@ namespace MCPForUnity.Editor.Services.Server
         bool TryGetStoredPid(int expectedPort, out int pid);
 
         /// <summary>
-        /// Gets the stored args hash for the tracked server.
+        /// Gets the stored args hash for the tracked server on a port.
         /// </summary>
+        /// <param name="port">The port number</param>
         /// <returns>The stored args hash, or empty string if not found</returns>
-        string GetStoredArgsHash();
+        string GetStoredArgsHash(int port);
 
         /// <summary>
-        /// Clears all PID tracking information from EditorPrefs.
+        /// Clears handshake and tracking information for a port, and the launch marker if it
+        /// points at that port. Other ports and other projects are untouched.
         /// </summary>
-        void ClearTracking();
+        /// <param name="port">The port number</param>
+        void ClearTracking(int port);
 
         /// <summary>
         /// Computes a short hash of the input string for fingerprinting.
