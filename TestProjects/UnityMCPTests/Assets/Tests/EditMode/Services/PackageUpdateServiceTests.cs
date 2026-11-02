@@ -134,7 +134,10 @@ namespace MCPForUnityTests.Editor.Services
             EditorPrefs.SetString(TestCachedVersionKey, cachedVersion);
 
             // Act
-            var result = _service.CheckForUpdate("5.0.0");
+            var result = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Git
+            }.CheckForUpdate("5.0.0");
 
             // Assert
             Assert.IsTrue(result.CheckSucceeded, "Check should succeed with valid cache");
@@ -151,7 +154,10 @@ namespace MCPForUnityTests.Editor.Services
             EditorPrefs.SetString(TestCachedVersionKey, "6.0.0");
 
             // Act
-            var result = _service.CheckForUpdate("5.0.0");
+            var result = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Git
+            }.CheckForUpdate("5.0.0");
 
             // Assert
             Assert.IsTrue(result.UpdateAvailable, "Should detect update is available");
@@ -167,7 +173,10 @@ namespace MCPForUnityTests.Editor.Services
             EditorPrefs.SetString(TestCachedVersionKey, "5.0.0");
 
             // Act
-            var result = _service.CheckForUpdate("5.0.0");
+            var result = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Git
+            }.CheckForUpdate("5.0.0");
 
             // Assert
             Assert.IsFalse(result.UpdateAvailable, "Should detect no update needed");
@@ -183,7 +192,10 @@ namespace MCPForUnityTests.Editor.Services
             EditorPrefs.SetString(TestCachedVersionKey, "5.0.0");
 
             // Act
-            var result = _service.CheckForUpdate("6.0.0");
+            var result = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Git
+            }.CheckForUpdate("6.0.0");
 
             // Assert
             Assert.IsFalse(result.UpdateAvailable, "Should detect no update when current is newer");
@@ -231,7 +243,7 @@ namespace MCPForUnityTests.Editor.Services
 
             var mockService = new TestablePackageUpdateService
             {
-                IsGitInstallationResult = false,
+                InstallSourceResult = UpdateInstallSource.AssetStore,
                 AssetStoreFetchResult = "9.9.9"
             };
 
@@ -257,7 +269,7 @@ namespace MCPForUnityTests.Editor.Services
 
             var mockService = new TestablePackageUpdateService
             {
-                IsGitInstallationResult = false,
+                InstallSourceResult = UpdateInstallSource.AssetStore,
                 AssetStoreFetchResult = "9.1.0"
             };
 
@@ -276,7 +288,7 @@ namespace MCPForUnityTests.Editor.Services
             // Arrange
             var mockService = new TestablePackageUpdateService
             {
-                IsGitInstallationResult = false,
+                InstallSourceResult = UpdateInstallSource.AssetStore,
                 AssetStoreFetchResult = null
             };
 
@@ -288,6 +300,120 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsFalse(result.UpdateAvailable, "No update should be reported when fetch fails");
             Assert.AreEqual("Failed to check for Asset Store updates (network issue or offline)", result.Message);
             Assert.IsNull(result.LatestVersion, "Latest version should be null when fetch fails");
+        }
+
+        [Test]
+        public void CheckForUpdate_DoesNotUseGitHubChannel_WhenInstalledFromRegistry()
+        {
+            // A registry install (for example OpenUPM) is versioned by the registry. Reporting the
+            // GitHub branch number told users an update existed that the Package Manager could not install.
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Registry,
+                GitFetchResult = "99.0.0"
+            };
+
+            // Act
+            var result = mockService.CheckForUpdate("10.0.0");
+
+            // Assert
+            Assert.IsFalse(mockService.GitFetchCalled, "Registry installs must not be compared against the GitHub branch");
+            Assert.IsFalse(result.UpdateAvailable, "Should not report an update the Package Manager cannot install");
+            Assert.IsNull(result.LatestVersion, "Latest version should be unknown for registry installs");
+            StringAssert.Contains("Package Manager", result.Message);
+        }
+
+        [Test]
+        public void CheckForUpdate_IgnoresGitCache_WhenInstalledFromRegistry()
+        {
+            // A GitHub result cached for today must not leak into a registry install.
+            EditorPrefs.SetString(TestLastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
+            EditorPrefs.SetString(TestCachedVersionKey, "99.0.0");
+
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Registry,
+                GitFetchResult = "99.0.0"
+            };
+
+            // Act
+            var result = mockService.CheckForUpdate("10.0.0");
+
+            // Assert
+            Assert.AreNotEqual("99.0.0", result.LatestVersion, "Git cache must not be reused for a registry install");
+            Assert.IsFalse(result.UpdateAvailable);
+        }
+
+        [Test]
+        public void TryGetCachedResult_ReturnsNotApplicable_ForLocalInstall()
+        {
+            EditorPrefs.SetString(TestLastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
+            EditorPrefs.SetString(TestCachedVersionKey, "99.0.0");
+
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Local
+            };
+
+            // Act
+            var result = mockService.TryGetCachedResult("10.0.0");
+
+            // Assert
+            Assert.IsNotNull(result, "Should short-circuit instead of scheduling a network fetch");
+            Assert.IsFalse(result.UpdateAvailable, "Local installs have no update channel");
+        }
+
+        [Test]
+        public void CheckForUpdate_StillUsesGitHubChannel_WhenInstalledFromGit()
+        {
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Git,
+                GitFetchResult = "6.0.0"
+            };
+
+            // Act
+            var result = mockService.CheckForUpdate("5.0.0");
+
+            // Assert
+            Assert.IsTrue(mockService.GitFetchCalled, "Git installs should still be checked against the branch");
+            Assert.IsTrue(result.UpdateAvailable);
+            Assert.AreEqual("6.0.0", result.LatestVersion);
+        }
+
+        [Test]
+        public void FetchAndCompare_SkipsEveryChannel_WhenInstallSourceHasNoRemote()
+        {
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Embedded,
+                GitFetchResult = "99.0.0",
+                AssetStoreFetchResult = "99.0.0"
+            };
+
+            // Act
+            var result = mockService.FetchAndCompare("10.0.0", UpdateInstallSource.Embedded, "main");
+
+            // Assert
+            Assert.IsFalse(mockService.GitFetchCalled, "Embedded installs must not fetch the GitHub branch");
+            Assert.IsFalse(mockService.AssetStoreFetchCalled, "Embedded installs must not fetch Asset Store metadata");
+            Assert.IsFalse(result.UpdateAvailable);
+        }
+
+        [Test]
+        public void CacheFetchResult_DoesNotSeedGitCache_ForRegistryInstall()
+        {
+            var mockService = new TestablePackageUpdateService
+            {
+                InstallSourceResult = UpdateInstallSource.Registry
+            };
+
+            // Act
+            mockService.CacheFetchResult("10.0.0", "99.0.0");
+
+            // Assert
+            Assert.IsFalse(EditorPrefs.HasKey(TestLastCheckDateKey), "Registry installs must not seed the Git channel cache");
+            Assert.IsFalse(EditorPrefs.HasKey(TestCachedVersionKey));
         }
 
         [Test]
@@ -331,15 +457,15 @@ namespace MCPForUnityTests.Editor.Services
     /// </summary>
     internal class TestablePackageUpdateService : PackageUpdateService
     {
-        public bool IsGitInstallationResult { get; set; } = true;
+        public UpdateInstallSource InstallSourceResult { get; set; } = UpdateInstallSource.Git;
         public string GitFetchResult { get; set; }
         public string AssetStoreFetchResult { get; set; }
         public bool GitFetchCalled { get; private set; }
         public bool AssetStoreFetchCalled { get; private set; }
 
-        public override bool IsGitInstallation()
+        public override UpdateInstallSource GetInstallSource()
         {
-            return IsGitInstallationResult;
+            return InstallSourceResult;
         }
 
         protected override string FetchLatestVersionFromGitHub(string branch)
