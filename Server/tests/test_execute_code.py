@@ -126,6 +126,26 @@ def test_error_response_normalized(mock_unity_error):
     assert "Compilation failed" in result["message"]
 
 
+def test_transport_error_with_null_message_keeps_error(monkeypatch):
+    # Transport failures arrive as MCPResponse(...).model_dump(), so "message" is present but None.
+    async def fake_send(send_fn, unity_instance, tool_name, params):
+        return {"success": False, "message": None, "error": "TimeoutError", "data": None, "hint": "retry"}
+
+    monkeypatch.setattr(
+        "services.tools.execute_code.get_unity_instance_from_context",
+        AsyncMock(return_value="unity-instance-1"),
+    )
+    monkeypatch.setattr(
+        "services.tools.execute_code.send_with_unity_instance",
+        fake_send,
+    )
+    result = asyncio.run(execute_code(SimpleNamespace(), action="execute", code="return 1;"))
+    assert result["success"] is False
+    assert "TimeoutError" in result["message"]
+    assert result["error"] == "TimeoutError"
+    assert result["hint"] == "retry"
+
+
 def test_non_dict_response_handled(monkeypatch):
     async def fake_send(send_fn, unity_instance, tool_name, params):
         return "unexpected"

@@ -94,8 +94,13 @@ async def execute_code(
     if not isinstance(response, dict):
         return {"success": False, "message": str(response)}
 
-    return {
+    result = {
         "success": response.get("success", False),
-        "message": response.get("message", response.get("error", "")),
+        # Transport failures (timeout, disconnect) carry "message": None and the text in "error".
+        "message": response.get("message") or response.get("error") or "",
         "data": response.get("data"),
     }
+    for key in ("error", "hint"):
+        if response.get(key) is not None:
+            result[key] = response[key]
+    return result
