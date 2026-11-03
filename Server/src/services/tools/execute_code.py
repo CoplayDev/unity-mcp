@@ -100,7 +100,7 @@ async def execute_code(
         "message": response.get("message") or response.get("error") or "",
         "data": response.get("data"),
     }
-    for key in ("error", "hint"):
-        if response.get(key) is not None:
-            result[key] = response[key]
+    # The transport's hint="retry" is not forwarded: a timed-out snippet may still be running in Unity.
+    if response.get("error") is not None:
+        result["error"] = response["error"]
     return result

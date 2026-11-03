@@ -143,7 +143,8 @@ def test_transport_error_with_null_message_keeps_error(monkeypatch):
     assert result["success"] is False
     assert "TimeoutError" in result["message"]
     assert result["error"] == "TimeoutError"
-    assert result["hint"] == "retry"
+    # A retry hint would invite re-running code that may still be executing in Unity.
+    assert "hint" not in result
 
 
 def test_non_dict_response_handled(monkeypatch):
