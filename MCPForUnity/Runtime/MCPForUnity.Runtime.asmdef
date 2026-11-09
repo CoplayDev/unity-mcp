@@ -2,7 +2,9 @@
     "name": "MCPForUnity.Runtime",
     "rootNamespace": "MCPForUnity.Runtime",
     "references": [],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
