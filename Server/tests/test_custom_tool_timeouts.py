@@ -477,3 +477,159 @@ def test_the_handshake_ends_at_the_earlier_of_its_timeout_and_the_deadline(monke
     finally:
         stop.set()
     assert elapsed < 0.75
+
+
+def _answer_once(unity, reply: bytes, framed: bool = True):
+    """Play Unity for one exchange: read one command, send one reply. Returns what was received."""
+    import struct
+    import threading
+
+    received: list[bytes] = []
+
+    def serve():
+        try:
+            if framed:
+                header = b""
+                while len(header) < 8:
+                    header += unity.recv(8 - len(header))
+                (length,) = struct.unpack(">Q", header)
+                body = b""
+                while len(body) < length:
+                    body += unity.recv(length - len(body))
+                received.append(body)
+                unity.sendall(struct.pack(">Q", len(reply)) + reply)
+            else:
+                received.append(unity.recv(4096))
+                unity.sendall(reply)
+        except OSError:
+            pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    return received
+
+
+def test_a_command_within_its_deadline_returns_unitys_result(monkeypatch, tmp_path):
+    import json
+    import time
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+    received = _answer_once(unity, b'{"status":"success","result":{"answer":42}}')
+    _elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("x", {"a": 1}, max_attempts=0, deadline=time.monotonic() + 5.0), 5.0)
+    assert outcome.get("result") == {"answer": 42}
+    assert json.loads(received[0]) == {"type": "x", "params": {"a": 1}}
+    assert conn.sock.gettimeout() == 30.0, "the deadline's shorter timeout must not stay on the socket"
+
+
+def test_an_error_from_unity_is_raised_with_its_message(monkeypatch, tmp_path):
+    import time
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+    _answer_once(unity, b'{"status":"error","error":"no such tool"}')
+    _elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("x", {}, max_attempts=0, deadline=time.monotonic() + 5.0), 5.0)
+    assert str(outcome.get("error")) == "no such tool"
+    assert conn.sock is None, "a failed exchange drops the socket"
+
+
+@pytest.mark.parametrize("framed", [True, False])
+def test_a_ping_within_its_deadline_is_answered(monkeypatch, tmp_path, framed):
+    import time
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+    conn.use_framing = framed
+    received = _answer_once(unity, b'{"status":"success","result":{"message":"pong"}}', framed=framed)
+    _elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("ping", {}, max_attempts=0, deadline=time.monotonic() + 5.0), 5.0)
+    assert outcome.get("result") == {"message": "pong"}
+    assert received == [b"ping"]
+
+
+def test_a_ping_answered_with_anything_else_fails(monkeypatch, tmp_path):
+    import time
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+    _answer_once(unity, b'{"status":"success","result":{"message":"busy"}}')
+    _elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("ping", {}, max_attempts=0, deadline=time.monotonic() + 5.0), 5.0)
+    assert str(outcome.get("error")) == "Ping unsuccessful"
+
+
+def test_a_reconnect_that_spends_the_budget_sends_nothing(monkeypatch, tmp_path):
+    import time
+
+    import transport.legacy.unity_connection as unity_connection
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+    unity.setblocking(False)
+    fresh, conn.sock = conn.sock, None  # the stale socket was dropped: send_command reconnects
+
+    def slow_connect(self, connect_timeout=None, deadline=None):  # noqa: ARG001
+        time.sleep(0.3)
+        self.sock = fresh
+        return True
+
+    monkeypatch.setattr(unity_connection.UnityConnection, "connect", slow_connect)
+    elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("x", {}, max_attempts=0, deadline=time.monotonic() + 0.2), 3.0)
+    assert isinstance(outcome.get("error"), TimeoutError)
+    assert "before it was sent" in str(outcome["error"])
+    assert elapsed < 1.0
+    assert conn.sock is fresh, "nothing was sent, so the new socket is kept"
+    try:
+        sent = unity.recv(64)
+    except BlockingIOError:
+        sent = b""
+    assert sent == b""
+
+
+def test_a_read_after_the_deadline_times_out_without_waiting(monkeypatch, tmp_path):
+    import socket
+    import time
+
+    conn, _unity = _stdio_connection(monkeypatch, tmp_path)
+    started = time.monotonic()
+    with pytest.raises(socket.timeout):
+        conn._recv_by(conn.sock, 8, time.monotonic() - 1.0, 30.0)
+    assert time.monotonic() - started < 0.5
+    assert conn.sock.gettimeout() == 30.0
+
+
+def test_a_failed_port_rediscovery_keeps_the_commands_own_error(monkeypatch, tmp_path):
+    import time
+
+    import transport.legacy.unity_connection as unity_connection
+
+    conn, unity = _stdio_connection(monkeypatch, tmp_path)
+
+    def broken_registry(**_):
+        raise OSError("registry unreadable")
+
+    monkeypatch.setattr(unity_connection.stdio_port_registry, "get_instances", broken_registry)
+    _answer_once(unity, b'{"status":"error","error":"no such tool"}')
+    _elapsed, outcome = _call_in_thread(
+        lambda: conn.send_command("x", {}, max_attempts=0, deadline=time.monotonic() + 5.0), 5.0)
+    assert str(outcome.get("error")) == "no such tool"
+
+
+def test_a_new_pooled_connection_is_opened_within_the_deadline(monkeypatch):
+    import time
+
+    import transport.legacy.unity_connection as unity_connection
+    from models.models import UnityInstanceInfo
+
+    seen: list = []
+
+    def fake_connect(self, connect_timeout=None, deadline=None):  # noqa: ARG001
+        seen.append(deadline)
+        return False
+
+    monkeypatch.setattr(unity_connection.UnityConnection, "connect", fake_connect)
+    pool = unity_connection.UnityConnectionPool()
+    instance = UnityInstanceInfo(
+        id="Playground@abc", name="Playground", path="/tmp/Playground", hash="abc", port=1, status="running")
+    monkeypatch.setattr(pool, "discover_all_instances", lambda *_, **__: [instance])
+    deadline = time.monotonic() + 0.5
+    with pytest.raises(ConnectionError):
+        pool.get_connection("Playground@abc", deadline=deadline)
+    assert seen == [deadline]
