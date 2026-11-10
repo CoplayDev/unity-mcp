@@ -82,6 +82,25 @@ def test_forwards_core_parameters(mock_unity):
     assert params["queryTriggerInteraction"] == "Ignore"
 
 
+def test_omitted_scales_are_inferred_by_unity(mock_unity):
+    result = asyncio.run(
+        pick_gameobject_from_image(
+            SimpleNamespace(),
+            image_x=320,
+            image_y=180,
+            image_width=640,
+            image_height=360,
+            pick_view={"viewportWidth": 1920, "viewportHeight": 1080},
+        )
+    )
+
+    assert result["success"] is True
+    params = mock_unity["params"]
+    assert "scaleX" not in params
+    assert "scaleY" not in params
+    assert params["pickView"]["viewportWidth"] == 1920
+
+
 def test_requires_pick_view_or_camera(mock_unity):
     result = asyncio.run(
         pick_gameobject_from_image(

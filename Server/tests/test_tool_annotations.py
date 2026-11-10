@@ -45,6 +45,8 @@ NON_DESTRUCTIVE = {
     # preflight(refresh_if_dirty=True) at find_gameobjects.py can refresh assets,
     # so it is not read-only -- but it never destroys anything.
     "find_gameobjects",
+    # Uses a temporary camera and transient physics/Scene View state; writes no project asset.
+    "pick_gameobject_from_image",
     # 'clear' empties the ephemeral Editor console buffer; Unity still mirrors
     # every entry to the Editor log file on disk.
     "read_console",

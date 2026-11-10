@@ -598,22 +598,19 @@ namespace MCPForUnity.Editor.Tools
                     if (!Application.isBatchMode) EnsureGameView();
 
                     string folderOverride = ScreenshotPreferences.Resolve(cmd.outputFolder);
+                    Dictionary<string, object> pickView = null;
                     ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToProjectFolder(
                         targetCamera, fileName, resolvedSuperSize, ensureUniqueFileName: true,
                         includeImage: includeImage, maxResolution: maxResolution,
-                        folderOverride: folderOverride);
+                        folderOverride: folderOverride,
+                        beforeRender: (camera, width, height) => pickView = BuildPickView(camera, "game_view", width, height));
 
                     if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
                         AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {targetCamera.name}).";
                     return new SuccessResponse(
                         message,
-                        BuildScreenshotResponseData(
-                            result,
-                            targetCamera.name,
-                            includeImage,
-                            targetCamera,
-                            includePickView: true));
+                        BuildScreenshotResponseData(result, targetCamera.name, includeImage, pickView));
                 }
 
                 if (includeImage && Application.isPlaying)
@@ -732,8 +729,7 @@ namespace MCPForUnity.Editor.Tools
             ScreenshotCaptureResult result,
             string cameraName,
             bool includeImage,
-            Camera cameraForPickView = null,
-            bool includePickView = false)
+            Dictionary<string, object> pickView = null)
         {
             var data = new Dictionary<string, object>
             {
@@ -752,14 +748,8 @@ namespace MCPForUnity.Editor.Tools
                 data["imageHeight"] = result.ImageHeight;
             }
 
-            if (includePickView && cameraForPickView != null)
-            {
-                data["pickView"] = BuildPickView(
-                    cameraForPickView,
-                    "game_view",
-                    GetCameraCaptureWidth(cameraForPickView, result.SuperSize),
-                    GetCameraCaptureHeight(cameraForPickView, result.SuperSize));
-            }
+            if (pickView != null)
+                data["pickView"] = pickView;
 
             if (result.FallbackReason != null)
             {
@@ -781,6 +771,11 @@ namespace MCPForUnity.Editor.Tools
 
             var euler = camera.transform.eulerAngles;
             var position = camera.transform.position;
+            Matrix4x4 projection = camera.projectionMatrix;
+            var projectionElements = new float[16];
+            for (int i = 0; i < projectionElements.Length; i++)
+                projectionElements[i] = projection[i / 4, i % 4];
+
             return new Dictionary<string, object>
             {
                 { "captureSource", captureSource },
@@ -788,6 +783,7 @@ namespace MCPForUnity.Editor.Tools
                 { "rotation", new[] { euler.x, euler.y, euler.z } },
                 { "projection", camera.orthographic ? "orthographic" : "perspective" },
                 { "orthographic", camera.orthographic },
+                { "projectionMatrix", projectionElements },
                 { "fieldOfView", camera.fieldOfView },
                 { "orthographicSize", camera.orthographicSize },
                 { "nearClipPlane", camera.nearClipPlane },
@@ -797,18 +793,6 @@ namespace MCPForUnity.Editor.Tools
                 { "viewportWidth", viewportWidth },
                 { "viewportHeight", viewportHeight },
             };
-        }
-
-        private static int GetCameraCaptureWidth(Camera camera, int superSize)
-        {
-            int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
-            return width * Mathf.Max(1, superSize);
-        }
-
-        private static int GetCameraCaptureHeight(Camera camera, int superSize)
-        {
-            int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
-            return height * Mathf.Max(1, superSize);
         }
 
         private static async Task<object> CaptureCompositedScreenshotAsync(
@@ -1298,8 +1282,9 @@ namespace MCPForUnity.Editor.Tools
                     else if (targetPos.HasValue)
                         tempCam.transform.LookAt(targetPos.Value);
 
-                    var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
-                    tempCam.aspect = w > 0 && h > 0 ? (float)w / h : tempCam.aspect;
+                    Dictionary<string, object> pickView = null;
+                    var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes,
+                        (camera, width, height) => pickView = BuildPickView(camera, "game_view", width, height));
 
                     // Resolve output folder (per-call override → user pref → built-in default).
                     string resolvedFolderSpec = ScreenshotPreferences.Resolve(cmd.outputFolder);
@@ -1353,7 +1338,7 @@ namespace MCPForUnity.Editor.Tools
                         { "path", projectRelativePath },
                         { "fullPath", normalizedFull },
                         { "captureSource", "game_view" },
-                        { "pickView", BuildPickView(tempCam, "game_view", w, h) },
+                        { "pickView", pickView },
                     };
                     if (targetPos.HasValue)
                         data["viewTarget"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };

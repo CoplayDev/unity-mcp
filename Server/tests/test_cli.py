@@ -511,6 +511,20 @@ class TestCameraCommands:
             assert params["maxDistance"] == 100
             assert params["queryTriggerInteraction"] == "Ignore"
 
+    def test_camera_pick_prints_json_and_leaves_scales_unset(self, runner, mock_unity_response):
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "--format", "json", "camera", "pick",
+                "--x", "320", "--y", "180", "--image-width", "640", "--image-height", "360",
+                "--view-json", '{"viewportWidth":1920,"viewportHeight":1080}',
+            ])
+            assert result.exit_code == 0, result.output
+            assert json.loads(result.output) == mock_unity_response
+            params = mock_run.call_args.args[1]
+            assert "scaleX" not in params
+            assert "scaleY" not in params
+
+
     def test_camera_screenshot_position_view_target_reaches_unity_as_an_array(self, runner, mock_unity_response):
         # Unity reads a JSON array as a position; the text "[0, 1, 2]" would be looked up as a GameObject name.
         with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:

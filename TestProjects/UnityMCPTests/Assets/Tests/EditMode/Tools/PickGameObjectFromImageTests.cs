@@ -1,8 +1,12 @@
+using System.Collections;
+using System.Threading;
+using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
@@ -418,6 +422,61 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Greater(pickView.Value<int>("viewportHeight"), 0);
         }
 
+        [TestCase(false, 80)]
+        [TestCase(true, 320)]
+        public void Screenshot_ExplicitCameraPixelPicksWithCapturedProjection(bool lensShift, int maxResolution)
+        {
+            var camera = CreatePerspectiveCamera("PickTest_PixelRoundTripCamera", new Vector3(2500, 2500, -10));
+            var targetTexture = new RenderTexture(320, 180, 24);
+            camera.targetTexture = targetTexture;
+            camera.aspect = 320f / 180f;
+            camera.usePhysicalProperties = lensShift;
+            if (lensShift)
+                camera.lensShift = new Vector2(0.25f, -0.15f);
+
+            try
+            {
+                var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                target.name = "PickTest_PixelRoundTripTarget";
+                target.transform.position = camera.ViewportPointToRay(new Vector3(0.5f, 0.5f)).GetPoint(10f);
+
+                var screenshot = ToJObject(ManageScene.HandleCommand(new JObject
+                {
+                    ["action"] = "screenshot",
+                    ["camera"] = camera.name,
+                    ["includeImage"] = true,
+                    ["maxResolution"] = maxResolution,
+                    ["outputFolder"] = TempRoot
+                }));
+                Assert.IsTrue(screenshot.Value<bool>("success"), screenshot.ToString());
+                var data = screenshot["data"];
+                Assert.AreEqual(maxResolution, data.Value<int>("imageWidth"));
+                Assert.AreEqual(320, data["pickView"].Value<int>("viewportWidth"));
+                Assert.AreEqual(180, data["pickView"].Value<int>("viewportHeight"));
+                Assert.AreEqual(16, ((JArray)data["pickView"]["projectionMatrix"]).Count);
+
+                // Move the source camera to verify the screenshot metadata supplies the ray.
+                camera.transform.position += Vector3.up * 20f;
+                var result = ToJObject(PickGameObjectFromImage.HandleCommand(new JObject
+                {
+                    ["imageX"] = data.Value<int>("imageWidth") * 0.5f,
+                    ["imageY"] = data.Value<int>("imageHeight") * 0.5f,
+                    ["imageWidth"] = data["imageWidth"],
+                    ["imageHeight"] = data["imageHeight"],
+                    ["pickView"] = data["pickView"]
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsTrue(result["data"].Value<bool>("hit"), result.ToString());
+                Assert.AreEqual(target.name, result["data"].Value<string>("gameObjectName"));
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                Object.DestroyImmediate(targetTexture);
+            }
+        }
+
         [Test]
         public void Screenshot_PositionedCapture_ReturnsPickView()
         {
@@ -440,31 +499,76 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Greater(pickView.Value<int>("viewportHeight"), 0);
         }
 
-        [Test]
-        public void Screenshot_SceneView_ReturnsSceneViewPickView()
+        [UnityTest]
+        public IEnumerator Screenshot_SceneViewPicksColliderlessSpriteThroughDispatcher()
         {
             if (Application.isBatchMode)
-                Assert.Ignore("Scene View screenshot requires a non-batch Unity Editor window.");
+                Assert.Ignore("Scene View picking requires a non-batch Unity Editor window.");
 
             var sceneView = SceneView.lastActiveSceneView ?? EditorWindow.GetWindow<SceneView>();
-            if (sceneView == null)
-                Assert.Ignore("No Scene View window is available.");
+            sceneView.Focus();
+            Vector3 savedPivot = sceneView.pivot;
+            Quaternion savedRotation = sceneView.rotation;
+            float savedSize = sceneView.size;
+            bool savedOrthographic = sceneView.orthographic;
 
-            var result = ToJObject(ManageScene.HandleCommand(new JObject
+            Texture2D texture = Texture2D.whiteTexture;
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f), texture.width);
+            try
             {
-                ["action"] = "screenshot",
-                ["captureSource"] = "scene_view",
-                ["fileName"] = "scene-view-pick-view",
-                ["outputFolder"] = TempRoot
-            }));
+                var target = new GameObject("PickTest_SceneViewSprite");
+                target.transform.position = new Vector3(2600, 2600, 0);
+                target.AddComponent<SpriteRenderer>().sprite = sprite;
+                sceneView.orthographic = true;
+                sceneView.LookAtDirect(target.transform.position, Quaternion.identity, 5f);
+                sceneView.Repaint();
+                yield return null;
+                yield return null;
 
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            Assert.AreEqual("scene_view", result["data"].Value<string>("captureSource"));
-            var pickView = result["data"]?["pickView"] as JObject;
-            Assert.IsNotNull(pickView, result.ToString());
-            Assert.AreEqual("scene_view", pickView.Value<string>("captureSource"));
-            Assert.Greater(pickView.Value<int>("viewportWidth"), 0);
-            Assert.Greater(pickView.Value<int>("viewportHeight"), 0);
+                var screenshot = ToJObject(ManageScene.HandleCommand(new JObject
+                {
+                    ["action"] = "screenshot",
+                    ["captureSource"] = "scene_view",
+                    ["fileName"] = "scene-view-pick-view",
+                    ["outputFolder"] = TempRoot
+                }));
+                Assert.IsTrue(screenshot.Value<bool>("success"), screenshot.ToString());
+                var pickView = screenshot["data"]?["pickView"] as JObject;
+                Assert.IsNotNull(pickView, screenshot.ToString());
+                Assert.AreEqual("scene_view", pickView.Value<string>("captureSource"));
+                int width = pickView.Value<int>("viewportWidth");
+                int height = pickView.Value<int>("viewportHeight");
+
+                var command = new JObject
+                {
+                    ["type"] = "pick_gameobject_from_image",
+                    ["params"] = new JObject
+                    {
+                        ["imageX"] = width * 0.5f,
+                        ["imageY"] = height * 0.5f,
+                        ["imageWidth"] = width,
+                        ["imageHeight"] = height,
+                        ["pickView"] = pickView
+                    }
+                };
+                using var timeout = new CancellationTokenSource(System.TimeSpan.FromSeconds(5));
+                var reply = TransportCommandDispatcher.ExecuteCommandJsonAsync(command.ToString(), timeout.Token);
+                while (!reply.IsCompleted)
+                    yield return null;
+
+                var result = JObject.Parse(reply.GetAwaiter().GetResult())["result"];
+                Assert.IsNotNull(result);
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.AreEqual("handle_utility", result["data"].Value<string>("sceneViewPickBackend"), result.ToString());
+                Assert.AreEqual(target.name, result["data"].Value<string>("gameObjectName"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(sprite);
+                sceneView.orthographic = savedOrthographic;
+                sceneView.LookAtDirect(savedPivot, savedRotation, savedSize);
+            }
         }
 
         [Test]

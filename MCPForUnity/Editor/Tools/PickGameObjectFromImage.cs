@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Scene;
 using MCPForUnity.Runtime.Helpers;
@@ -61,6 +62,7 @@ namespace MCPForUnity.Editor.Tools
         private const float SceneViewRotationTolerance = 0.1f;
         private const float SceneViewScalarTolerance = 0.01f;
         private const float SceneViewViewportTolerancePixels = 1f;
+        private const string SceneViewPickCommand = "MCPForUnity.PickGameObjectFromImage";
         private static MethodInfo _intersectRayMeshMethod;
         private static bool _intersectRayMeshMethodProbed;
 
@@ -91,11 +93,11 @@ namespace MCPForUnity.Editor.Tools
                 if (imageY.Value < 0 || imageY.Value >= imageHeight.Value)
                     return new ErrorResponse("'image_y' must be within [0, image_height).");
 
-                float scaleX = ParamCoercion.CoerceFloatNullable(p.GetRaw("scaleX")) ?? 1f;
-                float scaleY = ParamCoercion.CoerceFloatNullable(p.GetRaw("scaleY")) ?? scaleX;
-                if (!IsFinite(scaleX) || scaleX <= 0f)
+                float? requestedScaleX = ParamCoercion.CoerceFloatNullable(p.GetRaw("scaleX"));
+                float? requestedScaleY = ParamCoercion.CoerceFloatNullable(p.GetRaw("scaleY"));
+                if (requestedScaleX.HasValue && (!IsFinite(requestedScaleX) || requestedScaleX.Value <= 0f))
                     return new ErrorResponse("'scale_x' must be a positive finite number.");
-                if (!IsFinite(scaleY) || scaleY <= 0f)
+                if (requestedScaleY.HasValue && (!IsFinite(requestedScaleY) || requestedScaleY.Value <= 0f))
                     return new ErrorResponse("'scale_y' must be a positive finite number.");
 
                 string dimension = (p.Get("dimension") ?? "3d").ToLowerInvariant();
@@ -112,16 +114,19 @@ namespace MCPForUnity.Editor.Tools
 
                 float viewportWidth = ParamCoercion.CoerceFloatNullable(p.GetRaw("viewportWidth"))
                     ?? ParamCoercion.CoerceFloatNullable(pickView?["viewportWidth"] ?? pickView?["viewport_width"])
-                    ?? imageWidth.Value * scaleX;
+                    ?? imageWidth.Value * (requestedScaleX ?? 1f);
                 float viewportHeight = ParamCoercion.CoerceFloatNullable(p.GetRaw("viewportHeight"))
                     ?? ParamCoercion.CoerceFloatNullable(pickView?["viewportHeight"] ?? pickView?["viewport_height"])
-                    ?? imageHeight.Value * scaleY;
+                    ?? imageHeight.Value * (requestedScaleY ?? requestedScaleX ?? 1f);
 
                 if (!IsFinite(viewportWidth) || viewportWidth <= 0f)
                     return new ErrorResponse("'viewport_width' must be a positive finite number.");
                 if (!IsFinite(viewportHeight) || viewportHeight <= 0f)
                     return new ErrorResponse("'viewport_height' must be a positive finite number.");
 
+                // Inline screenshots can be resized independently on each axis due to pixel rounding.
+                float scaleX = requestedScaleX ?? viewportWidth / imageWidth.Value;
+                float scaleY = requestedScaleY ?? requestedScaleX ?? viewportHeight / imageHeight.Value;
                 float viewportX = imageX.Value * scaleX;
                 float viewportYFromTop = imageY.Value * scaleY;
                 float viewportU = viewportX / viewportWidth;
@@ -158,36 +163,39 @@ namespace MCPForUnity.Editor.Tools
                     var ray = camera.ViewportPointToRay(new Vector3(viewportU, viewportV, 0f));
                     string viewSource = pickView != null ? "pick_view" : "camera";
 
-                    if (IsSceneViewPickView(pickView) &&
-                        TryPickSceneViewObject(pickView, ray, viewportU, 1f - viewportV, viewportWidth, viewportHeight, layerMask, maxDistance, out var sceneViewPick, out var sceneViewPickMessage))
-                    {
-                        if (sceneViewPick.GameObject != null)
-                        {
-                            return new SuccessResponse(
-                                $"Picked GameObject '{sceneViewPick.GameObject.name}' from Scene View image coordinate.",
-                                BuildSceneViewHitData(
-                                    dimension,
-                                    ray,
-                                    imageX.Value,
-                                    imageY.Value,
-                                    imageWidth.Value,
-                                    imageHeight.Value,
-                                    scaleX,
-                                    scaleY,
-                                    viewportU,
-                                    viewportV,
-                                    viewportWidth,
-                                    viewportHeight,
-                                    viewSource,
-                                    sceneViewPick));
-                        }
-
-                        McpLog.Debug($"[PickGameObjectFromImage] Scene View editor pick did not hit: {sceneViewPickMessage}");
-                    }
-
-                    return dimension == "2d"
+                    object PickFromRay() => dimension == "2d"
                         ? Pick2D(ray, maxDistance, layerMask, imageX.Value, imageY.Value, imageWidth.Value, imageHeight.Value, scaleX, scaleY, viewportU, viewportV, viewportWidth, viewportHeight, viewSource)
                         : Pick3D(ray, maxDistance, layerMask, triggerInteraction, imageX.Value, imageY.Value, imageWidth.Value, imageHeight.Value, scaleX, scaleY, viewportU, viewportV, viewportWidth, viewportHeight, viewSource);
+
+                    if (!IsSceneViewPickView(pickView))
+                        return PickFromRay();
+
+                    object FinishSceneViewPick(SceneViewPickResult pick, bool useMeshFallback)
+                    {
+                        if (pick.GameObject != null && (layerMask & (1 << pick.GameObject.layer)) == 0)
+                            pick = default;
+                        if (pick.GameObject == null && useMeshFallback)
+                            TryPickRendererMesh(ray, layerMask, maxDistance, out pick, out _);
+                        if (pick.GameObject == null)
+                            return PickFromRay();
+
+                        return new SuccessResponse(
+                            $"Picked GameObject '{pick.GameObject.name}' from Scene View image coordinate.",
+                            BuildSceneViewHitData(dimension, ray, imageX.Value, imageY.Value, imageWidth.Value,
+                                imageHeight.Value, scaleX, scaleY, viewportU, viewportV, viewportWidth,
+                                viewportHeight, viewSource, pick));
+                    }
+
+                    var guiFraction = new Vector2(viewportU, 1f - viewportV);
+                    if (SceneViewPickOverrideForTests != null)
+                        return FinishSceneViewPick(SceneViewPickOverrideForTests(guiFraction), useMeshFallback: false);
+
+                    var sceneView = Application.isBatchMode ? null : SceneView.lastActiveSceneView;
+                    if (!LiveSceneViewMatchesPickView(sceneView, pickView, viewportWidth, viewportHeight, out _, out _))
+                        return FinishSceneViewPick(default, useMeshFallback: true);
+
+                    return PickInSceneGui(sceneView, pickView, guiFraction, viewportWidth, viewportHeight,
+                        pick => FinishSceneViewPick(pick, useMeshFallback: true));
                 }
                 finally
                 {
@@ -255,68 +263,72 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Picked GameObject '{go.name}' from image coordinate.", data);
         }
 
-        private static bool TryPickSceneViewObject(
+        private static Task<object> PickInSceneGui(
+            SceneView sceneView,
             JObject pickView,
-            Ray ray,
-            float viewportU,
-            float viewportTopFraction,
+            Vector2 guiFraction,
             float viewportWidth,
             float viewportHeight,
-            int layerMask,
-            float maxDistance,
-            out SceneViewPickResult result,
-            out string message)
+            Func<SceneViewPickResult, object> finish)
         {
-            result = default;
-            message = null;
+            var response = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            SceneViewPickResult pick = default;
 
-            Vector2 guiPoint;
-            if (SceneViewPickOverrideForTests != null)
+            void OnSceneGui(SceneView view)
             {
-                guiPoint = new Vector2(viewportU, viewportTopFraction);
-                result = SceneViewPickOverrideForTests(guiPoint);
-                return FilterSceneViewPickByLayerMask(result, layerMask, out result, out message);
+                Event current = Event.current;
+                if (view != sceneView || current?.type != EventType.ExecuteCommand ||
+                    current.commandName != SceneViewPickCommand || Camera.current != view.camera)
+                    return;
+
+                try
+                {
+                    // The callback is inside the camera viewport's GUI group, so use local coordinates.
+                    if (LiveSceneViewMatchesPickView(view, pickView, viewportWidth, viewportHeight, out Rect viewport, out _))
+                    {
+                        var point = new Vector2(guiFraction.x * viewport.width, guiFraction.y * viewport.height);
+                        GameObject picked = HandleUtility.PickGameObject(point, out int materialIndex);
+                        pick = new SceneViewPickResult(picked, materialIndex);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Debug($"[PickGameObjectFromImage] Scene View editor pick was unavailable: {ex.Message}");
+                }
             }
 
-            string handleUtilityMessage = null;
-
-            if (!Application.isBatchMode)
+            EditorApplication.delayCall += () =>
             {
-                var sceneView = SceneView.lastActiveSceneView;
-                if (LiveSceneViewMatchesPickView(sceneView, pickView, viewportWidth, viewportHeight, out Rect viewportRect, out handleUtilityMessage))
+                if (sceneView != null)
                 {
-                    guiPoint = new Vector2(
-                        viewportRect.x + viewportU * viewportRect.width,
-                        viewportRect.y + viewportTopFraction * viewportRect.height);
-
+                    // Send a dedicated non-rendering event. A repaint's layout pass may already
+                    // be inside a native render scope, which cannot start the picking render.
+                    SceneView.duringSceneGui += OnSceneGui;
                     try
                     {
-                        int materialIndex;
-                        GameObject picked = HandleUtility.PickGameObject(guiPoint, out materialIndex);
-                        var handleUtilityResult = new SceneViewPickResult(picked, materialIndex, "handle_utility");
-                        if (picked != null)
-                            return FilterSceneViewPickByLayerMask(handleUtilityResult, layerMask, out result, out message);
-                        handleUtilityMessage = "HandleUtility.PickGameObject did not hit a selectable object.";
+                        sceneView.SendEvent(EditorGUIUtility.CommandEvent(SceneViewPickCommand));
                     }
                     catch (Exception ex)
                     {
-                        handleUtilityMessage = $"HandleUtility.PickGameObject was unavailable: {ex.Message}";
+                        McpLog.Debug($"[PickGameObjectFromImage] Could not dispatch Scene View pick: {ex.Message}");
+                    }
+                    finally
+                    {
+                        SceneView.duringSceneGui -= OnSceneGui;
                     }
                 }
-            }
-            else
-            {
-                handleUtilityMessage = "Scene View HandleUtility picking is not available in batch mode.";
-            }
 
-            if (TryPickRendererMesh(ray, layerMask, maxDistance, out result, out string meshMessage))
-            {
-                message = meshMessage;
-                return true;
-            }
-
-            message = $"{handleUtilityMessage} {meshMessage}".Trim();
-            return true;
+                try
+                {
+                    response.TrySetResult(finish(pick));
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Error($"[PickGameObjectFromImage] Failed: {ex}");
+                    response.TrySetResult(new ErrorResponse($"Error picking GameObject from image: {ex.Message}"));
+                }
+            };
+            return response.Task;
         }
 
         private static bool TryPickRendererMesh(
@@ -442,32 +454,6 @@ namespace MCPForUnity.Editor.Tools
             {
                 return false;
             }
-        }
-
-        private static bool FilterSceneViewPickByLayerMask(
-            SceneViewPickResult input,
-            int layerMask,
-            out SceneViewPickResult result,
-            out string message)
-        {
-            result = input;
-            message = null;
-
-            if (input.GameObject == null)
-            {
-                message = "No selectable Scene View object under the coordinate.";
-                return true;
-            }
-
-            int layerBit = 1 << input.GameObject.layer;
-            if ((layerMask & layerBit) == 0)
-            {
-                result = default;
-                message = $"Picked object '{input.GameObject.name}' is excluded by layer_mask.";
-                return true;
-            }
-
-            return true;
         }
 
         private static Dictionary<string, object> BuildSceneViewHitData(
@@ -790,6 +776,20 @@ namespace MCPForUnity.Editor.Tools
                 return false;
             }
 
+            Matrix4x4? expectedProjection = ReadProjectionMatrix(pickView);
+            if (expectedProjection.HasValue)
+            {
+                Matrix4x4 liveProjection = camera.projectionMatrix;
+                for (int i = 0; i < 16; i++)
+                {
+                    if (Mathf.Abs(liveProjection[i] - expectedProjection.Value[i]) > 0.0001f)
+                    {
+                        message = "Active Scene View projection matrix no longer matches the screenshot pickView.";
+                        return false;
+                    }
+                }
+            }
+
             viewportRect = GetSceneViewViewportRectPoints(sceneView);
             if (viewportRect.width <= 0f || viewportRect.height <= 0f)
             {
@@ -873,7 +873,31 @@ namespace MCPForUnity.Editor.Tools
             if (!IsFinite(aspect) || aspect <= 0f)
                 aspect = viewportWidth / viewportHeight;
             camera.aspect = aspect;
+            Matrix4x4? projectionMatrix = ReadProjectionMatrix(view);
+            if (projectionMatrix.HasValue)
+                camera.projectionMatrix = projectionMatrix.Value;
             return camera;
+        }
+
+        private static Matrix4x4? ReadProjectionMatrix(JObject view)
+        {
+            var token = view["projectionMatrix"] ?? view["projection_matrix"];
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+            if (!(token is JArray elements) || elements.Count != 16)
+                throw new ArgumentException("pick_view.projectionMatrix must contain 16 finite numbers in row-major order.");
+
+            var matrix = new Matrix4x4();
+            for (int i = 0; i < elements.Count; i++)
+            {
+                float? value = ParamCoercion.CoerceFloatNullable(elements[i]);
+                if (!IsFinite(value))
+                    throw new ArgumentException("pick_view.projectionMatrix must contain 16 finite numbers in row-major order.");
+                matrix[i / 4, i % 4] = value.Value;
+            }
+            if (!IsFinite(matrix.determinant) || matrix.determinant == 0f)
+                throw new ArgumentException("pick_view.projectionMatrix must be invertible.");
+            return matrix;
         }
 
         private static Vector3? ReadVector3(JToken token)

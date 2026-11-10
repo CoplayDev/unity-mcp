@@ -572,9 +572,9 @@ def screenshot_multiview(max_resolution, view_target, output_folder):
 @click.option("--dimension", default="3d", type=click.Choice(["3d", "2d"], case_sensitive=False),
               help="Physics dimension to query.")
 @click.option("--scale-x", type=float, default=None,
-              help="Scale from inspected image X pixels back to captured Unity viewport pixels.")
+              help="Scale X pixels to the captured viewport. Inferred from the widths if omitted.")
 @click.option("--scale-y", type=float, default=None,
-              help="Scale from inspected image Y pixels back to captured Unity viewport pixels. Defaults to scale-x.")
+              help="Scale Y pixels to the captured viewport. Defaults to an explicit scale-x or is inferred from the heights.")
 @click.option("--viewport-width", type=int, default=None,
               help="Original captured Unity viewport width. Use pickView.viewportWidth when present.")
 @click.option("--viewport-height", type=int, default=None,

@@ -64,8 +64,8 @@ async def pick_gameobject_from_image(
     image_y: Annotated[float | int | str, "Y coordinate in the screenshot image, origin at top-left, increasing down."],
     image_width: Annotated[int | str, "Width of the image the AI is inspecting, in pixels."],
     image_height: Annotated[int | str, "Height of the image the AI is inspecting, in pixels."],
-    scale_x: Annotated[float | int | str | None, "Scale from inspected image X pixels back to the captured Unity viewport pixels. Default 1."] = None,
-    scale_y: Annotated[float | int | str | None, "Scale from inspected image Y pixels back to the captured Unity viewport pixels. Defaults to scale_x."] = None,
+    scale_x: Annotated[float | int | str | None, "Scale from inspected image X pixels back to the captured Unity viewport pixels. Defaults to the viewport width divided by the image width."] = None,
+    scale_y: Annotated[float | int | str | None, "Scale from inspected image Y pixels back to the captured Unity viewport pixels. Defaults to an explicit scale_x, or the viewport height divided by the image height."] = None,
     viewport_width: Annotated[int | str | None, "Optional original captured Unity viewport width. Use pick_view.viewportWidth when present."] = None,
     viewport_height: Annotated[int | str | None, "Optional original captured Unity viewport height. Use pick_view.viewportHeight when present."] = None,
     dimension: Annotated[Literal["3d", "2d"] | str | None, "Physics dimension to query: '3d' for Collider, '2d' for Collider2D."] = "3d",
@@ -95,7 +95,7 @@ async def pick_gameobject_from_image(
     if y < 0 or y >= height:
         return {"success": False, "message": "image_y must be within [0, image_height)."}
 
-    sx = 1.0
+    sx = None
     if scale_x is not None:
         sx, error = _positive_float(scale_x, "scale_x")
         if error:
@@ -162,10 +162,12 @@ async def pick_gameobject_from_image(
         "imageY": y,
         "imageWidth": width,
         "imageHeight": height,
-        "scaleX": sx,
-        "scaleY": sy,
         "dimension": dim,
     }
+    if sx is not None:
+        params["scaleX"] = sx
+    if sy is not None:
+        params["scaleY"] = sy
     if vw is not None:
         params["viewportWidth"] = vw
     if vh is not None:
