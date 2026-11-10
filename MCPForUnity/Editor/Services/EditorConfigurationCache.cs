@@ -243,28 +243,34 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// Set HttpBaseUrl and update cache + EditorPrefs atomically.
+        /// Always writes the project value, even when it equals the cached one: the cached
+        /// value may come from the machine-wide fallback, and the project must keep it
+        /// if that fallback changes later.
         /// </summary>
         public void SetHttpBaseUrl(string value)
         {
             value = value ?? string.Empty;
+            HttpEndpointUtility.WriteProjectUrlPref(EditorPrefKeys.HttpBaseUrl, value);
             if (_httpBaseUrl != value)
             {
                 _httpBaseUrl = value;
-                HttpEndpointUtility.WriteProjectUrlPref(EditorPrefKeys.HttpBaseUrl, value);
                 OnConfigurationChanged?.Invoke(nameof(HttpBaseUrl));
             }
         }
 
         /// <summary>
         /// Set HttpRemoteBaseUrl and update cache + EditorPrefs atomically.
+        /// Always writes the project value, even when it equals the cached one: the cached
+        /// value may come from the machine-wide fallback, and the project must keep it
+        /// if that fallback changes later.
         /// </summary>
         public void SetHttpRemoteBaseUrl(string value)
         {
             value = value ?? string.Empty;
+            HttpEndpointUtility.WriteProjectUrlPref(EditorPrefKeys.HttpRemoteBaseUrl, value);
             if (_httpRemoteBaseUrl != value)
             {
                 _httpRemoteBaseUrl = value;
-                HttpEndpointUtility.WriteProjectUrlPref(EditorPrefKeys.HttpRemoteBaseUrl, value);
                 OnConfigurationChanged?.Invoke(nameof(HttpRemoteBaseUrl));
             }
         }

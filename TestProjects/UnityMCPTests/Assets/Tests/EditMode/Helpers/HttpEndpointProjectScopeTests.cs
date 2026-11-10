@@ -141,5 +141,20 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("https://c.example.com", EditorPrefs.GetString(RemoteKey));
             Assert.IsFalse(EditorPrefs.HasKey(EditorPrefKeys.HttpRemoteBaseUrl));
         }
+
+        [Test]
+        public void ConfigurationCache_SetSameValueAsFallback_PinsItToProject()
+        {
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.1:9001");
+            EditorConfigurationCache.Instance.Refresh();
+            Assert.AreEqual("http://127.0.0.1:9001", EditorConfigurationCache.Instance.HttpBaseUrl);
+
+            EditorConfigurationCache.Instance.SetHttpBaseUrl("http://127.0.0.1:9001");
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.1:9005");
+
+            Assert.AreEqual("http://127.0.0.1:9001", EditorPrefs.GetString(LocalKey));
+            Assert.AreEqual("http://127.0.0.1:9001", HttpEndpointUtility.GetLocalBaseUrl(),
+                "A URL set for this project must not follow later machine-wide changes");
+        }
     }
 }
