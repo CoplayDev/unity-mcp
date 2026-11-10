@@ -12,7 +12,7 @@ using UnityEngine.UIElements;
 namespace MCPForUnity.Editor.Windows
 {
     /// <summary>
-    /// Editor window for managing Unity EditorPrefs, specifically for MCP For Unity development
+    /// Editor window for managing Unity EditorPrefs, specifically for MCP for Unity development
     /// </summary>
     public class EditorPrefsWindow : EditorWindow
     {
@@ -32,7 +32,6 @@ namespace MCPForUnity.Editor.Windows
             // Boolean prefs
             { EditorPrefKeys.DebugLogs, EditorPrefType.Bool },
             { EditorPrefKeys.UseHttpTransport, EditorPrefType.Bool },
-            { EditorPrefKeys.ResumeHttpAfterReload, EditorPrefType.Bool },
             { EditorPrefKeys.ResumeStdioAfterReload, EditorPrefType.Bool },
             { EditorPrefKeys.UseEmbeddedServer, EditorPrefType.Bool },
             { EditorPrefKeys.LockCursorConfig, EditorPrefType.Bool },

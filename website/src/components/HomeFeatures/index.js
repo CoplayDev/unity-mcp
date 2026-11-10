@@ -1,59 +1,67 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './styles.module.css';
 
-const features = [
-  {
-    n: '01',
-    kicker: 'CONTROL',
-    title: 'Talk to the Editor.',
-    body: 'Drive scenes, GameObjects, scripts, assets, prefabs, and materials with natural language. 43 tools across 9 groups expose Unity’s editing surface to your MCP client.',
-    href: '/reference/tools',
-    cta: 'Browse tools',
-  },
-  {
-    n: '02',
-    kicker: 'ROUTING',
-    title: 'Multiple Editors, one session.',
-    body: 'Open several Unity Editors at once and aim a single MCP session at any of them. Per-call routing for cross-project prompts; session isolation across MCP clients.',
-    href: '/guides/multi-instance',
-    cta: 'How routing works',
-  },
-  {
-    n: '03',
-    kicker: 'TRANSPORT',
-    title: 'HTTP or stdio. Your call.',
-    body: 'HTTP for multi-agent, remote-hosted, and shared workflows. Stdio for single-client setups like Claude Desktop. Auto-detected and auto-configured.',
-    href: '/architecture/transports',
-    cta: 'HTTP vs stdio',
-  },
-  {
-    n: '04',
-    kicker: 'VISIBILITY',
-    title: 'Your tools, on demand.',
-    body: 'Per-session visibility. Activate animation, vfx, ui, testing, or probuilder tools only when needed. Smaller prompt, sharper routing, lower cost.',
-    href: '/guides/tool-groups',
-    cta: 'Tool groups',
-  },
-  {
-    n: '05',
-    kicker: 'DOCS',
-    title: 'Generated, never stale.',
-    body: 'Every tool and resource page is generated from the Python @mcp_for_unity_tool registry. CI fails if the docs drift. Examples you write are preserved across regenerations.',
-    href: '/contributing/docs',
-    cta: 'Docs workflow',
-  },
-  {
-    n: '06',
-    kicker: 'EXTEND',
-    title: 'Plug in custom tools.',
-    body: 'Write a C# attribute, register a new domain. The MCP client picks it up automatically. Project-scoped or global. Full reflection-based dispatch.',
-    href: '/guides/custom-tools',
-    cta: 'Custom tools',
-  },
-];
+function getFeatures(toolCount, toolGroupCount) {
+  return [
+    {
+      n: '01',
+      kicker: 'CONTROL',
+      title: 'Talk to the Editor.',
+      body: `Drive scenes, GameObjects, scripts, assets, prefabs, and materials with natural language. ${toolCount} tools across ${toolGroupCount} groups expose Unity's editing surface to your MCP client.`,
+      href: '/reference/tools',
+      cta: 'Browse tools',
+    },
+    {
+      n: '02',
+      kicker: 'ROUTING',
+      title: 'Multiple Editors, one session.',
+      body: 'Open several Unity Editors at once and aim a single MCP session at any of them. Per-call routing for cross-project prompts; session isolation across MCP clients.',
+      href: '/guides/multi-instance',
+      cta: 'How routing works',
+    },
+    {
+      n: '03',
+      kicker: 'TRANSPORT',
+      title: 'HTTP or stdio. Your call.',
+      body: 'HTTP for multi-agent, remote-hosted, and shared workflows. Stdio for single-client setups like Claude Desktop. Auto-detected and auto-configured.',
+      href: '/architecture/transports',
+      cta: 'HTTP vs stdio',
+    },
+    {
+      n: '04',
+      kicker: 'VISIBILITY',
+      title: 'Your tools, on demand.',
+      body: 'Per-session visibility. Activate animation, vfx, ui, testing, or probuilder tools only when needed. Smaller prompt, sharper routing, lower cost.',
+      href: '/guides/tool-groups',
+      cta: 'Tool groups',
+    },
+    {
+      n: '05',
+      kicker: 'DOCS',
+      title: 'Generated, never stale.',
+      body: 'Every tool and resource page is generated from the Python @mcp_for_unity_tool registry. CI fails if the docs drift. Examples you write are preserved across regenerations.',
+      href: '/contributing/docs',
+      cta: 'Docs workflow',
+    },
+    {
+      n: '06',
+      kicker: 'EXTEND',
+      title: 'Plug in custom tools.',
+      body: 'Write a C# attribute, register a new domain. The MCP client picks it up automatically. Project-scoped or global. Full reflection-based dispatch.',
+      href: '/guides/custom-tools',
+      cta: 'Custom tools',
+    },
+  ];
+}
 
 export default function HomeFeatures() {
+  const { siteConfig } = useDocusaurusContext();
+  const toolCount = siteConfig.customFields?.toolCount ?? 47;
+  const toolGroupCount = siteConfig.customFields?.toolGroupCount ?? 10;
+  const features = getFeatures(toolCount, toolGroupCount);
+
   return (
     <section className={styles.section}>
       <div className={styles.inner}>

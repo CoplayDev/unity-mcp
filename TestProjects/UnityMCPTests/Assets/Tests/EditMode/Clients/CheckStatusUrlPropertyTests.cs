@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using MCPForUnity.Editor.Clients;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Models;
 using NUnit.Framework;
+using UnityEditor;
 
 namespace MCPForUnityTests.Editor.Clients
 {
@@ -41,6 +43,41 @@ namespace MCPForUnityTests.Editor.Clients
         [Test]
         public void CheckStatus_DetectsHttp_WhenHttpUrlProperty()
             => AssertHttpDetected("httpUrl");
+
+        // Prerelease packages expect "mcpforunityserver>=0.0.0a0". On Windows, Mono's
+        // Path.GetFullPath throws on '>', so a correct stdio config read as VersionMismatch
+        // and the auto-rewrite path rewrote it every startup.
+        [Test]
+        public void CheckStatus_Configured_WhenStdioUsesPrereleasePackageRange()
+        {
+            const string source = "mcpforunityserver>=0.0.0a0";
+            bool hadOverride = EditorPrefs.HasKey(EditorPrefKeys.GitUrlOverride);
+            string originalOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
+            try
+            {
+                EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, source);
+                string configPath = Path.Combine(_tempDir, "stdio.json");
+                File.WriteAllText(configPath,
+                    "{\"mcpServers\":{\"unityMCP\":{\"command\":\"uvx\",\"args\":[\"--prerelease\",\"explicit\",\"--from\",\""
+                    + source + "\",\"mcp-for-unity\",\"--transport\",\"stdio\"]}}}");
+                var client = new McpClient
+                {
+                    name = "Fake",
+                    windowsConfigPath = configPath,
+                    macConfigPath = configPath,
+                    linuxConfigPath = configPath,
+                };
+
+                var status = new FakeJsonConfigurator(client).CheckStatus(attemptAutoRewrite: false);
+
+                Assert.AreEqual(McpStatus.Configured, status, client.configStatus);
+            }
+            finally
+            {
+                if (hadOverride) EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, originalOverride);
+                else EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
+            }
+        }
 
         private void AssertHttpDetected(string urlProperty)
         {

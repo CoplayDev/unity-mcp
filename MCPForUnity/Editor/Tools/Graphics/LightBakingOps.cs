@@ -69,7 +69,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 {
                     isRunning = running,
                     bakedGI = Lightmapping.bakedGI,
-                    realtimeGI = Lightmapping.realtimeGI,
+                    realtimeGI = GetRealtimeGI(),
                     lightmapCount = LightmapSettings.lightmaps.Length
                 }
             };
@@ -143,8 +143,8 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 ["name"] = settings.name,
                 ["path"] = AssetDatabase.GetAssetPath(settings),
                 ["bakedGI"] = settings.bakedGI,
-                ["realtimeGI"] = settings.realtimeGI,
-                ["lightmapper"] = settings.lightmapper.ToString(),
+                ["realtimeGI"] = GetRealtimeGI(settings),
+                ["lightmapper"] = GetLightmapperName(settings),
                 ["lightmapResolution"] = settings.lightmapResolution,
                 ["lightmapMaxSize"] = settings.lightmapMaxSize,
                 ["directSampleCount"] = settings.directSampleCount,
@@ -162,7 +162,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             return new
             {
                 success = true,
-                message = $"Lighting settings: {settings.lightmapper}, resolution {settings.lightmapResolution}.",
+                message = $"Lighting settings: {GetLightmapperName(settings)}, resolution {settings.lightmapResolution}.",
                 data
             };
         }
@@ -443,6 +443,37 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 data["maxBounces"] = prop.GetValue(settings);
         }
 
+        private static string GetLightmapperName(LightingSettings settings)
+        {
+#if UNITY_7000_0_OR_NEWER
+            return UnityEditor.Rendering.EditorGraphicsSettings.defaultLightBaker.ToString();
+#else
+            return settings.lightmapper.ToString();
+#endif
+        }
+
+        private static bool GetRealtimeGI()
+        {
+            var property = typeof(Lightmapping).GetProperty("realtimeGI");
+            return property != null && (bool)property.GetValue(null);
+        }
+
+        // Enlighten has no replacement toggle. Keep its legacy tool parameter optional
+        // through reflection so versions that remove the property remain supported.
+        private static bool GetRealtimeGI(LightingSettings settings)
+        {
+            var property = typeof(LightingSettings).GetProperty("realtimeGI");
+            return settings != null && property != null && (bool)property.GetValue(settings);
+        }
+
+        private static bool TrySetRealtimeGI(LightingSettings settings, bool enabled)
+        {
+            var property = typeof(LightingSettings).GetProperty("realtimeGI");
+            if (settings == null || property == null || !property.CanWrite) return false;
+            property.SetValue(settings, enabled);
+            return true;
+        }
+
         // --- Helper: Set a single lighting setting by name ---
         private static bool TrySetLightingSetting(LightingSettings settings, string name, JToken value)
         {
@@ -455,15 +486,22 @@ namespace MCPForUnity.Editor.Tools.Graphics
 
                 case "realtimegi":
                 case "realtime_gi":
-                    settings.realtimeGI = ParamCoercion.CoerceBool(value, settings.realtimeGI);
-                    return true;
+                    return TrySetRealtimeGI(settings, ParamCoercion.CoerceBool(value, GetRealtimeGI(settings)));
 
                 case "lightmapper":
+#if UNITY_7000_0_OR_NEWER
+                    if (TryParseEnum<UnityEditor.Rendering.LightBaker>(value, out var baker))
+                    {
+                        UnityEditor.Rendering.EditorGraphicsSettings.defaultLightBaker = baker;
+                        return true;
+                    }
+#else
                     if (TryParseEnum<LightingSettings.Lightmapper>(value, out var lm))
                     {
                         settings.lightmapper = lm;
                         return true;
                     }
+#endif
                     return false;
 
                 case "lightmapresolution":

@@ -16,7 +16,7 @@ using UnityEngine.UIElements;
 namespace MCPForUnity.Editor.Windows.Components.Tools
 {
     /// <summary>
-    /// Controller for the Tools section inside the MCP For Unity editor window.
+    /// Controller for the Tools section inside the MCP for Unity editor window.
     /// Provides discovery, filtering, and per-tool enablement toggles.
     /// Tools are grouped by their Group property (core first, then alphabetical).
     /// </summary>
@@ -46,6 +46,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             { "testing", "Testing" },
             { "probuilder", "ProBuilder — Experimental" },
             { "profiling", "Profiling & Frame Debugger" },
+            { "asset_gen", "Asset Gen" },
         };
 
         public VisualElement Root { get; }

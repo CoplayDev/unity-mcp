@@ -65,6 +65,25 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// How long the configured port may keep returning AddressAlreadyInUse before the
+        /// bridge gives up on it and discovers a new one. The common cause of a transient
+        /// conflict is our own previous listener whose OS socket has not been released yet
+        /// after a domain reload (slower on Windows/macOS); this window covers that race so
+        /// the bridge keeps the configured port instead of stranding the client on the
+        /// orphan (#1173).
+        /// </summary>
+        public const double BusyPortFallbackWindowSeconds = 3.0;
+
+        /// <summary>
+        /// Decide whether a configured port that keeps reporting AddressAlreadyInUse should be
+        /// abandoned for a freshly discovered port. Returns false (keep retrying the same port)
+        /// until it has been continuously busy for <see cref="BusyPortFallbackWindowSeconds"/>,
+        /// which distinguishes a domain-reload socket-release race from a foreign occupant (#1173).
+        /// </summary>
+        public static bool ShouldAbandonBusyPort(double busyForSeconds)
+            => busyForSeconds >= BusyPortFallbackWindowSeconds;
+
+        /// <summary>
         /// Persist a user-selected port and return the value actually stored.
         /// If <paramref name="port"/> is unavailable, the next available port is chosen instead.
         /// </summary>

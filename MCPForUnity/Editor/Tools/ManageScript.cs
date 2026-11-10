@@ -14,7 +14,6 @@ using System.Security.Cryptography;
 #if USE_ROSLYN
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Formatting;
 #endif
 
 #if UNITY_EDITOR
@@ -740,16 +739,6 @@ namespace MCPForUnity.Editor.Tools
                     int endLineRos = firstLine + 5;
                     return new ErrorResponse("syntax_error", new { status = "syntax_error", diagnostics, evidenceWindow = new { startLine = startLineRos, endLine = endLineRos } });
                 }
-
-                // Optional formatting
-                try
-                {
-                    var root = tree.GetRoot();
-                    var workspace = new AdhocWorkspace();
-                    root = Microsoft.CodeAnalysis.Formatting.Formatter.Format(root, workspace);
-                    working = root.ToFullString();
-                }
-                catch { }
             }
 #endif
 
@@ -2361,7 +2350,7 @@ namespace MCPForUnity.Editor.Tools
                 bool hasErrors = false;
                 foreach (var diagnostic in diagnostics)
                 {
-                    string severity = diagnostic.Severity.ToString().ToUpper();
+                    string severity = diagnostic.Severity.ToString().ToUpperInvariant();
                     string message = $"{severity}: {diagnostic.GetMessage()}";
                     
                     if (diagnostic.Severity == DiagnosticSeverity.Error)
@@ -2758,6 +2747,14 @@ namespace MCPForUnity.Editor.Tools
                 string returnType = sm.Groups[1].Value;
                 string methodName = sm.Groups[2].Value;
                 if (string.Equals(returnType, "new", StringComparison.Ordinal)) continue; // constructor invocation, not a method declaration
+                // A punctuation "return type" means this match is a CALL, not a declaration:
+                // the opening brace of a method body ("{ Foo();") or an expression-bodied
+                // member ("=> Foo();"). Both sit at class-member depth, so the brace-depth
+                // guard below cannot reject them.
+                if (returnType.Length == 0) continue;
+                char returnTypeStart = returnType[0];
+                if (!char.IsLetter(returnTypeStart) && returnTypeStart != '_'
+                    && returnTypeStart != '@' && returnTypeStart != '(') continue;
                 if (IsCSharpKeyword(methodName)) continue;
                 int paramCount = CountTopLevelParams(sm.Groups[3].Value);
                 string paramTypes = ExtractParamTypes(sm.Groups[3].Value);

@@ -10,7 +10,7 @@ description: The repo-root manifest.json — what it describes, why it ships, an
 
 The `manifest.json` at the repo root describes MCP for Unity as a package — independent of Unity's UPM `package.json` (which lives at `MCPForUnity/package.json`). It's used by MCP marketplaces and aggregators to surface the project's metadata, server invocation, and tool catalog.
 
-If you're adding a new MCP tool, update [the tool registry](/architecture/python-layers) and let CI's drift check fail any stale entry — the generator keeps the docs in sync. The `tools` block in `manifest.json` is a separate, hand-maintained surface (see Notes below).
+If you're adding a new MCP tool, update [the tool registry](/architecture/python-layers) and let CI's drift check fail any stale entry — the generator keeps the docs in sync. The `tools` block in `manifest.json` is edited by hand, but `Server/tests/test_manifest_tools.py` fails unless it lists exactly the registered tools (see [`tools`](#tools) below).
 
 ## Top-level fields
 
@@ -55,7 +55,7 @@ Tells aggregators how to launch the Python server.
 
 A flat array of `{ name, description }` entries listing every MCP tool the server exposes. Aggregators use it for search and category surfaces without having to introspect the live registry.
 
-This list is hand-maintained for now. The authoritative count and metadata live in the Python tool registry — see the [Tool reference](/reference/tools) for the generated catalog with full parameter docs.
+The entries are written by hand, but `Server/tests/test_manifest_tools.py` keeps the list equal to the Python tool registry: it fails when a registered tool is missing, when an entry names a tool that is not registered, or when a name appears twice. It compares names only, not descriptions. See the [Tool reference](/reference/tools) for the generated catalog with full parameter docs.
 
 ## Notes
 

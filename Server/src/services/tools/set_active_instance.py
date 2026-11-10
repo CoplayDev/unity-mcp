@@ -17,6 +17,11 @@ from core.config import config
     description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
     annotations=ToolAnnotations(
         title="Set Active Instance",
+        # Changes session-local routing only; touches nothing in the project.
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def set_active_instance(
@@ -54,7 +59,7 @@ async def set_active_instance(
             "message": f"Active instance set to {resolved_id}",
             "data": {
                 "instance": resolved_id,
-                "session_key": await middleware.get_session_key(ctx),
+                "session_id": getattr(ctx, "session_id", None),
             },
         }
 
@@ -138,18 +143,15 @@ async def set_active_instance(
             "error": "Internal error: Instance resolution failed."
         }
 
-    # Store selection in middleware (session-scoped)
+    # Store selection in middleware (session-scoped via FastMCP context state).
     middleware = get_unity_instance_middleware()
-    # We use middleware.set_active_instance to persist the selection.
-    # The session key is an internal detail but useful for debugging response.
     await middleware.set_active_instance(ctx, resolved.id)
-    session_key = await middleware.get_session_key(ctx)
 
     return {
         "success": True,
         "message": f"Active instance set to {resolved.id}",
         "data": {
             "instance": resolved.id,
-            "session_key": session_key,
+            "session_id": getattr(ctx, "session_id", None),
         },
     }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from dataclasses import dataclass
@@ -34,6 +35,11 @@ class ApiKeyService:
     # Request defaults (sensible hardening)
     REQUEST_TIMEOUT: float = 5.0
     MAX_RETRIES: int = 1
+
+    # Confirmed-invalid keys are cached too, so a bad key does not re-hit the auth service on
+    # every call. That also means an unauthenticated caller grows the cache by one entry per
+    # random key it tries; the cap keeps that bounded and negatives are the first to go.
+    MAX_CACHE_ENTRIES: int = 1024
 
     def __init__(
         self,
@@ -108,24 +114,41 @@ class ApiKeyService:
         # not be cached to avoid locking out users during service outages.
         if result.cacheable:
             async with self._cache_lock:
-                expires_at = time.time() + self._cache_ttl
+                now = time.time()
+                if len(self._cache) >= self.MAX_CACHE_ENTRIES:
+                    for stale in [k for k, v in self._cache.items() if v[3] <= now]:
+                        del self._cache[stale]
+                if len(self._cache) >= self.MAX_CACHE_ENTRIES:
+                    if not result.valid:
+                        # Full of live entries: a negative verdict is not worth evicting
+                        # anything for. The caller still gets the answer.
+                        return result
+                    # Make room for a validated key: drop a negative entry if there is
+                    # one, otherwise the validated key that expires soonest.
+                    negatives = [k for k, v in self._cache.items() if not v[0]]
+                    pool = negatives or list(self._cache)
+                    del self._cache[min(pool, key=lambda k: self._cache[k][3])]
                 self._cache[api_key] = (
                     result.valid,
                     result.user_id,
                     result.metadata,
-                    expires_at,
+                    now + self._cache_ttl,
                 )
 
         return result
+
+    @staticmethod
+    def _fingerprint(api_key: str) -> str:
+        """One-way handle for log lines. Eight literal characters of a key were enough to
+        correlate a leaked log with a key; a hash prefix correlates without exposing any."""
+        return "sha256:" + hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:12]
 
     async def _validate_external(self, api_key: str) -> ValidationResult:
         """Call external validation endpoint.
 
         Failure mode: fail closed (treat as invalid on errors).
         """
-        # Redact API key from logs
-        redacted_key = f"{api_key[:4]}...{api_key[-4:]}" if len(
-            api_key) > 8 else "***"
+        redacted_key = self._fingerprint(api_key)
 
         for attempt in range(self.MAX_RETRIES + 1):
             try:

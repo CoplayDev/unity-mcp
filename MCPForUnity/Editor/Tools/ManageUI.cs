@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -646,7 +647,7 @@ namespace MCPForUnity.Editor.Tools
                 result = token.ToObject<float>();
                 return true;
             }
-            return float.TryParse(token.ToString(), out result);
+            return float.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out result);
         }
 
         private static bool TryInt(JToken token, out int result)
@@ -658,7 +659,7 @@ namespace MCPForUnity.Editor.Tools
                 result = token.ToObject<int>();
                 return true;
             }
-            return int.TryParse(token.ToString(), out result);
+            return int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
         }
 
         private static bool TryParseColor(JToken token, out Color color)
@@ -865,6 +866,14 @@ namespace MCPForUnity.Editor.Tools
                 string playFullPath = Path.Combine(resolvedFolderAbs, resolvedPlayName).Replace('\\', '/');
                 playFullPath = EnsureUniqueFilePath(playFullPath);
                 string playProjectRelPath = ScreenshotUtility.ToProjectRelativePath(playFullPath);
+
+                if (s_pendingCaptureDone && s_pendingCaptureTex == null)
+                {
+                    s_pendingCaptureDone = false;
+                    s_pendingCaptureStarted = false;
+                    return new ErrorResponse(
+                        "Play-mode screenshot timed out or captured nothing. Keep the Game view visible and the editor unpaused.");
+                }
 
                 // ── Case 1: capture is ready ──────────────────────────────────────
                 if (s_pendingCaptureDone && s_pendingCaptureTex != null)

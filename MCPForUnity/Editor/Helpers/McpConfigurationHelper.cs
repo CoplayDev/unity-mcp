@@ -212,6 +212,9 @@ namespace MCPForUnity.Editor.Helpers
         public static bool PathsEqual(string a, string b)
         {
             if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            // Callers also pass package specs such as "mcpforunityserver>=0.0.0a0". On Windows,
+            // Mono's Path.GetFullPath throws on '>', so identical text has to match first.
+            if (string.Equals(a.Trim(), b.Trim(), StringComparison.Ordinal)) return true;
             try
             {
                 string na = Path.GetFullPath(a.Trim());

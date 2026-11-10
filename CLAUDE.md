@@ -70,7 +70,7 @@ from services.registry import mcp_for_unity_tool
 
 @mcp_for_unity_tool(
     description="Does something in Unity.",
-    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder, profiling, docs
+    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder, profiling, docs, asset_gen
 )
 async def manage_something(
     ctx: Context,
@@ -165,7 +165,24 @@ cd Server && uv run pytest tests/ -k "test_create_material" -v
 # Local multi-version compile check (parity with CI matrix, see tools/unity-versions.json)
 tools/check-unity-versions.sh           # compile-only across installed Unity Hub editors
 tools/check-unity-versions.sh --full    # full EditMode test run
+
+# License-free Roslyn compile of MCPForUnity, the same gate compile-check.yml runs on every PR.
+# No Editor launch, ~1 min per version. EXTRA_REFS must hold Newtonsoft.Json.dll and
+# nunit.framework.dll (copy them from TestProjects/UnityMCPTests/Library/PackageCache);
+# the script header has the full recipe, including the Windows/Git Bash form.
+UNITY_DATA=/path/to/Editor/Data UNITY_VERSION=2021.3.45f2 EXTRA_REFS=/path/to/refs tools/compile-check.sh
 ```
+
+#### Local headless test harness
+One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge — the same entrypoint CI uses (`.github/workflows/e2e-bridge.yml`):
+
+```bash
+python tools/local_harness.py
+```
+
+Key flags: `--legs smoke,editmode,playmode` (subset to run), `--project-path` (target project, default `TestProjects/UnityMCPTests`), `--reuse` (attach to an already-resident bridge instead of booting one), `--keep-alive` (leave the Editor running after the legs), `--no-warmup` (skip the warm-up import phase).
+
+Exit codes: `0` pass, `1` blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found. Requires a Hub-activated Editor locally (no ULF/serial).
 
 ### Local Development
 1. Set **Server Source Override** in MCP for Unity Advanced Settings to your local `Server/` path

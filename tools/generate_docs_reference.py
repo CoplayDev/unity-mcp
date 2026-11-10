@@ -439,16 +439,18 @@ def render_resources_catalog(resources: list[dict[str, Any]]) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Same text as TOOL_GROUPS in Server/src/services/registry/tool_registry.py, so a fallback run writes the same pages.
 GROUP_BLURBS_FALLBACK = {
-    "core": "Essential scene, script, asset, and editor tools — always on by default.",
-    "docs": "Unity API reflection and documentation lookup.",
-    "vfx": "Visual effects — VFX Graph, shaders, procedural textures.",
-    "animation": "Animator control and AnimationClip creation.",
-    "ui": "UI Toolkit — UXML, USS, UIDocument.",
-    "scripting_ext": "ScriptableObject management.",
-    "testing": "Test runner and async test jobs.",
-    "probuilder": "ProBuilder 3D modeling — requires `com.unity.probuilder`.",
-    "profiling": "Unity Profiler session control, counters, memory snapshots, Frame Debugger.",
+    "core": "Essential scene, script, asset & editor tools (always on by default)",
+    "docs": "Unity API reflection and documentation lookup",
+    "vfx": "Visual effects – VFX Graph, shaders, procedural textures",
+    "animation": "Animator control, AnimationClip creation & 2D sprite-sheet animation",
+    "ui": "UI Toolkit (UXML, USS, UIDocument)",
+    "scripting_ext": "ScriptableObject management",
+    "testing": "Test runner & async test jobs",
+    "probuilder": "ProBuilder 3D modeling – requires com.unity.probuilder package",
+    "profiling": "Unity Profiler session control, counters, memory snapshots & Frame Debugger",
+    "asset_gen": "AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-your-own-key)",
 }
 
 

@@ -89,19 +89,18 @@ def _fetch_via_gh(path: str) -> list[dict] | None:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"gh api failed ({e}); falling back to urllib.", file=sys.stderr)
         return None
-    # `gh api --paginate` concatenates JSON arrays as `][`. Split + parse.
+    # `gh api --paginate` prints one JSON array per page, back to back. Decode them in
+    # turn: replacing every `][` with `,` also rewrote release bodies that contain `][`.
     text = result.stdout.strip()
-    if not text:
-        return []
-    if "][" in text:
-        text = "[" + text.replace("][", ",") + "]"
-        # Now we may have [[..],[..]] — flatten.
-        nested = json.loads(text)
-        flat: list[dict] = []
-        for chunk in nested:
-            flat.extend(chunk if isinstance(chunk, list) else [chunk])
-        return flat
-    return json.loads(text)
+    decoder = json.JSONDecoder()
+    releases: list[dict] = []
+    pos = 0
+    while pos < len(text):
+        page, pos = decoder.raw_decode(text, pos)
+        releases.extend(page)
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+    return releases
 
 
 def _fetch_via_urllib(url: str) -> list[dict]:
@@ -170,6 +169,7 @@ def _minor_key(tag: str) -> str:
 def _normalize_body(body: str | None) -> str:
     if not body:
         return "_No release notes._"
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
     # Trim trailing whitespace; collapse 3+ blank lines.
     body = body.strip()
     body = re.sub(r"\n{3,}", "\n\n", body)
@@ -233,7 +233,8 @@ def render_releases_md(releases: list[dict]) -> str:
     )
     out.append("- [v5 — UnityMcpBridge → MCPForUnity](/migrations/v5)")
     out.append("- [v6 — New Editor Window (UI Toolkit + service architecture)](/migrations/v6)")
-    out.append("- [v8 — HTTP and Stdio support](/migrations/v8)\n")
+    out.append("- [v8 — HTTP and Stdio support](/migrations/v8)")
+    out.append("- [v10 — Asset Generation and Docs Refresh](/migrations/v10)\n")
     return "\n".join(out)
 
 

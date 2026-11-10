@@ -10,7 +10,7 @@ using UnityEngine.UIElements;
 namespace MCPForUnity.Editor.Windows.Components.Resources
 {
     /// <summary>
-    /// Controller for the Resources section inside the MCP For Unity editor window.
+    /// Controller for the Resources section inside the MCP for Unity editor window.
     /// Provides discovery, filtering, and per-resource enablement toggles.
     /// </summary>
     public class McpResourcesSection

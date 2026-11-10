@@ -227,7 +227,7 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b "$BRANCH"
-          git add MCPForUnity/package.json manifest.json "Server/pyproject.toml" Server/README.md
+          git add MCPForUnity/package.json manifest.json "Server/pyproject.toml" Server/uv.lock Server/README.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
@@ -453,6 +453,23 @@ jobs:
           echo "Sync PR did not merge in time."
           gh pr view "$PR_NUMBER" --json state,mergeStateStatus,isDraft -q '{state: .state, mergeStateStatus: .mergeStateStatus, isDraft: .isDraft}'
           exit 1
+
+  sync_release_notes:
+    name: Dispatch release-notes sync
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    # The bump job creates the release with GITHUB_TOKEN, and events made with that token
+    # start no workflows, so sync-releases.yml never sees `release: published`.
+    # workflow_dispatch is exempt from that rule.
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch sync-releases.yml on beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh workflow run sync-releases.yml --repo "$GITHUB_REPOSITORY" --ref beta
 
   publish_docker:
     name: Publish Docker image

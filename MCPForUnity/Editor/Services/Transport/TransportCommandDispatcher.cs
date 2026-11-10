@@ -341,6 +341,19 @@ namespace MCPForUnity.Editor.Services.Transport
 
                 var parameters = command.@params ?? new JObject();
 
+                // An unknown command is the caller's mistake or a version mismatch (a server or
+                // CLI newer than this package), not an Editor fault: answer it without logging
+                // an error and a stack trace to the user's console.
+                if (!CommandRegistry.HasHandler(command.type))
+                {
+                    string unknown = $"Unity has no tool or resource named '{command.type}'. If the MCP server " +
+                        "or CLI is newer than the MCP for Unity package in this project, update the package.";
+                    McpLog.Warn(unknown);
+                    pending.TrySetResult(SerializeError(unknown, command.type));
+                    RemovePending(id, pending);
+                    return;
+                }
+
                 // Block execution of disabled resources
                 var resourceMeta = MCPServiceLocator.ResourceDiscovery.GetResourceMetadata(command.type);
                 if (resourceMeta != null && !MCPServiceLocator.ResourceDiscovery.IsResourceEnabled(command.type))

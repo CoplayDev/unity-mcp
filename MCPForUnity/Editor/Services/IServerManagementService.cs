@@ -12,12 +12,36 @@ namespace MCPForUnity.Editor.Services
         bool ClearUvxCache();
 
         /// <summary>
-        /// Start the local HTTP server in a new terminal window.
-        /// Stops any existing server on the port and clears the uvx cache first.
+        /// Start the local HTTP server headless (no terminal window), redirecting its output to a
+        /// per-port launch log. Stops any existing server on the port and clears stale artifacts first.
         /// </summary>
         /// <param name="quiet">When true, skip confirmation dialogs (used by auto-start).</param>
         /// <returns>True if server was started successfully, false otherwise</returns>
         bool StartLocalHttpServer(bool quiet = false);
+
+        /// <summary>
+        /// Gets the launch-log path for the configured local HTTP server port, or null if unavailable.
+        /// </summary>
+        string GetLocalHttpServerLaunchLogPath();
+
+        /// <summary>
+        /// Returns true while the most-recently launched headless server process is still alive.
+        /// Used by callers to keep waiting for reachability instead of declaring failure prematurely.
+        /// </summary>
+        bool IsManagedServerLaunchProcessAlive();
+
+        /// <summary>
+        /// True when this domain launched the local HTTP server and still holds its Process
+        /// handle. Handles do not survive domain reloads, so false also means "unknown" —
+        /// callers should wait rather than fail fast.
+        /// </summary>
+        bool HasManagedServerLaunchHandle { get; }
+
+        /// <summary>
+        /// Writes a launch-failure report to the Console (Error): the tail of the launch log,
+        /// the log path, and a copy-command hint pointing at the Manual Server Launch foldout.
+        /// </summary>
+        void LogLocalHttpServerLaunchFailure();
 
         /// <summary>
         /// Stop the local HTTP server by finding the process listening on the configured port

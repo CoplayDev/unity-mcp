@@ -24,7 +24,7 @@ Most users don't need this. Enable it when:
 
 The installer downloads the required NuGet packages, places the DLLs in `Assets/Plugins/Roslyn/`, and adds `USE_ROSLYN` to Scripting Define Symbols.
 
-You can also trigger it from the menu: **Window → MCP For Unity → Install Roslyn DLLs**.
+You can also trigger it from the menu: **Window → MCP for Unity → Install Roslyn DLLs**.
 
 ## Manual install (if the installer isn't available)
 

@@ -22,7 +22,7 @@ def shader():
 def read_shader(path: str):
     """Read a shader file.
 
-    \\b
+    \b
     Examples:
         unity-mcp shader read "Assets/Shaders/MyShader.shader"
     """
@@ -69,7 +69,7 @@ def read_shader(path: str):
 def create_shader(name: str, path: str, contents: Optional[str], file_path: Optional[str]):
     """Create a new shader.
 
-    \\b
+    \b
     Examples:
         unity-mcp shader create "MyShader" --path "Assets/Shaders"
         unity-mcp shader create "MyShader" --file local_shader.shader
@@ -155,7 +155,7 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
 def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
     """Update an existing shader.
 
-    \\b
+    \b
     Examples:
         unity-mcp shader update "Assets/Shaders/MyShader.shader" --file updated.shader
         echo "New shader code" | unity-mcp shader update "Assets/Shaders/MyShader.shader"
@@ -203,7 +203,7 @@ def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
 def delete_shader(path: str, force: bool):
     """Delete a shader.
 
-    \\b
+    \b
     Examples:
         unity-mcp shader delete "Assets/Shaders/OldShader.shader"
         unity-mcp shader delete "Assets/Shaders/OldShader.shader" --force

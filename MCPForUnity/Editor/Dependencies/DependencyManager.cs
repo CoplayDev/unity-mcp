@@ -60,6 +60,9 @@ namespace MCPForUnity.Editor.Dependencies
                 var uvStatus = detector.DetectUv();
                 result.Dependencies.Add(uvStatus);
 
+                // Check git (optional: Package Manager Git-URL installs only)
+                result.Dependencies.Add(detector.DetectGit());
+
                 // Generate summary and recommendations
                 result.GenerateSummary();
                 GenerateRecommendations(result, detector);

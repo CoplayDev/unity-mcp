@@ -1,0 +1,169 @@
+name: E2E Bridge Smoke (deterministic, no LLM)
+
+# Boots a headless Unity Editor, starts the Python MCP server's wire path, and
+# drives a fixed sequence of real tool calls with exact assertions
+# (Server/tests/e2e/bridge_smoke.py). Unlike claude-nl-suite.yml this needs
+# NO Anthropic API key -- it is deterministic and cheap, so it can gate PRs and
+# releases. It still needs Unity license secrets to boot the Editor.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "MCPForUnity/Editor/**"
+      - "MCPForUnity/Runtime/**"
+      - "Server/src/**"
+      - "Server/tests/e2e/**"
+      - "tools/local_harness.py"
+      - "tools/ci_unity_license.py"
+      - "tools/tests/test_ci_unity_license.py"
+      - ".github/workflows/e2e-bridge.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UNITY_IMAGE: unityci/editor:ubuntu-2021.3.45f2-linux-il2cpp-3
+
+jobs:
+  license:
+    # Hoisted out of the smoke job so the gate is a JOB-level condition. A step-level `if:`
+    # produces step-conclusion `skipped`, which contributes nothing to the job conclusion,
+    # so this workflow reported a green check having booted no Editor and exercised no tool
+    # call. A job skipped by a job-level `if:` reports "Skipped" in the merge box instead.
+    # Branch protection treats a skipped required check as satisfied, so merges are not blocked.
+    name: Detect Unity license secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      unity_ok: ${{ steps.detect.outputs.unity_ok }}
+    steps:
+      - name: Detect Unity license secrets
+        id: detect
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -e
+          # Only absent secrets skip a fork run. Partial configuration must fail
+          # explicitly in prepare, rather than silently look like missing access.
+          if [ -n "$UNITY_LICENSE$UNITY_EMAIL$UNITY_PASSWORD$UNITY_SERIAL" ]; then
+            echo "unity_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "unity_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::E2E bridge smoke SKIPPED - no license secrets in scope (normal for fork PRs). This check is NOT a pass: nothing was booted or exercised."
+            # The dependent job is gated on this output, so it reports Skipped rather
+            # than a green check. Still say plainly on the run page what did not happen.
+            {
+              echo "## :warning: E2E bridge smoke was SKIPPED"
+              echo
+              echo "No Unity license secrets were in scope, so **no Editor was booted and no tool call was exercised**."
+              echo "The dependent job reports **Skipped** - it did not pass, it did not run."
+              echo
+              echo "GitHub withholds repository secrets from workflow runs triggered by a fork's pull request."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+
+  e2e-bridge:
+    runs-on: ubuntu-24.04
+    needs: license
+    if: needs.license.outputs.unity_ok == 'true'
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install MCP server
+        run: |
+          set -eux
+          uv venv
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          uv pip install -e Server
+
+      # Activate with the same pinned GameCI implementation that runs our tests.
+      # Personal account credentials do not require a professional serial key.
+      - name: Prepare Unity license and activation helpers
+        id: prepare_license
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: python3 tools/ci_unity_license.py prepare
+
+      - name: Activate Unity license
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: python3 tools/ci_unity_license.py activate
+
+      - name: Warm up project (import Library once)
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+        run: |
+          set -euxo pipefail
+          docker run --rm --network host \
+            -e HOME=/root \
+            -v "$RUNNER_TEMP/unity-machine-id:/etc/machine-id:ro" \
+            -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            -v "$RUNNER_TEMP/unity-cache:/root/.cache/unity3d" \
+            "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+              -projectPath "${{ github.workspace }}/TestProjects/UnityMCPTests" \
+              -quit
+
+      - name: Clean old MCP status
+        run: |
+          set -eux
+          mkdir -p "$GITHUB_WORKSPACE/.unity-mcp"
+          rm -f "$GITHUB_WORKSPACE/.unity-mcp"/unity-mcp-status-*.json || true
+
+      - name: Run headless bridge harness (boot + wait + smoke/editmode/playmode)
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+        run: |
+          set -euxo pipefail
+          # In --ci mode the harness drives the DockerLauncher: it runs the same
+          # docker container (repo .unity-mcp status dir, docker liveness/teardown,
+          # log redaction), waits on the status file, derives the instance, then
+          # runs the smoke + EditMode + PlayMode legs over the bridge.
+          python3 tools/local_harness.py --ci \
+            --legs smoke,editmode,playmode \
+            --project-path TestProjects/UnityMCPTests \
+            --reports reports
+
+      - name: Return Unity license seat
+        if: always() && steps.prepare_license.outcome == 'success'
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: python3 tools/ci_unity_license.py return
+
+      - name: Upload E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-bridge-report
+          # The harness snapshots redacted Editor logs before removing its container.
+          path: |
+            reports/junit-*.xml
+            reports/unity-editor-*.log
+          if-no-files-found: ignore

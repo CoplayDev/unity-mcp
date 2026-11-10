@@ -9,12 +9,24 @@ on:
     branches-ignore: [beta, main]
     paths:
       - Server/**
-      - .github/workflows/python-tests.yml
+      - tools/**
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   pull_request:
     branches: [main, beta]
     paths:
       - Server/**
-      - .github/workflows/python-tests.yml
+      - tools/**
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   workflow_dispatch: {}
   workflow_call:
     inputs:
@@ -26,8 +38,14 @@ on:
 
 jobs:
   test:
-    name: Run Python Tests
+    name: Run Python Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the oldest supported version; 3.14 catches changes like the lazy
+        # __annotations__ evaluation from PEP 649.
+        python-version: ["3.10", "3.14"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,22 +58,34 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.10
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           cd Server
-          uv sync
-          uv pip install -e ".[dev]"
+          # --locked fails if uv.lock disagrees with pyproject.toml instead of silently
+          # re-resolving, so a dependency or version bump that forgot `uv lock` shows up here.
+          # The dev extra is resolved in the lock too, so pytest runs against pinned versions
+          # instead of whatever `uv pip install` would fetch today.
+          uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Run tests with coverage
         run: |
           cd Server
           uv run pytest tests/ -v --tb=short --cov --cov-report=xml --cov-report=html --cov-report=term
 
+      - name: Run local harness unit tests (hermetic, no Unity)
+        run: |
+          cd Server
+          uv run python -m pytest "$GITHUB_WORKSPACE/tools/tests/" -v --tb=short
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
-        if: always()
+        if: always() && matrix.python-version == '3.10'
+        # fail_ci_if_error: false does not cover a failed download: v4 crashes on the https
+        # error before it reads that input. This job gates both release pipelines, and a
+        # Codecov outage must not stop a release.
+        continue-on-error: true
         with:
           files: ./Server/coverage.xml
           flags: python
@@ -66,7 +96,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pytest-results
+          name: pytest-results-${{ matrix.python-version }}
           path: |
             Server/.pytest_cache/
             Server/tests/

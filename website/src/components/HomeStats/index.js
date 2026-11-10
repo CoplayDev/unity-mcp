@@ -4,11 +4,13 @@ import styles from './styles.module.css';
 
 export default function HomeStats() {
   const { siteConfig } = useDocusaurusContext();
+  const toolCount = siteConfig.customFields?.toolCount ?? 47;
+  const resourceCount = siteConfig.customFields?.resourceCount ?? 25;
   const clientCount = siteConfig.customFields?.supportedClientCount ?? 0;
 
   const stats = [
-    { value: '43',          unit: 'tools',     label: 'MCP tool surface' },
-    { value: '25',          unit: 'resources', label: 'read-only state' },
+    { value: String(toolCount), unit: 'tools',     label: 'MCP tool surface' },
+    { value: String(resourceCount), unit: 'resources', label: 'read-only state' },
     { value: String(clientCount), unit: 'clients',   label: 'auto-configured' },
     { value: '2021.3 → 6.x', unit: 'lts',       label: 'Unity version range' },
   ];

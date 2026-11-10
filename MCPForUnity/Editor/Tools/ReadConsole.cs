@@ -30,6 +30,19 @@ namespace MCPForUnity.Editor.Tools
         private static FieldInfo _messageField;
         private static FieldInfo _fileField;
         private static FieldInfo _lineField;
+
+        // Optional reflection members: used to neutralize the Console window's own filters
+        // while reading. Absent members degrade to the previous (filter-inheriting) behavior.
+        private static PropertyInfo _consoleFlagsProperty;
+        private static MethodInfo _setFilteringTextMethod;
+        private static MethodInfo _getFilteringTextMethod;
+
+        // Severity bits from the internal UnityEditor.ConsoleWindow.ConsoleFlags enum.
+        private const int ConsoleFlagLogLevelLog = 1 << 7;
+        private const int ConsoleFlagLogLevelWarning = 1 << 8;
+        private const int ConsoleFlagLogLevelError = 1 << 9;
+        private const int ConsoleFlagLogLevelMask =
+            ConsoleFlagLogLevelLog | ConsoleFlagLogLevelWarning | ConsoleFlagLogLevelError;
     
         // Static constructor for reflection setup
         static ReadConsole()
@@ -99,6 +112,13 @@ namespace MCPForUnity.Editor.Tools
                 if (_lineField == null)
                     throw new Exception("Failed to reflect LogEntry.line");
 
+                // Console window UI state. Present on every Unity version this package
+                // supports, but reflected optionally so a future rename degrades to the old
+                // behavior rather than disabling console reads outright.
+                _consoleFlagsProperty = logEntriesType.GetProperty("consoleFlags", staticFlags);
+                _setFilteringTextMethod = logEntriesType.GetMethod("SetFilteringText", staticFlags);
+                _getFilteringTextMethod = logEntriesType.GetMethod("GetFilteringText", staticFlags);
+
                 // (Calibration removed)
 
             }
@@ -115,6 +135,8 @@ namespace MCPForUnity.Editor.Tools
                     _getEntryMethod =
                         null;
                 _modeField = _messageField = _fileField = _lineField = null;
+                _consoleFlagsProperty = null;
+                _setFilteringTextMethod = _getFilteringTextMethod = null;
             }
         }
 
@@ -202,6 +224,99 @@ namespace MCPForUnity.Editor.Tools
 
         // --- Action Implementations ---
 
+        /// <summary>
+        /// Forces the Console window's Log/Warning/Error severity bits on so that
+        /// StartGettingEntries reports every entry regardless of the toolbar toggles.
+        /// </summary>
+        /// <param name="savedConsoleFlags">The flags as they were, for restoration.</param>
+        /// <returns>True when the flags were changed and must be restored.</returns>
+        private static bool TryForceLogLevelFlags(out int savedConsoleFlags)
+        {
+            savedConsoleFlags = 0;
+            if (_consoleFlagsProperty == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                savedConsoleFlags = (int)_consoleFlagsProperty.GetValue(null);
+                int forcedFlags = savedConsoleFlags | ConsoleFlagLogLevelMask;
+                if (forcedFlags == savedConsoleFlags)
+                {
+                    return false; // Nothing is hidden; leave the property untouched.
+                }
+
+                _consoleFlagsProperty.SetValue(null, forcedFlags);
+                return true;
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn(
+                    $"[ReadConsole] Could not override console severity flags; entries hidden by the Console window may be missing: {e.Message}"
+                );
+                return false;
+            }
+        }
+
+        private static void RestoreConsoleFlags(int savedConsoleFlags)
+        {
+            try
+            {
+                _consoleFlagsProperty.SetValue(null, savedConsoleFlags);
+            }
+            catch (Exception e)
+            {
+                McpLog.Error($"[ReadConsole] Failed to restore console severity flags: {e}");
+            }
+        }
+
+        /// <summary>
+        /// Clears the Console window's search query for the duration of a read. Only clears it
+        /// when it can also be read back, so a user's search is never silently discarded.
+        /// </summary>
+        /// <param name="savedFilteringText">The query as it was, for restoration.</param>
+        /// <returns>True when the query was cleared and must be restored.</returns>
+        private static bool TryClearFilteringText(out string savedFilteringText)
+        {
+            savedFilteringText = null;
+            if (_setFilteringTextMethod == null || _getFilteringTextMethod == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                savedFilteringText = _getFilteringTextMethod.Invoke(null, null) as string;
+                if (string.IsNullOrEmpty(savedFilteringText))
+                {
+                    return false; // No search query active; nothing to neutralize.
+                }
+
+                _setFilteringTextMethod.Invoke(null, new object[] { string.Empty });
+                return true;
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn(
+                    $"[ReadConsole] Could not clear the console search filter; entries hidden by it may be missing: {e.Message}"
+                );
+                return false;
+            }
+        }
+
+        private static void RestoreFilteringText(string savedFilteringText)
+        {
+            try
+            {
+                _setFilteringTextMethod.Invoke(null, new object[] { savedFilteringText });
+            }
+            catch (Exception e)
+            {
+                McpLog.Error($"[ReadConsole] Failed to restore the console search filter: {e}");
+            }
+        }
+
         private static object ClearConsole()
         {
             try
@@ -246,8 +361,20 @@ namespace MCPForUnity.Editor.Tools
             int resolvedCursor = Mathf.Max(0, cursor ?? 0);
             int pageEndExclusive = resolvedCursor + resolvedPageSize;
 
+            // LogEntries filtering state is global and shared with the Console window, so a
+            // severity toggle switched off or a leftover search query in the toolbar silently
+            // starves this tool of entries. Neutralize both for the duration of the read; the
+            // tool applies its own 'types' and 'filterText' arguments instead.
+            int savedConsoleFlags = 0;
+            bool consoleFlagsOverridden = false;
+            string savedFilteringText = null;
+            bool filteringTextOverridden = false;
+
             try
             {
+                consoleFlagsOverridden = TryForceLogLevelFlags(out savedConsoleFlags);
+                filteringTextOverridden = TryClearFilteringText(out savedFilteringText);
+
                 // LogEntries requires calling Start/Stop around GetEntries/GetEntryInternal.
                 // StartGettingEntries() returns the entry count — use it instead of GetCount()
                 // which may return stale values within an active iteration session.
@@ -285,13 +412,9 @@ namespace MCPForUnity.Editor.Tools
                     // (Calibration removed)
 
                     // --- Filtering ---
-                    // Prefer classifying severity from message/stacktrace; fallback to mode bits if needed
-                    LogType unityType = InferTypeFromMessage(message);
-                    bool isExplicitDebug = IsExplicitDebugLog(message);
-                    if (!isExplicitDebug && unityType == LogType.Log)
-                    {
-                        unityType = GetLogTypeFromMode(mode);
-                    }
+                    // The mode bits carry Unity's own type. The message text does not: with Full
+                    // stack traces its frames contain words like "Exception" for any log (#1433).
+                    LogType unityType = GetLogTypeFromMode(mode);
 
                     bool want;
                     // Treat Exception/Assert as errors for filtering convenience
@@ -319,16 +442,7 @@ namespace MCPForUnity.Editor.Tools
                         continue;
                     }
 
-                    // --- Formatting ---
-                    string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
-                    // Always get first line for the message, use full message only if no stack trace exists
-                    string[] messageLines = message.Split(
-                        new[] { '\n', '\r' },
-                        StringSplitOptions.RemoveEmptyEntries
-                    );
-                    string messageOnly = messageLines.Length > 0 ? messageLines[0] : message;
-
-                    // If not including stacktrace, ensure we only show the first line
+                    var (messageOnly, stackTrace) = SplitMessageAndStackTrace(message);
                     if (!includeStacktrace)
                     {
                         stackTrace = null;
@@ -401,6 +515,18 @@ namespace MCPForUnity.Editor.Tools
                     McpLog.Error($"[ReadConsole] Failed to call EndGettingEntries: {e}");
                     // Don't return error here as we might have valid data, but log it.
                 }
+
+                // Restore the Console window's filters once the iteration session is closed,
+                // so the user's view is left exactly as they had it.
+                if (filteringTextOverridden)
+                {
+                    RestoreFilteringText(savedFilteringText);
+                }
+
+                if (consoleFlagsOverridden)
+                {
+                    RestoreConsoleFlags(savedConsoleFlags);
+                }
             }
 
             if (usePaging)
@@ -432,96 +558,79 @@ namespace MCPForUnity.Editor.Tools
 
         // --- Internal Helpers ---
 
-        // Mapping bits from LogEntry.mode. These may vary by Unity version.
+        // Mapping bits from LogEntry.mode, mirroring UnityEditor.ConsoleWindow.Mode.
+        // These values are stable from 2021.3 through 6000.x.
         private const int ModeBitError = 1 << 0;
         private const int ModeBitAssert = 1 << 1;
-        private const int ModeBitWarning = 1 << 2;
-        private const int ModeBitLog = 1 << 3;
-        private const int ModeBitException = 1 << 4; // often combined with Error bits
-        private const int ModeBitScriptingError = 1 << 9;
-        private const int ModeBitScriptingWarning = 1 << 10;
-        private const int ModeBitScriptingLog = 1 << 11;
-        private const int ModeBitScriptingException = 1 << 18;
-        private const int ModeBitScriptingAssertion = 1 << 22;
+        private const int ModeBitLog = 1 << 2;
+        private const int ModeBitFatal = 1 << 4;
+        private const int ModeBitAssetImportError = 1 << 6;
+        private const int ModeBitAssetImportWarning = 1 << 7;
+        private const int ModeBitScriptingError = 1 << 8;
+        private const int ModeBitScriptingWarning = 1 << 9;
+        private const int ModeBitScriptingLog = 1 << 10;
+        private const int ModeBitScriptCompileError = 1 << 11;
+        private const int ModeBitScriptCompileWarning = 1 << 12;
+        private const int ModeBitStickyError = 1 << 13;
+        private const int ModeBitScriptingException = 1 << 17;
+        private const int ModeBitScriptingAssertion = 1 << 21;
+        private const int ModeBitVisualScriptingError = 1 << 22;
 
-        private static LogType GetLogTypeFromMode(int mode)
+        private const int ModeMaskError = ModeBitError
+            | ModeBitFatal
+            | ModeBitAssetImportError
+            | ModeBitScriptingError
+            | ModeBitScriptCompileError
+            | ModeBitStickyError
+            | ModeBitVisualScriptingError;
+
+        private const int ModeMaskWarning = ModeBitAssetImportWarning
+            | ModeBitScriptingWarning
+            | ModeBitScriptCompileWarning;
+
+        internal static LogType GetLogTypeFromMode(int mode)
         {
-            // Preserve Unity's real type (no remapping); bits may vary by version
-            if ((mode & (ModeBitException | ModeBitScriptingException)) != 0) return LogType.Exception;
-            if ((mode & (ModeBitError | ModeBitScriptingError)) != 0) return LogType.Error;
+            // Preserve Unity's real type (no remapping). Order matters: an exception
+            // also carries the Error bit, and an assertion also carries Assert.
+            if ((mode & ModeBitScriptingException) != 0) return LogType.Exception;
             if ((mode & (ModeBitAssert | ModeBitScriptingAssertion)) != 0) return LogType.Assert;
-            if ((mode & (ModeBitWarning | ModeBitScriptingWarning)) != 0) return LogType.Warning;
+            if ((mode & ModeMaskError) != 0) return LogType.Error;
+            if ((mode & ModeMaskWarning) != 0) return LogType.Warning;
             return LogType.Log;
         }
 
         // (Calibration helpers removed)
 
         /// <summary>
-        /// Classifies severity using message/stacktrace content. Works across Unity versions.
+        /// Splits a Unity log message into its body and appended stack trace.
+        /// Unity concatenates both, separated by newlines, so the body may span
+        /// several lines before the stack trace begins.
         /// </summary>
-        private static LogType InferTypeFromMessage(string fullMessage)
-        {
-            if (string.IsNullOrEmpty(fullMessage)) return LogType.Log;
-
-            // Fast path: look for explicit Debug API names in the appended stack trace
-            // e.g., "UnityEngine.Debug:LogError (object)" or "LogWarning"
-            if (fullMessage.IndexOf("LogError", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Error;
-            if (fullMessage.IndexOf("LogWarning", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Warning;
-
-            // Compiler diagnostics (C#): "warning CSxxxx" / "error CSxxxx"
-            if (fullMessage.IndexOf(" warning CS", StringComparison.OrdinalIgnoreCase) >= 0
-                || fullMessage.IndexOf(": warning CS", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Warning;
-            if (fullMessage.IndexOf(" error CS", StringComparison.OrdinalIgnoreCase) >= 0
-                || fullMessage.IndexOf(": error CS", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Error;
-
-            // Exceptions (avoid misclassifying compiler diagnostics)
-            if (fullMessage.IndexOf("Exception", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Exception;
-
-            // Unity assertions
-            if (fullMessage.IndexOf("Assertion", StringComparison.OrdinalIgnoreCase) >= 0)
-                return LogType.Assert;
-
-            return LogType.Log;
-        }
-
-        private static bool IsExplicitDebugLog(string fullMessage)
-        {
-            if (string.IsNullOrEmpty(fullMessage)) return false;
-            if (fullMessage.IndexOf("Debug:Log (", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            if (fullMessage.IndexOf("UnityEngine.Debug:Log (", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            return false;
-        }
-
-        /// <summary>
-        /// Attempts to extract the stack trace part from a log message.
-        /// Unity log messages often have the stack trace appended after the main message,
-        /// starting on a new line and typically indented or beginning with "at ".
-        /// </summary>
-        /// <param name="fullMessage">The complete log message including potential stack trace.</param>
-        /// <returns>The extracted stack trace string, or null if none is found.</returns>
-        private static string ExtractStackTrace(string fullMessage)
+        /// <param name="fullMessage">The complete log message including any appended stack trace.</param>
+        /// <returns>The message body (line endings normalized to "\n", internal blank lines preserved) and the stack trace, or null when none is found.</returns>
+        internal static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
-                return null;
+                return (fullMessage, null);
 
-            // Split into lines, removing empty ones to handle different line endings gracefully.
-            // Using StringSplitOptions.None might be better if empty lines matter within stack trace, but RemoveEmptyEntries is usually safer here.
-            string[] lines = fullMessage.Split(
-                new[] { '\r', '\n' },
-                StringSplitOptions.RemoveEmptyEntries
-            );
+            string[] lines = fullMessage.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
 
             // If there's only one line or less, there's no separate stack trace.
             if (lines.Length <= 1)
-                return null;
+                return (fullMessage, null);
 
-            int stackStartIndex = -1;
+            int stackStartIndex = FindStackStartIndex(lines);
+            if (stackStartIndex <= 0)
+                return (string.Join("\n", lines), null);
 
+            return (
+                string.Join("\n", lines.Take(stackStartIndex)),
+                string.Join("\n", lines.Skip(stackStartIndex))
+            );
+        }
+
+        private static int FindStackStartIndex(string[] lines)
+        {
             // Start checking from the second line onwards.
             for (int i = 1; i < lines.Length; ++i)
             {
@@ -531,6 +640,7 @@ namespace MCPForUnity.Editor.Tools
                 // Check for common stack trace patterns.
                 if (
                     trimmedLine.StartsWith("at ")
+                    || IsNativeStackFrame(trimmedLine)
                     || trimmedLine.StartsWith("UnityEngine.")
                     || trimmedLine.StartsWith("UnityEditor.")
                     || trimmedLine.Contains("(at ")
@@ -543,21 +653,31 @@ namespace MCPForUnity.Editor.Tools
                     )
                 )
                 {
-                    stackStartIndex = i;
-                    break; // Found the likely start of the stack trace
+                    return i; // Found the likely start of the stack trace
                 }
             }
 
-            // If a potential start index was found...
-            if (stackStartIndex > 0)
-            {
-                // Join the lines from the stack start index onwards using standard newline characters.
-                // This reconstructs the stack trace part of the message.
-                return string.Join("\n", lines.Skip(stackStartIndex));
-            }
+            return -1;
+        }
 
-            // No clear stack trace found based on the patterns.
-            return null;
+        // Native frames Unity appends when Stack Trace Logging is set to Full, e.g.
+        // "0x00007ffd387f224e (Unity) StackWalker::ShowCallstack".
+        private static bool IsNativeStackFrame(string line)
+        {
+            if (!line.StartsWith("0x", StringComparison.Ordinal))
+                return false;
+
+            int i = 2;
+            while (i < line.Length && Uri.IsHexDigit(line[i]))
+                i++;
+
+            // A pointer-width address, a "(Module)" label and a symbol after it.
+            int digits = i - 2;
+            if ((digits != 8 && digits != 16) || string.CompareOrdinal(line, i, " (", 0, 2) != 0)
+                return false;
+
+            int close = line.IndexOf(") ", i + 2, StringComparison.Ordinal);
+            return close > i + 2 && close + 2 < line.Length;
         }
 
         /* LogEntry.mode bits exploration (based on Unity decompilation/observation):

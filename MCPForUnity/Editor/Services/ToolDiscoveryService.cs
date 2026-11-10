@@ -23,30 +23,19 @@ namespace MCPForUnity.Editor.Services
 
             _cachedTools = new Dictionary<string, ToolMetadata>();
 
-            // Primary scan via TypeCache (fast, but can miss project assemblies in some domain-reload states)
-            var toolTypes = TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>();
-
-            // Fallback scan via AppDomain (slower but exhaustive; mirrors CommandRegistry behaviour)
-            var appDomainTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic)
-                .SelectMany(a =>
-                {
-                    try { return a.GetTypes(); }
-                    catch (Exception ex)
-                    {
-                        McpLog.Warn($"Failed to reflect types from assembly {a.FullName}: {ex.Message}");
-                        return new Type[0];
-                    }
-                })
-                .Where(t => t.GetCustomAttribute<McpForUnityToolAttribute>() != null);
-
-            // Merge both scans, deduplicating by type
-            var allToolTypes = toolTypes
-                .Concat(appDomainTypes)
-                .Distinct()
-                .ToList();
-
-            foreach (var type in allToolTypes)
+            // TypeCache is Unity's precomputed attribute index, rebuilt once per domain reload.
+            // This used to query it and then ALSO materialise every type in every loaded assembly
+            // and call GetCustomAttribute on each one, before merging the two sets — so the fast
+            // path never actually saved anything (issue #1336). The result is cached, so the walk
+            // ran once per domain reload, and again on each tool toggle in the editor window,
+            // which invalidates the cache. A reload therefore paid for two full assembly walks:
+            // this one and CommandRegistry.AutoDiscoverCommands, which #1364 removed. This brings
+            // the tool registry in line with it, and with ResourceDiscoveryService, which has
+            // always been TypeCache-only.
+            //
+            // Ordered because a duplicate tool name overwrites the previous registration below,
+            // so registration order decides which one wins, and TypeCache documents no order.
+            foreach (var type in InRegistrationOrder(TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>()))
             {
                 McpForUnityToolAttribute toolAttr;
                 try
@@ -78,6 +67,19 @@ namespace MCPForUnity.Editor.Services
 
             McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection", false);
             return _cachedTools.Values.ToList();
+        }
+
+        /// <summary>
+        /// Stable registration order for discovered tool types. FullName alone is not a total
+        /// order: two assemblies can declare the same full type name, and if their tool names
+        /// also collide the later registration wins, so the assembly identity breaks the tie.
+        /// Without both keys a collision could resolve differently between domain reloads.
+        /// </summary>
+        internal static IEnumerable<Type> InRegistrationOrder(IEnumerable<Type> types)
+        {
+            return types
+                .OrderBy(type => type.FullName, StringComparer.Ordinal)
+                .ThenBy(type => type.Assembly.FullName, StringComparer.Ordinal);
         }
 
         public ToolMetadata GetToolMetadata(string toolName)

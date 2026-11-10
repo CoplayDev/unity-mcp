@@ -36,6 +36,9 @@ from services.registry import (
     annotations=ToolAnnotations(
         title="Manage Tools",
         readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def manage_tools(

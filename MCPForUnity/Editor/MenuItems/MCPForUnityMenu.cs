@@ -1,3 +1,4 @@
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Setup;
 using MCPForUnity.Editor.Windows;
 using UnityEditor;
@@ -7,20 +8,20 @@ namespace MCPForUnity.Editor.MenuItems
 {
     public static class MCPForUnityMenu
     {
-        [MenuItem("Window/MCP For Unity/Toggle MCP Window %#m", priority = 1)]
+        [MenuItem(ProductInfo.MenuRoot + "/Toggle MCP Window %#m", priority = 1)]
         public static void ToggleMCPWindow()
         {
             MCPForUnityEditorWindow.ShowWindow();
         }
 
-        [MenuItem("Window/MCP For Unity/Local Setup Window", priority = 2)]
+        [MenuItem(ProductInfo.MenuRoot + "/Local Setup Window", priority = 2)]
         public static void ShowSetupWindow()
         {
             SetupWindowService.ShowSetupWindow();
         }
 
 
-        [MenuItem("Window/MCP For Unity/Edit EditorPrefs", priority = 3)]
+        [MenuItem(ProductInfo.MenuRoot + "/Edit EditorPrefs", priority = 3)]
         public static void ShowEditorPrefsWindow()
         {
             EditorPrefsWindow.ShowWindow();

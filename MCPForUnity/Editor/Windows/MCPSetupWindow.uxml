@@ -2,13 +2,16 @@
     <Style src="Components/Common.uss" />
     <Style src="MCPSetupWindow.uss" />
     <ui:ScrollView name="root-container" mode="Vertical">
-        <ui:Label text="MCP for Unity Setup" name="title" class="title" />
+        <ui:VisualElement name="setup-header" class="setup-header">
+            <!-- OceanMark logo is injected here at index 0 in CreateGUI -->
+            <ui:Label text="MCP for Unity Setup" name="title" class="title" />
+        </ui:VisualElement>
 
         <ui:VisualElement name="step-deps">
             <ui:VisualElement class="section">
                 <ui:Label text="System Requirements" class="section-title" />
                 <ui:VisualElement class="section-content">
-                    <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function." class="help-text description-text" />
+                    <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function. Git is only needed to install or update the package from a Git URL." class="help-text description-text" />
 
                     <!-- Dependency Status -->
                     <ui:VisualElement name="dependency-list">
@@ -31,6 +34,16 @@
                             </ui:VisualElement>
                             <ui:Label name="uv-details" class="help-text dependency-details" />
                         </ui:VisualElement>
+
+                        <!-- Git Status (optional) -->
+                        <ui:VisualElement class="dependency-item">
+                            <ui:VisualElement class="dependency-row">
+                                <ui:Label text="Git (optional)" class="dependency-name" />
+                                <ui:Label name="git-version" text="..." class="setting-value" />
+                                <ui:VisualElement name="git-indicator" class="status-indicator-small" />
+                            </ui:VisualElement>
+                            <ui:Label name="git-details" class="help-text dependency-details" />
+                        </ui:VisualElement>
                     </ui:VisualElement>
 
                     <!-- Overall Status Message -->
@@ -43,6 +56,7 @@
                         <ui:Label text="Installation Instructions" class="installation-title" />
                         <ui:Label name="installation-instructions" class="help-text" />
                         <ui:VisualElement class="install-links-row">
+                            <ui:Button name="install-uv-button" text="Install UV Automatically" class="action-button install-link-button" />
                             <ui:Button name="open-python-link-button" text="Open Python Install Page" class="secondary-button install-link-button" />
                             <ui:Button name="open-uv-link-button" text="Open UV Install Page" class="secondary-button install-link-button" />
                         </ui:VisualElement>
@@ -53,7 +67,7 @@
             <!-- Action Buttons -->
             <ui:VisualElement class="button-container">
                 <ui:Button name="refresh-button" text="Refresh" class="setup-button secondary-button" />
-                <ui:Button name="done-button" text="Done" class="setup-button action-button" />
+                <ui:Button name="done-button" text="Next" class="setup-button action-button" />
             </ui:VisualElement>
         </ui:VisualElement>
 

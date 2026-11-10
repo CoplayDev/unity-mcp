@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -49,7 +50,11 @@ namespace MCPForUnity.Editor.Helpers
         {
             var str = GetString(key);
             if (string.IsNullOrEmpty(str)) return defaultValue;
-            return int.TryParse(str, out var result) ? result : defaultValue;
+            // Parsed with the invariant culture: "1.5" must mean the same on a de-DE or
+            // tr-TR editor (where '.' is the thousands separator) as on en-US. JSON
+            // integers stringify without separators in every culture, so they take the
+            // same path and an out-of-range value still falls back to the default.
+            return int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
         }
 
         /// <summary>
@@ -66,9 +71,12 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public float? GetFloat(string key, float? defaultValue = null)
         {
-            var str = GetString(key);
+            var token = GetToken(key);
+            if (token == null || token.Type == JTokenType.Null) return defaultValue;
+            if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer) return token.ToObject<float>();
+            var str = token.ToString();
             if (string.IsNullOrEmpty(str)) return defaultValue;
-            return float.TryParse(str, out var result) ? result : defaultValue;
+            return float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
         }
 
         /// <summary>

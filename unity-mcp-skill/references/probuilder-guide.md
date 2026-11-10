@@ -177,7 +177,8 @@ manage_probuilder(action="create_polygon", target="MyMesh",
 ## Vertex Operations
 
 ```python
-# Move vertices by offset
+# Move vertices by offset. Only the listed indices move: faces that meet at a corner
+# usually each have their own vertex there, so moving one face's corners opens a gap.
 manage_probuilder(action="move_vertices", target="MyCube",
     properties={"vertexIndices": [0, 1, 2, 3], "offset": [0, 1, 0]})
 
@@ -260,13 +261,14 @@ info = manage_probuilder(action="get_mesh_info", target="House",
 manage_probuilder(action="extrude_faces", target="House",
     properties={"faceIndices": [2], "distance": 0.3})
 
-# 4. Re-query faces, then move top vertices inward to form a ridge
-info = manage_probuilder(action="get_mesh_info", target="House",
-    properties={"include": "faces"})
-# Find the new top face after extrude, get its vertex indices
-# Move them to form a peaked roof shape
-manage_probuilder(action="move_vertices", target="House",
-    properties={"vertexIndices": [0, 1, 2, 3], "offset": [0, 2, 0]})
+# 4. Add a peaked roof as a separate Prism; its ridge runs along Z, like the house.
+#    (Moving the top face's vertices would pull it away from the walls; see Vertex Operations.)
+#    Shapes are centered on their position: the walls now reach y = 1.8,
+#    so a roof 2 high sits on them at y = 1.8 + 1.
+manage_probuilder(action="create_shape", properties={
+    "shape_type": "Prism", "name": "Roof",
+    "width": 6, "height": 2, "depth": 8, "position": [0, 2.8, 0]
+})
 
 # 5. Cut a doorway: subdivide front face, delete center sub-face
 info = manage_probuilder(action="get_mesh_info", target="House",
@@ -300,8 +302,9 @@ manage_probuilder(action="auto_smooth", target="House",
 # 9. Assign materials per face
 manage_probuilder(action="set_face_material", target="House",
     properties={"faceIndices": [0, 1, 2, 3], "materialPath": "Assets/Materials/Brick.mat"})
-manage_probuilder(action="set_face_material", target="House",
-    properties={"faceIndices": [4, 5], "materialPath": "Assets/Materials/Roof.mat"})
+# A Prism's faces 1 and 3 are its two slopes
+manage_probuilder(action="set_face_material", target="Roof",
+    properties={"faceIndices": [1, 3], "materialPath": "Assets/Materials/Roof.mat"})
 
 # 10. Cleanup
 manage_probuilder(action="center_pivot", target="House")

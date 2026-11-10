@@ -27,6 +27,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public TaskCompletionSource<string> Tcs;
         public bool IsExecuting;
         public long EnqueuedAtMs;
+
+        /// <summary>
+        /// Connection that queued this command, used to tell a broker resend apart from a
+        /// genuinely new request. Never dereferenced — identity only.
+        /// </summary>
+        public object Owner;
     }
 
     [InitializeOnLoad]
@@ -46,16 +52,44 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static bool isStarting = false;
         private static double nextStartAt = 0.0f;
         private static double nextHeartbeatAt = 0.0f;
+        // EditorApplication.timeSinceStartup of the first AddressAlreadyInUse on the configured
+        // port; 0 when the port binds cleanly. Drives the same-port retry window (#1173).
+        private static double _portBusySince = 0.0;
+        // If the port has been continuously busy longer than this, _portBusySince is treated as a
+        // stale leftover from an abandoned retry and a fresh window is started (#1173).
+        private const double PortBusyStaleResetSeconds = 60.0;
         private static int heartbeatSeq = 0;
         private static Dictionary<string, QueuedCommand> commandQueue = new();
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024;
-        private const int FrameIOTimeoutMs = 30000;
+        // Command/frame I/O timeout for the stdio bridge TCP hop. Previously a
+        // hardcoded 30s const, which cut off long-running tool calls mid-execution
+        // (the client would then reconnect and re-send, causing the bridge to
+        // restart on a new port). Now defaults to 5 minutes and is overridable via
+        // the UNITY_MCP_STDIO_COMMAND_TIMEOUT_MS environment variable.
+        private const int DefaultFrameIOTimeoutMs = 300000;
+        private static readonly int FrameIOTimeoutMs = ResolveFrameIOTimeoutMs();
         private static readonly Stopwatch _uptime = Stopwatch.StartNew();
         private static volatile int _consecutiveTimeouts = 0;
         private static bool _processCommandsHooked = false;
+
+        private static int ResolveFrameIOTimeoutMs()
+        {
+            try
+            {
+                string raw = Environment.GetEnvironmentVariable("UNITY_MCP_STDIO_COMMAND_TIMEOUT_MS");
+                if (!string.IsNullOrWhiteSpace(raw)
+                    && int.TryParse(raw.Trim(), out int ms)
+                    && ms > 0)
+                {
+                    return ms;
+                }
+            }
+            catch { /* fall through to default */ }
+            return DefaultFrameIOTimeoutMs;
+        }
 
         private static void IoInfo(string s) { McpLog.Info(s, always: false); }
 
@@ -231,24 +265,50 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private static bool IsCompiling()
+        // Routed through EditorStateCache so a deferred domain reload (issue #1276) does not
+        // pin the bridge off: raw EditorApplication.isCompiling stays true for as long as the
+        // reload is held, and this gates bridge startup.
+        /// <summary>
+        /// Number of commands currently queued, read under the queue lock. Diagnostics only —
+        /// callers must not reason about individual entries, since the queue mutates from both
+        /// the listener tasks and the editor update loop.
+        /// </summary>
+        internal static int QueuedCommandCount
         {
-            if (EditorApplication.isCompiling)
+            get { lock (lockObj) { return commandQueue.Count; } }
+        }
+
+        /// <summary>
+        /// True when an already-queued command is the same payload arriving from a different
+        /// connection — the signature of a broker that reconnected and resent. Payload equality
+        /// alone is not enough: a single connection handles one command at a time, so two
+        /// identical payloads on the same connection are sequential and genuinely distinct.
+        /// </summary>
+        internal static bool IsBrokerResend(
+            string queuedCommandJson, object queuedOwner, string incomingCommandJson, object incomingOwner)
+        {
+            if (queuedOwner == null || incomingOwner == null) return false;
+            if (ReferenceEquals(queuedOwner, incomingOwner)) return false;
+            return string.Equals(queuedCommandJson, incomingCommandJson, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Finds an in-flight command that <paramref name="incomingOwner"/> is resending.
+        /// Callers must hold <see cref="lockObj"/>.
+        /// </summary>
+        private static QueuedCommand FindBrokerResendTarget(string commandText, object incomingOwner)
+        {
+            foreach (var kvp in commandQueue)
             {
-                return true;
-            }
-            try
-            {
-                Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                var prop = pipeline?.GetProperty("isCompiling", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (prop != null)
+                if (IsBrokerResend(kvp.Value.CommandJson, kvp.Value.Owner, commandText, incomingOwner))
                 {
-                    return (bool)prop.GetValue(null);
+                    return kvp.Value;
                 }
             }
-            catch { }
-            return false;
+            return null;
         }
+
+        private static bool IsCompiling() => EditorStateCache.GetActualIsCompiling();
 
         public static void Start()
         {
@@ -284,10 +344,45 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     }
                     catch (SocketException se) when (se.SocketErrorCode == SocketError.AddressAlreadyInUse)
                     {
-                        // Port is busy. Try switching to a new port once; if that also fails,
-                        // let the reload handler retry with async backoff instead of blocking here.
+                        // The configured port is busy. The usual cause is our own previous listener
+                        // whose OS socket has not been released yet after a domain reload: Stop()/
+                        // Dispose runs on the main thread, but the kernel frees the bound port a few
+                        // hundred ms later (longer on Windows/macOS).
+                        //
+                        // Do NOT silently switch to a new port on the first conflict — the Python
+                        // client stays pinned to the configured port and ends up talking to the
+                        // orphan, returning busy/timeout forever (#1173). Keep the configured port
+                        // and fail this attempt WITHOUT blocking: the reload handler's async resume
+                        // schedule and the editor-idle retry re-invoke Start() on the same port within
+                        // ~1s, by which point the OS has released it. Only after the port stays busy
+                        // past the fallback window do we treat it as a foreign occupant and switch.
+                        double now = EditorApplication.timeSinceStartup;
+                        // Start a fresh window on the first conflict, or if a stale timestamp
+                        // survived a long idle gap (a real reload + retry resolves in seconds).
+                        if (_portBusySince <= 0.0 || (now - _portBusySince) > PortBusyStaleResetSeconds) _portBusySince = now;
+
+                        if (!PortManager.ShouldAbandonBusyPort(now - _portBusySince))
+                        {
+                            try { listener?.Stop(); } catch { }
+                            try { listener?.Server?.Dispose(); } catch { }
+                            listener = null;
+                            McpLog.Warn($"Port {currentUnityPort} not released yet after reload; retrying same port.");
+                            WriteHeartbeat(true, "port_busy");
+                            nextStartAt = now + 0.3; // throttle the editor-idle retry loop
+                            // Arm the editor-idle retry even when Start() was called directly
+                            // (e.g. StartAutoConnect), not only during reload resume — so a transient
+                            // AddressAlreadyInUse can never leave the bridge permanently stopped.
+                            if (!ensureUpdateHooked)
+                            {
+                                ensureUpdateHooked = true;
+                                EditorApplication.update += EnsureStartedOnEditorIdle;
+                            }
+                            return;
+                        }
+
                         int oldPort = currentUnityPort;
                         currentUnityPort = PortManager.DiscoverNewPort();
+                        _portBusySince = 0.0;
 
                         try
                         {
@@ -295,15 +390,13 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         }
                         catch { }
 
-                        if (IsDebugEnabled())
-                        {
-                            McpLog.Info($"Port {oldPort} occupied, switching to port {currentUnityPort}");
-                        }
+                        McpLog.Warn($"Port {oldPort} still occupied after {PortManager.BusyPortFallbackWindowSeconds:0.#}s; falling back to port {currentUnityPort} (clients follow via the status file).");
 
                         listener = CreateConfiguredListener(currentUnityPort);
                         listener.Start();
                     }
 
+                    _portBusySince = 0.0;
                     isRunning = true;
                     isAutoConnectMode = false;
                     string platform = Application.platform.ToString();
@@ -440,7 +533,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         true
                     );
 
-                    client.ReceiveTimeout = 60000;
+                    // Keep the socket receive timeout at least as long as the command
+                    // timeout so it never fires before a long-running tool call completes.
+                    client.ReceiveTimeout = Math.Max(60000, FrameIOTimeoutMs);
 
                     _ = Task.Run(() => HandleClientAsync(client, token), token);
                 }
@@ -551,15 +646,31 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 continue;
                             }
 
+                            // A command already in flight from a different connection means the
+                            // broker gave up waiting, reconnected and resent it. Running it a
+                            // second time would duplicate side effects (issue #1130), so attach
+                            // to the original instead of queueing a copy.
+                            TaskCompletionSource<string> pending = tcs;
                             lock (lockObj)
                             {
-                                commandQueue[commandId] = new QueuedCommand
+                                QueuedCommand inFlight = FindBrokerResendTarget(commandText, client);
+                                if (inFlight != null)
                                 {
-                                    CommandJson = commandText,
-                                    Tcs = tcs,
-                                    IsExecuting = false,
-                                    EnqueuedAtMs = _uptime.ElapsedMilliseconds
-                                };
+                                    pending = inFlight.Tcs;
+                                    McpLog.Warn("Suppressed duplicate command resent on a new connection; "
+                                                + "awaiting the in-flight result instead of running it twice.");
+                                }
+                                else
+                                {
+                                    commandQueue[commandId] = new QueuedCommand
+                                    {
+                                        CommandJson = commandText,
+                                        Tcs = tcs,
+                                        IsExecuting = false,
+                                        EnqueuedAtMs = _uptime.ElapsedMilliseconds,
+                                        Owner = client
+                                    };
+                                }
                             }
 
                             // Force Unity's main loop to iterate even when backgrounded,
@@ -571,11 +682,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                             try
                             {
                                 using var respCts = new CancellationTokenSource(FrameIOTimeoutMs);
-                                var completed = await Task.WhenAny(tcs.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
-                                if (completed == tcs.Task)
+                                var completed = await Task.WhenAny(pending.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
+                                if (completed == pending.Task)
                                 {
                                     respCts.Cancel();
-                                    response = tcs.Task.Result;
+                                    response = pending.Task.Result;
                                     Interlocked.Exchange(ref _consecutiveTimeouts, 0);
                                 }
                                 else
@@ -631,7 +742,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                             bool isBenign =
                                 msg.IndexOf("Connection closed before reading expected bytes", StringComparison.OrdinalIgnoreCase) >= 0
                                 || msg.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
-                                || ex is IOException;
+                                || ex is IOException
+                                || ex is ObjectDisposedException;
                             if (isBenign)
                             {
                                 if (IsDebugEnabled()) McpLog.Info($"Client handler: {msg}", always: false);
@@ -799,7 +911,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                     // Evict commands stuck with IsExecuting=true for too long (e.g. from pre-reload state).
                     long nowMs = _uptime.ElapsedMilliseconds;
-                    const long staleThresholdMs = 2L * FrameIOTimeoutMs; // 60s
+                    long staleThresholdMs = 2L * FrameIOTimeoutMs; // 2x the command timeout
                     List<string> staleIds = null;
                     foreach (var kvp in commandQueue)
                     {

@@ -173,7 +173,7 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
     Examples:
         unity-mcp material assign "Assets/Materials/Red.mat" "Cube"
         unity-mcp material assign "Assets/Materials/Blue.mat" "Player" --mode instance
-        unity-mcp material assign "Assets/Materials/Mat.mat" "-81840" --search-method by_id --slot 1
+        unity-mcp material assign --search-method by_id --slot 1 -- "Assets/Materials/Mat.mat" -81840
     """
     config = get_config()
 

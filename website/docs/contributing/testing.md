@@ -25,7 +25,7 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 cd Server && uv run pytest tests/ -k "test_create_material" -v
 ```
 
-CI workflow: `.github/workflows/python-tests.yml`. Coverage is uploaded to Codecov on every run.
+CI workflow: `.github/workflows/python-tests.yml`. It runs the tests on Python 3.10 and 3.14; coverage is uploaded to Codecov from the 3.10 job.
 
 ### Adding a Python test
 
@@ -41,6 +41,28 @@ Location: `TestProjects/UnityMCPTests/Assets/Tests/`
 To run locally, open `TestProjects/UnityMCPTests` in Unity, then **Window → General → Test Runner**.
 
 CI runs both modes across a multi-Unity matrix via `.github/workflows/unity-tests.yml`.
+
+### Local headless test harness
+
+One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge, then tears down:
+
+```bash
+python tools/local_harness.py
+```
+
+This is the same entrypoint CI uses — `.github/workflows/e2e-bridge.yml` collapses its boot/wait/discover/run-smoke shell into this invocation.
+
+Key flags:
+
+- `--legs smoke,editmode,playmode` — subset of legs to run.
+- `--project-path TestProjects/UnityMCPTests` — Unity project to boot (repo-relative or absolute).
+- `--reuse` — attach to an already-resident bridge instead of booting one.
+- `--keep-alive` — leave the Editor running after the legs (no teardown).
+- `--no-warmup` — skip the warm-up import phase.
+
+Exit-code contract: `0` all blocking legs passed, `1` a blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found.
+
+It needs a Hub-activated Editor locally (no ULF/serial); none of the CI license staging applies.
 
 ### Adding a Unity test
 

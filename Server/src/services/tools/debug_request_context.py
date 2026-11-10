@@ -11,6 +11,31 @@ from services.registry import mcp_for_unity_tool
 from transport.unity_instance_middleware import get_unity_instance_middleware
 from transport.plugin_hub import PluginHub
 
+_SECRET_FLAG_MARKERS = ("token", "secret", "password", "api-key", "api_key", "apikey")
+
+
+def _redact_argv(argv: list[str]) -> list[str]:
+    """Keep flag names for diagnosis, hide the values of secret-bearing ones.
+
+    A remote-hosted server is started with --api-key-service-token on its command line and
+    this tool is callable by every authenticated tenant, so the raw argv handed out the
+    service credential. The flag shape is what helps debug a deployment; the value never is.
+    """
+    # Every secret-bearing flag the server accepts takes a value, so the token after a bare
+    # flag is always that value, even when it happens to start with "-".
+    out: list[str] = []
+    hide_next = False
+    for arg in argv:
+        if hide_next:
+            out.append("***")
+            hide_next = False
+            continue
+        name, sep, _value = arg.partition("=")
+        secret = name.startswith("-") and any(m in name.lower() for m in _SECRET_FLAG_MARKERS)
+        out.append(f"{name}=***" if secret and sep else arg)
+        hide_next = secret and not sep
+    return out
+
 
 @mcp_for_unity_tool(
     unity_target=None,
@@ -19,6 +44,9 @@ from transport.plugin_hub import PluginHub
     annotations=ToolAnnotations(
         title="Debug Request Context",
         readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
     ),
 )
 async def debug_request_context(ctx: Context) -> dict[str, Any]:
@@ -46,15 +74,12 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
     # List all ctx attributes for debugging
     ctx_attrs = [attr for attr in dir(ctx) if not attr.startswith("_")]
 
-    # Get session state info via middleware
+    # Get session state info via middleware. Active-instance storage now lives
+    # in FastMCP's session-scoped state store, keyed by ctx.session_id, so
+    # there is no global dict to enumerate — that snapshot was a footgun
+    # anyway (it exposed every connected client's selection).
     middleware = get_unity_instance_middleware()
-    derived_key = await middleware.get_session_key(ctx)
     active_instance = await middleware.get_active_instance(ctx)
-
-    # Debugging middleware internals
-    # NOTE: These fields expose internal implementation details and may change between versions.
-    with middleware._lock:
-        all_keys = list(middleware._active_by_key.keys())
 
     # Debugging PluginHub state
     plugin_hub_configured = PluginHub.is_configured()
@@ -65,7 +90,7 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
             "server": {
                 "version": get_package_version(),
                 "cwd": os.getcwd(),
-                "argv": list(sys.argv),
+                "argv": _redact_argv(sys.argv),
             },
             "request_context": {
                 "client_id": rc_client_id,
@@ -77,9 +102,7 @@ async def debug_request_context(ctx: Context) -> dict[str, Any]:
                 "client_id": ctx_client_id,
             },
             "session_state": {
-                "derived_key": derived_key,
                 "active_instance": active_instance,
-                "all_keys_in_store": all_keys,
                 "plugin_hub_configured": plugin_hub_configured,
                 "middleware_id": id(middleware),
             },

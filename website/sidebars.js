@@ -68,6 +68,7 @@ const sidebars = {
       collapsed: true,
       items: [
         'architecture/transports',
+        'architecture/instance-routing',
         'architecture/python-layers',
         'architecture/unity-compat',
         'architecture/remote-auth',
@@ -75,6 +76,7 @@ const sidebars = {
         'architecture/manage-physics',
         'architecture/project-roadmap',
         'architecture/roadmap',
+        'architecture/external-analytics',
       ],
     },
     {
@@ -96,6 +98,7 @@ const sidebars = {
         'migrations/v5',
         'migrations/v6',
         'migrations/v8',
+        'migrations/v10',
       ],
     },
     'releases',

@@ -10,7 +10,7 @@ namespace MCPForUnityTests.Editor.Services.Server
     /// Unit tests for ServerCommandBuilder component.
     /// </summary>
     [TestFixture]
-    public class ServerCommandBuilderTests
+    public class ServerCommandBuilderTests : TransportPreferenceTestBase
     {
         private ServerCommandBuilder _builder;
         private bool _savedUseHttpTransport;

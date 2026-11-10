@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 
 namespace MCPForUnity.Runtime.Helpers
@@ -6,24 +7,16 @@ namespace MCPForUnity.Runtime.Helpers
     // Part of MCP for Unity's compat-shim family. See UnityCompatShims.cs in this
     // folder for the full list of shims, the audit policy, and the reflection pattern.
     /// <summary>
-    /// Version-compatible wrapper for enumerating loaded assemblies.
-    ///
-    /// API timeline:
-    ///   Pre-6.8           : AppDomain.CurrentDomain.GetAssemblies()
-    ///   6.8 (CoreCLR)     : UnityEngine.Assemblies.CurrentAssemblies.GetLoadedAssemblies()
-    ///                       (Unity 6.8 replaces Mono with CoreCLR and warns on
-    ///                        AppDomain.GetAssemblies — see the official Path to
-    ///                        CoreCLR 2026 upgrade guide.)
-    ///
-    /// Uses runtime reflection to discover the new API once and cache a delegate,
-    /// so calling code stays warning-free across versions and survives the
-    /// eventual removal of AppDomain.GetAssemblies if Unity ever takes that step.
+    /// Version-compatible wrappers for enumerating and loading managed assemblies.
+    /// Unity 7 uses its assembly load context and tracks paths for stream-loaded assemblies.
+    /// Earlier versions retain the reflection-based enumeration shim and legacy loading APIs.
     /// </summary>
     public static class UnityAssembliesCompat
     {
         // Candidate assembly-qualified names to try BEFORE falling back to a full
         // assembly scan. Probing by name avoids calling AppDomain.GetAssemblies on
         // CoreCLR (where it emits warnings) in the common case.
+#if !UNITY_7000_0_OR_NEWER
         private static readonly string[] CurrentAssembliesAqns =
         {
             "UnityEngine.Assemblies.CurrentAssemblies, UnityEngine.CoreModule",
@@ -34,15 +27,18 @@ namespace MCPForUnity.Runtime.Helpers
 
         private static Func<Assembly[]> _getLoadedAssemblies;
         private static bool _probed;
+#endif
 
         /// <summary>
         /// Returns all currently loaded managed assemblies in this Unity process.
-        /// On Unity 6.8+ (CoreCLR) this dispatches to
-        /// <c>UnityEngine.Assemblies.CurrentAssemblies.GetLoadedAssemblies()</c>;
-        /// otherwise falls back to <c>AppDomain.CurrentDomain.GetAssemblies()</c>.
+        /// Unity 7 calls CurrentAssemblies directly and converts its read-only list to an array.
+        /// Earlier versions retain the reflection shim and AppDomain fallback.
         /// </summary>
         public static Assembly[] GetLoadedAssemblies()
         {
+#if UNITY_7000_0_OR_NEWER
+            return UnityEngine.Assemblies.CurrentAssemblies.GetLoadedAssemblies().ToArray();
+#else
             if (!_probed)
             {
                 _probed = true;
@@ -62,8 +58,28 @@ namespace MCPForUnity.Runtime.Helpers
             }
 
             return AppDomain.CurrentDomain.GetAssemblies();
+#endif
         }
 
+        public static Assembly LoadFromBytes(byte[] bytes)
+        {
+#if UNITY_7000_0_OR_NEWER
+            return UnityEngine.Assemblies.CurrentAssemblies.LoadFromBytes(bytes);
+#else
+            return Assembly.Load(bytes);
+#endif
+        }
+
+        public static string GetAssemblyPath(Assembly assembly)
+        {
+#if UNITY_7000_0_OR_NEWER
+            return UnityEngine.AssemblyExtension.GetLoadedAssemblyPath(assembly);
+#else
+            return assembly.Location;
+#endif
+        }
+
+#if !UNITY_7000_0_OR_NEWER
         private static Func<Assembly[]> ResolveCurrentAssembliesDelegate()
         {
             // 1. Try direct AQN lookups first — cheap, side-effect-free, and
@@ -117,5 +133,6 @@ namespace MCPForUnity.Runtime.Helpers
                 return () => (Assembly[])method.Invoke(null, null);
             }
         }
+#endif
     }
 }

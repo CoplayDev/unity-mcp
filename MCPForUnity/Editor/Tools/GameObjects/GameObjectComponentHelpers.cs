@@ -143,6 +143,79 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             }
         }
 
+        /// <summary>
+        /// Applies a "componentProperties" object (as accepted by 'modify') to every named
+        /// component already present on <paramref name="targetGo"/>. Shared by 'create' and
+        /// 'modify' so the argument behaves identically on both actions.
+        /// </summary>
+        /// <param name="modified">Set to true if at least one property was set successfully.</param>
+        /// <returns>An ErrorResponse aggregating any per-component failures, or null if all
+        /// (or none) of the requested properties were applied successfully.</returns>
+        internal static object ApplyComponentProperties(GameObject targetGo, JObject componentPropertiesObj, out bool modified)
+        {
+            modified = false;
+            if (componentPropertiesObj == null)
+            {
+                return null;
+            }
+
+            var componentErrors = new List<object>();
+            foreach (var prop in componentPropertiesObj.Properties())
+            {
+                string compName = prop.Name;
+                JObject propertiesToSet = prop.Value as JObject;
+                if (propertiesToSet != null)
+                {
+                    var setResult = SetComponentPropertiesInternal(targetGo, compName, propertiesToSet);
+                    if (setResult != null)
+                    {
+                        componentErrors.Add(setResult);
+                    }
+                    else
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
+            if (componentErrors.Count == 0)
+            {
+                return null;
+            }
+
+            var aggregatedErrors = new List<string>();
+            foreach (var errorObj in componentErrors)
+            {
+                try
+                {
+                    var dataProp = errorObj?.GetType().GetProperty("data");
+                    var dataVal = dataProp?.GetValue(errorObj);
+                    if (dataVal != null)
+                    {
+                        var errorsProp = dataVal.GetType().GetProperty("errors");
+                        var errorsEnum = errorsProp?.GetValue(dataVal) as System.Collections.IEnumerable;
+                        if (errorsEnum != null)
+                        {
+                            foreach (var item in errorsEnum)
+                            {
+                                var s = item?.ToString();
+                                if (!string.IsNullOrEmpty(s)) aggregatedErrors.Add(s);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[ManageGameObject] Error aggregating component errors: {ex.Message}");
+                }
+            }
+
+            return new ErrorResponse(
+                $"One or more component property operations failed on '{targetGo.name}'.",
+                new { componentErrors = componentErrors, errors = aggregatedErrors }
+            );
+        }
+
         internal static object SetComponentPropertiesInternal(GameObject targetGo, string componentTypeName, JObject properties, Component targetComponentInstance = null)
         {
             Component targetComponent = targetComponentInstance;

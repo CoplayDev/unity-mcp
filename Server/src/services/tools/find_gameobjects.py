@@ -5,6 +5,7 @@ Returns only instance IDs with pagination support for efficient searches.
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 from pydantic import Field
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -21,7 +22,16 @@ from services.tools.preflight import preflight
         "Then use mcpforunity://scene/gameobject/{id} resource for full data, "
         "or mcpforunity://scene/gameobject/{id}/components for component details. "
         "For CRUD operations (create/modify/delete), use manage_gameobject instead."
-    )
+    ),
+    annotations=ToolAnnotations(
+        title="Find GameObjects",
+        # Not readOnly: preflight(refresh_if_dirty=True) below can trigger an
+        # asset refresh and domain reload.
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
 )
 async def find_gameobjects(
     ctx: Context,

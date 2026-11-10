@@ -107,60 +107,10 @@ namespace MCPForUnity.Editor.Services
                 return null;
             }
 
-            // No override - use platform-specific discovery
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                string[] candidates = new[]
-                {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude", "claude.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude.exe"),
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-
-#if UNITY_EDITOR_WIN
-                // Fall back to PATH search (handles non-standard install locations and npm shims)
-                foreach (var name in new[] { "claude.exe", "claude.cmd", "claude.ps1" })
-                {
-                    string fromPath = ExecPath.FindInPathWindows(name);
-                    if (!string.IsNullOrEmpty(fromPath)) return fromPath;
-                }
-#endif
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                string[] candidates = new[]
-                {
-                    "/opt/homebrew/bin/claude",
-                    "/usr/local/bin/claude",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude")
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                string[] candidates = new[]
-                {
-                    "/usr/bin/claude",
-                    "/usr/local/bin/claude",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude")
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-            }
-
-            return null;
+            // No override: delegate to the shared discovery in ExecPath, which covers the
+            // native-installer, npm, NVM and PATH-scan locations for every platform. Kept in
+            // one place so both call sites (this and ExecPath's own callers) stay in sync.
+            return ExecPath.ResolveClaude();
         }
 
         public bool IsPythonDetected()

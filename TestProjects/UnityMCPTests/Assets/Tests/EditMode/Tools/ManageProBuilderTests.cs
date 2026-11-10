@@ -241,6 +241,7 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 ["action"] = "get_mesh_info",
                 ["target"] = "PBTestInfoCube",
+                ["properties"] = new JObject { ["include"] = "faces" },
             };
             var result = ToJObject(ManageProBuilder.HandleCommand(infoParams));
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());

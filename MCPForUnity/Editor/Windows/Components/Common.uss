@@ -170,6 +170,23 @@
     -unity-text-align: middle-left;
 }
 
+/* At narrow widths the connection status label (e.g. "Session Active (Project)") must wrap/shrink
+   instead of sliding under the toggle button. Scoped to the connection section so other shared
+   .status-text rows are unaffected; uses wrapping (not ellipsis) so the text stays fully readable. */
+#connection-section .status-container {
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+#connection-section .status-text {
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+#connection-section #connection-toggle {
+    flex-shrink: 0;
+}
+
 .status-indicator-small {
     width: 8px;
     height: 8px;

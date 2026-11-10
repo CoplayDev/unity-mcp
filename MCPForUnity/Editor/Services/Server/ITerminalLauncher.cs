@@ -17,6 +17,15 @@ namespace MCPForUnity.Editor.Services.Server
         ProcessStartInfo CreateTerminalProcessStartInfo(string command);
 
         /// <summary>
+        /// Creates a ProcessStartInfo that runs the given command headless (no terminal window),
+        /// redirecting both stdout and stderr to the given log file.
+        /// </summary>
+        /// <param name="command">The command to execute</param>
+        /// <param name="logFilePath">File that receives the process's stdout and stderr</param>
+        /// <returns>A configured ProcessStartInfo for launching the command in the background</returns>
+        ProcessStartInfo CreateHeadlessProcessStartInfo(string command, string logFilePath);
+
+        /// <summary>
         /// Gets the project root path for storing terminal scripts.
         /// </summary>
         /// <returns>Path to the project root directory</returns>

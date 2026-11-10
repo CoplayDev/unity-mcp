@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json;
@@ -22,8 +23,24 @@ namespace MCPForUnity.Editor.Services
         private static long _observedUnixMs;
 
         private static bool _lastIsCompiling;
-        private static long? _lastCompileStartedUnixMs;
-        private static long? _lastCompileFinishedUnixMs;
+
+        // Compile edges live in SessionState, recorded from the CompilationPipeline
+        // events, rather than in statics sampled off the update tick. Two reasons,
+        // both load-bearing:
+        //
+        //  - A successful compile ends in a domain reload that wipes every static in
+        //    this class, including the "was compiling" flag the falling edge was
+        //    derived from. The finish of the very compile a client is waiting on was
+        //    therefore unobservable: both timestamps read null afterwards, so nothing
+        //    downstream could tell "finished" from "never started" (issue #814).
+        //  - The events fire at the true edges. Sampling quantised them to the 1s
+        //    update throttle and dropped any compile shorter than one tick entirely.
+        //
+        // SessionState survives domain reloads and dies with the editor session,
+        // which is exactly the lifetime these values describe.
+        private const string CompileStartedKey = "MCPForUnity.EditorState.CompileStartedUnixMs";
+        private const string CompileFinishedKey = "MCPForUnity.EditorState.CompileFinishedUnixMs";
+        private const string CompileCountKey = "MCPForUnity.EditorState.CompileCount";
 
         private static bool _domainReloadPending;
         private static long? _domainReloadBeforeUnixMs;
@@ -259,6 +276,28 @@ namespace MCPForUnity.Editor.Services
                 EditorApplication.update += OnUpdate;
                 EditorApplication.playModeStateChanged += _ => ForceUpdate("playmode");
 
+                // Tracks whether an assembly compilation is actually running, for
+                // GetActualIsCompiling. Statics reset on domain reload and this
+                // [InitializeOnLoad] ctor re-subscribes, so the flag is per-domain.
+                // The timestamps beside it are not per-domain — see the SessionState
+                // note on CompileStartedKey.
+                UnityEditor.Compilation.CompilationPipeline.compilationStarted += _ =>
+                {
+                    _pipelineCompilationRunning = true;
+                    SetSessionUnixMs(CompileStartedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                    SessionState.SetInt(CompileCountKey, SessionState.GetInt(CompileCountKey, 0) + 1);
+                    ForceUpdate("compilation_started");
+                };
+                UnityEditor.Compilation.CompilationPipeline.compilationFinished += _ =>
+                {
+                    _pipelineCompilationRunning = false;
+                    // Fires before the domain reload, which is what makes the finish
+                    // observable at all: the write lands while this domain is alive and
+                    // is read back by the next one.
+                    SetSessionUnixMs(CompileFinishedKey, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                    ForceUpdate("compilation_finished");
+                };
+
                 AssemblyReloadEvents.beforeAssemblyReload += () =>
                 {
                     _domainReloadPending = true;
@@ -282,7 +321,7 @@ namespace MCPForUnity.Editor.Services
         {
             // Throttle to reduce overhead while keeping the snapshot fresh enough for polling clients.
             double now = EditorApplication.timeSinceStartup;
-            // Use GetActualIsCompiling() to avoid Play mode false positives (issue #582)
+            // Use GetActualIsCompiling() to avoid isCompiling false positives (issues #549, #1276)
             bool isCompiling = GetActualIsCompiling();
 
             // Check for compilation edge transitions (always update on these)
@@ -372,14 +411,6 @@ namespace MCPForUnity.Editor.Services
             _observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             bool isCompiling = GetActualIsCompiling();
-            if (isCompiling && !_lastIsCompiling)
-            {
-                _lastCompileStartedUnixMs = _observedUnixMs;
-            }
-            else if (!isCompiling && _lastIsCompiling)
-            {
-                _lastCompileFinishedUnixMs = _observedUnixMs;
-            }
             _lastIsCompiling = isCompiling;
 
             var scene = EditorSceneManager.GetActiveScene();
@@ -452,8 +483,8 @@ namespace MCPForUnity.Editor.Services
                 {
                     IsCompiling = isCompiling,
                     IsDomainReloadPending = _domainReloadPending,
-                    LastCompileStartedUnixMs = _lastCompileStartedUnixMs,
-                    LastCompileFinishedUnixMs = _lastCompileFinishedUnixMs,
+                    LastCompileStartedUnixMs = GetSessionUnixMs(CompileStartedKey),
+                    LastCompileFinishedUnixMs = GetSessionUnixMs(CompileFinishedKey),
                     LastDomainReloadBeforeUnixMs = _domainReloadBeforeUnixMs,
                     LastDomainReloadAfterUnixMs = _domainReloadAfterUnixMs
                 },
@@ -530,11 +561,42 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <summary>
-        /// Returns the actual compilation state, working around a known Unity quirk where
-        /// EditorApplication.isCompiling can return false positives in Play mode.
-        /// See: https://github.com/CoplayDev/unity-mcp/issues/549
+        /// Compilations begun this editor session, surviving domain reloads. Callers
+        /// that trigger a compile snapshot this first, then wait for it to move — the
+        /// only signal that separates "a compile ran" from "one never started", which
+        /// <see cref="GetActualIsCompiling"/> reads as idle either way.
         /// </summary>
-        private static bool GetActualIsCompiling()
+        internal static int CompileCount => SessionState.GetInt(CompileCountKey, 0);
+
+        internal static long? GetSessionUnixMs(string key)
+        {
+            string raw = SessionState.GetString(key, string.Empty);
+            return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value)
+                ? value
+                : (long?)null;
+        }
+
+        // SessionState has no long overload, so these round-trip through an
+        // invariant string rather than losing precision through int or float.
+        internal static void SetSessionUnixMs(string key, long value)
+            => SessionState.SetString(key, value.ToString(CultureInfo.InvariantCulture));
+
+        // Set/cleared by the CompilationPipeline.compilationStarted/Finished events
+        // subscribed in the static ctor. NOTE: CompilationPipeline.isCompiling does not
+        // exist on the supported Unity range (verified by reflection probe on 2021.3 and
+        // 6000.4 — neither public nor non-public), so the reflection this replaced never
+        // resolved and always fell back to the raw signal.
+        private static bool _pipelineCompilationRunning;
+
+        /// <summary>
+        /// Returns the actual compilation state, working around known Unity quirks where
+        /// EditorApplication.isCompiling reports false positives while no compilation is
+        /// running: a recompile deferred by Recompile-After-Finished-Playing keeps it true
+        /// for the whole play session (issue #549), and a project holding
+        /// EditorApplication.LockReloadAssemblies keeps it true until the lock is released
+        /// (issue #1276). In both cases the event-tracked pipeline flag is authoritative.
+        /// </summary>
+        internal static bool GetActualIsCompiling()
         {
             // If EditorApplication.isCompiling is false, Unity is definitely not compiling
             if (!EditorApplication.isCompiling)
@@ -542,27 +604,9 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            // In Play mode, EditorApplication.isCompiling can have false positives.
-            // Double-check with CompilationPipeline.isCompiling via reflection.
-            if (EditorApplication.isPlaying)
-            {
-                try
-                {
-                    Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                    var prop = pipeline?.GetProperty("isCompiling", BindingFlags.Public | BindingFlags.Static);
-                    if (prop != null)
-                    {
-                        return (bool)prop.GetValue(null);
-                    }
-                }
-                catch
-                {
-                    // If reflection fails, fall back to EditorApplication.isCompiling
-                }
-            }
-
-            // Outside Play mode or if reflection failed, trust EditorApplication.isCompiling
-            return true;
+            // Otherwise trust the event-tracked pipeline state: isCompiling stays true for as
+            // long as an assembly reload is deferred, with no compilation actually running.
+            return _pipelineCompilationRunning;
         }
     }
 }

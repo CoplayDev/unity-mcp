@@ -140,6 +140,346 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         // =============================================================================
+        // Animator: Child Resolution
+        // =============================================================================
+
+        [Test]
+        public void AnimatorGetInfo_AnimatorOnChild_ResolvesFromChild()
+        {
+            var root = new GameObject("AnimTest_ChildRoot");
+            var model = new GameObject("AnimTest_ChildModel");
+            model.transform.SetParent(root.transform);
+            model.AddComponent<Animator>();
+            try
+            {
+                Assert.IsNull(root.GetComponent<Animator>());
+
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_get_info",
+                    ["target"] = "AnimTest_ChildRoot"
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+                var data = result["data"] as JObject;
+                Assert.IsNotNull(data);
+                Assert.AreEqual("AnimTest_ChildRoot", data["gameObject"].ToString());
+                Assert.AreEqual("AnimTest_ChildModel", data["animatorGameObject"].ToString(),
+                    "Response must name the GameObject that actually carries the Animator");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorGetInfo_InactiveChildAnimator_ResolvesFromChild()
+        {
+            var root = new GameObject("AnimTest_InactiveRoot");
+            var model = new GameObject("AnimTest_InactiveModel");
+            model.transform.SetParent(root.transform);
+            model.AddComponent<Animator>();
+            model.SetActive(false);
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_get_info",
+                    ["target"] = "AnimTest_InactiveRoot"
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.AreEqual("AnimTest_InactiveModel", result["data"]["animatorGameObject"].ToString());
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorSetSpeed_AnimatorOnChild_AppliesToChildAnimator()
+        {
+            var root = new GameObject("AnimTest_ChildSpeedRoot");
+            var model = new GameObject("AnimTest_ChildSpeedModel");
+            model.transform.SetParent(root.transform);
+            var animator = model.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_set_speed",
+                    ["target"] = "AnimTest_ChildSpeedRoot",
+                    ["speed"] = 2.5f
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.AreEqual(2.5f, animator.speed, 0.001f);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorSetSpeed_MultipleDescendantAnimators_RefusesAndNamesThem()
+        {
+            var root = new GameObject("AnimTest_AmbigRoot");
+            var a = new GameObject("AnimTest_AmbigA");
+            var b = new GameObject("AnimTest_AmbigB");
+            a.transform.SetParent(root.transform);
+            b.transform.SetParent(root.transform);
+            var animA = a.AddComponent<Animator>();
+            var animB = b.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_set_speed",
+                    ["target"] = "AnimTest_AmbigRoot",
+                    ["speed"] = 2.5f
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+
+                var message = result["message"].ToString();
+                Assert.That(message, Does.Contain("AnimTest_AmbigA"));
+                Assert.That(message, Does.Contain("AnimTest_AmbigB"));
+                Assert.AreEqual(1f, animA.speed, 0.001f, "An ambiguous request must not mutate a rig");
+                Assert.AreEqual(1f, animB.speed, 0.001f, "An ambiguous request must not mutate a rig");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorSetSpeed_AnimatorOnChild_ResponseNamesTheChild()
+        {
+            var root = new GameObject("AnimTest_AttribRoot");
+            var model = new GameObject("AnimTest_AttribModel");
+            model.transform.SetParent(root.transform);
+            model.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_set_speed",
+                    ["target"] = "AnimTest_AttribRoot",
+                    ["speed"] = 2f
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.That(result["message"].ToString(), Does.Contain("AnimTest_AttribModel"),
+                    "A retargeted control response must name the object it actually changed");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorGetInfo_TargetAndDescendantsHaveAnimators_UsesTheTarget()
+        {
+            var root = new GameObject("AnimTest_PriorityRoot");
+            var child = new GameObject("AnimTest_PriorityChild");
+            child.transform.SetParent(root.transform);
+            root.AddComponent<Animator>();
+            child.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_get_info",
+                    ["target"] = "AnimTest_PriorityRoot"
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.AreEqual("AnimTest_PriorityRoot", result["data"]["animatorGameObject"].ToString(),
+                    "An Animator on the exact target wins over any descendant");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorGetInfo_MultipleDescendantAnimators_RefusesAndNamesThem()
+        {
+            var root = new GameObject("AnimTest_AmbigReadRoot");
+            var a = new GameObject("AnimTest_AmbigReadA");
+            var b = new GameObject("AnimTest_AmbigReadB");
+            a.transform.SetParent(root.transform);
+            b.transform.SetParent(root.transform);
+            a.AddComponent<Animator>();
+            b.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_get_info",
+                    ["target"] = "AnimTest_AmbigReadRoot"
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsFalse(result.Value<bool>("success"), result.ToString());
+
+                var message = result["message"].ToString();
+                Assert.That(message, Does.Contain("AnimTest_AmbigReadA"));
+                Assert.That(message, Does.Contain("AnimTest_AmbigReadB"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        // Every resolver consumer, not just the two the other tests happen to call: a call site
+        // that drops the shared resolver must fail here rather than ship green.
+        [TestCase("animator_get_info")]
+        [TestCase("animator_get_parameter")]
+        [TestCase("animator_play")]
+        [TestCase("animator_crossfade")]
+        [TestCase("animator_set_parameter")]
+        [TestCase("animator_set_speed")]
+        [TestCase("animator_set_enabled")]
+        public void AnimatorActions_MultipleDescendantAnimators_AllRefuse(string action)
+        {
+            var root = new GameObject("AnimTest_AllRefuseRoot");
+            var a = new GameObject("AnimTest_AllRefuseA");
+            var b = new GameObject("AnimTest_AllRefuseB");
+            a.transform.SetParent(root.transform);
+            b.transform.SetParent(root.transform);
+            var animA = a.AddComponent<Animator>();
+            var animB = b.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = action,
+                    ["target"] = "AnimTest_AllRefuseRoot",
+                    ["stateName"] = "Walk",
+                    ["parameterName"] = "Speed",
+                    ["value"] = 1f,
+                    ["speed"] = 2f,
+                    ["enabled"] = false
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsFalse(result.Value<bool>("success"), $"{action} must refuse an ambiguous target: {result}");
+
+                var message = result["message"].ToString();
+                Assert.That(message, Does.Contain("AnimTest_AllRefuseA"), action);
+                Assert.That(message, Does.Contain("AnimTest_AllRefuseB"), action);
+                Assert.AreEqual(1f, animA.speed, 0.001f, $"{action} mutated a rig it should not have picked");
+                Assert.AreEqual(1f, animB.speed, 0.001f, $"{action} mutated a rig it should not have picked");
+                Assert.IsTrue(animA.enabled && animB.enabled, $"{action} mutated a rig it should not have picked");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorSetEnabled_AnimatorOnChild_ResponseNamesTheChild()
+        {
+            var root = new GameObject("AnimTest_EnabledRoot");
+            var model = new GameObject("AnimTest_EnabledModel");
+            model.transform.SetParent(root.transform);
+            var animator = model.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_set_enabled",
+                    ["target"] = "AnimTest_EnabledRoot",
+                    ["enabled"] = false
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsFalse(animator.enabled);
+                Assert.That(result["message"].ToString(), Does.Contain("AnimTest_EnabledModel"),
+                    "A retargeted control response must name the object it actually changed");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AnimatorSetParameter_AnimatorOnChild_EditModeResponseNamesTheChild()
+        {
+            string controllerPath = $"{TempRoot}/ChildParam_{Guid.NewGuid():N}.controller";
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+            controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
+            AssetDatabase.SaveAssets();
+
+            var root = new GameObject("AnimTest_ParamRoot");
+            var model = new GameObject("AnimTest_ParamModel");
+            model.transform.SetParent(root.transform);
+            var animator = model.AddComponent<Animator>();
+            animator.runtimeAnimatorController = controller;
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "animator_set_parameter",
+                    ["target"] = "AnimTest_ParamRoot",
+                    ["parameterName"] = "Speed",
+                    ["parameterType"] = "float",
+                    ["value"] = 3f
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.That(result["message"].ToString(), Does.Contain("AnimTest_ParamModel"),
+                    "A retargeted parameter write must disclose the Animator it resolved");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void ControllerAssign_AnimatorOnChild_AddsAnimatorToTarget()
+        {
+            string controllerPath = $"{TempRoot}/ChildAssign_{Guid.NewGuid():N}.controller";
+            AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+            AssetDatabase.SaveAssets();
+
+            var root = new GameObject("AnimTest_AssignRoot");
+            var model = new GameObject("AnimTest_AssignModel");
+            model.transform.SetParent(root.transform);
+            var childAnimator = model.AddComponent<Animator>();
+            try
+            {
+                var paramsObj = new JObject
+                {
+                    ["action"] = "controller_assign",
+                    ["target"] = "AnimTest_AssignRoot",
+                    ["controllerPath"] = controllerPath
+                };
+                var result = ToJObject(ManageAnimation.HandleCommand(paramsObj));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+                Assert.IsNotNull(root.GetComponent<Animator>(),
+                    "Assign must add an Animator to the named target, not reuse a descendant's");
+                Assert.IsNull(childAnimator.runtimeAnimatorController,
+                    "The child Animator must be left untouched");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        // =============================================================================
         // Animator: Set Speed / Set Enabled
         // =============================================================================
 

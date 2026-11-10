@@ -6,6 +6,29 @@
     flex-grow: 1;
 }
 
+/* Header row (logo + title) */
+.setup-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.setup-logo {
+    width: 34px;
+    height: 34px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+/* In the header row the title reads as a plain heading beside the logo, not a boxed button. */
+.setup-header .title {
+    margin-bottom: 0;
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0);
+    flex-shrink: 1;
+    white-space: normal;
+}
+
 /* Dependency list */
 #dependency-list {
     margin-top: 8px;
@@ -88,16 +111,30 @@
     margin-top: 0;
 }
 
-/* Button container at bottom */
+/* Button container at bottom — wraps rather than clipping when the window is narrowed. */
 .button-container {
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
-/* Button sizing */
+/* Button sizing — grow to fit the label (e.g. "Configure Selected") instead of clipping. */
 .setup-button {
-    width: 96px;
+    min-width: 96px;
+    height: 28px;
+    padding-left: 12px;
+    padding-right: 12px;
+    margin-left: 8px;
+    margin-top: 4px;
+}
+
+/* Footer buttons size to content and sit together on one row. The descendant selector
+   (higher specificity) beats .secondary-button's width:100% regardless of stylesheet order,
+   so Refresh no longer stretches full-width and overflows. */
+.button-container .setup-button {
+    width: auto;
+    flex-grow: 0;
 }
 
 /* Description text spacing */

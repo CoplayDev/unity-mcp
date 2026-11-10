@@ -23,7 +23,7 @@ All resources use `mcpforunity://` scheme:
 mcpforunity://{category}/{resource_path}[?query_params]
 ```
 
-**Categories:** `editor`, `scene`, `prefab`, `project`, `pipeline`, `rendering`, `menu-items`, `custom-tools`, `tests`, `instances`
+**Categories:** `editor`, `scene`, `prefab`, `project`, `pipeline`, `rendering`, `menu-items`, `custom-tools`, `tool-groups`, `tests`, `instances`
 
 ---
 
@@ -506,7 +506,7 @@ Assets/Prefabs/Player.prefab → Assets%2FPrefabs%2FPlayer.prefab
 
 **Purpose:** Custom tools available in the active Unity project.
 
-**Returns:**
+**Returns** (abbreviated: one of the 3 tools is shown):
 ```json
 {
   "project_id": "MyProject",
@@ -522,6 +522,23 @@ Assets/Prefabs/Player.prefab → Assets%2FPrefabs%2FPlayer.prefab
       ]
     }
   ]
+}
+```
+
+### mcpforunity://tool-groups
+
+**Purpose:** Every tool group, whether it is on by default, and its tools. Enable or hide a group for the session with `manage_tools`.
+
+**Returns** (abbreviated: `groups` has one entry per group, in name order; one is shown):
+```json
+{
+  "groups": [
+    {"name": "animation", "description": "Animator control, AnimationClip creation & 2D sprite-sheet animation",
+     "default_enabled": false, "tools": ["manage_animation", "manage_sprite"], "tool_count": 2}
+  ],
+  "total_groups": 10,
+  "default_enabled": ["core"],
+  "usage": "Call manage_tools(action='activate', group='<name>') to enable a group."
 }
 ```
 

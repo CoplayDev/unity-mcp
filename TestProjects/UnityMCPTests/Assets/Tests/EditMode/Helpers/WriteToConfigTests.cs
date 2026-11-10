@@ -13,7 +13,7 @@ using EditorConfigCache = MCPForUnity.Editor.Services.EditorConfigurationCache;
 
 namespace MCPForUnityTests.Editor.Helpers
 {
-    public class WriteToConfigTests
+    public class WriteToConfigTests : TransportPreferenceTestBase
     {
         private const string UseHttpTransportPrefKey = EditorPrefKeys.UseHttpTransport;
         private const string HttpUrlPrefKey = EditorPrefKeys.HttpBaseUrl;

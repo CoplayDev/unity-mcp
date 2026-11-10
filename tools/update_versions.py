@@ -5,6 +5,7 @@ This script updates the version in all files that need it:
 - MCPForUnity/package.json (Unity package version)
 - manifest.json (MCP bundle manifest)
 - Server/pyproject.toml (Python package version)
+- Server/uv.lock (the project's own entry, so `uv sync --locked` keeps passing)
 - Server/README.md (version references)
 - README.md (fixed version examples)
 - docs/i18n/README-zh.md (fixed version examples)
@@ -37,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_JSON = REPO_ROOT / "MCPForUnity" / "package.json"
 MANIFEST_JSON = REPO_ROOT / "manifest.json"
 PYPROJECT_TOML = REPO_ROOT / "Server" / "pyproject.toml"
+UV_LOCK = REPO_ROOT / "Server" / "uv.lock"
 SERVER_README = REPO_ROOT / "Server" / "README.md"
 ROOT_README = REPO_ROOT / "README.md"
 ZH_README = REPO_ROOT / "docs" / "i18n" / "README-zh.md"
@@ -137,6 +139,53 @@ def update_pyproject_toml(new_version: str, dry_run: bool = False) -> bool:
         content = re.sub(
             r'^version = ".*"', f'version = "{new_version}"', content, count=1, flags=re.MULTILINE)
         PYPROJECT_TOML.write_text(content, encoding="utf-8")
+
+    return True
+
+
+# uv.lock records the project's own version next to its resolved dependencies. Bumping
+# pyproject.toml without this line makes `uv sync --locked` fail and left the lock stale
+# for whole release cycles (10.1.0 in the lock while pyproject said 10.2.0). The block is
+# the only place the project's version appears, so a targeted rewrite is equivalent to
+# `uv lock` here without requiring uv on the release runner.
+_UV_LOCK_SELF_VERSION = re.compile(
+    r'(^\[\[package\]\]\s*\nname = "mcpforunityserver"\s*\nversion = ")([^"]+)(")',
+    re.MULTILINE,
+)
+
+
+def _display(path: Path) -> str:
+    """Repo-relative for the normal case; absolute when tests point at a temp file."""
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def update_uv_lock(new_version: str, dry_run: bool = False) -> bool:
+    """Update the mcpforunityserver entry in Server/uv.lock."""
+    if not UV_LOCK.exists():
+        print(f"Warning: {_display(UV_LOCK)} not found")
+        return False
+
+    # Bytes round-trip: text mode would rewrite the file's line endings to os.linesep.
+    content = UV_LOCK.read_bytes().decode("utf-8")
+    match = _UV_LOCK_SELF_VERSION.search(content)
+    if not match:
+        print(f"Warning: Could not find the mcpforunityserver entry in {_display(UV_LOCK)}")
+        return False
+
+    current_version = match.group(2)
+    if current_version == new_version:
+        print(f"✓ {_display(UV_LOCK)} already at v{new_version}")
+        return False
+
+    print(f"Updating {_display(UV_LOCK)}: {current_version} → {new_version}")
+
+    if not dry_run:
+        content = _UV_LOCK_SELF_VERSION.sub(
+            lambda m: f"{m.group(1)}{new_version}{m.group(3)}", content, count=1)
+        UV_LOCK.write_bytes(content.encode("utf-8"))
 
     return True
 
@@ -261,6 +310,9 @@ def main() -> int:
 
         if update_pyproject_toml(version, args.dry_run):
             updates_made.append("Server/pyproject.toml")
+
+        if update_uv_lock(version, args.dry_run):
+            updates_made.append("Server/uv.lock")
 
         if update_server_readme(version, args.dry_run):
             updates_made.append("Server/README.md")

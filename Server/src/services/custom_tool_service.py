@@ -79,6 +79,13 @@ class CustomToolService:
 
     # --- HTTP Routes -----------------------------------------------------
     def _register_http_routes(self) -> None:
+        # The plugin registers custom tools over the hub WebSocket (register_tools message),
+        # so this REST route only serves local tooling. A remote-hosted server must not expose
+        # it: it carries no API-key check, so any caller could replace tool definitions for
+        # every tenant. Mirrors the /api/command gate in main.py.
+        if config.http_remote_hosted:
+            return
+
         @self._mcp.custom_route("/register-tools", methods=["POST"])
         async def register_tools(request: Request) -> JSONResponse:
             try:
@@ -402,7 +409,12 @@ class CustomToolService:
         _handler.__name__ = f"custom_tool_{definition.name}"
         _handler.__doc__ = definition.description or ""
         _handler.__signature__ = self._build_signature(definition)
-        _handler.__annotations__ = self._build_annotations(definition)
+        annotations = self._build_annotations(definition)
+        _handler.__annotations__ = annotations
+        # On Python 3.14, functools.wraps copies __annotate__ instead of __annotations__,
+        # and assigning __annotations__ sets __annotate__ to None. Without a real
+        # __annotate__ the logging/telemetry wrappers end up with no annotations.
+        _handler.__annotate__ = lambda format: dict(annotations)
         return _handler
 
     def _build_signature(self, definition: ToolDefinitionModel) -> inspect.Signature:
@@ -426,7 +438,7 @@ class CustomToolService:
             params.append(
                 inspect.Parameter(
                     param.name,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
                     default=default,
                     annotation=self._map_param_type(param),
                 )
