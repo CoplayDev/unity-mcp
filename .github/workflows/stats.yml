@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 24 }
       - name: Fetch + summarize stats (private to collaborators)
         env:
           # public stars/forks work with the default token; unique cloners/viewers
