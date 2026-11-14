@@ -286,7 +286,25 @@ unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --delete-child Child1 --d
 unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --set-property "Rigidbody.mass=5"
 unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --add-component BoxCollider
 unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --create-child '{"name":"Spawn","primitive_type":"Sphere"}'
+
+# Inspect scene-instance overrides, including current instance and prefab values
+unity-mcp prefab overrides "Player"
+unity-mcp prefab overrides "HUD" --child-path Health --component RectTransform --property-prefix m_Anchor
+
+# Revert one property on one scene object, or apply it to its source prefab
+unity-mcp prefab revert-overrides "Player" --component Rigidbody --property-path m_Mass
+unity-mcp prefab apply-overrides "Player" --component Rigidbody --property-path m_Mass
+
+# Select a structural override by kind and index from the listing
+unity-mcp prefab revert-overrides "Player" --override-type added_component --override-index 0
 ```
+
+Override writes affect the selected object and its components. Select children with
+`--child-path`, a hierarchy path, or an index from `overrides`; children are not
+changed implicitly. Applying changes the source prefab asset and can affect other
+instances. `--prefab-path` can select an ancestor prefab as the apply destination.
+`--include-defaults` includes instance-root placement; writes also require an exact
+`--property-path`. Removed GameObject overrides require a Unity version with that API.
 
 ### Asset Operations
 
@@ -579,7 +597,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `material` | `assign`, `create`, `info`, `set-color`, `set-property`, `set-renderer-color` |
 | `packages` | `add`, `add-registry`, `embed`, `info`, `list`, `list-registries`, `ping`, `remove`, `remove-registry`, `resolve`, `search`, `status` |
 | `physics` | `add-joint`, `apply-force`, `assign-material`, `configure-joint`, `configure-material`, `configure-rigidbody`, `create-material`, `get-collision-matrix`, `get-rigidbody`, `get-settings`, `linecast`, `overlap`, `ping`, `raycast`, `raycast-all`, `remove-joint`, `set-collision-matrix`, `set-settings`, `shapecast`, `simulate`, `validate` |
-| `prefab` | `close`, `create`, `hierarchy`, `info`, `modify`, `open`, `save` |
+| `prefab` | `apply-overrides`, `close`, `create`, `hierarchy`, `info`, `modify`, `open`, `overrides`, `revert-overrides`, `save` |
 | `probuilder` | `auto-smooth`, `bevel-edges`, `center-pivot`, `create-poly`, `create-shape`, `delete-faces`, `extrude-edges`, `extrude-faces`, `freeze-transform`, `info`, `move-vertices`, `raw`, `repair`, `select-faces`, `set-material`, `set-pivot`, `set-smoothing`, `subdivide`, `validate`, `weld-vertices` |
 | `profiler` | `frame-debugger-disable`, `frame-debugger-enable`, `frame-debugger-events`, `frame-timing`, `get-counters`, `memory-compare`, `memory-list`, `memory-snapshot`, `object-memory`, `set-areas`, `start`, `status`, `stop` |
 | `reflect` | `member`, `search`, `type` |

@@ -12,8 +12,93 @@ from cli.utils.connection import run_command, handle_unity_errors
 
 @click.group()
 def prefab():
-    """Prefab operations - info, hierarchy, open, save, close, create prefabs."""
+    """Prefab assets, editing stages, and scene-instance overrides."""
     pass
+
+
+OVERRIDE_TYPES = ["property", "added_component", "removed_component", "added_gameobject", "removed_gameobject"]
+
+
+def _override_params(action: str, target: str, **options: Any) -> dict[str, Any]:
+    params: dict[str, Any] = {"action": action, "target": target}
+    for key, wire_key in (
+        ("child_path", "childPath"), ("component", "componentType"),
+        ("property_path", "propertyPath"), ("property_prefix", "propertyPrefix"),
+        ("override_type", "overrideType"), ("override_index", "overrideIndex"),
+        ("prefab_path", "prefabPath"),
+    ):
+        if options.get(key) is not None:
+            params[wire_key] = options[key]
+    if options.get("include_defaults"):
+        params["includeDefaultOverrides"] = True
+    return params
+
+
+@prefab.command("overrides")
+@click.argument("target")
+@click.option("--child-path", help="Relative child path to inspect.")
+@click.option("--component", help="Filter by component type.")
+@click.option("--property-path", help="Filter by an exact serialized property path.")
+@click.option("--property-prefix", help="Filter serialized property paths, e.g. m_Anchor.")
+@click.option("--override-type", type=click.Choice(OVERRIDE_TYPES))
+@click.option("--override-index", type=click.IntRange(min=0))
+@click.option("--include-defaults", is_flag=True, help="Include default overrides such as instance-root placement.")
+@handle_unity_errors
+def list_overrides(target: str, **options: Any) -> None:
+    """Inspect overrides on a scene prefab instance (name, hierarchy path or ID).
+
+    \b
+    Examples:
+        unity-mcp prefab overrides Player
+        unity-mcp prefab overrides HUD --child-path Health --property-prefix m_Anchor
+    """
+    config = get_config()
+    result = run_command("manage_prefabs", _override_params("list_overrides", target, **options), config)
+    click.echo(format_output(result, config.format))
+
+
+@prefab.command("revert-overrides")
+@click.argument("target")
+@click.option("--child-path", help="Relative child path to change; children are not changed implicitly.")
+@click.option("--component", help="Select a component type.")
+@click.option("--property-path", help="Revert one serialized property.")
+@click.option("--override-type", type=click.Choice(OVERRIDE_TYPES), default="property", show_default=True)
+@click.option("--override-index", type=click.IntRange(min=0), help="Select an index returned by prefab overrides.")
+@click.option("--include-defaults", is_flag=True, help="Allow default overrides for an explicit property path.")
+@handle_unity_errors
+def revert_overrides(target: str, **options: Any) -> None:
+    """Revert selected scene overrides to the source prefab values.
+
+    \b
+    Examples:
+        unity-mcp prefab revert-overrides HUD --child-path Health --component RectTransform
+        unity-mcp prefab revert-overrides Player --component Rigidbody --property-path m_Mass
+    """
+    config = get_config()
+    result = run_command("manage_prefabs", _override_params("revert_overrides", target, **options), config)
+    click.echo(format_output(result, config.format))
+
+
+@prefab.command("apply-overrides")
+@click.argument("target")
+@click.option("--child-path", help="Relative child path to change; children are not changed implicitly.")
+@click.option("--component", help="Select a component type.")
+@click.option("--property-path", help="Apply one serialized property.")
+@click.option("--override-type", type=click.Choice(OVERRIDE_TYPES), default="property", show_default=True)
+@click.option("--override-index", type=click.IntRange(min=0), help="Select an index returned by prefab overrides.")
+@click.option("--prefab-path", help="Destination source prefab; defaults to the selected override's source.")
+@click.option("--include-defaults", is_flag=True, help="Allow default overrides for an explicit property path.")
+@handle_unity_errors
+def apply_overrides(target: str, **options: Any) -> None:
+    """Apply selected overrides to the prefab asset; affects other instances.
+
+    \b
+    Examples:
+        unity-mcp prefab apply-overrides Player --component Rigidbody --property-path m_Mass
+    """
+    config = get_config()
+    result = run_command("manage_prefabs", _override_params("apply_overrides", target, **options), config)
+    click.echo(format_output(result, config.format))
 
 
 @prefab.command("open")

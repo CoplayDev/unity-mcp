@@ -147,7 +147,7 @@
     },
     {
       "name": "manage_prefabs",
-      "description": "Create, instantiate, unpack, and modify prefabs"
+      "description": "Create, inspect and modify prefab assets; list, apply and revert scene-instance overrides"
     },
     {
       "name": "manage_probuilder",
