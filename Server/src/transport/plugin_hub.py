@@ -1102,10 +1102,13 @@ class PluginHub(WebSocketEndpoint):
                     ).model_dump()
 
         resends = 0
+        # A resend after a disconnect must reach the same project: with unity_instance=None the
+        # resolver picks whichever project is connected, which may be a different one by then.
+        pinned_project = await cls._session_project_hash(session_id)
         while True:
             can_resend = (
                 retry_on_reload
-                and request_id is not None
+                and bool(request_id)  # "" is no idempotency key: Unity runs it without a ledger entry
                 and resends < cls.MAX_RESENDS_AFTER_DISCONNECT
                 and await cls._session_has_capability(session_id, COMMAND_LEDGER_CAPABILITY)
             )
@@ -1115,15 +1118,32 @@ class PluginHub(WebSocketEndpoint):
                 if not can_resend:
                     return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
                 resends += 1
-                logger.info(
-                    "Re-sending %s (request %s) after plugin disconnect, attempt %d",
-                    command_type, request_id, resends,
-                )
                 try:
                     session_id = await cls._resolve_session_id(
                         unity_instance, user_id=user_id, retry_on_reload=True)
                 except NoUnitySessionError:
                     return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                if pinned_project is not None and await cls._session_project_hash(session_id) != pinned_project:
+                    logger.info("Not re-sending %s (request %s): the reconnected session belongs to another project",
+                                command_type, request_id)
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                # The command may already have run; only a session with a command ledger can
+                # deduplicate it. Check the replacement session before sending again.
+                if not await cls._session_has_capability(session_id, COMMAND_LEDGER_CAPABILITY):
+                    logger.info("Not re-sending %s (request %s): the reconnected session has no command ledger",
+                                command_type, request_id)
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                logger.info(
+                    "Re-sending %s (request %s) after plugin disconnect, attempt %d",
+                    command_type, request_id, resends,
+                )
+
+    @classmethod
+    async def _session_project_hash(cls, session_id: str) -> str | None:
+        if cls._registry is None:
+            return None
+        session = await cls._registry.get_session(session_id)
+        return getattr(session, "project_hash", None) if session is not None else None
 
     @classmethod
     async def _session_has_capability(cls, session_id: str, capability: str) -> bool:

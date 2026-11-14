@@ -282,3 +282,75 @@ async def test_stdio_transport_failure_is_marked_retry(monkeypatch):
     assert resp.success is False
     assert resp.hint == "retry"
     assert "Could not connect" in resp.error
+
+
+class _TwoSessionRegistry:
+    """s1 = the original project with a ledger; s2 = configurable replacement."""
+
+    def __init__(self, s2_hash, s2_capabilities):
+        now = datetime.now(timezone.utc)
+        self.sessions = {
+            "s1": PluginSession(session_id="s1", project_name="P", project_hash="h1", unity_version="6000.6",
+                                registered_at=now, connected_at=now, capabilities=(COMMAND_LEDGER_CAPABILITY,)),
+            "s2": PluginSession(session_id="s2", project_name="Q", project_hash=s2_hash, unity_version="6000.6",
+                                registered_at=now, connected_at=now, capabilities=tuple(s2_capabilities)),
+        }
+
+    async def get_session(self, session_id):
+        return self.sessions.get(session_id)
+
+
+def _resolve_sequence(monkeypatch, ids):
+    queue = list(ids)
+
+    async def resolve(unity_instance, user_id=None, retry_on_reload=True):
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(PluginHub, "_resolve_session_id", classmethod(lambda cls, *a, **k: resolve(*a, **k)))
+
+
+@pytest.mark.asyncio
+async def test_hub_does_not_resend_an_empty_request_id(hub, monkeypatch):
+    PluginHub._registry = _FakeRegistry([COMMAND_LEDGER_CAPABILITY])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="")
+
+    assert result["hint"] == "retry"
+    assert len(hub) == 1, "an empty id is no idempotency key; Unity would run the resend again"
+
+
+@pytest.mark.asyncio
+async def test_hub_does_not_resend_to_a_replacement_session_without_ledger(hub, monkeypatch):
+    PluginHub._registry = _TwoSessionRegistry("h1", [])
+    _resolve_sequence(monkeypatch, ["s1", "s2"])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["hint"] == "retry"
+    assert [sid for sid, _ in hub] == ["s1"], "nothing may be sent to a session that cannot deduplicate"
+
+
+@pytest.mark.asyncio
+async def test_hub_does_not_resend_to_another_project(hub, monkeypatch):
+    PluginHub._registry = _TwoSessionRegistry("other-project", [COMMAND_LEDGER_CAPABILITY])
+    _resolve_sequence(monkeypatch, ["s1", "s2"])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["hint"] == "retry"
+    assert [sid for sid, _ in hub] == ["s1"], "a command for project h1 must never reach another project"
+
+
+@pytest.mark.asyncio
+async def test_hub_resends_to_the_same_project_after_reconnect(hub, monkeypatch):
+    PluginHub._registry = _TwoSessionRegistry("h1", [COMMAND_LEDGER_CAPABILITY])
+    _resolve_sequence(monkeypatch, ["s1", "s2"])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["status"] == "success"
+    assert hub == [("s1", "rid-1"), ("s2", "rid-1")]
