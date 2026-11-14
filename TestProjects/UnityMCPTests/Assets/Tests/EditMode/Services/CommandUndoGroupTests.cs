@@ -62,6 +62,41 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsTrue(Roots().Any(g => g.name == Prefix + "First"));
         }
 
+        [UnityTest]
+        public IEnumerator AsyncCommand_DoesNotSwallowACommandThatRanWhileItWaited()
+        {
+            UndoAsyncProbe.Release = false;
+            var discovery = MCPForUnity.Editor.Services.MCPServiceLocator.ToolDiscovery;
+            bool wasEnabled = discovery.IsToolEnabled(UndoAsyncProbe.Name);
+            discovery.SetToolEnabled(UndoAsyncProbe.Name, true);
+            try
+            {
+                yield return RunAsyncOverlap();
+            }
+            finally
+            {
+                discovery.SetToolEnabled(UndoAsyncProbe.Name, wasEnabled);
+            }
+        }
+
+        private IEnumerator RunAsyncOverlap()
+        {
+            var asyncReply = TransportCommandDispatcher.ExecuteCommandJsonAsync(
+                new JObject { ["type"] = UndoAsyncProbe.Name, ["params"] = new JObject() }.ToString(), CancellationToken.None);
+            for (int frame = 0; frame < 600 && !asyncReply.IsCompleted && !Roots().Any(g => g.name == Prefix + "AsyncBefore"); frame++) yield return null;
+            Assert.IsTrue(Roots().Any(g => g.name == Prefix + "AsyncBefore"),
+                "the async probe did not start: " + (asyncReply.IsCompleted ? asyncReply.Result : "no reply yet"));
+
+            yield return Dispatch(Create(Prefix + "Interleaved"));   // runs while the async command waits
+            UndoAsyncProbe.Release = true;
+            for (int frame = 0; frame < 600 && !asyncReply.IsCompleted; frame++) yield return null;
+            Assert.IsTrue(asyncReply.IsCompleted);
+
+            Undo.PerformUndo();
+            Assert.IsTrue(Roots().Any(g => g.name == Prefix + "AsyncBefore"),
+                "one undo must not revert the async command's earlier step together with the interleaved command");
+        }
+
         [Test]
         public void EditorUndoAction_IsNotWrapped()
         {
@@ -89,5 +124,31 @@ namespace MCPForUnityTests.Editor.Services
         private static GameObject[] Roots() => SceneManager.GetActiveScene().GetRootGameObjects();
 
         private static int Count() => Roots().Count(g => g.name.StartsWith(Prefix));
+    }
+
+    /// <summary>Async test tool: creates one object, waits until released, then creates another.</summary>
+    [MCPForUnity.Editor.Tools.McpForUnityTool(UndoAsyncProbe.Name, AutoRegister = false)]
+    public static class UndoAsyncProbe
+    {
+        public const string Name = "test_undo_async_probe";
+        public static volatile bool Release;
+
+        public static async System.Threading.Tasks.Task<object> HandleCommand(JObject @params)
+        {
+            var before = new GameObject("UndoProbe_AsyncBefore");
+            Undo.RegisterCreatedObjectUndo(before, "async before");
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            void Tick()
+            {
+                if (!Release) return;
+                EditorApplication.update -= Tick;
+                tcs.TrySetResult(true);
+            }
+            EditorApplication.update += Tick;
+            await tcs.Task;
+            var after = new GameObject("UndoProbe_AsyncAfter");
+            Undo.RegisterCreatedObjectUndo(after, "async after");
+            return new { created = 2 };
+        }
     }
 }

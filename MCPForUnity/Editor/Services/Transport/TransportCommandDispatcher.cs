@@ -416,7 +416,12 @@ namespace MCPForUnity.Editor.Services.Transport
 
                 if (result == null)
                 {
-                    // Async command – cleanup after completion on next editor frame to preserve order.
+                    // Async command: close its Undo group now, over the synchronous part only. When
+                    // it completes, other commands or user edits may sit above its group, and
+                    // CollapseUndoOperations would fold them in; changes made after an await stay
+                    // separate undo steps instead.
+                    EndUndoGroup(undoGroup);
+                    // Cleanup after completion on next editor frame to preserve order.
                     var capturedType = command.type;
                     var capturedParams = parameters;
                     var capturedLogType = logType;
@@ -455,11 +460,7 @@ namespace MCPForUnity.Editor.Services.Transport
                         }
                         McpLogRecord.Log(capturedType, capturedParams, capturedLogType,
                             logStatus, sw?.ElapsedMilliseconds ?? 0, logError);
-                        EditorApplication.delayCall += () =>
-                        {
-                            EndUndoGroup(undoGroup);
-                            RemovePending(id, pending);
-                        };
+                        EditorApplication.delayCall += () => RemovePending(id, pending);
                     }, TaskScheduler.Default);
                     return;
                 }
