@@ -2110,3 +2110,27 @@ if not errors["messages"]:
     # Safe to proceed with tools
     pass
 ```
+
+## Record motion from a natural-language request
+
+Use `manage_recording` for a video of UI motion, animation, Timeline, a live DOTween sequence or an opt-in
+project state machine. Call `capabilities`, then `discover`; resolve names to unique targets and inspect source
+FPS, state names and duration before planning. Do not infer source FPS from the requested video FPS.
+
+Translate “from source frame 30, record 3 seconds at 1080p/60 FPS” into `start_frame=30`,
+`duration_seconds=3`, `width=1920`, `height=1080`, `fps=60`, plus the discovered `playback` target.
+Call `prepare`, inspect its resolved plan, and `start` that recording ID. Poll `status` until the job reaches
+a terminal state: `completed`, `failed`, `cancelled`, or `interrupted`. Use the artifact only when `ready=true`;
+otherwise report the job's `error` when present. Do not keep polling a terminal job that is not ready.
+All frame indices are zero based; an `end_frame` is exclusive. Clarify user conventions when ambiguous.
+
+For runtime UI including Overlay canvases, enter Play Mode and use `capture_source="game_view"`.
+For Edit Mode clip/Timeline sampling, select `camera` or `scene_view`; these exclude Overlay UI.
+The output is fitted/letterboxed from the current render size; it does not reflow the Game view.
+Use `fixed_step` for source-time sampling, `realtime` to observe an actual running interaction. Neither
+promises deterministic replay of unrelated physics/scripts. A custom non-seekable adapter can pre-roll
+before capture. Never replace a project's state machine with arbitrary reflection calls.
+
+Read the output manifest and frame counts before claiming success. Stop/cancel with an explicit job ID.
+Interrupted/failed/partial artifacts are not ready videos. The tool returns a local file path; video analysis
+requires the client's separate media-reading capability. See the recording guide for codec/platform limits.

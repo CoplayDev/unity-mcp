@@ -158,6 +158,10 @@
       "description": "Unity Profiler session control, counter reads, memory snapshots, and Frame Debugger (group: profiling)"
     },
     {
+      "name": "manage_recording",
+      "description": "Record views while controlling animation, Timeline, Tween or custom state playback."
+    },
+    {
       "name": "manage_scene",
       "description": "Load, save, query hierarchy, multi-scene editing, templates, validation, and manage Unity scenes"
     },
