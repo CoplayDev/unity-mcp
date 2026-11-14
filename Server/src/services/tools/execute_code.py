@@ -94,8 +94,13 @@ async def execute_code(
     if not isinstance(response, dict):
         return {"success": False, "message": str(response)}
 
-    return {
+    result = {
         "success": response.get("success", False),
-        "message": response.get("message", response.get("error", "")),
+        # Transport failures (timeout, disconnect) carry "message": None and the text in "error".
+        "message": response.get("message") or response.get("error") or "",
         "data": response.get("data"),
     }
+    # The transport's hint="retry" is not forwarded: a timed-out snippet may still be running in Unity.
+    if response.get("error") is not None:
+        result["error"] = response["error"]
+    return result
