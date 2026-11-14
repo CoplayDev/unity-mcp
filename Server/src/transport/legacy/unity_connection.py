@@ -280,7 +280,7 @@ class UnityConnection:
             return timeout
         return max(floor, min(timeout, deadline - time.monotonic()))
 
-    def send_command(self, command_type: str, params: dict[str, Any] | None = None, max_attempts: int | None = None, deadline: float | None = None) -> dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None, max_attempts: int | None = None, deadline: float | None = None, request_id: str | None = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested.
 
         Args:
@@ -288,6 +288,7 @@ class UnityConnection:
             params: Command parameters
             max_attempts: Maximum retry attempts (None = use config default, 0 = no retries)
             deadline: Shared monotonic() ceiling across retries (None = derive from command_total_timeout)
+            request_id: Idempotency key sent with every attempt so Unity runs the command at most once
         """
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
@@ -380,10 +381,13 @@ class UnityConnection:
                 if command_type == 'ping':
                     payload = b'ping'
                 else:
-                    payload = json.dumps({
+                    envelope = {
                         'type': command_type,
                         'params': params,
-                    }).encode('utf-8')
+                    }
+                    if request_id:
+                        envelope['request_id'] = request_id
+                    payload = json.dumps(envelope).encode('utf-8')
 
                 # Send/receive are serialized to protect the shared socket
                 with self._io_lock:
@@ -827,7 +831,8 @@ def send_command_with_retry(
     instance_id: str | None = None,
     max_retries: int | None = None,
     retry_ms: int | None = None,
-    retry_on_reload: bool = True
+    retry_on_reload: bool = True,
+    request_id: str | None = None,
 ) -> dict[str, Any] | MCPResponse:
     """Send a command to a Unity instance, waiting politely through Unity reloads.
 
@@ -839,6 +844,7 @@ def send_command_with_retry(
         retry_ms: Delay between retries in milliseconds
         retry_on_reload: If False, don't retry when Unity is reloading (for commands
             that trigger compilation/reload and shouldn't be re-sent)
+        request_id: Idempotency key reused by every resend of this call
 
     Returns:
         Response dictionary or MCPResponse from Unity
@@ -885,7 +891,8 @@ def send_command_with_retry(
     send_max_attempts = None if retry_on_reload else 0
 
     response = conn.send_command(
-        command_type, params, max_attempts=send_max_attempts, deadline=deadline)
+        command_type, params, max_attempts=send_max_attempts, deadline=deadline,
+        request_id=request_id)
     retries = 0
     wait_started = None
     reason = _extract_response_reason(response)
@@ -922,7 +929,8 @@ def send_command_with_retry(
         )
         time.sleep(max(0.0, sleep_ms / 1000.0))
         retries += 1
-        response = conn.send_command(command_type, params, deadline=deadline)
+        response = conn.send_command(command_type, params, deadline=deadline,
+                                     request_id=request_id)
         reason = _extract_response_reason(response)
 
     if wait_started is not None:
@@ -961,7 +969,8 @@ async def async_send_command_with_retry(
     loop=None,
     max_retries: int | None = None,
     retry_ms: int | None = None,
-    retry_on_reload: bool = True
+    retry_on_reload: bool = True,
+    request_id: str | None = None,
 ) -> dict[str, Any] | MCPResponse:
     """Async wrapper that runs the blocking retry helper in a thread pool.
 
@@ -973,6 +982,7 @@ async def async_send_command_with_retry(
         max_retries: Maximum number of retries for reload states
         retry_ms: Delay between retries in milliseconds
         retry_on_reload: If False, don't retry when Unity is reloading
+        request_id: Idempotency key reused by every resend of this call
 
     Returns:
         Response dictionary or MCPResponse on error
@@ -985,7 +995,8 @@ async def async_send_command_with_retry(
             None,
             lambda: send_command_with_retry(
                 command_type, params, instance_id=instance_id, max_retries=max_retries,
-                retry_ms=retry_ms, retry_on_reload=retry_on_reload),
+                retry_ms=retry_ms, retry_on_reload=retry_on_reload,
+                request_id=request_id),
         )
 
         # After a successful command, check if the connection was freshly

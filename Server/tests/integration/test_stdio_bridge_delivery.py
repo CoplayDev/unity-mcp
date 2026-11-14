@@ -77,9 +77,16 @@ def bridge(monkeypatch, tmp_path):
         started["srv"].close()
 
 
+def test_stdio_payload_carries_request_id(bridge):
+    port, received = bridge({"status": "success", "result": {"ok": True}})
+    conn = UnityConnection(port=port)
+    assert conn.send_command("manage_scene", {"action": "get_active"}, request_id="rid-9") == {"ok": True}
+    assert received[0]["request_id"] == "rid-9"
+
+
 def test_stdio_unity_error_is_not_resent(bridge):
     port, received = bridge({"status": "error", "error": "GameObject 'X' not found"})
     conn = UnityConnection(port=port)
     with pytest.raises(UnityCommandError, match="not found"):
-        conn.send_command("manage_gameobject", {"action": "delete", "target": "X"})
+        conn.send_command("manage_gameobject", {"action": "delete", "target": "X"}, request_id="rid-2")
     assert len(received) == 1

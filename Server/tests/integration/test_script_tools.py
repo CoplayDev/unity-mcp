@@ -150,7 +150,7 @@ async def test_manage_asset_prefab_modify_request(monkeypatch):
     manage_asset = tools["manage_asset"]
     captured = {}
 
-    async def fake_async(cmd, params, loop=None):
+    async def fake_async(cmd, params, loop=None, **_kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {"success": True}

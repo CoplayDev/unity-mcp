@@ -615,6 +615,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 ["type"] = commandName,
                 ["params"] = parameters
             };
+            string requestId = payload.Value<string>("request_id");
+            if (!string.IsNullOrEmpty(requestId))
+            {
+                commandEnvelope["request_id"] = requestId;
+            }
 
             string responseJson;
             try

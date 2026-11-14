@@ -284,7 +284,13 @@ class PluginHub(WebSocketEndpoint):
     # Public API
     # ------------------------------------------------------------------
     @classmethod
-    async def send_command(cls, session_id: str, command_type: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def send_command(
+        cls,
+        session_id: str,
+        command_type: str,
+        params: dict[str, Any],
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         websocket = await cls._get_connection(session_id)
         command_id = str(uuid.uuid4())
         future: asyncio.Future = asyncio.get_running_loop().create_future()
@@ -341,6 +347,7 @@ class PluginHub(WebSocketEndpoint):
                 name=command_type,
                 params=params,
                 timeout=unity_timeout_s,
+                request_id=request_id,
             )
             try:
                 await websocket.send_json(msg.model_dump())
@@ -1001,6 +1008,7 @@ class PluginHub(WebSocketEndpoint):
         params: dict[str, Any],
         user_id: str | None = None,
         retry_on_reload: bool = True,
+        request_id: str | None = None,
     ) -> dict[str, Any]:
         """Send a command to a Unity instance.
 
@@ -1010,6 +1018,7 @@ class PluginHub(WebSocketEndpoint):
             params: Command parameters
             user_id: User ID for session isolation in remote-hosted mode
             retry_on_reload: If False, do not wait for session reconnect on reload.
+            request_id: Idempotency key forwarded to the plugin with the command.
         """
         try:
             session_id = await cls._resolve_session_id(
@@ -1070,7 +1079,7 @@ class PluginHub(WebSocketEndpoint):
                         hint="retry",
                     ).model_dump()
 
-        return await cls.send_command(session_id, command_type, params)
+        return await cls.send_command(session_id, command_type, params, request_id=request_id)
 
     # ------------------------------------------------------------------
     # Blocking helpers for synchronous tool code

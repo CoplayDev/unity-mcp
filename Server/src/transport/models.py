@@ -22,6 +22,8 @@ class ExecuteCommandMessage(BaseModel):
     name: str
     params: dict[str, Any]
     timeout: float
+    # Idempotency key shared by every resend of one logical call (see transport.idempotency).
+    request_id: str | None = None
 
 
 class PingMessage(BaseModel):
