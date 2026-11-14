@@ -138,6 +138,30 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
+        public void ReadConsole_GetCompileErrors_WorksWhenConsoleReflectionFailed()
+        {
+            var field = typeof(ReadConsole).GetField("_startGettingEntriesMethod",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(field, "test needs the reflection member");
+            object saved = field.GetValue(null);
+            try
+            {
+                field.SetValue(null, null);
+                CompilationDiagnostics.RecordForTests(Array.Empty<CompilerMessage>(), "Assembly-CSharp");
+                var json = JObject.FromObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get_compile_errors" }));
+                Assert.IsTrue((bool)json["success"], json.ToString());
+                UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
+                    new System.Text.RegularExpressions.Regex("reflection members are not initialized"));
+                var get = JObject.FromObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get" }));
+                Assert.IsFalse((bool)get["success"], "get still needs the console reflection");
+            }
+            finally
+            {
+                field.SetValue(null, saved);
+            }
+        }
+
+        [Test]
         public void ReadConsole_GetCompileErrors_ReturnsData()
         {
             CompilationDiagnostics.RecordForTests(new[]

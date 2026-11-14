@@ -145,6 +145,22 @@ namespace MCPForUnity.Editor.Tools
 
         public static object HandleCommand(JObject @params)
         {
+            if (@params == null)
+            {
+                return new ErrorResponse("Parameters cannot be null.");
+            }
+
+            var p = new ToolParams(@params);
+            string action = p.Get("action", "get").ToLower();
+
+            // Compiler diagnostics come from CompilationDiagnostics, not from the console window's
+            // internals, so they stay available when the console reflection below failed.
+            if (action == "get_compile_errors")
+            {
+                var data = CompilationDiagnostics.ToResponseData(p.GetBool("includeWarnings", false));
+                return new SuccessResponse("Compiler messages of the last script compilation.", data);
+            }
+
             // Check if ALL required reflection members were successfully initialized.
             if (
                 _startGettingEntriesMethod == null
@@ -167,24 +183,11 @@ namespace MCPForUnity.Editor.Tools
                 );
             }
 
-            if (@params == null)
-            {
-                return new ErrorResponse("Parameters cannot be null.");
-            }
-
-            var p = new ToolParams(@params);
-            string action = p.Get("action", "get").ToLower();
-
             try
             {
                 if (action == "clear")
                 {
                     return ClearConsole();
-                }
-                else if (action == "get_compile_errors")
-                {
-                    var data = CompilationDiagnostics.ToResponseData(p.GetBool("includeWarnings", false));
-                    return new SuccessResponse("Compiler messages of the last script compilation.", data);
                 }
                 else if (action == "get")
                 {
