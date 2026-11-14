@@ -17,21 +17,25 @@ namespace MCPForUnity.Editor.Services.Server
     {
         /// <inheritdoc/>
         public bool TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error)
+            => TryBuildCommand(null, out fileName, out arguments, out displayCommand, out error);
+
+        internal bool TryBuildCommand(WindowRefreshContext context, out string fileName, out string arguments, out string displayCommand, out string error)
         {
             fileName = null;
             arguments = null;
             displayCommand = null;
             error = null;
 
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool useHttpTransport = context?.UseHttp ?? EditorConfigurationCache.Instance.UseHttpTransport;
             if (!useHttpTransport)
             {
                 error = $"HTTP transport is disabled. Enable it in the {ProductInfo.ProductName} window first.";
                 return false;
             }
 
-            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
-            if (!HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out string localUrlError))
+            string httpUrl = context?.LocalUrl ?? HttpEndpointUtility.GetLocalBaseUrl();
+            string localUrlError = context?.LocalLaunchError;
+            if (!(context?.LocalLaunchAllowed ?? HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out localUrlError)))
             {
                 error = string.IsNullOrEmpty(localUrlError)
                     ? $"The configured URL ({httpUrl}) is not allowed for HTTP Local launch."
@@ -39,22 +43,23 @@ namespace MCPForUnity.Editor.Services.Server
                 return false;
             }
 
-            var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+            var (uvxPath, fromUrl, packageName) = context == null ? AssetPathUtility.GetUvxCommandParts()
+                : (context.Paths.UvxPath, context.PackageSource, "mcp-for-unity");
             if (string.IsNullOrEmpty(uvxPath))
             {
                 error = "uv is not installed or found in PATH. Install it or set an override in Advanced Settings.";
                 return false;
             }
 
-            string devFlags = AssetPathUtility.GetUvxDevFlags();
-            bool projectScopedTools = EditorPrefs.GetBool(
+            string devFlags = context?.DevFlags ?? AssetPathUtility.GetUvxDevFlags();
+            bool projectScopedTools = context?.ProjectScopedTools ?? EditorPrefs.GetBool(
                 EditorPrefKeys.ProjectScopedToolsLocalHttp,
                 true
             );
             string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
 
             // Use centralized helper for beta server / prerelease args
-            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+            string fromArgs = context?.QuotedFromArgs ?? AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
 
             string args = string.IsNullOrEmpty(fromArgs)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
