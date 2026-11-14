@@ -114,7 +114,8 @@ namespace MCPForUnity.Runtime.Helpers
             bool ensureUniqueFileName = true,
             bool includeImage = false,
             int maxResolution = 0,
-            string folderOverride = null)
+            string folderOverride = null,
+            Action<Camera, int, int> beforeRender = null)
         {
             if (camera == null)
             {
@@ -139,6 +140,7 @@ namespace MCPForUnity.Runtime.Helpers
             try
             {
                 camera.targetTexture = rt;
+                beforeRender?.Invoke(camera, width, height);
                 camera.Render();
 
                 RenderTexture.active = rt;
@@ -350,7 +352,8 @@ namespace MCPForUnity.Runtime.Helpers
         /// Renders a camera to a Texture2D without saving to disk. Used for multi-angle captures.
         /// Returns the base64-encoded PNG, downscaled to fit within <paramref name="maxResolution"/>.
         /// </summary>
-        public static (string base64, int width, int height) RenderCameraToBase64(Camera camera, int maxResolution = 640)
+        public static (string base64, int width, int height) RenderCameraToBase64(
+            Camera camera, int maxResolution = 640, Action<Camera, int, int> beforeRender = null)
         {
             if (camera == null) throw new ArgumentNullException(nameof(camera));
 
@@ -365,6 +368,7 @@ namespace MCPForUnity.Runtime.Helpers
             try
             {
                 camera.targetTexture = rt;
+                beforeRender?.Invoke(camera, width, height);
                 camera.Render();
 
                 RenderTexture.active = rt;

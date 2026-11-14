@@ -68,7 +68,8 @@ ALL_ACTIONS = SETUP_ACTIONS + CREATION_ACTIONS + CONFIGURATION_ACTIONS + EXTENSI
         "Supports include_image=true for inline base64 PNG, "
         "batch='surround' for 6-angle contact sheet, batch='orbit' for configurable grid, "
         "view_target/view_position for positioned capture, and capture_source='scene_view' to capture "
-        "the active Unity Scene View viewport.\n"
+        "the active Unity Scene View viewport. Supported single-view Unity screenshots return pickView metadata "
+        "for use with pick_gameobject_from_image.\n"
         "- screenshot_multiview: Shorthand for screenshot with batch='surround' and include_image=true."
     ),
     annotations=ToolAnnotations(
