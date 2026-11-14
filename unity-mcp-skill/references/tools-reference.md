@@ -902,7 +902,9 @@ Discover available custom tools via `mcpforunity://custom-tools` resource.
 
 ### manage_camera
 
-Unified camera management (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; unlocks presets, pipelines, and blending when Cinemachine is installed. Use `ping` to check availability.
+Unified camera management (Unity Camera + Cinemachine). Basic Camera operations are always available; presets, pipelines, and blending use the Cinemachine 3 camera API. `ping` returns `installed`, `version` (UPM release when registered), `cinemachine` (native API available), and `supportedApiMajor` (3).
+
+Before writing package-specific code, use `manage_packages(action="get_package_info", package="com.unity.cinemachine")`. Preserve an existing Cinemachine 2 version and use `execute_code` with its installed API; unsupported native actions explain this limitation without prompting an upgrade. The Dependencies tab also supports exact package versions and preserves unchanged installations in Install All.
 
 **Parameters:**
 
