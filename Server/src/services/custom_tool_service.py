@@ -46,6 +46,10 @@ async def get_user_id_from_context(ctx: Context) -> str | None:
     return user_id if isinstance(user_id, str) and user_id else None
 
 
+# Prefix of the owner keys of projects registered over /register-tools (see _route_owner_key).
+_ROUTE_OWNER = "<register-tools>"
+
+
 class RegisterToolsPayload(BaseModel):
     project_id: str
     project_hash: str | None = None
@@ -69,6 +73,12 @@ class CustomToolService:
         self._project_tools: dict[str, dict[str, ToolDefinitionModel]] = {}
         self._hash_to_project: dict[str, str] = {}
         self._global_tools: dict[str, ToolDefinitionModel] = {}
+        # What each project (owner key) last declared for each global tool. A tool's owners are the projects
+        # whose declaration is the definition being served.
+        self._global_tool_declarations: dict[str, dict[str, dict]] = {}
+        # Projects registered over /register-tools, by route owner key. That route has no connection whose end
+        # could be observed, so they count as connected beside the PluginHub sessions.
+        self._route_owners: set[str] = set()
         self._register_http_routes()
 
     @classmethod
@@ -93,8 +103,31 @@ class CustomToolService:
             except ValidationError as exc:
                 return JSONResponse({"success": False, "error": exc.errors()}, status_code=400)
 
-            registered, replaced = self._register_project_tools(
-                payload.project_id, payload.tools, project_hash=payload.project_hash)
+            if not payload.project_hash and self._project_owns_global_tools(payload.project_id):
+                # Without its hash the request cannot say which of the project's instances it speaks for,
+                # so it could neither release that instance's dropped tools nor leave the others' alone.
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "project_hash is required: this project's instances own global custom tools",
+                    },
+                    status_code=409,
+                )
+
+            served_before = self._served_global_definitions()
+            try:
+                registered, replaced = self._register_project_tools(
+                    payload.project_id,
+                    payload.tools,
+                    project_hash=payload.project_hash,
+                    live_owners=await self.hub_owner_keys(),
+                )
+            finally:
+                # As after a PluginHub registration: connected clients re-fetch the tool list, but only when the
+                # served definitions changed (not for a no-op, a kept schema or a restored one) — including the
+                # tools registered before one in the batch failed.
+                if self._served_global_definitions() != served_before:
+                    await PluginHub._notify_mcp_tool_list_changed()
 
             message = f"Registered {len(registered)} tool(s)"
             if replaced:
@@ -317,52 +350,258 @@ class CustomToolService:
         project_id: str,
         tools: list[ToolDefinitionModel],
         project_hash: str | None = None,
+        live_owners: set[str] | None = None,
     ) -> tuple[list[str], list[str]]:
+        """Register a project's tools from /register-tools. ``live_owners`` are the PluginHub sessions' owner keys
+        (None without a hub): declarations of hub projects no longer connected then give way here too."""
         registered: list[str] = []
         replaced: list[str] = []
+        live: set[str] | None = None
+        owner = self._route_owner_key(project_hash) if project_hash else None
+        if not self._project_scoped_tools and owner:
+            self._route_owners.add(owner)
+            live = self._with_route_owners(live_owners)
+            self._release_undeclared_tools(owner, tools, live)
         for tool in tools:
             if self._is_registered(project_id, tool.name):
                 replaced.append(tool.name)
             self._register_tool(project_id, tool)
-            registered.append(tool.name)
             if not self._project_scoped_tools:
-                self._register_global_tool(tool)
+                # As in register_global_tools: one malformed tool is skipped, not the rest of the batch, and only a
+                # tool FastMCP serves is reported as registered.
+                try:
+                    if not self._register_global_tool(tool, owner=owner, live_owners=live):
+                        continue
+                except Exception as exc:
+                    logger.warning(
+                        "Custom tool '%s' could not be registered and was skipped: %s",
+                        tool.name,
+                        exc,
+                        exc_info=True,
+                    )
+                    continue
+            registered.append(tool.name)
 
         if project_hash:
             self._hash_to_project[project_hash.lower()] = project_id
 
         return registered, replaced
 
-    def register_global_tools(self, tools: list[ToolDefinitionModel]) -> None:
+    def register_global_tools(
+        self,
+        tools: list[ToolDefinitionModel],
+        owner: str | None = None,
+        live_owners: set[str] | None = None,
+    ) -> None:
+        """Expose a plugin's custom tools through FastMCP.
+
+        ``owner`` is the registering project's hash and ``live_owners`` the hashes of every connected
+        project; together they decide whether a changed schema may replace the one being served.
+        """
         # Global custom tools are always registered, even when project-scoped tools
         # are enabled. Project-scoped tools can override globals by name, but
         # disabling globals entirely would break shared tooling that projects expect.
+        live_owners = self._with_route_owners(live_owners)
+        if owner:
+            self._release_undeclared_tools(owner, tools, live_owners)
         builtin_names = self._get_builtin_tool_names()
+        exposed: list[str] = []
+        skipped: list[str] = []
         for tool in tools:
             if tool.name in builtin_names:
-                logger.info(
+                logger.debug(
                     "Skipping global custom tool registration for built-in tool '%s'",
                     tool.name,
                 )
                 continue
-            self._register_global_tool(tool)
+            # One malformed tool must not cost the plugin every other tool it registered. This loop used to
+            # let an exception escape to PluginHub, which logged "custom tools may not be available globally"
+            # and moved on — leaving the author staring at a plugin whose tools are all missing, with nothing
+            # to say which one was at fault.
+            try:
+                if self._register_global_tool(tool, owner=owner, live_owners=live_owners):
+                    exposed.append(tool.name)
+                else:
+                    skipped.append(tool.name)
+            except Exception as exc:
+                skipped.append(tool.name)
+                logger.warning(
+                    "Custom tool '%s' could not be registered and was skipped: %s",
+                    tool.name,
+                    exc,
+                    exc_info=True,
+                )
+
+        # SAY WHAT HAPPENED. This path had no success log at all, so "no custom tools appeared" and "no custom
+        # tools were offered" were indistinguishable from the outside — and the only failure log was a generic
+        # one in PluginHub that named nothing. An operator should be able to answer "did the server expose my
+        # tools?" from the log alone.
+        if exposed or skipped:
+            logger.info(
+                "Custom tools exposed globally: %d (%s)%s",
+                len(exposed),
+                ", ".join(exposed) if exposed else "none",
+                f" — skipped {len(skipped)}: {', '.join(skipped)}" if skipped else "",
+            )
+
+    @staticmethod
+    def _owner_id(owner_key: str) -> str:
+        """Normalize an owner key: the project hash ignores case, a user id (``user/hash``) keeps it."""
+        user, sep, project_hash = owner_key.rpartition("/")
+        return f"{user}{sep}{project_hash.lower()}"
+
+    def _served_global_definitions(self) -> dict[str, dict]:
+        return {name: definition.model_dump() for name, definition in self._global_tools.items()}
+
+    async def hub_owner_keys(self) -> set[str] | None:
+        """The owner keys of every connected PluginHub session; None when no hub is running."""
+        if not PluginHub.is_configured():
+            return None
+        return await PluginHub._registry.owner_keys()
+
+    def _route_owner_key(self, project_hash: str) -> str:
+        """Owner key of a project registered over /register-tools, apart from the same hash's PluginHub session:
+        the route's projects always count as connected, which must not keep a disconnected session's declarations
+        alive. The project hash stays the last ``/`` part, as in every owner key."""
+        return f"{_ROUTE_OWNER}/{project_hash.lower()}"
+
+    def _with_route_owners(self, live_owners: set[str] | None) -> set[str] | None:
+        """Connected owners: the given hub sessions plus the projects registered over /register-tools."""
+        if live_owners is None:
+            return None
+        return {self._owner_id(key) for key in live_owners} | self._route_owners
+
+    def _served_owners(self, name: str) -> set[str]:
+        """The projects whose declaration of ``name`` is the definition being served."""
+        served = self._global_tools.get(name)
+        if served is None:
+            return set()
+        served_dump = served.model_dump()
+        return {
+            owner
+            for owner, declared in self._global_tool_declarations.get(name, {}).items()
+            if declared == served_dump
+        }
+
+    def _project_owns_global_tools(self, project_id: str) -> bool:
+        """Whether an instance of ``project_id`` has declared a global tool. Project-scoped mode tracks none.
+
+        An instance is known by its hash: one mapped to ``project_id`` by an earlier hashed registration, or
+        ``project_id`` itself, which is the hash for a project registered through PluginHub.
+        """
+        if self._project_scoped_tools:
+            return False
+        hashes = {h for h, pid in self._hash_to_project.items() if pid == project_id}
+        hashes.add(project_id.lower())
+        return any(
+            owner.rpartition("/")[2] in hashes
+            for declarations in self._global_tool_declarations.values()
+            for owner in declarations
+        )
+
+    def _release_undeclared_tools(
+        self,
+        owner: str,
+        tools: list[ToolDefinitionModel],
+        live_owners: set[str] | None = None,
+    ) -> None:
+        """A project's tool list is complete: it no longer declares the tools missing from it.
+
+        Left in place, a stale declaration would count as a connected project serving that schema, and refuse
+        another project's changed one. Declarations of projects no longer connected are dropped too.
+        """
+        owner = self._owner_id(owner)
+        declared = {tool.name for tool in tools}
+        live = {self._owner_id(key) for key in live_owners} if live_owners is not None else None
+        for name, declarations in self._global_tool_declarations.items():
+            if name not in declared:
+                declarations.pop(owner, None)
+            if live is not None:
+                for gone in [key for key in declarations if key not in live and key != owner]:
+                    del declarations[gone]
 
     def _get_builtin_tool_names(self) -> set[str]:
         return {tool["name"] for tool in get_registered_tools()}
 
-    def _register_global_tool(self, definition: ToolDefinitionModel) -> None:
-        existing = self._global_tools.get(definition.name)
-        if existing:
-            if existing.model_dump() != definition.model_dump():
-                logger.warning(
-                    "Custom tool '%s' already registered with a different schema; keeping existing definition.",
-                    definition.name,
-                )
-            return
+    def _register_global_tool(
+        self,
+        definition: ToolDefinitionModel,
+        owner: str | None = None,
+        live_owners: set[str] | None = None,
+    ) -> bool:
+        """Expose a custom tool through FastMCP.
 
+        Returns whether FastMCP serves the tool afterwards: this definition, an identical one already there,
+        or the previous one, kept because another connected project serves it, because it could not be
+        removed, or restored because FastMCP refused this one. False when FastMCP serves neither.
+        """
+        owner = self._owner_id(owner) if owner else None
+        existing = self._global_tools.get(definition.name)
+        replaced = None
+        if existing:
+            if existing.model_dump() == definition.model_dump():
+                self._declare(owner, definition)
+                return True
+            # FastMCP serves one schema per tool name, and validates a call against it before the handler
+            # routes it to a project. Replacing the definition another connected project declares would make
+            # that project's calls fail validation, and two such projects reloading in turn would swap it back
+            # and forth; keep it, as before. Projects no longer connected, and projects that now declare
+            # another schema, do not hold it: projects sharing a tool that all move to a new schema replace it.
+            others = self._served_owners(definition.name) - {owner}
+            if live_owners is not None:
+                others &= {self._owner_id(key) for key in live_owners}
+            if others:
+                logger.warning(
+                    "Custom tool '%s' from project %s declares a different schema than connected project(s) %s; "
+                    "keeping theirs (one schema per tool name is served). Call this project's version through "
+                    "execute_custom_tool.",
+                    definition.name,
+                    owner or "(unknown)",
+                    ", ".join(sorted(others)),
+                )
+                # Recorded although another schema is served: this project owns the tool as soon as its schema is
+                # the one served, whoever registers it. Only a schema that could be served is recorded: one that
+                # cannot be built raises here and leaves the project's previous declaration, and its ownership.
+                self._build_global_tool_handler(definition)
+                self._declare(owner, definition)
+                return True
+            # Unity re-registers on every domain reload, so the newest definition is authoritative. Keeping the
+            # first one froze a tool's signature at its earliest version: after fixing a tool's parameters the
+            # server went on rejecting the arguments the tool now declares, until it was restarted.
+            logger.info(
+                "Custom tool '%s' re-registered with a changed schema — replacing the previous definition.",
+                definition.name,
+            )
+
+        # Prepared before the previous definition is removed: a definition whose handler cannot be built (a
+        # parameter named ctx, say) then leaves the working tool in place.
         handler = self._build_global_tool_handler(definition)
         wrapped = log_execution(definition.name, "Tool")(handler)
         wrapped = telemetry_tool(definition.name)(wrapped)
+
+        # RE-STAMP THE OUTERMOST CALLABLE. This is what actually kept custom tools from being exposed.
+        #
+        # The handler is given a synthetic __signature__/__annotations__ so FastMCP can see the plugin's
+        # parameters. Both decorators above use functools.wraps, which copies __wrapped__ but leaves the
+        # wrapper's OWN __annotations__ empty. inspect.signature follows __wrapped__ and therefore reports the
+        # right signature — which is why this looked correct from every angle — but FastMCP builds its schema
+        # with pydantic's TypeAdapter, which reads the wrapper's real annotations and raises KeyError on the
+        # first parameter name. The tool was then dropped with a one-line warning and no traceback.
+        #
+        # So: put the signature on the object FastMCP is actually handed, and drop __wrapped__ so nothing
+        # resolves back to a function with a different one. Verified against fastmcp 3.0.2 — without this a
+        # two-parameter tool fails to register; with it, it registers and exposes both parameters.
+        wrapped.__signature__ = self._build_signature(definition)
+        wrapped.__annotations__ = self._build_annotations(definition)
+        if hasattr(wrapped, "__wrapped__"):
+            del wrapped.__wrapped__
+
+        if existing:
+            if not self._unregister_global_tool(definition.name):
+                # Registering on top of a tool FastMCP still routes would leave the two out of step; the
+                # previous definition keeps serving (warned about in _unregister_global_tool).
+                return True
+            replaced = existing
 
         try:
             wrapped = self._mcp.tool(
@@ -375,9 +614,44 @@ class CustomToolService:
                 definition.name,
                 exc,
             )
-            return
+            if replaced is not None:
+                # The previous definition was already removed: put it back rather than lose a working tool.
+                return self._register_global_tool(replaced)
+            return False
 
         self._global_tools[definition.name] = definition
+        self._declare(owner, definition)
+        return True
+
+    def _declare(self, owner: str | None, definition: ToolDefinitionModel) -> None:
+        """Record ``owner``'s declaration of a tool. Only declarations that are served, or kept out on purpose, are
+        recorded: one that failed to build or register leaves the owner's previous declaration in place."""
+        if owner:
+            self._global_tool_declarations.setdefault(definition.name, {})[owner] = definition.model_dump()
+
+    def _unregister_global_tool(self, name: str) -> bool:
+        """Drop a registered custom tool so it can be re-added with a new signature.
+
+        Tries the removal spellings FastMCP has used across the supported range (>=3.0.2,<4). If none exists,
+        the old tool keeps serving rather than being dropped from the registry while FastMCP still routes to it.
+        Returns whether the tool was removed.
+        """
+        for attr in ("remove_tool", "unregister_tool", "delete_tool"):
+            remover = getattr(self._mcp, attr, None)
+            if not callable(remover):
+                continue
+            try:
+                remover(name)
+                self._global_tools.pop(name, None)
+                return True
+            except Exception as exc:  # pragma: no cover - depends on FastMCP version
+                logger.debug("FastMCP.%s('%s') failed: %s", attr, name, exc)
+        logger.warning(
+            "Could not remove custom tool '%s' from FastMCP (no supported removal API); "
+            "its signature stays as first registered until the server restarts.",
+            name,
+        )
+        return False
 
     def _build_global_tool_handler(self, definition: ToolDefinitionModel):
         async def _handler(ctx: Context, **kwargs) -> MCPResponse:
@@ -425,6 +699,25 @@ class CustomToolService:
                 annotation=Context,
             )
         ]
+        # Required parameters first. Python forbids a non-default argument after a defaulted one, and the
+        # incoming order is whatever the plugin happened to declare (in the Unity package that is C# reflection
+        # order, which is not even guaranteed). A tool author has no reason to know this rule, and getting it
+        # wrong raised ValueError out of register_global_tools and took the WHOLE BATCH of custom tools with
+        # it — one tool with its optional argument listed first, and none of the plugin's tools appeared.
+        # Sorting is stable, so the author's order survives within each group.
+        # A parameter whose name is not an identifier cannot appear in the signature FastMCP validates calls
+        # against. An optional one is left out (and warned about below); a required one would make every call
+        # fail, so the tool is refused with its name instead of being exposed unusable.
+        unusable = [p.name for p in definition.parameters if p.required and not p.name.isidentifier()]
+        if unusable:
+            raise ValueError(
+                f"Custom tool '{definition.name}' has required parameter(s) that are not valid identifiers: "
+                f"{', '.join(unusable)}"
+            )
+        ordered = sorted(
+            (p for p in definition.parameters if p.name.isidentifier()),
+            key=lambda p: not p.required,
+        )
         for param in definition.parameters:
             if not param.name.isidentifier():
                 logger.warning(
@@ -432,7 +725,7 @@ class CustomToolService:
                     definition.name,
                     param.name,
                 )
-                continue
+        for param in ordered:
             default = inspect._empty if param.required else self._coerce_default(
                 param.default_value, param.type)
             params.append(

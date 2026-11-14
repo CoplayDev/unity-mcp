@@ -211,7 +211,12 @@ async def sync_tool_visibility_from_unity(
                         )
 
                     service = CustomToolService.get_instance()
-                    service.register_global_tools(custom_tool_models)
+                    # Connected hub sessions, if a hub runs: a disconnected session's declaration must not keep
+                    # Unity's changed schema out.
+                    service.register_global_tools(
+                        custom_tool_models,
+                        live_owners=await service.hub_owner_keys(),
+                    )
                     custom_tool_count = len(custom_tool_models)
                     logger.info(
                         "Registered %d custom tool(s) from Unity via stdio sync",
