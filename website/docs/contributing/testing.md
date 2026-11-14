@@ -64,6 +64,17 @@ Exit-code contract: `0` all blocking legs passed, `1` a blocking-leg regression,
 
 It needs a Hub-activated Editor locally (no ULF/serial); none of the CI license staging applies.
 
+### Test jobs in a background Editor
+
+`run_tests` disables interaction throttling before setup for both EditMode and PlayMode,
+and restores your preferences after Unity finishes its native cleanup.
+The initialization deadline still defaults to 15,000 ms and can be changed with `init_timeout`.
+When it expires, the job reports `failed`; cancellation waits for `RunStarted` so Unity
+has captured the open scenes before teardown. A new request returns `tests_running`
+until cleanup finishes. Poll `get_test_job` and retry after that busy period.
+If the installed Test Framework cannot monitor cancellation, the existing run is allowed
+to finish before another job starts.
+
 ### Adding a Unity test
 
 Mirror the C# tool you're adding. For `ManageNavigation.cs` in `MCPForUnity/Editor/Tools/`, create `TestProjects/UnityMCPTests/Assets/Tests/EditMode/Editor/ManageNavigationTests.cs`. Use the existing assembly definition (`MCPForUnityTests.Editor.asmdef`) so the suite picks it up automatically.
