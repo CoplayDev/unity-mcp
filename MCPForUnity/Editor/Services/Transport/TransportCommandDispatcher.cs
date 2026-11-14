@@ -395,6 +395,7 @@ namespace MCPForUnity.Editor.Services.Transport
 
                 var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
                 var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
+                int undoGroup = BeginUndoGroup(command.type, parameters);
                 object result;
                 try
                 {
@@ -402,6 +403,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 }
                 catch (Exception ex)
                 {
+                    EndUndoGroup(undoGroup);
                     McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
                     var errorJson = SerializeError(ex.Message, command.type, ex.StackTrace);
                     CommandLedger.Complete(requestId, errorJson);
@@ -451,11 +453,16 @@ namespace MCPForUnity.Editor.Services.Transport
                         }
                         McpLogRecord.Log(capturedType, capturedParams, capturedLogType,
                             logStatus, sw?.ElapsedMilliseconds ?? 0, logError);
-                        EditorApplication.delayCall += () => RemovePending(id, pending);
+                        EditorApplication.delayCall += () =>
+                        {
+                            EndUndoGroup(undoGroup);
+                            RemovePending(id, pending);
+                        };
                     }, TaskScheduler.Default);
                     return;
                 }
 
+                EndUndoGroup(undoGroup);
                 sw?.Stop();
 
                 string syncLogStatus = "SUCCESS";
@@ -479,6 +486,34 @@ namespace MCPForUnity.Editor.Services.Transport
                 pending.TrySetResult(SerializeError(ex.Message, "Unknown (error during processing)", ex.StackTrace));
                 RemovePending(id, pending);
             }
+        }
+
+        /// <summary>
+        /// Opens a fresh Undo group named after the command so everything one MCP command changes
+        /// is undone with a single Ctrl+Z (batch_execute included, since it composes in-process).
+        /// Returns -1 for the editor's own undo/redo actions, which must not be wrapped.
+        /// </summary>
+        internal static int BeginUndoGroup(string commandType, JObject parameters)
+        {
+            string action = parameters?.Value<string>("action");
+            if (commandType == "manage_editor" && (action == "undo" || action == "redo"))
+            {
+                return -1;
+            }
+
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName(string.IsNullOrEmpty(action) ? $"MCP: {commandType}" : $"MCP: {commandType} {action}");
+            return Undo.GetCurrentGroup();
+        }
+
+        internal static void EndUndoGroup(int group)
+        {
+            if (group < 0)
+            {
+                return;
+            }
+
+            Undo.CollapseUndoOperations(group);
         }
 
         private static void CancelPending(string id, CancellationToken token)
