@@ -405,7 +405,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 {
                     EndUndoGroup(undoGroup);
                     McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
-                    var errorJson = SerializeError(ex.Message, command.type, ex.StackTrace);
+                    var errorJson = JsonConvert.SerializeObject(ExceptionLocation.Describe(command.type, ex));
                     CommandLedger.Complete(requestId, errorJson);
                     pending.TrySetResult(errorJson);
                     RemovePending(id, pending);
@@ -483,7 +483,8 @@ namespace MCPForUnity.Editor.Services.Transport
             catch (Exception ex)
             {
                 McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
-                pending.TrySetResult(SerializeError(ex.Message, "Unknown (error during processing)", ex.StackTrace));
+                pending.TrySetResult(JsonConvert.SerializeObject(
+                    ExceptionLocation.Describe("Unknown (error during processing)", ex)));
                 RemovePending(id, pending);
             }
         }

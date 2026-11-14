@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
@@ -180,6 +181,11 @@ namespace MCPForUnity.Editor.Tools
                 {
                     return ClearConsole();
                 }
+                else if (action == "get_compile_errors")
+                {
+                    var data = CompilationDiagnostics.ToResponseData(p.GetBool("includeWarnings", false));
+                    return new SuccessResponse("Compiler messages of the last script compilation.", data);
+                }
                 else if (action == "get")
                 {
                     // Extract parameters for 'get'
@@ -211,7 +217,7 @@ namespace MCPForUnity.Editor.Tools
                 else
                 {
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Valid actions are 'get' or 'clear'."
+                        $"Unknown action: '{action}'. Valid actions are 'get', 'clear' or 'get_compile_errors'."
                     );
                 }
             }

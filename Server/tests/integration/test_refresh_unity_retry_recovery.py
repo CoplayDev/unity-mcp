@@ -27,6 +27,8 @@ async def test_refresh_unity_recovers_from_retry_disconnect(monkeypatch):
             return {"success": False, "error": "disconnected", "hint": "retry"}
         elif command_type == "get_editor_state":
             return {"success": True, "data": {"advice": {"ready_for_tools": True}}}
+        elif command_type == "read_console":
+            return {"success": True, "data": {"error_count": 0, "messages": []}}
         raise ValueError(f"Unexpected command: {command_type}")
 
     import services.tools.refresh_unity as refresh_mod

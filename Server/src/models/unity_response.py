@@ -6,6 +6,18 @@ from typing import Any, Type
 from models.models import MCPResponse
 
 
+# Structured fields Unity puts on a top-level {"status": "error"} envelope.
+ERROR_DETAIL_KEYS = ("code", "command", "exception_type", "file", "line", "replayed")
+
+
+def error_details(envelope: Any) -> dict[str, Any] | None:
+    """Return the structured fields of a Unity error envelope (code, file/line, ...), if any."""
+    if not isinstance(envelope, dict):
+        return None
+    details = {k: envelope[k] for k in ERROR_DETAIL_KEYS if envelope.get(k) is not None}
+    return details or None
+
+
 def normalize_unity_response(response: Any) -> Any:
     """Normalize Unity's {status,result} payloads into MCPResponse shape."""
     if not isinstance(response, dict):
@@ -35,6 +47,8 @@ def normalize_unity_response(response: Any) -> Any:
             "message", "error", "status", "code"}}
         if not data:
             data = None
+    if data is None and not success and not payload:
+        data = error_details(response)
 
     normalized: dict[str, Any] = {
         "success": success,

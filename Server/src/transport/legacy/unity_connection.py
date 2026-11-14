@@ -15,6 +15,7 @@ import time
 from typing import Any
 
 from models.models import MCPResponse, UnityInstanceInfo
+from models.unity_response import error_details
 from transport.legacy.stdio_port_registry import stdio_port_registry
 
 
@@ -31,7 +32,12 @@ class UnityCommandError(Exception):
     """Unity answered with status "error": the command reached the Editor and was handled.
 
     Not a transport failure, so it is surfaced as-is instead of being re-sent.
+    ``response`` keeps the raw envelope (code, exception_type, file, line, ...).
     """
+
+    def __init__(self, message: str, response: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.response = response or {}
 
 
 @dataclass
@@ -437,7 +443,7 @@ class UnityConnection:
                 if resp.get('status') == 'error':
                     err = resp.get('error') or resp.get(
                         'message', 'Unknown Unity error')
-                    raise UnityCommandError(err)
+                    raise UnityCommandError(err, resp)
                 return resp.get('result', {})
             except UnityCommandError:
                 raise
@@ -1021,6 +1027,8 @@ async def async_send_command_with_retry(
             )
 
         return result
+    except UnityCommandError as e:
+        return MCPResponse(success=False, error=str(e), data=error_details(e.response))
     except Exception as e:
         return MCPResponse(success=False, error=str(e))
 

@@ -90,3 +90,13 @@ def test_stdio_unity_error_is_not_resent(bridge):
     with pytest.raises(UnityCommandError, match="not found"):
         conn.send_command("manage_gameobject", {"action": "delete", "target": "X"}, request_id="rid-2")
     assert len(received) == 1
+
+
+def test_stdio_unity_error_keeps_envelope(bridge):
+    port, _ = bridge({"status": "error", "error": "boom", "exception_type": "System.InvalidOperationException",
+                      "file": "Assets/X.cs", "line": 3})
+    conn = UnityConnection(port=port)
+    with pytest.raises(UnityCommandError) as info:
+        conn.send_command("manage_scene", {"action": "load"})
+    assert info.value.response["exception_type"] == "System.InvalidOperationException"
+    assert info.value.response["line"] == 3

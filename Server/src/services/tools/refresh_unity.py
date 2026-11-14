@@ -191,6 +191,8 @@ async def refresh_unity(
         "wait_for_ready": bool(wait_for_ready),
     }
 
+    compile_before = await _last_compile(unity_instance) if wait_for_ready else None
+
     recovered_from_disconnect = False
     # Don't retry on reload - refresh_unity triggers compilation/reload,
     # so retrying would cause multiple reloads (issue #577)
@@ -264,10 +266,55 @@ async def refresh_unity(
         pass
 
     if recovered_from_disconnect:
-        return MCPResponse(
+        result = MCPResponse(
             success=True,
             message="Refresh recovered after Unity disconnect/retry; editor is ready.",
             data={"recovered_from_disconnect": True},
         )
+    else:
+        result = MCPResponse(**response_dict) if isinstance(response, dict) else response
 
-    return MCPResponse(**response_dict) if isinstance(response, dict) else response
+    if wait_for_ready and isinstance(result, MCPResponse):
+        result = _with_compile_errors(result, compile_before, await _last_compile(unity_instance))
+    return result
+
+
+MAX_REPORTED_COMPILE_ERRORS = 20
+
+
+async def _last_compile(unity_instance: str | None) -> dict[str, Any] | None:
+    """Structured compiler messages of Unity's most recent compilation (errors only)."""
+    resp = await unity_transport.send_with_unity_instance(
+        _legacy_conn.async_send_command_with_retry,
+        unity_instance,
+        "read_console",
+        {"action": "get_compile_errors", "includeWarnings": False},
+    )
+    if not isinstance(resp, dict):
+        resp = resp.model_dump() if hasattr(resp, "model_dump") else {}
+    data = resp.get("data")
+    return data if resp.get("success") and isinstance(data, dict) else None
+
+
+def _with_compile_errors(
+    result: MCPResponse, before: dict[str, Any] | None, after: dict[str, Any] | None
+) -> MCPResponse:
+    """Attach the errors of a compilation that finished during this refresh."""
+    if not after or not after.get("error_count"):
+        return result
+    finished = after.get("last_compile_finished_unix_ms")
+    if before is not None and finished == before.get("last_compile_finished_unix_ms"):
+        return result  # no new compilation: these errors predate the refresh
+
+    errors = [m for m in after.get("messages") or [] if m.get("severity") == "error"]
+    first = errors[0] if errors else {}
+    where = f"{first.get('file')}:{first.get('line')}" if first.get("file") else "unknown location"
+    data = dict(result.data) if isinstance(result.data, dict) else {}
+    data.update({
+        "compilation_failed": True,
+        "compile_error_count": after["error_count"],
+        "compile_errors": errors[:MAX_REPORTED_COMPILE_ERRORS],
+    })
+    message = (f"{result.message or 'Refresh done.'} Compilation failed with {after['error_count']} "
+               f"error(s); first: {where} {first.get('code') or ''} {first.get('message') or ''}").strip()
+    return result.model_copy(update={"message": message, "data": data})
