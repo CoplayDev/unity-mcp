@@ -554,6 +554,7 @@ namespace MCPForUnity.Editor.Services
         private static void SaveDirtyScenesIfNeeded()
         {
             int sceneCount = SceneManager.sceneCount;
+            bool dirtyUntitled = false;
             for (int i = 0; i < sceneCount; i++)
             {
                 var scene = SceneManager.GetSceneAt(i);
@@ -561,6 +562,7 @@ namespace MCPForUnity.Editor.Services
                 {
                     if (string.IsNullOrEmpty(scene.path))
                     {
+                        dirtyUntitled = true;
                         McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running tests.");
                         continue;
                     }
@@ -573,6 +575,14 @@ namespace MCPForUnity.Editor.Services
                         McpLog.Warn($"[TestRunnerService] Failed to save dirty scene '{scene.name}': {ex.Message}");
                     }
                 }
+            }
+
+            // The Test Runner asks to save a dirty Untitled scene. In batch mode nobody can answer,
+            // the dialog is cancelled, and the run is silently dropped (RunStarted never fires), so
+            // start from a fresh scene instead: there is no interactive user whose work could be lost.
+            if (dirtyUntitled && Application.isBatchMode)
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             }
         }
 
