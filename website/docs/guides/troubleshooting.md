@@ -186,6 +186,23 @@ Git is only needed for this install path; the bridge itself does not use it, so 
 
 *Reported by [@Cherrymocha](https://github.com/CoplayDev/unity-mcp/issues/1216).*
 
+## The update notice names a version the Package Manager cannot install
+
+The **Window → MCP for Unity** update notice and the Package Manager read different things:
+
+| Install source | What the notice compares against |
+|---|---|
+| Git URL | `MCPForUnity/package.json` on `main` (stable) or `beta` (pre-release) |
+| Asset Store | the Asset Store listing for the package |
+| Registry (OpenUPM), `file:`, embedded | nothing — no notice is shown |
+
+So "update available: v10.3.0" next to a Package Manager that reports "already up to date" means the two disagree about where the package comes from:
+
+- **Registry install.** The registry has no newer version, so the Package Manager is right; the notice only applies to the Git URL. Switch to `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main` if you want the GitHub build. Earlier builds compared registry installs against GitHub and reported updates the Package Manager could not install — that mismatch is gone.
+- **Git install pinned to a tag or commit.** `...?path=/MCPForUnity#v10.0.0` never advances on its own. Change the revision to `#main` (or `#beta`).
+
+To move a Git install forward: quit the Editor, edit the revision in `Packages/manifest.json`, delete `Library/PackageCache/com.coplaydev.unity-mcp@*`, and reopen the project.
+
 ## Codex: `resources/read failed: unknown MCP server`
 
 The `mcpforunity://` URI names the *resource*, not the server. Some clients take a separate server key on a resource read.
