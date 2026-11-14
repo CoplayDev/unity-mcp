@@ -29,6 +29,10 @@ Install and run directly from PyPI using `uvx`.
 uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
+To connect with curl or a custom HTTP client, follow the
+[HTTP client session guide](https://coplaydev.github.io/unity-mcp/guides/http-client-sessions)
+to initialize and reuse the required session headers.
+
 **MCP Client Configuration (HTTP):**
 
 ```json
