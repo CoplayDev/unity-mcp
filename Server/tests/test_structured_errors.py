@@ -81,3 +81,18 @@ def test_refresh_without_errors_is_unchanged():
     original = MCPResponse(success=True, message="ok", data={"x": 1})
     after = {"error_count": 0, "last_compile_finished_unix_ms": 300, "messages": []}
     assert refresh_mod._with_compile_errors(original, None, after) is original
+
+
+def test_refresh_without_baseline_ignores_historical_errors():
+    """Baseline read failed and the errors' compilation finished before the refresh started."""
+    original = MCPResponse(success=True, message="Refresh requested.")
+    after = {"error_count": 1, "last_compile_finished_unix_ms": 1_000, "messages": [ERR]}
+    assert refresh_mod._with_compile_errors(original, None, after, refresh_started_ms=5_000) is original
+    assert refresh_mod._with_compile_errors(original, None, after) is original, "no proof of freshness at all"
+
+
+def test_refresh_without_baseline_attaches_errors_of_a_compile_that_finished_during_it():
+    original = MCPResponse(success=True, message="Refresh requested.")
+    after = {"error_count": 1, "last_compile_finished_unix_ms": 6_000, "messages": [ERR]}
+    out = refresh_mod._with_compile_errors(original, None, after, refresh_started_ms=5_000)
+    assert out.data["compilation_failed"] is True

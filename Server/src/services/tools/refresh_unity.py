@@ -191,6 +191,7 @@ async def refresh_unity(
         "wait_for_ready": bool(wait_for_ready),
     }
 
+    refresh_started_ms = int(time.time() * 1000)
     compile_before = await _last_compile(unity_instance) if wait_for_ready else None
 
     recovered_from_disconnect = False
@@ -275,7 +276,8 @@ async def refresh_unity(
         result = MCPResponse(**response_dict) if isinstance(response, dict) else response
 
     if wait_for_ready and isinstance(result, MCPResponse):
-        result = _with_compile_errors(result, compile_before, await _last_compile(unity_instance))
+        result = _with_compile_errors(result, compile_before, await _last_compile(unity_instance),
+                                      refresh_started_ms=refresh_started_ms)
     return result
 
 
@@ -297,14 +299,23 @@ async def _last_compile(unity_instance: str | None) -> dict[str, Any] | None:
 
 
 def _with_compile_errors(
-    result: MCPResponse, before: dict[str, Any] | None, after: dict[str, Any] | None
+    result: MCPResponse, before: dict[str, Any] | None, after: dict[str, Any] | None,
+    refresh_started_ms: int | None = None,
 ) -> MCPResponse:
-    """Attach the errors of a compilation that finished during this refresh."""
+    """Attach the errors of a compilation that finished during this refresh.
+
+    Freshness is proven either by the baseline (a different finish time than before the refresh)
+    or, when the baseline read failed, by a finish time after the refresh started. Without either
+    proof the errors may be historical (an assets-only refresh compiles nothing), so none are attached.
+    """
     if not after or not after.get("error_count"):
         return result
     finished = after.get("last_compile_finished_unix_ms")
-    if before is not None and finished == before.get("last_compile_finished_unix_ms"):
-        return result  # no new compilation: these errors predate the refresh
+    if before is not None:
+        if finished == before.get("last_compile_finished_unix_ms"):
+            return result  # no new compilation: these errors predate the refresh
+    elif refresh_started_ms is None or not isinstance(finished, (int, float)) or finished < refresh_started_ms:
+        return result  # baseline unavailable and nothing proves this compilation is new
 
     errors = [m for m in after.get("messages") or [] if m.get("severity") == "error"]
     first = errors[0] if errors else {}
