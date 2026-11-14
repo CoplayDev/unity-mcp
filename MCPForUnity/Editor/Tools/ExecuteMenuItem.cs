@@ -23,6 +23,8 @@ namespace MCPForUnity.Editor.Tools
         {
             McpLog.Info("[ExecuteMenuItem] Handling menu item command");
             string menuPath = @params["menu_path"]?.ToString() ?? @params["menuPath"]?.ToString();
+            // Decode once here, including direct/batch calls, before checking the blacklist.
+            menuPath = ParamCoercion.DecodeJsonString(menuPath);
             if (string.IsNullOrWhiteSpace(menuPath))
             {
                 return new ErrorResponse("Required parameter 'menu_path' or 'menuPath' is missing or empty.");
