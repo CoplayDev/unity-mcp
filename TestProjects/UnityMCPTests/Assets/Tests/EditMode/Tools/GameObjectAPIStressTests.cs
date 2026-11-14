@@ -12,6 +12,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using static MCPForUnityTests.Editor.TestUtilities;
 using Debug = UnityEngine.Debug;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -74,7 +75,7 @@ namespace MCPForUnityTests.Editor.Tools
                 int instanceId = result["data"]?["instanceID"]?.Value<int>() ?? 0;
                 if (instanceId != 0)
                 {
-                    var go = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                    var go = UnityObjectIdCompat.InstanceIDToObjectCompat(instanceId) as GameObject;
                     if (go != null) _createdObjects.Add(go);
                 }
             }
@@ -103,7 +104,7 @@ namespace MCPForUnityTests.Editor.Tools
                 int instanceId = result["data"]?["instanceID"]?.Value<int>() ?? 0;
                 if (instanceId != 0)
                 {
-                    var go = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                    var go = UnityObjectIdCompat.InstanceIDToObjectCompat(instanceId) as GameObject;
                     if (go != null) _createdObjects.Add(go);
                 }
             }
@@ -184,7 +185,7 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 if (go != null && go.name.StartsWith("Paginate_"))
                 {
-                    createdIds.Add(go.GetInstanceID());
+                    createdIds.Add(go.GetInstanceIDCompat());
                 }
             }
 
@@ -255,7 +256,7 @@ namespace MCPForUnityTests.Editor.Tools
                 var result = ToJObject(ManageComponents.HandleCommand(new JObject
                 {
                     ["action"] = "add",
-                    ["target"] = go.GetInstanceID().ToString(),
+                    ["target"] = go.GetInstanceIDCompat().ToString(),
                     ["searchMethod"] = "by_id",
                     ["componentType"] = compType  // Correct parameter name
                 }));
@@ -290,7 +291,7 @@ namespace MCPForUnityTests.Editor.Tools
             // Use the resource handler for getting components
             var result = ToJObject(GameObjectComponentsResource.HandleCommand(new JObject
             {
-                ["instanceID"] = go.GetInstanceID(),
+                ["instanceID"] = go.GetInstanceIDCompat(),
                 ["includeProperties"] = true,
                 ["pageSize"] = 50
             }));
@@ -316,7 +317,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageComponents.HandleCommand(new JObject
             {
                 ["action"] = "set_property",
-                ["target"] = go.GetInstanceID().ToString(),
+                ["target"] = go.GetInstanceIDCompat().ToString(),
                 ["searchMethod"] = "by_id",
                 ["componentType"] = "Rigidbody",  // Correct parameter name
                 ["properties"] = new JObject       // Correct parameter name
@@ -373,7 +374,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             Assert.IsNotNull(ids);
             Assert.AreEqual(1, ids.Count);
-            Assert.AreEqual(target.GetInstanceID(), ids[0].Value<int>());
+            Assert.AreEqual(target.GetInstanceIDCompat(), ids[0].Value<int>());
         }
 
         [Test]
@@ -435,7 +436,7 @@ namespace MCPForUnityTests.Editor.Tools
             // Call the resource directly (no action param needed)
             var result = ToJObject(GameObjectResource.HandleCommand(new JObject
             {
-                ["instanceID"] = go.GetInstanceID()
+                ["instanceID"] = go.GetInstanceIDCompat()
             }));
 
             sw.Stop();
@@ -478,7 +479,7 @@ namespace MCPForUnityTests.Editor.Tools
             // Use the components resource handler
             var result = ToJObject(GameObjectComponentsResource.HandleCommand(new JObject
             {
-                ["instanceID"] = go.GetInstanceID(),
+                ["instanceID"] = go.GetInstanceIDCompat(),
                 ["includeProperties"] = true
             }));
 
