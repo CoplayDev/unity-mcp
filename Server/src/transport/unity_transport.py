@@ -1,6 +1,7 @@
 """Transport helpers for routing commands to Unity."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Awaitable, Callable, TypeVar
 
@@ -101,11 +102,25 @@ async def send_with_unity_instance(
         except Exception as exc:
             # NOTE: asyncio.TimeoutError has an empty str() by default, which is confusing for clients.
             err = str(exc) or f"{type(exc).__name__}"
+            data: dict | None = None
+            if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+                # A bare "TimeoutError" reads as noise and agents plough on as if the
+                # command ran. Spell out what a timeout means and what to do about it.
+                err = (
+                    f"Unity did not respond to '{command_type}' within its time budget. "
+                    "The editor is likely compiling, reloading, importing assets, or still "
+                    "running the operation. The command may or may not have executed — do NOT "
+                    "assume it ran; verify its effects (or re-run it) once "
+                    "mcpforunity://editor/state reports advice.ready_for_tools=true. "
+                    "For long-running tools, pass timeout_seconds in the tool parameters "
+                    "(honored up to 3600)."
+                )
+                data = {"reason": "unity_timeout"}
             # Fail fast with a retry hint instead of hanging for COMMAND_TIMEOUT.
             # The client can decide whether retrying is appropriate for the command.
             return normalize_unity_response(
                 MCPResponse(success=False, error=err,
-                            hint="retry").model_dump()
+                            hint="retry", data=data).model_dump()
             )
 
     if unity_instance:
