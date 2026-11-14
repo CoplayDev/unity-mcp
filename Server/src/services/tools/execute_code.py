@@ -26,6 +26,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "Actions: execute (run code), get_history (list past executions), "
         "replay (re-run a history entry), clear_history. "
         "NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. "
+        "File.Delete/Directory.Delete are allowed only for a single string-literal path under the configured delete roots "
+        "(defaults: Builds, Temp, Logs, obj, Library/Bee, Library/Artifacts); Assets/ and paths outside the project are always blocked. "
         "Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only)."
     ),
     group="scripting_ext",
@@ -47,8 +49,8 @@ async def execute_code(
     ] | None = None,
     safety_checks: Annotated[
         bool,
-        "Enable basic blocked-pattern checks (File.Delete, Process.Start, infinite loops, etc). "
-        "Not a full sandbox — advanced bypass is possible. Default: true.",
+        "Enable basic blocked-pattern checks (Process.Start, infinite loops, etc) and the "
+        "File.Delete/Directory.Delete path allowlist. Not a full sandbox — advanced bypass is possible. Default: true.",
     ] = True,
     index: Annotated[
         int,
