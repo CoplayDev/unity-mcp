@@ -523,6 +523,16 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                     )
                     return JSONResponse(result.model_dump())
 
+                # Poll by project hash so a domain reload can replace the WebSocket session.
+                # Startup requests are sent once; replay of on_ready_code is not safe.
+                if command_type == "manage_editor" and isinstance(params, dict) and params.get("action") == "play":
+                    from services.play_mode_startup import has_startup_options, run_play_startup
+                    if has_startup_options(params):
+                        async def send_startup(wire_params: dict[str, Any], bound_instance: str | None) -> dict[str, Any]:
+                            return await PluginHub.send_command_for_instance(
+                                bound_instance or session_details.hash, "manage_editor", wire_params, retry_on_reload=False)
+                        return JSONResponse(await run_play_startup(send_startup, params))
+
                 # Send command to Unity
                 result = await PluginHub.send_command(session_id, command_type, params)
                 return JSONResponse(result)
