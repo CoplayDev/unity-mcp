@@ -192,6 +192,11 @@ def _client(args):
 async def main_async(args) -> int:
     async with _client(args) as client:
         stress = Stress(client, args)
+        if args.instance:
+            selected = await stress.call("set_active_instance", {"instance": args.instance})
+            if not selected.get("success", True):
+                print("could not select instance:", selected)
+                return 2
         activated = await stress.call("manage_tools", {"action": "activate", "group": "scripting_ext"})
         if not activated.get("success", True):
             print("could not activate scripting_ext:", activated)
@@ -233,6 +238,8 @@ def main() -> int:
     p.add_argument("--status-dir", default=None, help="UNITY_MCP_STATUS_DIR for the spawned stdio server.")
     p.add_argument("--project-path", required=True, help="Unity project root (for the recompile probe).")
     p.add_argument("--cycles", type=int, default=25)
+    p.add_argument("--instance", default=None,
+                   help="Unity instance (Name@hash or hash prefix) when several editors are connected.")
     p.add_argument("--max-attempts", type=int, default=8)
     p.add_argument("--retry-delay", type=float, default=1.5)
     p.add_argument("--call-timeout", type=float, default=120.0)
