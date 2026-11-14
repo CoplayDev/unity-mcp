@@ -14,6 +14,9 @@ namespace MCPForUnity.Editor.Helpers
     ///
     /// HTTP Local and HTTP Remote use separate EditorPrefs keys so that switching
     /// between scopes does not overwrite the other scope's URL.
+    ///
+    /// Both URLs are stored per project (see <see cref="ReadProjectUrlPref"/>), so editors
+    /// for different projects on the same machine can point at different servers.
     /// </summary>
     public static class HttpEndpointUtility
     {
@@ -51,7 +54,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetLocalBaseUrl()
         {
-            string stored = EditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
+            string stored = ReadProjectUrlPref(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
         }
 
@@ -61,7 +64,7 @@ namespace MCPForUnity.Editor.Helpers
         public static void SaveLocalBaseUrl(string userValue)
         {
             string normalized = NormalizeBaseUrl(userValue, DefaultLocalBaseUrl, remoteScope: false);
-            EditorPrefs.SetString(LocalPrefKey, normalized);
+            WriteProjectUrlPref(LocalPrefKey, normalized);
         }
 
         /// <summary>
@@ -70,7 +73,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetRemoteBaseUrl()
         {
-            string stored = EditorPrefs.GetString(RemotePrefKey, DefaultRemoteBaseUrl);
+            string stored = ReadProjectUrlPref(RemotePrefKey, DefaultRemoteBaseUrl);
             if (string.IsNullOrWhiteSpace(stored))
             {
                 return DefaultRemoteBaseUrl;
@@ -85,11 +88,35 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (string.IsNullOrWhiteSpace(userValue))
             {
-                EditorPrefs.SetString(RemotePrefKey, DefaultRemoteBaseUrl);
+                WriteProjectUrlPref(RemotePrefKey, DefaultRemoteBaseUrl);
                 return;
             }
             string normalized = NormalizeBaseUrl(userValue, DefaultRemoteBaseUrl, remoteScope: true);
-            EditorPrefs.SetString(RemotePrefKey, normalized);
+            WriteProjectUrlPref(RemotePrefKey, normalized);
+        }
+
+        /// <summary>
+        /// Reads a URL pref (<see cref="EditorPrefKeys.HttpBaseUrl"/> or
+        /// <see cref="EditorPrefKeys.HttpRemoteBaseUrl"/>) for the current project.
+        /// EditorPrefs are machine-wide, so the value is stored under a project-scoped key.
+        /// Until this project saves its own value, the machine-wide key written by earlier
+        /// versions is used, so existing setups keep their URL after upgrading.
+        /// </summary>
+        internal static string ReadProjectUrlPref(string key, string defaultValue)
+        {
+            string projectKey = ProjectIdentityUtility.GetProjectScopedKey(key);
+            return EditorPrefs.HasKey(projectKey)
+                ? EditorPrefs.GetString(projectKey, defaultValue)
+                : EditorPrefs.GetString(key, defaultValue);
+        }
+
+        /// <summary>
+        /// Writes a URL pref for the current project only. The machine-wide key is left
+        /// untouched so other projects that never saved their own value keep reading it.
+        /// </summary>
+        internal static void WriteProjectUrlPref(string key, string value)
+        {
+            EditorPrefs.SetString(ProjectIdentityUtility.GetProjectScopedKey(key), value);
         }
 
         /// <summary>

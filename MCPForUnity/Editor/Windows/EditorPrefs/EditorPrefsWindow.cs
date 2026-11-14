@@ -177,6 +177,14 @@ namespace MCPForUnity.Editor.Windows
                     knownMcpKeys.Add(field.GetValue(null).ToString());
                 }
             }
+
+            // HTTP URLs are stored under per-project keys; show this project's entries too.
+            foreach (string key in new[] { EditorPrefKeys.HttpBaseUrl, EditorPrefKeys.HttpRemoteBaseUrl })
+            {
+                string projectKey = ProjectIdentityUtility.GetProjectScopedKey(key);
+                knownMcpKeys.Add(projectKey);
+                knownPrefTypes[projectKey] = EditorPrefType.String;
+            }
         }
 
         private void RefreshPrefs()
