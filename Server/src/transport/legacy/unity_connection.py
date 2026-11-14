@@ -1030,7 +1030,9 @@ async def async_send_command_with_retry(
     except UnityCommandError as e:
         return MCPResponse(success=False, error=str(e), data=error_details(e.response))
     except Exception as e:
-        return MCPResponse(success=False, error=str(e))
+        # A transport failure: the command may or may not have run. Same contract as the HTTP
+        # path - hint="retry" - which also lets an identical retry reuse the request_id.
+        return MCPResponse(success=False, error=str(e) or type(e).__name__, hint="retry")
 
 
 async def _resync_tools_after_reconnect(instance_id: str | None) -> None:

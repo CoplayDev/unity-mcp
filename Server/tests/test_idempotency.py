@@ -208,3 +208,17 @@ def test_register_message_capabilities_default_to_empty():
     assert RegisterMessage(project_hash="h").capabilities == []
     msg = RegisterMessage(project_hash="h", capabilities=[COMMAND_LEDGER_CAPABILITY])
     assert msg.capabilities == ["command_ledger"]
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_failure_is_marked_retry(monkeypatch):
+    from transport.legacy import unity_connection as uc
+
+    def unreachable(*_a, **_k):
+        raise ConnectionError("Could not connect to Unity")
+
+    monkeypatch.setattr(uc, "send_command_with_retry", unreachable)
+    resp = await uc.async_send_command_with_retry("manage_scene", {"action": "get_active"})
+    assert resp.success is False
+    assert resp.hint == "retry"
+    assert "Could not connect" in resp.error
