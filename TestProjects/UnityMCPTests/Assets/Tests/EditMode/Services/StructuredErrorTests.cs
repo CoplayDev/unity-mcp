@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Tools;
@@ -109,6 +110,31 @@ namespace MCPForUnityTests.Editor.Services
             var all = CompilationDiagnostics.GetMessages(includeWarnings: true);
             Assert.AreEqual(2, all.Count);
             Assert.AreEqual("error", all[0].severity, "errors are listed first");
+        }
+
+        [Test]
+        public void CompilationDiagnostics_ErrorsSurviveTheMessageCapAcrossAssemblies()
+        {
+            CompilerMessage Warning(int i) => new CompilerMessage
+            {
+                type = CompilerMessageType.Warning,
+                message = $"Assets/W.cs({i},1): warning CS0168: unused", file = "Assets/W.cs", line = i, column = 1,
+            };
+            var warnings = Enumerable.Range(1, CompilationDiagnostics.MaxMessages + 50).Select(Warning).ToArray();
+            var error = new CompilerMessage
+            {
+                type = CompilerMessageType.Error,
+                message = "Assets/E.cs(5,1): error CS0103: The name 'x' does not exist", file = "Assets/E.cs", line = 5, column = 1,
+            };
+            CompilationDiagnostics.RecordAssembliesForTests(("Assembly-A", warnings), ("Assembly-B", new[] { error }));
+
+            var errors = CompilationDiagnostics.GetMessages(includeWarnings: false);
+            Assert.AreEqual(1, errors.Count, "the error after 250 warnings must not be dropped");
+            Assert.AreEqual("CS0103", errors[0].code);
+            var data = JObject.FromObject(CompilationDiagnostics.ToResponseData(includeWarnings: true));
+            Assert.AreEqual(1, (int)data["error_count"]);
+            Assert.AreEqual(CompilationDiagnostics.MaxMessages, ((JArray)data["messages"]).Count);
+            Assert.AreEqual(51, (int)data["dropped_messages"]);
         }
 
         [Test]

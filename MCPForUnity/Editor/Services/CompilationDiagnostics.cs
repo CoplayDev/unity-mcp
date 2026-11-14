@@ -39,6 +39,7 @@ namespace MCPForUnity.Editor.Services
             public List<Message> messages = new();
             public long finished_unix_ms;
             public long started_unix_ms;
+            public int dropped;
         }
 
         private static Snapshot _last = new();
@@ -85,6 +86,7 @@ namespace MCPForUnity.Editor.Services
                 last_compile_finished_unix_ms = _last.finished_unix_ms == 0 ? (long?)null : _last.finished_unix_ms,
                 error_count = _last.messages.Count(m => m.severity == "error"),
                 warning_count = _last.messages.Count(m => m.severity == "warning"),
+                dropped_messages = _last.dropped > 0 ? _last.dropped : (int?)null,
                 messages,
             };
         }
@@ -94,6 +96,14 @@ namespace MCPForUnity.Editor.Services
         {
             OnStarted();
             OnAssemblyFinished(assembly, messages.ToArray());
+            OnFinished();
+        }
+
+        /// <summary>One compilation with several assembly callbacks (tests only).</summary>
+        internal static void RecordAssembliesForTests(params (string assembly, CompilerMessage[] messages)[] assemblies)
+        {
+            OnStarted();
+            foreach (var (assembly, messages) in assemblies) OnAssemblyFinished(assembly, messages);
             OnFinished();
         }
 
@@ -107,15 +117,25 @@ namespace MCPForUnity.Editor.Services
             _current ??= new Snapshot { started_unix_ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
             foreach (var m in messages)
             {
+                bool isError = m.type == CompilerMessageType.Error;
                 if (_current.messages.Count >= MaxMessages)
                 {
-                    break;
+                    // Errors must survive the cap: an error replaces the most recent warning.
+                    // Warnings past the cap are dropped (counted).
+                    int warning = isError ? _current.messages.FindLastIndex(x => x.severity == "warning") : -1;
+                    if (warning < 0)
+                    {
+                        _current.dropped++;
+                        continue;
+                    }
+                    _current.messages.RemoveAt(warning);
+                    _current.dropped++;
                 }
 
                 var code = CodePattern.Match(m.message ?? string.Empty);
                 _current.messages.Add(new Message
                 {
-                    severity = m.type == CompilerMessageType.Error ? "error" : "warning",
+                    severity = isError ? "error" : "warning",
                     code = code.Success ? code.Groups[1].Value : null,
                     message = m.message,
                     file = string.IsNullOrEmpty(m.file) ? null : m.file.Replace('\\', '/'),
