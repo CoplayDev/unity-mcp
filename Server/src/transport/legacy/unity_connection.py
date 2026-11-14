@@ -27,6 +27,13 @@ _connection_lock = threading.Lock()
 FRAMED_MAX = 64 * 1024 * 1024
 
 
+class UnityCommandError(Exception):
+    """Unity answered with status "error": the command reached the Editor and was handled.
+
+    Not a transport failure, so it is surfaced as-is instead of being re-sent.
+    """
+
+
 @dataclass
 class UnityConnection:
     """Manages the socket connection to the Unity Editor."""
@@ -426,8 +433,10 @@ class UnityConnection:
                 if resp.get('status') == 'error':
                     err = resp.get('error') or resp.get(
                         'message', 'Unknown Unity error')
-                    raise Exception(err)
+                    raise UnityCommandError(err)
                 return resp.get('result', {})
+            except UnityCommandError:
+                raise
             except Exception as e:
                 logger.warning(
                     f"Unity communication attempt {attempt+1} failed: {e}")
