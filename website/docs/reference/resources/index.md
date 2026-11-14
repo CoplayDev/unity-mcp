@@ -11,6 +11,20 @@ description: Auto-generated catalog of every MCP for Unity resource.
 
 Resources are read-only state surfaces exposed to MCP clients. Tools mutate; resources observe.
 
+## `addressables_groups`
+
+**URI:** `mcpforunity://addressables/groups`
+
+Read the first 50 Addressables groups. Continue with manage_addressables group_list using the returned next_cursor, or choose page_size there. Requires com.unity.addressables and existing Addressables settings; does not create them.
+
+
+## `addressables_settings`
+
+**URI:** `mcpforunity://addressables/settings`
+
+Read basic Addressables settings without creating them. Requires com.unity.addressables and an existing Addressables settings asset.
+
+
 ## `cameras`
 
 **URI:** `mcpforunity://scene/cameras`

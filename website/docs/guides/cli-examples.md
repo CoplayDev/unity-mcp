@@ -286,6 +286,20 @@ unity-mcp asset-gen status --job-id abc123
 unity-mcp blender import-model --selection-only --target-size 2
 ```
 
+**Addressables**
+```bash
+unity-mcp addressables ping
+unity-mcp addressables groups --page-size 20
+unity-mcp addressables entries --group Characters
+unity-mcp addressables find --path Assets/Characters/Hero.prefab
+# Read the active profile; use --profile-id PROFILE_ID to select another.
+unity-mcp addressables profile
+unity-mcp addressables group-create Characters --dynamic-content
+unity-mcp addressables entry-add Characters --path Assets/Characters/Hero.prefab
+unity-mcp addressables build-content
+unity-mcp addressables build-status --job-id JOB_ID
+```
+
 **Raw Access (Any Tool)**
 ```bash
 unity-mcp raw tool_name 'JSON_params'

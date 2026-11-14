@@ -138,6 +138,10 @@
       "description": "Create and modify Unity materials and shaders"
     },
     {
+      "name": "manage_addressables",
+      "description": "Manage optional Addressables settings, groups, entries, labels, profiles and content builds"
+    },
+    {
       "name": "manage_packages",
       "description": "Modify Unity packages: install, remove, embed, and configure registries"
     },
