@@ -30,6 +30,19 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
+        public void ExceptionLocation_SkipsUnknownFramesBeforeTheFirstSourceFrame()
+        {
+            const string trace =
+                "  at System.Reflection.RuntimeMethodInfo.Invoke () [0x00000] in <00000000000000000000000000000000>:0 \n" +
+                "  at Zero.Line () [0x00000] in /proj/Gen.cs:0 \n" +
+                "  at Foo.Bar () [0x00012] in /proj/Packages/x/Editor/Tools/Foo.cs:42 ";
+            Assert.IsTrue(ExceptionLocation.TryParse(trace, out var file, out var line));
+            Assert.AreEqual("/proj/Packages/x/Editor/Tools/Foo.cs", file);
+            Assert.AreEqual(42, line);
+            Assert.IsFalse(ExceptionLocation.TryParse("  at X () [0x0] in <00000000000000000000000000000000>:0 ", out _, out _));
+        }
+
+        [Test]
         public void ExceptionLocation_ParsesDotNetFrame()
         {
             Assert.IsTrue(ExceptionLocation.TryParse(@"   at Foo.Bar() in C:\proj\Foo.cs:line 7", out var file, out var line));

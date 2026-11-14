@@ -23,15 +23,18 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
             }
 
-            var match = FrameWithFile.Match(stackTrace);
-            if (!match.Success)
+            // Frames without source information ("<00000000000000000000000000000000>:0", line 0) can
+            // come before the first real one; skip them instead of reporting the marker.
+            for (Match match = FrameWithFile.Match(stackTrace); match.Success; match = match.NextMatch())
             {
-                return false;
+                string candidate = match.Groups["file"].Value.Trim();
+                if (!int.TryParse(match.Groups["line"].Value, out int candidateLine) || candidateLine <= 0) continue;
+                if (candidate.Length == 0 || (candidate.StartsWith("<", StringComparison.Ordinal) && candidate.EndsWith(">", StringComparison.Ordinal))) continue;
+                file = candidate.Replace('\\', '/');
+                line = candidateLine;
+                return true;
             }
-
-            file = match.Groups["file"].Value.Trim().Replace('\\', '/');
-            line = int.Parse(match.Groups["line"].Value);
-            return true;
+            return false;
         }
 
         /// <summary>Error envelope fields shared by the dispatcher and async command failures.</summary>
