@@ -39,6 +39,9 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 
 If auto-config doesn't run (offline machine, sandboxed install, etc.), copy the snippet under **Manual MCP client configuration** in [Install](./install) into your client's MCP config file.
 
+For optional web search and page fetching alongside Unity tools, see
+[Web research](/guides/web-research).
+
 ## Per-client toggle locations
 
 A few clients need an MCP toggle flipped on after the configurator writes their config. Find it here:
