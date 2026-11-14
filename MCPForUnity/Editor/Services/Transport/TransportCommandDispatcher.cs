@@ -374,9 +374,41 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                var requestId = command.request_id;
+                switch (CommandLedger.Begin(requestId, command.type, out var replayJson, out var inFlight))
+                {
+                    case CommandLedger.Decision.Replay:
+                        McpLog.Info($"Replaying recorded response for '{command.type}' (request {requestId}) instead of running it again.", always: false);
+                        pending.TrySetResult(replayJson);
+                        RemovePending(id, pending);
+                        return;
+                    case CommandLedger.Decision.Attach:
+                        inFlight.ContinueWith(t =>
+                        {
+                            pending.TrySetResult(t.Status == TaskStatus.RanToCompletion
+                                ? t.Result
+                                : SerializeError($"Original execution of request {requestId} did not complete.", command.type));
+                            EditorApplication.delayCall += () => RemovePending(id, pending);
+                        }, TaskScheduler.Default);
+                        return;
+                }
+
                 var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
                 var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
-                var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
+                object result;
+                try
+                {
+                    result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+                    var errorJson = SerializeError(ex.Message, command.type, ex.StackTrace);
+                    CommandLedger.Complete(requestId, errorJson);
+                    pending.TrySetResult(errorJson);
+                    RemovePending(id, pending);
+                    return;
+                }
 
                 if (result == null)
                 {
@@ -384,8 +416,18 @@ namespace MCPForUnity.Editor.Services.Transport
                     var capturedType = command.type;
                     var capturedParams = parameters;
                     var capturedLogType = logType;
+                    CommandLedger.SetInFlight(requestId, pending.CompletionSource.Task);
                     pending.CompletionSource.Task.ContinueWith(t =>
                     {
+                        if (t.Status == TaskStatus.RanToCompletion)
+                        {
+                            CommandLedger.Complete(requestId, t.Result);
+                        }
+                        else
+                        {
+                            CommandLedger.Abandon(requestId);
+                        }
+
                         sw?.Stop();
                         var logStatus = "SUCCESS";
                         string logError = null;
@@ -426,7 +468,9 @@ namespace MCPForUnity.Editor.Services.Transport
                 McpLogRecord.Log(command.type, parameters, logType, syncLogStatus, sw?.ElapsedMilliseconds ?? 0, syncLogError);
 
                 var response = new { status = "success", result };
-                pending.TrySetResult(JsonConvert.SerializeObject(response));
+                var responseJson = JsonConvert.SerializeObject(response);
+                CommandLedger.Complete(requestId, responseJson);
+                pending.TrySetResult(responseJson);
                 RemovePending(id, pending);
             }
             catch (Exception ex)

@@ -1,13 +1,16 @@
 """Idempotent command delivery: one request_id per logical call, reused by every resend."""
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 
 import pytest
 
 from core.config import config
 from transport import idempotency, unity_transport
 from transport.idempotency import RetryKeyCache
-from transport.plugin_hub import PluginHub
+from transport.plugin_hub import COMMAND_LEDGER_CAPABILITY, PluginDisconnectedError, PluginHub
+from transport.plugin_registry import PluginSession
 
 
 @pytest.fixture(autouse=True)
@@ -112,3 +115,96 @@ async def test_http_passes_request_id_to_plugin_hub(monkeypatch):
 
     await unity_transport.send_with_unity_instance(unused, None, "manage_scene", {"action": "get_active"})
     assert isinstance(captured.get("request_id"), str) and len(captured["request_id"]) == 32
+
+
+# ---------------------------------------------------------------- PluginHub resend
+
+class _FakeRegistry:
+    def __init__(self, capabilities):
+        now = datetime.now(timezone.utc)
+        self.session = PluginSession(
+            session_id="s1", project_name="P", project_hash="h", unity_version="6000.6",
+            registered_at=now, connected_at=now, capabilities=tuple(capabilities))
+
+    async def get_session(self, session_id):
+        return self.session
+
+
+@pytest.fixture
+def hub(monkeypatch):
+    original = (PluginHub._registry, PluginHub._lock)
+    calls: list[tuple[str, str]] = []
+
+    async def resolve(unity_instance, user_id=None, retry_on_reload=True):
+        return "s1"
+
+    async def live(session_id):
+        return True
+
+    monkeypatch.setattr(PluginHub, "_resolve_session_id", classmethod(lambda cls, *a, **k: resolve(*a, **k)))
+    monkeypatch.setattr(PluginHub, "_ensure_live_connection", classmethod(lambda cls, sid: live(sid)))
+    PluginHub._lock = asyncio.Lock()
+    yield calls
+    PluginHub._registry, PluginHub._lock = original
+
+
+def _raw_sender(calls, failures):
+    async def raw(cls, session_id, command_type, params, request_id):
+        calls.append((session_id, request_id))
+        if len(calls) <= failures:
+            raise PluginDisconnectedError("Unity plugin session s1 disconnected while awaiting command_result")
+        return {"status": "success", "result": {"ok": True}}
+    return classmethod(raw)
+
+
+@pytest.mark.asyncio
+async def test_hub_resends_same_request_id_after_disconnect(hub, monkeypatch):
+    PluginHub._registry = _FakeRegistry([COMMAND_LEDGER_CAPABILITY])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["status"] == "success"
+    assert [rid for _, rid in hub] == ["rid-1", "rid-1"]
+
+
+@pytest.mark.asyncio
+async def test_hub_does_not_resend_without_ledger_capability(hub, monkeypatch):
+    PluginHub._registry = _FakeRegistry([])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["success"] is False and result["hint"] == "retry"
+    assert len(hub) == 1
+
+
+@pytest.mark.asyncio
+async def test_hub_does_not_resend_when_retry_on_reload_disabled(hub, monkeypatch):
+    PluginHub._registry = _FakeRegistry([COMMAND_LEDGER_CAPABILITY])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=1))
+
+    result = await PluginHub.send_command_for_instance(
+        None, "refresh_unity", {}, retry_on_reload=False, request_id="rid-1")
+
+    assert result["hint"] == "retry"
+    assert len(hub) == 1
+
+
+@pytest.mark.asyncio
+async def test_hub_resend_is_bounded(hub, monkeypatch):
+    PluginHub._registry = _FakeRegistry([COMMAND_LEDGER_CAPABILITY])
+    monkeypatch.setattr(PluginHub, "_send_command_raw", _raw_sender(hub, failures=99))
+
+    result = await PluginHub.send_command_for_instance(None, "manage_gameobject", {}, request_id="rid-1")
+
+    assert result["hint"] == "retry"
+    assert len(hub) == PluginHub.MAX_RESENDS_AFTER_DISCONNECT + 1
+
+
+def test_register_message_capabilities_default_to_empty():
+    from transport.models import RegisterMessage
+
+    assert RegisterMessage(project_hash="h").capabilities == []
+    msg = RegisterMessage(project_hash="h", capabilities=[COMMAND_LEDGER_CAPABILITY])
+    assert msg.capabilities == ["command_ledger"]
