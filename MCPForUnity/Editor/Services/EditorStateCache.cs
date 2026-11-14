@@ -380,6 +380,17 @@ namespace MCPForUnity.Editor.Services
             {
                 // No state change - skip the expensive BuildSnapshot entirely.
                 // This is the key optimization that prevents the 28ms GC spikes.
+                // The main thread is alive, though, so the snapshot is current: re-stamp it.
+                // Otherwise an idle, focused editor looks stale to the server after 2 s and
+                // advice.ready_for_tools stays false until something happens to change.
+                lock (LockObj)
+                {
+                    if (_cached != null)
+                    {
+                        _cached["observed_at_unix_ms"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    }
+                }
+                _lastUpdateTimeSinceStartup = now;
                 return;
             }
 
