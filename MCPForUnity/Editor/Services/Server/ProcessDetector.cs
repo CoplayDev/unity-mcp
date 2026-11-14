@@ -40,10 +40,17 @@ namespace MCPForUnity.Editor.Services.Server
             {
                 if (Application.platform == RuntimePlatform.WindowsEditor)
                 {
-                    // On Windows, use tasklist to check if process exists
-                    bool ok = ExecPath.TryRun("tasklist", $"/FI \"PID eq {pid}\"", Application.dataPath, out var stdout, out var stderr, 5000);
-                    string combined = ((stdout ?? string.Empty) + "\n" + (stderr ?? string.Empty)).ToLowerInvariant();
-                    return ok && combined.Contains(pid.ToString());
+                    try
+                    {
+                        using (var process = System.Diagnostics.Process.GetProcessById(pid))
+                        {
+                            return !process.HasExited;
+                        }
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        return false;
+                    }
                 }
 
                 // Unix: ps exits non-zero when PID is not found.
