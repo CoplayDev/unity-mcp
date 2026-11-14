@@ -124,6 +124,71 @@ namespace MCPForUnityTests.Editor.Services
             Assert.AreEqual(CommandLedger.Decision.Replay, CommandLedger.Begin("e" + CommandLedger.MaxEntries, "t", out _, out _));
         }
 
+        [Test]
+        public void RunningRequest_IsNotEvictedUnderCapacityPressure()
+        {
+            CommandLedger.Begin("active", "slow_tool", out _, out _);
+            var tcs = new TaskCompletionSource<string>();
+            CommandLedger.SetInFlight("active", tcs.Task);
+            for (int i = 0; i < CommandLedger.MaxEntries * 2; i++)
+            {
+                CommandLedger.Begin("p" + i, "t", out _, out _);
+                CommandLedger.Complete("p" + i, "{\"status\":\"success\",\"result\":{}}");
+            }
+
+            Assert.IsTrue(CommandLedger.Contains("active"), "a running request was evicted");
+            Assert.AreEqual(CommandLedger.Decision.Attach, CommandLedger.Begin("active", "slow_tool", out _, out var inFlight),
+                "a resend of the running request must attach, not execute again");
+            Assert.AreSame(tcs.Task, inFlight);
+            Assert.IsFalse(CommandLedger.Contains("p0"), "finished entries are still evicted");
+
+            CommandLedger.Complete("active", "{\"status\":\"success\",\"result\":{}}");
+            for (int i = 0; i < CommandLedger.MaxEntries + 1; i++)
+            {
+                CommandLedger.Begin("q" + i, "t", out _, out _);
+                CommandLedger.Complete("q" + i, "{\"status\":\"success\",\"result\":{}}");
+            }
+            Assert.IsFalse(CommandLedger.Contains("active"), "once finished it is evicted like any other entry");
+        }
+
+        [Test]
+        public void TooManyRunningRequests_RefuseNewWorkInsteadOfEvicting()
+        {
+            for (int i = 0; i < CommandLedger.MaxActiveEntries; i++)
+            {
+                Assert.AreEqual(CommandLedger.Decision.Execute, CommandLedger.Begin("run" + i, "t", out _, out _));
+            }
+
+            Assert.AreEqual(CommandLedger.Decision.Replay, CommandLedger.Begin("one-too-many", "t", out var busy, out _));
+            var obj = JObject.Parse(busy);
+            Assert.AreEqual(CommandLedger.BusyCode, (string)obj["code"]);
+            Assert.AreEqual("retry", (string)obj["hint"]);
+            Assert.IsTrue(CommandLedger.Contains("run0"), "no running id was dropped");
+            Assert.IsFalse(CommandLedger.Contains("one-too-many"), "the refused id is not recorded, so a retry can run it");
+        }
+
+        [Test]
+        public void OversizedMessageAndError_AreClippedAfterCompaction()
+        {
+            var huge = new string('m', 1_000_000);
+            var response = new JObject
+            {
+                ["status"] = "error",
+                ["error"] = new string('e', 1_000_000),
+                ["result"] = new JObject { ["success"] = false, ["message"] = huge },
+            };
+            CommandLedger.Begin("big", "t", out _, out _);
+            CommandLedger.Complete("big", response.ToString());
+
+            string stored = CommandLedger.StoredResponse("big");
+            Assert.LessOrEqual(stored.Length, CommandLedger.MaxStoredResponseChars);
+            var obj = JObject.Parse(stored);
+            Assert.IsTrue((bool)obj["truncated"]);
+            Assert.AreEqual("error", (string)obj["status"]);
+            Assert.LessOrEqual(((string)obj["error"]).Length, CommandLedger.MaxStoredTextChars + 20);
+            Assert.LessOrEqual(((string)obj["result"]["message"]).Length, CommandLedger.MaxStoredTextChars + 120);
+        }
+
         [UnityTest]
         public IEnumerator Dispatcher_RunsResentMutationOnce()
         {

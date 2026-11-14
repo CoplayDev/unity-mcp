@@ -26,6 +26,13 @@ namespace MCPForUnity.Editor.Services.Transport
     {
         internal const int MaxEntries = 64;
         internal const int MaxStoredResponseChars = 32 * 1024;
+
+        /// <summary>Running commands are never evicted; past this many at once new ids are refused.</summary>
+        internal const int MaxActiveEntries = 256;
+
+        /// <summary>Longest message / error text kept in a compacted response.</summary>
+        internal const int MaxStoredTextChars = 2000;
+        internal const string BusyCode = "ledger_busy";
         internal const string OutcomeUnknownCode = "outcome_unknown";
         private const string SessionKey = "MCPForUnity.CommandLedger.v1";
 
@@ -45,6 +52,8 @@ namespace MCPForUnity.Editor.Services.Transport
             public string command;
             public string response;   // null while the command is running
             [JsonIgnore] public Task<string> inFlight;
+            /// <summary>Executing in this domain (set by Begin, cleared by Complete/Abandon); never evicted.</summary>
+            [JsonIgnore] public bool active;
         }
 
         private static readonly Dictionary<string, Entry> Entries = new();
@@ -84,7 +93,22 @@ namespace MCPForUnity.Editor.Services.Transport
                     return Decision.Replay;
                 }
 
-                Add(new Entry { id = requestId, command = commandType });
+                int activeCount = 0;
+                foreach (var e in Entries.Values) if (e.active) activeCount++;
+                if (activeCount >= MaxActiveEntries)
+                {
+                    // Evicting a running id would let a resend execute it twice; refuse new work instead.
+                    replayJson = JsonConvert.SerializeObject(new
+                    {
+                        status = "error",
+                        code = BusyCode,
+                        error = $"{activeCount} commands are still running in Unity; command '{commandType}' was not started. Retry shortly.",
+                        hint = "retry",
+                        command = commandType,
+                    });
+                    return Decision.Replay;
+                }
+                Add(new Entry { id = requestId, command = commandType, active = true });
                 return Decision.Execute;
             }
         }
@@ -115,6 +139,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 }
                 entry.response = Compact(responseJson);
                 entry.inFlight = null;
+                entry.active = false;
             }
         }
 
@@ -127,6 +152,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 if (Entries.TryGetValue(requestId, out var entry))
                 {
                     entry.inFlight = null;
+                    entry.active = false;
                 }
             }
         }
@@ -188,10 +214,18 @@ namespace MCPForUnity.Editor.Services.Transport
             }
             Entries[entry.id] = entry;
             Order.AddLast(entry.id);
-            while (Order.Count > MaxEntries)
+            // Evict the oldest finished (or reload-interrupted) entries; a running command keeps its
+            // id until it completes, so a resend under capacity pressure still attaches to it.
+            var node = Order.First;
+            while (Order.Count > MaxEntries && node != null)
             {
-                Entries.Remove(Order.First.Value);
-                Order.RemoveFirst();
+                var next = node.Next;
+                if (!Entries[node.Value].active)
+                {
+                    Entries.Remove(node.Value);
+                    Order.Remove(node);
+                }
+                node = next;
             }
         }
 
@@ -229,18 +263,45 @@ namespace MCPForUnity.Editor.Services.Transport
             var result = original["result"] as JObject;
             var compactResult = new JObject
             {
-                ["success"] = result?["success"] ?? true,
-                ["message"] = (result?.Value<string>("message") ?? string.Empty)
+                ["success"] = result?["success"] is JValue success && success.Type == JTokenType.Boolean ? success : (JToken)true,
+                ["message"] = Clip(result?["message"]?.ToString())
                     + " (replayed from the command ledger; the original response was too large to keep)",
             };
             var compact = new JObject
             {
-                ["status"] = original["status"] ?? "success",
+                ["status"] = original["status"] is JValue status && status.Type == JTokenType.String ? status : (JToken)"success",
                 ["result"] = compactResult,
                 ["truncated"] = true,
             };
-            if (original["error"] != null) compact["error"] = original["error"];
-            return compact.ToString(Formatting.None);
+            if (original["error"] != null) compact["error"] = Clip(original["error"].ToString());
+            if (original["code"] is JValue code && code.Type == JTokenType.String) compact["code"] = Clip((string)code);
+            string json = compact.ToString(Formatting.None);
+            if (json.Length <= MaxStoredResponseChars) return json;
+            // Still too large (huge non-string status, pathological input): keep the bare outcome.
+            return new JObject
+            {
+                ["status"] = compact["status"].Type == JTokenType.String ? compact["status"] : "success",
+                ["result"] = new JObject { ["success"] = compactResult["success"], ["message"] = "(replayed from the command ledger; response not kept)" },
+                ["truncated"] = true,
+            }.ToString(Formatting.None);
+        }
+
+        private static string Clip(string text)
+        {
+            text ??= string.Empty;
+            return text.Length <= MaxStoredTextChars ? text : text.Substring(0, MaxStoredTextChars) + "... (truncated)";
+        }
+
+        /// <summary>Test hook: the stored (compacted) response of an id, or null.</summary>
+        internal static string StoredResponse(string requestId)
+        {
+            lock (Lock) return Entries.TryGetValue(requestId, out var entry) ? entry.response : null;
+        }
+
+        /// <summary>Test hook: whether the ledger still knows this id.</summary>
+        internal static bool Contains(string requestId)
+        {
+            lock (Lock) return Entries.ContainsKey(requestId);
         }
 
         private static string OutcomeUnknown(string commandType, string requestId)

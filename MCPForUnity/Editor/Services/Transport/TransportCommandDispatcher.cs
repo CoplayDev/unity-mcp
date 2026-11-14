@@ -310,6 +310,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 return;
             }
 
+            string ledgerId = null;
             try
             {
                 var command = JsonConvert.DeserializeObject<Command>(commandText);
@@ -392,6 +393,7 @@ namespace MCPForUnity.Editor.Services.Transport
                         }, TaskScheduler.Default);
                         return;
                 }
+                ledgerId = requestId;
 
                 var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
                 var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
@@ -482,6 +484,9 @@ namespace MCPForUnity.Editor.Services.Transport
             }
             catch (Exception ex)
             {
+                // Started but neither completed nor handed to the async path: release the ledger
+                // entry so it is not held as running forever (a resend reports outcome_unknown).
+                CommandLedger.Abandon(ledgerId);
                 McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
                 pending.TrySetResult(JsonConvert.SerializeObject(
                     ExceptionLocation.Describe("Unknown (error during processing)", ex)));
