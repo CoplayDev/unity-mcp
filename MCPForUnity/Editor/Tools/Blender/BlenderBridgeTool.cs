@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor.Tools.Blender
                         if (string.IsNullOrWhiteSpace(objectName))
                             return new ErrorResponse("'object_name' is required for object_info.");
                         JToken info = await BlenderSocketClient.SendAsync(BlenderBridgePrefs.Endpoint, "get_object_info",
-                            new JObject { ["object_name"] = objectName }, timeout);
+                            new JObject { ["name"] = objectName }, timeout); // BlenderMCP addon: get_object_info(self, name)
                         return new SuccessResponse($"Retrieved info for '{objectName}'.", info);
                     }
                     case "screenshot": return await ScreenshotAsync(p, timeout);
