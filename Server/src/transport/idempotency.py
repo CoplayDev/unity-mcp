@@ -29,9 +29,11 @@ def new_request_id() -> str:
     return uuid.uuid4().hex
 
 
-def fingerprint(unity_instance: str | None, command_type: str, params: Any) -> str:
+def fingerprint(unity_instance: str | None, command_type: str, params: Any, scope: str | None = None) -> str:
+    """Key of one logical call. ``scope`` separates callers that share a server (the
+    authenticated user in hosted mode), so one user's retry never reuses another's id."""
     body = json.dumps(
-        [unity_instance or "", command_type, params],
+        [scope or "", unity_instance or "", command_type, params],
         sort_keys=True,
         default=str,
         separators=(",", ":"),
@@ -39,10 +41,27 @@ def fingerprint(unity_instance: str | None, command_type: str, params: Any) -> s
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
+OUTCOME_UNKNOWN_CODE = "outcome_unknown"
+
+
 def _is_retry_hint(response: Any) -> bool:
+    """Outcomes after which the id must be kept: the command may have run.
+
+    ``hint == "retry"``: the reply was lost. ``code == "outcome_unknown"``: Unity's ledger saw the
+    command cut off by a domain reload. A retry must reuse the id so the ledger answers it instead
+    of running the command again.
+    """
     if isinstance(response, dict):
-        return response.get("success") is False and response.get("hint") == "retry"
-    return getattr(response, "success", None) is False and getattr(response, "hint", None) == "retry"
+        get = response.get
+    else:
+        def get(key: str) -> Any:
+            return getattr(response, key, None)
+    if get("success") is not False:
+        return False
+    if get("hint") == "retry" or get("code") == OUTCOME_UNKNOWN_CODE:
+        return True
+    data = get("data")
+    return isinstance(data, dict) and data.get("code") == OUTCOME_UNKNOWN_CODE
 
 
 class RetryKeyCache:
@@ -67,7 +86,11 @@ class RetryKeyCache:
     def record_outcome(self, fp: str, request_id: str, response: Any) -> None:
         with self._lock:
             if not _is_retry_hint(response):
-                self._entries.pop(fp, None)
+                # Only the call that owns the remembered id may clear it: an overlapping identical
+                # call with a different id finishing must not erase another call's unknown outcome.
+                entry = self._entries.get(fp)
+                if entry is not None and entry[0] == request_id:
+                    del self._entries[fp]
                 return
             self._entries[fp] = (request_id, time.monotonic())
             self._entries.move_to_end(fp)

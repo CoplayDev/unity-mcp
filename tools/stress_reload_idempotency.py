@@ -58,6 +58,12 @@ def _payload(result) -> dict:
 def _is_transient(resp: dict) -> bool:
     if resp.get("success"):
         return False
+    # outcome_unknown is a final answer from Unity's ledger: the command was cut off by a reload
+    # and may have run. Retrying cannot run it again (the id is kept), so stop and let the final
+    # check count the objects. Its message mentions "reloaded", so test it before the markers.
+    data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
+    if "outcome_unknown" in (resp.get("code"), data.get("code")):
+        return False
     text = json.dumps(resp).lower()
     return resp.get("hint") == "retry" or any(m in text for m in TRANSIENT_MARKERS)
 

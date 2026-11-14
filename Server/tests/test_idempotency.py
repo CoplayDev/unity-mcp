@@ -117,6 +117,66 @@ async def test_http_passes_request_id_to_plugin_hub(monkeypatch):
     assert isinstance(captured.get("request_id"), str) and len(captured["request_id"]) == 32
 
 
+def test_overlapping_call_does_not_clear_another_calls_unknown_outcome():
+    """Two identical calls overlap with ids A and B; A's reply is lost, then B succeeds."""
+    cache = RetryKeyCache()
+    fp = idempotency.fingerprint("P@h", "manage_gameobject", {"action": "create"})
+    a = cache.request_id_for(fp)
+    b = cache.request_id_for(fp)
+    assert a != b
+    cache.record_outcome(fp, a, {"success": False, "hint": "retry"})
+    cache.record_outcome(fp, b, {"success": True})
+    assert cache.request_id_for(fp) == a, "B's success must not erase A's unknown outcome"
+    cache.record_outcome(fp, a, {"success": True})
+    assert cache.request_id_for(fp) != a, "the owner clears its own entry"
+
+
+@pytest.mark.parametrize("response", [
+    {"success": False, "code": "outcome_unknown", "error": "Command ... was still running when the Unity domain reloaded"},
+    {"success": False, "error": "x", "data": {"code": "outcome_unknown"}},
+])
+def test_outcome_unknown_keeps_the_request_id(response):
+    cache = RetryKeyCache()
+    fp = idempotency.fingerprint(None, "execute_code", {"code": "x"})
+    rid = cache.request_id_for(fp)
+    cache.record_outcome(fp, rid, response)
+    assert cache.request_id_for(fp) == rid, "a retry must reach the ledger with the same id"
+
+
+def test_fingerprint_is_scoped_to_the_user():
+    assert idempotency.fingerprint("P@h", "x", {}, scope="u1") != idempotency.fingerprint("P@h", "x", {}, scope="u2")
+    assert idempotency.fingerprint("P@h", "x", {}) == idempotency.fingerprint("P@h", "x", {}, scope=None)
+
+
+@pytest.mark.asyncio
+async def test_http_retry_ids_are_not_shared_between_users(monkeypatch):
+    monkeypatch.setattr(config, "transport_mode", "http")
+    monkeypatch.setattr(config, "http_remote_hosted", False)
+    current_user = {"id": "user-a"}
+    sent: list[str] = []
+
+    async def resolve_user():
+        return current_user["id"]
+
+    async def fake_send_for_instance(_instance, _command, _params, **kwargs):
+        sent.append(kwargs["request_id"])
+        return {"success": False, "hint": "retry", "error": "lost"} if len(sent) == 1 else {"status": "success", "result": {}}
+
+    monkeypatch.setattr(unity_transport, "_resolve_user_id_from_request", resolve_user)
+    monkeypatch.setattr(PluginHub, "send_command_for_instance", fake_send_for_instance)
+
+    async def unused(*_a, **_k):
+        raise AssertionError("stdio path used in HTTP mode")
+
+    await unity_transport.send_with_unity_instance(unused, "P@h", "manage_gameobject", {"action": "create"})
+    current_user["id"] = "user-b"
+    await unity_transport.send_with_unity_instance(unused, "P@h", "manage_gameobject", {"action": "create"})
+    assert sent[0] != sent[1], "user B must not reuse user A's unknown-outcome id"
+    current_user["id"] = "user-a"
+    await unity_transport.send_with_unity_instance(unused, "P@h", "manage_gameobject", {"action": "create"})
+    assert sent[2] == sent[0], "user A's retry still reuses its id"
+
+
 # ---------------------------------------------------------------- PluginHub resend
 
 class _FakeRegistry:

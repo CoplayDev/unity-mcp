@@ -59,7 +59,11 @@ async def send_with_unity_instance(
     request_id = kwargs.pop("request_id", None)
     fp = None
     if request_id is None and command_type:
-        fp = idempotency.fingerprint(unity_instance, command_type, command_params)
+        # The retry cache is process-wide: scope keys to the authenticated user (hosted mode) so
+        # one user's retry can never reuse, or clear, another user's request id.
+        if user_id is None and _is_http_transport():
+            user_id = await _resolve_user_id_from_request()
+        fp = idempotency.fingerprint(unity_instance, command_type, command_params, scope=user_id)
         request_id = idempotency.retry_keys.request_id_for(fp)
 
     result = await _send_once(send_fn, unity_instance, *args, user_id=user_id,
