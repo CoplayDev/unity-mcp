@@ -10,6 +10,7 @@ from core.telemetry import record_milestone, record_telemetry, MilestoneType, Re
 from services.resources import register_all_resources
 from transport.plugin_registry import PluginRegistry
 from transport.plugin_hub import PluginHub
+from transport import idle_shutdown
 from services.custom_tool_service import (
     CustomToolService,
     resolve_project_id_for_unity_instance,
@@ -274,6 +275,11 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             }
         )).start()
 
+    idle_watch = None
+    if idle_shutdown.is_enabled():
+        idle_watch = asyncio.create_task(
+            idle_shutdown.shutdown_when_idle(_plugin_registry))
+
     try:
         # Yield shared state for lifespan consumers (e.g., middleware)
         yield {
@@ -281,6 +287,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             "plugin_registry": _plugin_registry,
         }
     finally:
+        if idle_watch:
+            idle_watch.cancel()
         if _unity_connection_pool:
             _unity_connection_pool.disconnect_all()
         logger.info("MCP for Unity Server shut down")
@@ -929,7 +937,11 @@ Examples:
             "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
         port = args.http_port or _env_port or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        mcp.run(transport=transport, host=host, port=port)
+        try:
+            mcp.run(transport=transport, host=host, port=port)
+        except KeyboardInterrupt:
+            if not idle_shutdown.requested:
+                raise
     else:
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
