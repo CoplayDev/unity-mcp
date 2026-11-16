@@ -23,6 +23,28 @@ _diag = logging.getLogger("transport.unity_instance_middleware")
 _unity_instance_middleware = None
 _middleware_lock = RLock()
 
+_UNITY_INSTANCE_PARAM = {
+    "anyOf": [{"type": "string"}, {"type": "null"}],
+    "default": None,
+    "description": (
+        "Optional Unity Editor to route this call to: Name@hash, a unique hash prefix, "
+        "or a port number in stdio mode. Overrides the session's active instance for this call only."
+    ),
+}
+
+
+def _with_unity_instance_param(tool):
+    """Advertise the per-call unity_instance argument that _inject_unity_instance consumes."""
+    params = getattr(tool, "parameters", None)
+    if (
+        getattr(tool, "name", None) == "set_active_instance"
+        or not isinstance(params, dict)
+        or "unity_instance" in params.get("properties", {})
+    ):
+        return tool
+    properties = {**params.get("properties", {}), "unity_instance": _UNITY_INSTANCE_PARAM}
+    return tool.model_copy(update={"parameters": {**params, "properties": properties}})
+
 
 def get_unity_instance_middleware() -> 'UnityInstanceMiddleware':
     """Get the global Unity instance middleware."""
@@ -353,6 +375,8 @@ class UnityInstanceMiddleware(Middleware):
             active_instance = await self.get_active_instance(ctx)
         if not active_instance:
             active_instance = await self._maybe_autoselect_instance(ctx)
+        # Request-scoped so a per-call value neither sticks to later calls nor leaks into concurrent ones.
+        await ctx.set_state("unity_instance", active_instance, serializable=False)
         if active_instance:
             # If using HTTP transport (PluginHub configured), validate session
             # But for stdio transport (no PluginHub needed or maybe partially configured),
@@ -393,7 +417,6 @@ class UnityInstanceMiddleware(Middleware):
                         exc_info=True
                     )
 
-            await ctx.set_state("unity_instance", active_instance)
             if session_id is not None:
                 await ctx.set_state("unity_session_id", session_id)
 
@@ -408,6 +431,10 @@ class UnityInstanceMiddleware(Middleware):
         return await call_next(context)
 
     async def on_list_tools(self, context: MiddlewareContext, call_next):
+        tools = await self._list_visible_tools(context, call_next)
+        return [_with_unity_instance_param(tool) for tool in tools]
+
+    async def _list_visible_tools(self, context: MiddlewareContext, call_next):
         """Filter MCP tool listing to the Unity-enabled set when session data is available."""
         try:
             await self._inject_unity_instance(context)

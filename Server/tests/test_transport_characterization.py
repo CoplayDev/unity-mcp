@@ -60,7 +60,7 @@ def mock_context():
     ctx.client_id = "test-client-456"
 
     state_storage = {}
-    ctx.set_state = AsyncMock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+    ctx.set_state = AsyncMock(side_effect=lambda k, v, **_: state_storage.__setitem__(k, v))
     ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
     ctx.info = AsyncMock()
 
@@ -112,7 +112,7 @@ def _make_ctx(session_id: str | None = None) -> Mock:
     state: dict[str, object] = {}
     ctx = Mock()
     ctx.session_id = session_id or "test-session"
-    ctx.set_state = AsyncMock(side_effect=lambda k, v: state.__setitem__(k, v))
+    ctx.set_state = AsyncMock(side_effect=lambda k, v, **_: state.__setitem__(k, v))
     ctx.get_state = AsyncMock(side_effect=lambda k: state.get(k))
     ctx.delete_state = AsyncMock(side_effect=lambda k: state.pop(k, None))
     return ctx
@@ -218,7 +218,7 @@ class TestUnityInstanceMiddlewareInjection:
         await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         assert call_next_called, "Middleware must call next handler"
-        mock_context.set_state.assert_called_with("unity_instance", instance_id)
+        mock_context.set_state.assert_called_with("unity_instance", instance_id, serializable=False)
 
     @pytest.mark.asyncio
     async def test_middleware_injects_into_resource_context(self, mock_context):
@@ -239,13 +239,13 @@ class TestUnityInstanceMiddlewareInjection:
 
         await middleware.on_read_resource(middleware_ctx, mock_call_next)
 
-        mock_context.set_state.assert_called_with("unity_instance", instance_id)
+        mock_context.set_state.assert_called_with("unity_instance", instance_id, serializable=False)
 
     @pytest.mark.asyncio
     async def test_middleware_does_not_inject_when_no_instance(self, mock_context):
         """
         Current behavior: When no active instance is set and auto-select fails,
-        middleware does not inject anything (None instance not stored).
+        middleware stores None so no earlier per-call instance leaks into this call.
         """
         middleware = UnityInstanceMiddleware()
 
@@ -261,10 +261,7 @@ class TestUnityInstanceMiddlewareInjection:
             with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                 await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
-        # set_state should not be called for unity_instance if no instance found
-        calls = [c for c in mock_context.set_state.call_args_list
-                if len(c[0]) > 0 and c[0][0] == "unity_instance"]
-        assert len(calls) == 0
+        assert await mock_context.get_state("unity_instance") is None
 
     @pytest.mark.asyncio
     async def test_list_tools_filters_disabled_unity_tools_and_aliases(self, mock_context, monkeypatch):
@@ -318,6 +315,42 @@ class TestUnityInstanceMiddlewareInjection:
         assert "create_script" in names
         assert "set_active_instance" in names
         assert "manage_asset" not in names
+
+    @pytest.mark.asyncio
+    async def test_list_tools_advertises_unity_instance(self, mock_context, monkeypatch):
+        """Clients that honor additionalProperties: false must see the per-call unity_instance argument."""
+        from pydantic import BaseModel
+
+        class FakeTool(BaseModel):
+            name: str
+            parameters: dict
+
+        def schema(**properties):
+            return {"type": "object", "properties": properties, "required": ["action"], "additionalProperties": False}
+
+        custom_param = {"type": "string", "description": "declared by the tool"}
+        tools = [
+            FakeTool(name="manage_scene", parameters=schema(action={"type": "string"})),
+            FakeTool(name="set_active_instance", parameters=schema(instance={"type": "string"})),
+            FakeTool(name="custom_tool", parameters=schema(unity_instance=custom_param)),
+        ]
+
+        async def call_next(_ctx):
+            return tools
+
+        middleware = UnityInstanceMiddleware()
+        middleware_ctx = Mock()
+        middleware_ctx.fastmcp_context = mock_context
+        monkeypatch.setattr(config, "transport_mode", "stdio")
+        with patch.object(middleware, "_inject_unity_instance", new=AsyncMock()):
+            listed = {t.name: t.parameters for t in await middleware.on_list_tools(middleware_ctx, call_next)}
+
+        scene = listed["manage_scene"]
+        assert scene["properties"]["unity_instance"]["default"] is None
+        assert scene["required"] == ["action"]
+        assert "unity_instance" not in tools[0].parameters["properties"]
+        assert "unity_instance" not in listed["set_active_instance"]["properties"]
+        assert listed["custom_tool"]["properties"]["unity_instance"] == custom_param
 
     @pytest.mark.asyncio
     async def test_list_tools_skips_filter_when_no_tools_registered_yet(self, mock_context, monkeypatch):
