@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import asyncio
+import time
 
 from core.config import config
 from models.models import ToolDefinitionModel
@@ -46,6 +47,9 @@ class PluginRegistry:
         self._hash_to_session: dict[str, str] = {}
         self._user_hash_to_session: dict[tuple[str, str], str] = {}
         self._lock = asyncio.Lock()
+        # time.monotonic() when a session was last removed, so a session that came and
+        # went between two polls of the registry is still seen.
+        self.last_session_ended: float | None = None
 
     async def register(
         self,
@@ -118,6 +122,7 @@ class PluginRegistry:
         async with self._lock:
             session = self._sessions.pop(session_id, None)
             if session:
+                self.last_session_ended = time.monotonic()
                 # Clean up hash mappings
                 if session.project_hash in self._hash_to_session:
                     mapped = self._hash_to_session.get(session.project_hash)

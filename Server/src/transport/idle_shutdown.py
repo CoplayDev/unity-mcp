@@ -55,13 +55,20 @@ async def shutdown_when_idle(
     clock: Callable[[], float] = time.monotonic,
 ) -> None:
     """Request shutdown once no Editor has been connected for ``idle_seconds``,
-    counting from start-up so a server no Editor ever reaches also exits."""
+    counting from start-up so a server no Editor ever reaches also exits.
+
+    ``clock`` must be the clock ``registry.last_session_ended`` is stamped with."""
     last_connected = clock()
     while True:
         await asyncio.sleep(check_interval)
         if await registry.list_sessions():
             last_connected = clock()
-        elif clock() - last_connected >= idle_seconds:
+            continue
+        # A session that connected and left between two polls still resets the window.
+        ended = registry.last_session_ended
+        if ended is not None and ended > last_connected:
+            last_connected = ended
+        if clock() - last_connected >= idle_seconds:
             logger.info(
                 "No Unity Editor connected for %.0f s; shutting down the server", idle_seconds)
             request_shutdown()

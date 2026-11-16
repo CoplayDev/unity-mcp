@@ -1,9 +1,11 @@
 import signal
+import time
 
 import pytest
 
 from core.config import config
 from transport import idle_shutdown
+from transport.plugin_registry import PluginRegistry
 
 
 class FakeClock:
@@ -16,20 +18,27 @@ class FakeClock:
 
 class ScriptedRegistry:
     """Each check advances the clock by one interval and reports the next scripted
-    connection state (True = an Editor is connected)."""
+    state: True = an Editor is connected, False = none, a number = none now, but a
+    session ended at that time since the previous check."""
 
     def __init__(self, clock, states, interval):
         self.clock = clock
         self.states = list(states)
         self.interval = interval
         self.checks = 0
+        self.last_session_ended = None
 
     async def list_sessions(self, user_id=None):
         self.checks += 1
         self.clock.now += self.interval
         if not self.states:
             raise AssertionError("watcher kept running past the scripted checks")
-        return {"session": object()} if self.states.pop(0) else {}
+        state = self.states.pop(0)
+        if state is True:
+            return {"session": object()}
+        if state is not False:
+            self.last_session_ended = state
+        return {}
 
 
 async def _run(states, idle_seconds=60.0, interval=15.0):
@@ -67,6 +76,28 @@ async def test_reconnect_within_the_window_restarts_it():
     checks, requests = await _run([False, False, False, True] + [False] * 10)
     assert requests == [120.0]
     assert checks == 8
+
+
+@pytest.mark.asyncio
+async def test_session_between_polls_restarts_the_window():
+    # Nothing at the first three checks; an Editor connects after t=45 and leaves at
+    # t=59, so no check ever sees it. The window must run from t=59, not from start-up.
+    checks, requests = await _run([False, False, False, 59.0] + [False] * 10)
+    assert requests == [120.0]
+    assert checks == 8
+
+
+@pytest.mark.asyncio
+async def test_registry_stamps_when_a_session_ends():
+    registry = PluginRegistry()
+    await registry.register("s1", "Proj", "hash1", "6000.3")
+    assert registry.last_session_ended is None
+    before = time.monotonic()
+    await registry.unregister("s1")
+    assert before <= registry.last_session_ended <= time.monotonic()
+    stamped = registry.last_session_ended
+    await registry.unregister("unknown")
+    assert registry.last_session_ended == stamped
 
 
 @pytest.mark.asyncio
