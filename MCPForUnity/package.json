@@ -8,6 +8,7 @@
   "licensesUrl": "https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE",
   "dependencies": {
     "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.director": "1.0.0",
     "com.unity.modules.imageconversion": "1.0.0",
     "com.unity.modules.physics": "1.0.0",
     "com.unity.modules.physics2d": "1.0.0",
@@ -30,5 +31,12 @@
     "name": "Coplay",
     "email": "support@coplay.dev",
     "url": "https://coplay.dev"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "Motion recording demo",
+      "description": "Game View UI demo with Timeline, Animator and opt-in custom state/tween playback. Requires Unity UI; Timeline is optional.",
+      "path": "Samples~/Recording"
+    }
+  ]
 }

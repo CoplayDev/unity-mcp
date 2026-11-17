@@ -271,6 +271,7 @@ def register_commands():
         ("cli.commands.probuilder", "probuilder"),
         ("cli.commands.build", "build"),
         ("cli.commands.camera", "camera"),
+        ("cli.commands.recording", "recording"),
         ("cli.commands.graphics", "graphics"),
         ("cli.commands.packages", "packages"),
         ("cli.commands.reflect", "reflect"),

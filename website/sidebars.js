@@ -28,6 +28,7 @@ const sidebars = {
         'guides/client-configurators',
         'guides/multi-instance',
         'guides/tool-groups',
+        'guides/recording',
         'guides/cli',
         'guides/cli-examples',
         'guides/custom-tools',
