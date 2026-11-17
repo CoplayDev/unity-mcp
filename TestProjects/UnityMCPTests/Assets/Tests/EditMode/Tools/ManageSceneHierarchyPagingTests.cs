@@ -3,6 +3,7 @@ using System.Reflection;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -87,7 +88,7 @@ namespace MCPForUnityTests.Editor.Tools
             var pChildren = new JObject
             {
                 ["action"] = "get_hierarchy",
-                ["parent"] = _root.GetInstanceID(),
+                ["parent"] = _root.GetInstanceIDCompat(),
                 ["pageSize"] = 7,
             };
             var rawChildren = ManageScene.HandleCommand(pChildren);

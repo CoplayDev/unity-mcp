@@ -21,7 +21,7 @@ def _strip_stacktrace_from_list(items: list) -> None:
 
 
 @mcp_for_unity_tool(
-    description="Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5'). The 'get' action is read-only; 'clear' modifies ephemeral UI state (not project data).",
+    description="Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5'). The 'get' action is read-only; 'clear' modifies ephemeral UI state (not project data). 'get_compile_errors' returns the compiler messages of the last script compilation as structured entries (file, line, column, CS code, message); pass types=['error','warning'] to include warnings.",
     annotations=ToolAnnotations(
         title="Read Console",
         # 'clear' wipes the ephemeral Editor console buffer only — Unity still
@@ -34,8 +34,8 @@ def _strip_stacktrace_from_list(items: list) -> None:
 )
 async def read_console(
     ctx: Context,
-    action: Annotated[Literal['get', 'clear'],
-                      "Get or clear the Unity Editor console. Defaults to 'get' if omitted."] | None = None,
+    action: Annotated[Literal['get', 'clear', 'get_compile_errors'],
+                      "Get or clear the Unity Editor console, or get structured compiler messages. Defaults to 'get' if omitted."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']] | str,
                      "Message types to get (accepts list or JSON string)"] | None = None,
@@ -56,6 +56,14 @@ async def read_console(
     unity_instance = await get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
+
+    if isinstance(action, str) and action.lower() == 'get_compile_errors':
+        wanted = parse_json_payload(types) if isinstance(types, str) else (types or [])
+        include_warnings = isinstance(wanted, list) and any(
+            str(t).lower() in ('warning', 'all') for t in wanted)
+        return await send_with_unity_instance(
+            async_send_command_with_retry, unity_instance, "read_console",
+            {"action": "get_compile_errors", "includeWarnings": include_warnings})
     
     # Parse types if it's a JSON string (handles client compatibility issue #561)
     if isinstance(types, str):

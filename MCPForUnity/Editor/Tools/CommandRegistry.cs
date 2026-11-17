@@ -482,13 +482,7 @@ namespace MCPForUnity.Editor.Tools
         {
             McpLog.Error($"Error in async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
 
-            var errorResponse = new
-            {
-                status = "error",
-                error = ex.Message,
-                command = commandName,
-                stackTrace = ex.StackTrace
-            };
+            var errorResponse = ExceptionLocation.Describe(commandName, ex);
 
             string json;
             try

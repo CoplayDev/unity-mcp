@@ -2,6 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -36,7 +37,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_SpriteRendererSprite_ObjectForm_SetsNativeField()
         {
             var renderer = testGo.AddComponent<SpriteRenderer>();
-            var value = new JObject { ["instanceID"] = sprite.GetInstanceID() };
+            var value = new JObject { ["instanceID"] = sprite.GetInstanceIDCompat() };
 
             bool ok = ComponentOps.SetProperty(renderer, "sprite", value, out string error);
 
@@ -48,7 +49,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_SpriteRendererSprite_LowercasePrefix_SetsNativeField()
         {
             var renderer = testGo.AddComponent<SpriteRenderer>();
-            var value = new JObject { ["instanceID"] = sprite.GetInstanceID() };
+            var value = new JObject { ["instanceID"] = sprite.GetInstanceIDCompat() };
 
             bool ok = ComponentOps.SetProperty(renderer, "m_sprite", value, out string error);
 
@@ -60,7 +61,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_AmbiguousAlias_ObjectForm_FailsWithoutWriting()
         {
             var component = testGo.AddComponent<AmbiguousFieldsBehaviour>();
-            var value = new JObject { ["instanceID"] = testGo.GetInstanceID() };
+            var value = new JObject { ["instanceID"] = testGo.GetInstanceIDCompat() };
 
             bool ok = ComponentOps.SetProperty(component, "target", value, out string error);
 
@@ -74,7 +75,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_AmbiguousAlias_ExactName_StillWorks()
         {
             var component = testGo.AddComponent<AmbiguousFieldsBehaviour>();
-            var value = new JObject { ["instanceID"] = testGo.GetInstanceID() };
+            var value = new JObject { ["instanceID"] = testGo.GetInstanceIDCompat() };
 
             bool ok = ComponentOps.SetProperty(component, "m_Target", value, out string error);
 
@@ -87,7 +88,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_UnknownProperty_ObjectForm_StillFails()
         {
             var renderer = testGo.AddComponent<SpriteRenderer>();
-            var value = new JObject { ["instanceID"] = sprite.GetInstanceID() };
+            var value = new JObject { ["instanceID"] = sprite.GetInstanceIDCompat() };
 
             bool ok = ComponentOps.SetProperty(renderer, "notARealProperty", value, out string error);
 

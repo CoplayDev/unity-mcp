@@ -7,6 +7,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using static MCPForUnityTests.Editor.TestUtilities;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -148,12 +149,12 @@ namespace MCPForUnityTests.Editor.Tools
             AssignMaterial_ToSphere_UsingManageMaterial_Succeeds();
 
             var renderer = _sphere.GetComponent<MeshRenderer>();
-            int beforeId = renderer.sharedMaterial != null ? renderer.sharedMaterial.GetInstanceID() : 0;
+            int beforeId = renderer.sharedMaterial != null ? renderer.sharedMaterial.GetInstanceIDCompat() : 0;
 
             var data = MCPForUnity.Editor.Helpers.GameObjectSerializer.GetComponentData(renderer) as System.Collections.Generic.Dictionary<string, object>;
             Assert.IsNotNull(data, "Serializer should return data.");
 
-            int afterId = renderer.sharedMaterial != null ? renderer.sharedMaterial.GetInstanceID() : 0;
+            int afterId = renderer.sharedMaterial != null ? renderer.sharedMaterial.GetInstanceIDCompat() : 0;
             Assert.AreEqual(beforeId, afterId, "sharedMaterial instance must not change (no instantiation in EditMode).");
 
             if (data.TryGetValue("properties", out var propsObj) && propsObj is System.Collections.Generic.Dictionary<string, object> props)

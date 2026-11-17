@@ -236,6 +236,11 @@ namespace MCPForUnity.Editor.Services
                     throw new InvalidOperationException("Cannot start a test run while the Editor is in or entering Play Mode. Stop Play Mode and try again.");
                 }
 
+                // Save dirty scenes for all test modes to prevent modal dialogs blocking MCP
+                // (Issue #525: EditMode tests were blocked by save dialog). Done before the run is
+                // marked as started: an unsaved scene that cannot be preserved aborts cleanly here.
+                SaveDirtyScenesIfNeeded();
+
                 if (mode == TestMode.PlayMode)
                 {
                     // PlayMode runs transition the editor into play across multiple update ticks. Unity's
@@ -265,10 +270,6 @@ namespace MCPForUnity.Editor.Services
                     assemblyNames = filterOptions?.AssemblyNames
                 };
                 var settings = new ExecutionSettings(filter);
-
-                // Save dirty scenes for all test modes to prevent modal dialogs blocking MCP
-                // (Issue #525: EditMode tests were blocked by save dialog)
-                SaveDirtyScenesIfNeeded();
 
                 // Apply no-throttling preemptively for PlayMode tests. This ensures Unity
                 // isn't throttled during the Play mode transition (which requires multiple
@@ -554,6 +555,7 @@ namespace MCPForUnity.Editor.Services
         private static void SaveDirtyScenesIfNeeded()
         {
             int sceneCount = SceneManager.sceneCount;
+            bool dirtyUntitled = false;
             for (int i = 0; i < sceneCount; i++)
             {
                 var scene = SceneManager.GetSceneAt(i);
@@ -561,6 +563,7 @@ namespace MCPForUnity.Editor.Services
                 {
                     if (string.IsNullOrEmpty(scene.path))
                     {
+                        dirtyUntitled = true;
                         McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running tests.");
                         continue;
                     }
@@ -573,6 +576,68 @@ namespace MCPForUnity.Editor.Services
                         McpLog.Warn($"[TestRunnerService] Failed to save dirty scene '{scene.name}': {ex.Message}");
                     }
                 }
+            }
+
+            // The Test Runner asks to save a dirty Untitled scene. In batch mode nobody can answer,
+            // the dialog is cancelled, and the run is silently dropped (RunStarted never fires), so
+            // start from a fresh scene. Batch mode does not make the scene's content disposable: a
+            // scene with anything beyond the default camera/light is first saved as a copy, and the
+            // run is refused if that copy cannot be written.
+            if (dirtyUntitled && Application.isBatchMode)
+            {
+                for (int i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+                    if (!scene.isDirty || !string.IsNullOrEmpty(scene.path) || IsDisposableScene(scene)) continue;
+                    string backup = BackupUntitledScene(scene);
+                    if (backup == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"The unsaved scene '{scene.name}' has content and could not be backed up. Save it (manage_scene save) before running tests in batch mode.");
+                    }
+                    McpLog.Warn($"[TestRunnerService] Saved a copy of the unsaved scene '{scene.name}' to {backup} before starting tests.");
+                    LastUntitledSceneBackup = backup;
+                }
+                EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            }
+        }
+
+        /// <summary>Where the last batch-mode run saved an unsaved scene's content (null if none).</summary>
+        internal static string LastUntitledSceneBackup { get; private set; }
+
+        /// <summary>True when the scene holds nothing but NewScene's default camera and light.</summary>
+        internal static bool IsDisposableScene(Scene scene) => IsDisposable(scene.GetRootGameObjects());
+
+        internal static bool IsDisposable(IEnumerable<GameObject> roots)
+        {
+            foreach (var root in roots)
+            {
+                if (root.transform.childCount > 0) return false;
+                var components = root.GetComponents<Component>();
+                bool defaultCamera = root.name == "Main Camera" && components.All(c => c is Transform || c is Camera || c is AudioListener || IsUrpCameraData(c));
+                bool defaultLight = root.name == "Directional Light" && components.All(c => c is Transform || c is Light || IsUrpLightData(c));
+                if (!defaultCamera && !defaultLight) return false;
+            }
+            return true;
+        }
+
+        private static bool IsUrpCameraData(Component c) => c != null && c.GetType().Name == "UniversalAdditionalCameraData";
+        private static bool IsUrpLightData(Component c) => c != null && c.GetType().Name == "UniversalAdditionalLightData";
+
+        /// <summary>Saves a copy of an untitled scene under Temp/MCPForUnity; returns the path or null.</summary>
+        internal static string BackupUntitledScene(Scene scene)
+        {
+            try
+            {
+                string dir = "Temp/MCPForUnity";
+                System.IO.Directory.CreateDirectory(dir);
+                string path = $"{dir}/UntitledBackup-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.unity";
+                return EditorSceneManager.SaveScene(scene, path, saveAsCopy: true) ? path : null;
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[TestRunnerService] Could not back up the unsaved scene '{scene.name}': {ex.Message}");
+                return null;
             }
         }
 

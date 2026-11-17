@@ -12,13 +12,13 @@ description: "Gets messages from or clears the Unity Editor console."
 
 ## Description
 
-Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5'). The 'get' action is read-only; 'clear' modifies ephemeral UI state (not project data).
+Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5'). The 'get' action is read-only; 'clear' modifies ephemeral UI state (not project data). 'get_compile_errors' returns the compiler messages of the last script compilation as structured entries (file, line, column, CS code, message); pass types=['error','warning'] to include warnings.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['get', 'clear'] \| None` | — | Get or clear the Unity Editor console. Defaults to 'get' if omitted. |
+| `action` | `Literal['get', 'clear', 'get_compile_errors'] \| None` | — | Get or clear the Unity Editor console, or get structured compiler messages. Defaults to 'get' if omitted. |
 | `types` | `list[Literal['error', 'warning', 'log', 'all']] \| str \| None` | — | Message types to get (accepts list or JSON string) |
 | `count` | `int \| str \| None` | — | Max messages to return in non-paging mode (accepts int or string, e.g., 5 or '5'). Ignored when paging with page_size/cursor. |
 | `filter_text` | `str \| None` | — | Text filter for messages |

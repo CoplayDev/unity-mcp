@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable, TypeVar
 
+from transport import idempotency
 from transport.plugin_hub import InstanceSelectionRequiredError, PluginHub
 from core.config import config
 from core.constants import API_KEY_HEADER
@@ -46,6 +47,40 @@ async def send_with_unity_instance(
     user_id: str | None = None,
     **kwargs,
 ) -> T:
+    """Route a command to Unity over the active transport.
+
+    The call carries one idempotency key (``request_id``) that every transport-level
+    resend reuses; see ``transport.idempotency``. Callers may pass ``request_id``
+    explicitly, otherwise one is minted (or reused from a recent unknown-outcome
+    attempt of the identical call).
+    """
+    command_type = args[0] if args else kwargs.get("command_type")
+    command_params = args[1] if len(args) > 1 else kwargs.get("params")
+    request_id = kwargs.pop("request_id", None)
+    fp = None
+    if request_id is None and command_type:
+        # The retry cache is process-wide: scope keys to the authenticated user (hosted mode) so
+        # one user's retry can never reuse, or clear, another user's request id.
+        if user_id is None and _is_http_transport():
+            user_id = await _resolve_user_id_from_request()
+        fp = idempotency.fingerprint(unity_instance, command_type, command_params, scope=user_id)
+        request_id = idempotency.retry_keys.request_id_for(fp)
+
+    result = await _send_once(send_fn, unity_instance, *args, user_id=user_id,
+                              request_id=request_id, **kwargs)
+    if fp is not None:
+        idempotency.retry_keys.record_outcome(fp, request_id, result)
+    return result
+
+
+async def _send_once(
+    send_fn: Callable[..., Awaitable[T]],
+    unity_instance: str | None,
+    *args,
+    user_id: str | None = None,
+    request_id: str | None = None,
+    **kwargs,
+) -> T:
     if _is_http_transport():
         if not args:
             raise ValueError("HTTP transport requires command arguments")
@@ -82,6 +117,7 @@ async def send_with_unity_instance(
                 params,
                 user_id=user_id,
                 retry_on_reload=retry_on_reload,
+                request_id=request_id,
             )
             return normalize_unity_response(raw)
         except InstanceSelectionRequiredError as exc:
@@ -110,4 +146,6 @@ async def send_with_unity_instance(
 
     if unity_instance:
         kwargs.setdefault("instance_id", unity_instance)
+    if request_id is not None:
+        kwargs["request_id"] = request_id
     return await send_fn(*args, **kwargs)

@@ -26,6 +26,7 @@ class PluginSession:
     # Full path to project root (for focus nudging)
     project_path: str | None = None
     user_id: str | None = None  # Associated user id (None for local mode)
+    capabilities: tuple[str, ...] = ()
 
 
 class PluginRegistry:
@@ -55,6 +56,7 @@ class PluginRegistry:
         unity_version: str,
         project_path: str | None = None,
         user_id: str | None = None,
+        capabilities: tuple[str, ...] = (),
     ) -> tuple[PluginSession, str | None]:
         """Register (or replace) a plugin session.
 
@@ -80,6 +82,7 @@ class PluginRegistry:
                 connected_at=now,
                 project_path=project_path,
                 user_id=user_id,
+                capabilities=tuple(capabilities),
             )
 
             # Remove old mapping for this hash if it existed under a different session

@@ -16,6 +16,11 @@ namespace MCPForUnity.Editor.Models
         /// The parameters for the command
         /// </summary>
         public JObject @params { get; set; }
+
+        /// <summary>
+        /// Idempotency key shared by every resend of one logical call; see CommandLedger.
+        /// </summary>
+        public string request_id { get; set; }
     }
 }
 

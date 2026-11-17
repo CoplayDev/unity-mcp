@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools.GameObjects;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -65,7 +66,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void Delete_ByInstanceID_DeletesObject()
         {
             var target = CreateTestObject("DeleteTargetByID");
-            int instanceID = target.GetInstanceID();
+            int instanceID = target.GetInstanceIDCompat();
 
             var p = new JObject
             {

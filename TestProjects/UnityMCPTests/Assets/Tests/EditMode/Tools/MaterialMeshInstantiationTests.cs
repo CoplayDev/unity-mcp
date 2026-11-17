@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -52,9 +53,9 @@ namespace MCPForUnityTests.Editor.Tools
         {
             var meshRenderer = testGameObject.AddComponent<MeshRenderer>();
             meshRenderer.sharedMaterial = testMaterial;
-            int beforeId = meshRenderer.sharedMaterial != null ? meshRenderer.sharedMaterial.GetInstanceID() : 0;
+            int beforeId = meshRenderer.sharedMaterial != null ? meshRenderer.sharedMaterial.GetInstanceIDCompat() : 0;
             var result = GameObjectSerializer.GetComponentData(meshRenderer);
-            int afterId = meshRenderer.sharedMaterial != null ? meshRenderer.sharedMaterial.GetInstanceID() : 0;
+            int afterId = meshRenderer.sharedMaterial != null ? meshRenderer.sharedMaterial.GetInstanceIDCompat() : 0;
             Assert.AreEqual(beforeId, afterId, "sharedMaterial instanceID must not change during edit-mode serialization (no instantiation)");
             Assert.IsNotNull(result, "GetComponentData should return a result");
             var propsObj = (result as Dictionary<string, object>) != null && ((Dictionary<string, object>)result).TryGetValue("properties", out var p)
@@ -92,9 +93,9 @@ namespace MCPForUnityTests.Editor.Tools
             var meshFilter = testGameObject.AddComponent<MeshFilter>();
             var uniqueMesh = UnityEngine.Object.Instantiate(testMesh);
             meshFilter.sharedMesh = uniqueMesh;
-            int beforeId = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.GetInstanceID() : 0;
+            int beforeId = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.GetInstanceIDCompat() : 0;
             var result = GameObjectSerializer.GetComponentData(meshFilter);
-            int afterId = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.GetInstanceID() : 0;
+            int afterId = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.GetInstanceIDCompat() : 0;
             Assert.AreEqual(beforeId, afterId, "sharedMesh instanceID must not change during edit-mode serialization (no instantiation)");
             Assert.IsNotNull(result, "GetComponentData should return a result");
             var propsObj = (result as Dictionary<string, object>) != null && ((Dictionary<string, object>)result).TryGetValue("properties", out var p)

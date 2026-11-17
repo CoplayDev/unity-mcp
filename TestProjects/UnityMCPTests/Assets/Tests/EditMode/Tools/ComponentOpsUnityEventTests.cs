@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using TestNamespace;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -30,7 +31,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_UnityEvent_SinglePersistentCall_PersistsViaSerialization()
         {
             var comp = testGo.AddComponent<UnityEventTestComponent>();
-            int targetId = testGo.GetInstanceID();
+            int targetId = testGo.GetInstanceIDCompat();
 
             var value = JObject.Parse(@"{
                 ""m_PersistentCalls"": {
@@ -70,7 +71,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_UnityEvent_MultiplePersistentCalls_AllPersist()
         {
             var comp = testGo.AddComponent<UnityEventTestComponent>();
-            int targetId = testGo.GetInstanceID();
+            int targetId = testGo.GetInstanceIDCompat();
 
             var value = JObject.Parse(@"{
                 ""m_PersistentCalls"": {
@@ -113,7 +114,7 @@ namespace MCPForUnityTests.Editor.Tools
             var comp = testGo.AddComponent<UnityEventTestComponent>();
 
             // First set a call
-            int targetId = testGo.GetInstanceID();
+            int targetId = testGo.GetInstanceIDCompat();
             var withCall = JObject.Parse(@"{
                 ""m_PersistentCalls"": {
                     ""m_Calls"": [
@@ -150,7 +151,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void SetProperty_PrivateSerializedUnityEvent_RoutesViaSerialization()
         {
             var comp = testGo.AddComponent<UnityEventTestComponent>();
-            int targetId = testGo.GetInstanceID();
+            int targetId = testGo.GetInstanceIDCompat();
 
             var value = JObject.Parse(@"{
                 ""m_PersistentCalls"": {
@@ -192,7 +193,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void HandleCommand_EndToEnd_UnityEventWiring()
         {
             testGo.AddComponent<UnityEventTestComponent>();
-            int targetId = testGo.GetInstanceID();
+            int targetId = testGo.GetInstanceIDCompat();
 
             var p = new JObject
             {

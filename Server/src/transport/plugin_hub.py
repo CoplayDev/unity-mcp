@@ -82,6 +82,10 @@ def _install_session_tracking() -> None:
     MiddlewareServerSession.__aenter__ = _tracking_aenter  # type: ignore[assignment]
 
 
+# Plugin capability: commands carrying a request_id run at most once (Unity-side ledger).
+COMMAND_LEDGER_CAPABILITY = "command_ledger"
+
+
 class PluginDisconnectedError(RuntimeError):
     """Raised when a plugin WebSocket disconnects while commands are in flight."""
 
@@ -133,6 +137,8 @@ class PluginHub(WebSocketEndpoint):
     # or is throttled while unfocused.
     _FAST_FAIL_COMMANDS: set[str] = {
         "read_console", "get_editor_state", "ping"}
+    # Resends of one request_id after the plugin drops mid-command (domain reload).
+    MAX_RESENDS_AFTER_DISCONNECT = 3
 
     _registry: PluginRegistry | None = None
     _mcp: FastMCP | None = None
@@ -284,7 +290,27 @@ class PluginHub(WebSocketEndpoint):
     # Public API
     # ------------------------------------------------------------------
     @classmethod
-    async def send_command(cls, session_id: str, command_type: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def send_command(
+        cls,
+        session_id: str,
+        command_type: str,
+        params: dict[str, Any],
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return await cls._send_command_raw(session_id, command_type, params, request_id)
+        except PluginDisconnectedError as exc:
+            return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+
+    @classmethod
+    async def _send_command_raw(
+        cls,
+        session_id: str,
+        command_type: str,
+        params: dict[str, Any],
+        request_id: str | None,
+    ) -> dict[str, Any]:
+        """Send once; a disconnect while awaiting the result raises PluginDisconnectedError."""
         websocket = await cls._get_connection(session_id)
         command_id = str(uuid.uuid4())
         future: asyncio.Future = asyncio.get_running_loop().create_future()
@@ -341,6 +367,7 @@ class PluginHub(WebSocketEndpoint):
                 name=command_type,
                 params=params,
                 timeout=unity_timeout_s,
+                request_id=request_id,
             )
             try:
                 await websocket.send_json(msg.model_dump())
@@ -352,8 +379,6 @@ class PluginHub(WebSocketEndpoint):
             try:
                 result = await asyncio.wait_for(future, timeout=server_wait_s)
                 return result
-            except PluginDisconnectedError as exc:
-                return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
             except asyncio.TimeoutError:
                 if command_type in cls._FAST_FAIL_COMMANDS:
                     return MCPResponse(
@@ -458,7 +483,9 @@ class PluginHub(WebSocketEndpoint):
         response = RegisteredMessage(session_id=session_id)
         await websocket.send_json(response.model_dump())
 
-        session, evicted_session_id = await registry.register(session_id, project_name, project_hash, unity_version, project_path, user_id=user_id)
+        session, evicted_session_id = await registry.register(
+            session_id, project_name, project_hash, unity_version, project_path,
+            user_id=user_id, capabilities=tuple(payload.capabilities))
         evicted_ws = None
         async with lock:
             # Clean up the evicted session's connection, ping loop, and pending commands
@@ -1001,6 +1028,7 @@ class PluginHub(WebSocketEndpoint):
         params: dict[str, Any],
         user_id: str | None = None,
         retry_on_reload: bool = True,
+        request_id: str | None = None,
     ) -> dict[str, Any]:
         """Send a command to a Unity instance.
 
@@ -1010,6 +1038,9 @@ class PluginHub(WebSocketEndpoint):
             params: Command parameters
             user_id: User ID for session isolation in remote-hosted mode
             retry_on_reload: If False, do not wait for session reconnect on reload.
+            request_id: Idempotency key. When the plugin dedups by it (capability
+                "command_ledger"), a command cut off by a disconnect is re-sent
+                once the plugin reconnects instead of returning a retry hint.
         """
         try:
             session_id = await cls._resolve_session_id(
@@ -1070,7 +1101,56 @@ class PluginHub(WebSocketEndpoint):
                         hint="retry",
                     ).model_dump()
 
-        return await cls.send_command(session_id, command_type, params)
+        resends = 0
+        # A resend after a disconnect must reach the same project: with unity_instance=None the
+        # resolver picks whichever project is connected, which may be a different one by then.
+        pinned_project = await cls._session_project_hash(session_id)
+        while True:
+            can_resend = (
+                retry_on_reload
+                and bool(request_id)  # "" is no idempotency key: Unity runs it without a ledger entry
+                and resends < cls.MAX_RESENDS_AFTER_DISCONNECT
+                and await cls._session_has_capability(session_id, COMMAND_LEDGER_CAPABILITY)
+            )
+            try:
+                return await cls._send_command_raw(session_id, command_type, params, request_id)
+            except PluginDisconnectedError as exc:
+                if not can_resend:
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                resends += 1
+                try:
+                    session_id = await cls._resolve_session_id(
+                        unity_instance, user_id=user_id, retry_on_reload=True)
+                except NoUnitySessionError:
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                if pinned_project is not None and await cls._session_project_hash(session_id) != pinned_project:
+                    logger.info("Not re-sending %s (request %s): the reconnected session belongs to another project",
+                                command_type, request_id)
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                # The command may already have run; only a session with a command ledger can
+                # deduplicate it. Check the replacement session before sending again.
+                if not await cls._session_has_capability(session_id, COMMAND_LEDGER_CAPABILITY):
+                    logger.info("Not re-sending %s (request %s): the reconnected session has no command ledger",
+                                command_type, request_id)
+                    return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+                logger.info(
+                    "Re-sending %s (request %s) after plugin disconnect, attempt %d",
+                    command_type, request_id, resends,
+                )
+
+    @classmethod
+    async def _session_project_hash(cls, session_id: str) -> str | None:
+        if cls._registry is None:
+            return None
+        session = await cls._registry.get_session(session_id)
+        return getattr(session, "project_hash", None) if session is not None else None
+
+    @classmethod
+    async def _session_has_capability(cls, session_id: str, capability: str) -> bool:
+        if cls._registry is None:
+            return False
+        session = await cls._registry.get_session(session_id)
+        return session is not None and capability in session.capabilities
 
     # ------------------------------------------------------------------
     # Blocking helpers for synchronous tool code

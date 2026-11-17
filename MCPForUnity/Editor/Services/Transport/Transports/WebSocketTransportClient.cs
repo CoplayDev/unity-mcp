@@ -615,6 +615,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 ["type"] = commandName,
                 ["params"] = parameters
             };
+            string requestId = payload.Value<string>("request_id");
+            if (!string.IsNullOrEmpty(requestId))
+            {
+                commandEnvelope["request_id"] = requestId;
+            }
 
             string responseJson;
             try
@@ -699,7 +704,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 ["project_name"] = _projectName,
                 ["project_hash"] = _projectHash,
                 ["unity_version"] = _unityVersion,
-                ["project_path"] = _projectPath
+                ["project_path"] = _projectPath,
+                // Commands carrying a request_id are deduplicated by CommandLedger, so the server
+                // may safely re-send them after a reconnect.
+                ["capabilities"] = new JArray("command_ledger")
             };
 
             await SendJsonAsync(registerPayload, token).ConfigureAwait(false);

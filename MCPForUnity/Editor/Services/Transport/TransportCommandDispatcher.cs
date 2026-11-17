@@ -310,6 +310,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 return;
             }
 
+            string ledgerId = null;
             try
             {
                 var command = JsonConvert.DeserializeObject<Command>(commandText);
@@ -374,18 +375,68 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                var requestId = command.request_id;
+                switch (CommandLedger.Begin(requestId, command.type, out var replayJson, out var inFlight))
+                {
+                    case CommandLedger.Decision.Replay:
+                        McpLog.Info($"Replaying recorded response for '{command.type}' (request {requestId}) instead of running it again.", always: false);
+                        pending.TrySetResult(replayJson);
+                        RemovePending(id, pending);
+                        return;
+                    case CommandLedger.Decision.Attach:
+                        inFlight.ContinueWith(t =>
+                        {
+                            pending.TrySetResult(t.Status == TaskStatus.RanToCompletion
+                                ? t.Result
+                                : SerializeError($"Original execution of request {requestId} did not complete.", command.type));
+                            EditorApplication.delayCall += () => RemovePending(id, pending);
+                        }, TaskScheduler.Default);
+                        return;
+                }
+                ledgerId = requestId;
+
                 var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
                 var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
-                var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
+                int undoGroup = BeginUndoGroup(command.type, parameters);
+                object result;
+                try
+                {
+                    result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
+                }
+                catch (Exception ex)
+                {
+                    EndUndoGroup(undoGroup);
+                    McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+                    var errorJson = JsonConvert.SerializeObject(ExceptionLocation.Describe(command.type, ex));
+                    CommandLedger.Complete(requestId, errorJson);
+                    pending.TrySetResult(errorJson);
+                    RemovePending(id, pending);
+                    return;
+                }
 
                 if (result == null)
                 {
-                    // Async command – cleanup after completion on next editor frame to preserve order.
+                    // Async command: close its Undo group now, over the synchronous part only. When
+                    // it completes, other commands or user edits may sit above its group, and
+                    // CollapseUndoOperations would fold them in; changes made after an await stay
+                    // separate undo steps instead.
+                    EndUndoGroup(undoGroup);
+                    // Cleanup after completion on next editor frame to preserve order.
                     var capturedType = command.type;
                     var capturedParams = parameters;
                     var capturedLogType = logType;
+                    CommandLedger.SetInFlight(requestId, pending.CompletionSource.Task);
                     pending.CompletionSource.Task.ContinueWith(t =>
                     {
+                        if (t.Status == TaskStatus.RanToCompletion)
+                        {
+                            CommandLedger.Complete(requestId, t.Result);
+                        }
+                        else
+                        {
+                            CommandLedger.Abandon(requestId);
+                        }
+
                         sw?.Stop();
                         var logStatus = "SUCCESS";
                         string logError = null;
@@ -414,6 +465,7 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                EndUndoGroup(undoGroup);
                 sw?.Stop();
 
                 string syncLogStatus = "SUCCESS";
@@ -426,15 +478,49 @@ namespace MCPForUnity.Editor.Services.Transport
                 McpLogRecord.Log(command.type, parameters, logType, syncLogStatus, sw?.ElapsedMilliseconds ?? 0, syncLogError);
 
                 var response = new { status = "success", result };
-                pending.TrySetResult(JsonConvert.SerializeObject(response));
+                var responseJson = JsonConvert.SerializeObject(response);
+                CommandLedger.Complete(requestId, responseJson);
+                pending.TrySetResult(responseJson);
                 RemovePending(id, pending);
             }
             catch (Exception ex)
             {
+                // Started but neither completed nor handed to the async path: release the ledger
+                // entry so it is not held as running forever (a resend reports outcome_unknown).
+                CommandLedger.Abandon(ledgerId);
                 McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
-                pending.TrySetResult(SerializeError(ex.Message, "Unknown (error during processing)", ex.StackTrace));
+                pending.TrySetResult(JsonConvert.SerializeObject(
+                    ExceptionLocation.Describe("Unknown (error during processing)", ex)));
                 RemovePending(id, pending);
             }
+        }
+
+        /// <summary>
+        /// Opens a fresh Undo group named after the command so everything one MCP command changes
+        /// is undone with a single Ctrl+Z (batch_execute included, since it composes in-process).
+        /// Returns -1 for the editor's own undo/redo actions, which must not be wrapped.
+        /// </summary>
+        internal static int BeginUndoGroup(string commandType, JObject parameters)
+        {
+            string action = parameters?.Value<string>("action");
+            if (commandType == "manage_editor" && (action == "undo" || action == "redo"))
+            {
+                return -1;
+            }
+
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName(string.IsNullOrEmpty(action) ? $"MCP: {commandType}" : $"MCP: {commandType} {action}");
+            return Undo.GetCurrentGroup();
+        }
+
+        internal static void EndUndoGroup(int group)
+        {
+            if (group < 0)
+            {
+                return;
+            }
+
+            Undo.CollapseUndoOperations(group);
         }
 
         private static void CancelPending(string id, CancellationToken token)

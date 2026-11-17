@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
@@ -144,6 +145,22 @@ namespace MCPForUnity.Editor.Tools
 
         public static object HandleCommand(JObject @params)
         {
+            if (@params == null)
+            {
+                return new ErrorResponse("Parameters cannot be null.");
+            }
+
+            var p = new ToolParams(@params);
+            string action = p.Get("action", "get").ToLower();
+
+            // Compiler diagnostics come from CompilationDiagnostics, not from the console window's
+            // internals, so they stay available when the console reflection below failed.
+            if (action == "get_compile_errors")
+            {
+                var data = CompilationDiagnostics.ToResponseData(p.GetBool("includeWarnings", false));
+                return new SuccessResponse("Compiler messages of the last script compilation.", data);
+            }
+
             // Check if ALL required reflection members were successfully initialized.
             if (
                 _startGettingEntriesMethod == null
@@ -165,14 +182,6 @@ namespace MCPForUnity.Editor.Tools
                     "ReadConsole handler failed to initialize due to reflection errors. Cannot access console logs."
                 );
             }
-
-            if (@params == null)
-            {
-                return new ErrorResponse("Parameters cannot be null.");
-            }
-
-            var p = new ToolParams(@params);
-            string action = p.Get("action", "get").ToLower();
 
             try
             {
@@ -211,7 +220,7 @@ namespace MCPForUnity.Editor.Tools
                 else
                 {
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Valid actions are 'get' or 'clear'."
+                        $"Unknown action: '{action}'. Valid actions are 'get', 'clear' or 'get_compile_errors'."
                     );
                 }
             }

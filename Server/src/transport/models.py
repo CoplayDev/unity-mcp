@@ -22,6 +22,8 @@ class ExecuteCommandMessage(BaseModel):
     name: str
     params: dict[str, Any]
     timeout: float
+    # Idempotency key shared by every resend of one logical call (see transport.idempotency).
+    request_id: str | None = None
 
 
 class PingMessage(BaseModel):
@@ -37,6 +39,8 @@ class RegisterMessage(BaseModel):
     project_hash: str
     unity_version: str = "Unknown"
     project_path: str | None = None  # Full path to project root (for focus nudging)
+    # Optional plugin features, e.g. "command_ledger" (dedups commands by request_id).
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class RegisterToolsMessage(BaseModel):
