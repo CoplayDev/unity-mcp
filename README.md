@@ -43,7 +43,7 @@ Full history: [Release Notes](https://coplaydev.github.io/unity-mcp/releases).
 
 Control the Unity Editor in natural language from any MCP client — create scenes & GameObjects, edit C# scripts, manage assets, run tests, profile, and build. 50 focused MCP tool entrypoints, any client, free & MIT.
 
-**[Browse the full tool catalog →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
+**[Browse the full tool catalog →](https://coplaydev.github.io/unity-mcp/reference/tools)**
 
 ---
 

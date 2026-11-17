@@ -41,7 +41,7 @@
 
 用自然语言从任意 MCP 客户端操作 Unity 编辑器：搭场景、建 GameObject、写改 C# 脚本、调材质和着色器、跑测试、看性能、出包。50 个 MCP 工具入口，任意客户端可用，免费、MIT 开源。
 
-**[查看完整工具目录 →](https://coplaydev.github.io/unity-mcp/reference/tools/)**
+**[查看完整工具目录 →](https://coplaydev.github.io/unity-mcp/reference/tools)**
 
 ---
 
