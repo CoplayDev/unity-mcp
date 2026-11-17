@@ -91,7 +91,7 @@ def test_send_command_against_wedged_socket_is_bounded(silent_bridge, monkeypatc
 def test_send_command_with_retry_is_bounded_by_deadline(silent_bridge, tmp_path, monkeypatch):
     """The reload-wait loop honours command_total_timeout, not just max_wait_s."""
     conn = UnityConnection(port=silent_bridge, instance_id="Repro@deadbeef")
-    monkeypatch.setattr(uc, "get_unity_connection", lambda instance_id=None: conn)
+    monkeypatch.setattr(uc, "get_unity_connection", lambda instance_id=None, deadline=None: conn)
     _write_reloading_status(tmp_path)
 
     start = time.monotonic()
@@ -143,7 +143,7 @@ def test_connection_failure_refreshes_cached_port_before_backoff(monkeypatch) ->
     attempted_ports: list[int] = []
     ports_before_backoff: list[int] = []
 
-    def fail_connect(connect_timeout: float | None = None) -> bool:
+    def fail_connect(connect_timeout: float | None = None, deadline: float | None = None) -> bool:
         attempted_ports.append(conn.port)
         return False
 

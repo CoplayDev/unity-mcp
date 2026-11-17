@@ -27,6 +27,10 @@ _connection_lock = threading.Lock()
 FRAMED_MAX = 64 * 1024 * 1024
 
 
+class _DeadlineBeforeSend(TimeoutError):
+    """The command's deadline passed before its payload was written: nothing was sent, the socket is intact."""
+
+
 @dataclass
 class UnityConnection:
     """Manages the socket connection to the Unity Editor."""
@@ -50,8 +54,11 @@ class UnityConnection:
         except OSError as exc:
             logger.debug(f"Unable to set TCP_NODELAY: {exc}")
 
-    def connect(self, connect_timeout: float | None = None) -> bool:
-        """Establish a connection to the Unity Editor."""
+    def connect(self, connect_timeout: float | None = None, deadline: float | None = None) -> bool:
+        """Establish a connection to the Unity Editor.
+
+        ``deadline`` (a monotonic() ceiling) caps both the connect and the handshake timeouts.
+        """
         if self.sock:
             return True
         with self._conn_lock:
@@ -62,6 +69,7 @@ class UnityConnection:
                 if connect_timeout is None:
                     connect_timeout = float(
                         getattr(config, "connection_timeout", 1.0))
+                connect_timeout = self._cap_to_deadline(connect_timeout, deadline)
                 # We trust config.unity_host (default 127.0.0.1) but future improvements
                 # could dynamically prefer 'localhost' depending on OS resolver behavior.
                 self.sock = socket.create_connection(
@@ -73,14 +81,17 @@ class UnityConnection:
                 # Strict handshake: require FRAMING=1
                 try:
                     require_framing = getattr(config, "require_framing", True)
-                    handshake_timeout = float(
-                        getattr(config, "handshake_timeout", 1.0))
+                    handshake_timeout = self._cap_to_deadline(float(
+                        getattr(config, "handshake_timeout", 1.0)), deadline)
                     self.sock.settimeout(handshake_timeout)
                     buf = bytearray()
-                    deadline = time.monotonic() + handshake_timeout
-                    while time.monotonic() < deadline and len(buf) < 512:
+                    # The earlier of the configured handshake timeout and the caller's deadline.
+                    handshake_deadline = time.monotonic() + handshake_timeout
+                    if deadline is not None:
+                        handshake_deadline = min(deadline, handshake_deadline)
+                    while time.monotonic() < handshake_deadline and len(buf) < 512:
                         try:
-                            chunk = self.sock.recv(256)
+                            chunk = self._recv_by(self.sock, 256, handshake_deadline, handshake_timeout)
                             if not chunk:
                                 break
                             buf.extend(chunk)
@@ -140,9 +151,13 @@ class UnityConnection:
         """
         if not self.sock:
             return
-        orig_blocking = None
+        orig_timeout = None
+        peeked = False
         try:
-            orig_blocking = self.sock.getblocking()
+            # setblocking(True) would clear the timeout, leaving the next send and receive unbounded:
+            # restore the timeout itself instead.
+            orig_timeout = self.sock.gettimeout()
+            peeked = True
             self.sock.setblocking(False)
             data = self.sock.recv(1, socket.MSG_PEEK)
             if not data:
@@ -157,21 +172,35 @@ class UnityConnection:
                 pass
             self.sock = None
         finally:
-            if self.sock and orig_blocking is not None:
-                self.sock.setblocking(orig_blocking)
+            if self.sock and peeked:
+                self.sock.settimeout(orig_timeout)
 
-    def _read_exact(self, sock: socket.socket, count: int) -> bytes:
+    def _recv_by(self, sock: socket.socket, size: int, deadline: float | None, timeout: float | None) -> bytes:
+        """One recv that waits no longer than ``timeout`` nor past ``deadline`` (a monotonic() ceiling)."""
+        if deadline is not None:
+            if time.monotonic() >= deadline:
+                raise socket.timeout("Deadline reached while receiving")
+            sock.settimeout(self._cap_to_deadline(timeout or config.connection_timeout, deadline))
+        return sock.recv(size)
+
+    def _read_exact(self, sock: socket.socket, count: int, deadline: float | None = None,
+                    timeout: float | None = None) -> bytes:
         data = bytearray()
         while len(data) < count:
-            chunk = sock.recv(count - len(data))
+            chunk = self._recv_by(sock, count - len(data), deadline, timeout)
             if not chunk:
                 raise ConnectionError(
                     "Connection closed before reading expected bytes")
             data.extend(chunk)
         return bytes(data)
 
-    def receive_full_response(self, sock, buffer_size=config.buffer_size) -> bytes:
-        """Receive a complete response from Unity, handling chunked data."""
+    def receive_full_response(self, sock, buffer_size=config.buffer_size, deadline: float | None = None) -> bytes:
+        """Receive a complete response from Unity, handling chunked data.
+
+        With a ``deadline`` (a monotonic() ceiling), every read is capped to what is left of it, so a
+        response arriving in pieces cannot hold the connection past the deadline.
+        """
+        timeout = sock.gettimeout()
         if self.use_framing:
             # Heartbeat semantics: the Unity editor emits zero-length frames while
             # a long-running command is still executing. We tolerate a bounded
@@ -183,7 +212,7 @@ class UnityConnection:
             heartbeat_count = 0
             try:
                 while True:
-                    header = self._read_exact(sock, 8)
+                    header = self._read_exact(sock, 8, deadline, timeout)
                     payload_len = struct.unpack('>Q', header)[0]
                     if payload_len == 0:
                         heartbeat_count += 1
@@ -197,7 +226,7 @@ class UnityConnection:
                     if payload_len > FRAMED_MAX:
                         raise ValueError(
                             f"Invalid framed length: {payload_len}")
-                    payload = self._read_exact(sock, payload_len)
+                    payload = self._read_exact(sock, payload_len, deadline, timeout)
                     logger.debug(
                         f"Received framed response ({len(payload)} bytes)")
                     return payload
@@ -214,7 +243,7 @@ class UnityConnection:
         # Respect the socket's currently configured timeout
         try:
             while True:
-                chunk = sock.recv(buffer_size)
+                chunk = self._recv_by(sock, buffer_size, deadline, timeout)
                 if not chunk:
                     if not chunks:
                         raise Exception(
@@ -266,6 +295,10 @@ class UnityConnection:
         except Exception as e:
             logger.error(f"Error during receive: {str(e)}")
             raise
+
+    def _lock_wait(self, deadline: float | None) -> float:
+        """How long to wait for the I/O lock: until the deadline (-1, without limit, when there is none)."""
+        return -1 if deadline is None else max(0.0, deadline - time.monotonic())
 
     def _cap_to_deadline(self, timeout: float, deadline: float | None, floor: float = 0.05) -> float:
         """Shrink a blocking timeout to whatever budget remains before the deadline."""
@@ -341,8 +374,13 @@ class UnityConnection:
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
                 # Reload invalidates the socket; drop it under the I/O lock so this
                 # close is serialized against the send/recv block, then reconnect next call.
-                with self._io_lock:
-                    self.disconnect()
+                # Wait for the lock only while the budget lasts: if another command still
+                # holds it, that command owns the socket and the reload ends its exchange.
+                if self._io_lock.acquire(timeout=self._lock_wait(deadline)):
+                    try:
+                        self.disconnect()
+                    finally:
+                        self._io_lock.release()
                 return MCPResponse(
                     success=False,
                     error="Unity is reloading; please retry",
@@ -359,148 +397,163 @@ class UnityConnection:
                 raise TimeoutError(
                     f"Command '{command_type}' exceeded total deadline of "
                     f"{total_timeout:.1f}s (connection wedged or Unity unresponsive)")
+            # Commands on this connection are serialized, from the liveness check to the close after a
+            # failure, so no command changes the socket (or its timeout) while another is using it. Wait for
+            # another command's turn only as long as this one's budget lasts.
+            if not self._io_lock.acquire(timeout=self._lock_wait(deadline)):
+                raise _DeadlineBeforeSend(
+                    f"Command '{command_type}' ran out of time waiting for the connection to Unity")
+            failure: Exception | None = None
             try:
-                # Discard stale sockets left over from a previous domain reload
-                # so we reconnect instead of writing to a dead connection.
-                self._ensure_live_connection()
-                # Ensure connected (handshake occurs within connect())
-                t_conn_start = time.time()
-                if not self.sock and not self.connect(self._cap_to_deadline(config.connection_timeout, deadline)):
-                    raise ConnectionError("Could not connect to Unity")
-                logger.info("[TIMING-STDIO] connect took %.3fs command=%s", time.time() - t_conn_start, command_type)
+                try:
+                    # Discard stale sockets left over from a previous domain reload
+                    # so we reconnect instead of writing to a dead connection.
+                    self._ensure_live_connection()
+                    # Ensure connected (handshake occurs within connect())
+                    t_conn_start = time.time()
+                    if not self.sock and not self.connect(self._cap_to_deadline(config.connection_timeout, deadline), deadline=deadline):
+                        raise ConnectionError("Could not connect to Unity")
+                    logger.info("[TIMING-STDIO] connect took %.3fs command=%s", time.time() - t_conn_start, command_type)
 
-                # Build payload
-                if command_type == 'ping':
-                    payload = b'ping'
-                else:
-                    payload = json.dumps({
-                        'type': command_type,
-                        'params': params,
-                    }).encode('utf-8')
+                    # Build payload
+                    if command_type == 'ping':
+                        payload = b'ping'
+                    else:
+                        payload = json.dumps({
+                            'type': command_type,
+                            'params': params,
+                        }).encode('utf-8')
 
-                # Send/receive are serialized to protect the shared socket
-                with self._io_lock:
+                    if deadline is not None and time.monotonic() >= deadline:
+                        raise _DeadlineBeforeSend(
+                            f"Command '{command_type}' ran out of time before it was sent")
                     mode = 'framed' if self.use_framing else 'legacy'
                     with contextlib.suppress(Exception):
                         logger.debug(
                             f"send {len(payload)} bytes; mode={mode}; head={payload[:32].decode('utf-8', 'ignore')}")
-                    t_send_start = time.time()
-                    if self.use_framing:
-                        header = struct.pack('>Q', len(payload))
-                        self.sock.sendall(header)
-                        self.sock.sendall(payload)
-                    else:
-                        self.sock.sendall(payload)
-                    logger.info("[TIMING-STDIO] sendall took %.3fs command=%s", time.time() - t_send_start, command_type)
-
-                    # Cap the receive timeout to the remaining command budget (and use a
-                    # short timeout during retry bursts) so a wedged socket can't block
-                    # past the deadline.
-                    restore_timeout = None
-                    recv_timeout = 1.0 if attempt > 0 else self.sock.gettimeout()
+                    # Cap sends and receives to the remaining command budget (and use a short timeout
+                    # during retry bursts) so a wedged socket can't block past the deadline.
+                    original_timeout = self.sock.gettimeout()
+                    io_timeout = 1.0 if attempt > 0 else original_timeout
                     if deadline is not None:
-                        recv_timeout = self._cap_to_deadline(
-                            recv_timeout or config.connection_timeout, deadline)
-                    if recv_timeout is not None and recv_timeout != self.sock.gettimeout():
-                        restore_timeout = self.sock.gettimeout()
-                        self.sock.settimeout(recv_timeout)
+                        io_timeout = self._cap_to_deadline(
+                            io_timeout or config.connection_timeout, deadline)
                     try:
+                        self.sock.settimeout(io_timeout)
+                        t_send_start = time.time()
+                        if self.use_framing:
+                            header = struct.pack('>Q', len(payload))
+                            self.sock.sendall(header)
+                            self.sock.sendall(payload)
+                        else:
+                            self.sock.sendall(payload)
+                        logger.info("[TIMING-STDIO] sendall took %.3fs command=%s", time.time() - t_send_start, command_type)
+
+                        if deadline is not None:
+                            self.sock.settimeout(self._cap_to_deadline(io_timeout, deadline))
                         t_recv_start = time.time()
-                        response_data = self.receive_full_response(self.sock)
+                        response_data = self.receive_full_response(self.sock, deadline=deadline)
                         logger.info("[TIMING-STDIO] receive took %.3fs command=%s len=%d", time.time() - t_recv_start, command_type, len(response_data))
                         with contextlib.suppress(Exception):
                             logger.debug(
                                 f"recv {len(response_data)} bytes; mode={mode}")
                     finally:
-                        if restore_timeout is not None:
-                            self.sock.settimeout(restore_timeout)
+                        if self.sock:
+                            self.sock.settimeout(original_timeout)
 
-                # Parse
-                if command_type == 'ping':
+                    # Parse
+                    if command_type == 'ping':
+                        resp = json.loads(response_data.decode('utf-8'))
+                        if resp.get('status') == 'success' and resp.get('result', {}).get('message') == 'pong':
+                            return {"message": "pong"}
+                        raise Exception("Ping unsuccessful")
+
                     resp = json.loads(response_data.decode('utf-8'))
-                    if resp.get('status') == 'success' and resp.get('result', {}).get('message') == 'pong':
-                        return {"message": "pong"}
-                    raise Exception("Ping unsuccessful")
+                    if resp.get('status') == 'error':
+                        err = resp.get('error') or resp.get(
+                            'message', 'Unknown Unity error')
+                        raise Exception(err)
+                    return resp.get('result', {})
+                except _DeadlineBeforeSend:
+                    # Nothing was sent, and the socket is left as it was.
+                    raise
+                except Exception as e:
+                    failure = e
+                    logger.warning(
+                        f"Unity communication attempt {attempt+1} failed: {e}")
+                    try:
+                        if self.sock:
+                            self.sock.close()
+                    finally:
+                        self.sock = None
+            finally:
+                self._io_lock.release()
 
-                resp = json.loads(response_data.decode('utf-8'))
-                if resp.get('status') == 'error':
-                    err = resp.get('error') or resp.get(
-                        'message', 'Unknown Unity error')
-                    raise Exception(err)
-                return resp.get('result', {})
-            except Exception as e:
-                logger.warning(
-                    f"Unity communication attempt {attempt+1} failed: {e}")
-                try:
-                    if self.sock:
-                        self.sock.close()
-                finally:
-                    self.sock = None
-
-                # Re-discover the port for this specific instance
-                try:
-                    stdio_port_registry.get_instances(force_refresh=True)
-                    new_port: int | None = None
-                    if self.instance_id:
-                        # Try to rediscover the specific instance via shared registry
-                        refreshed_instance = stdio_port_registry.get_instance(
-                            self.instance_id)
-                        if refreshed_instance and isinstance(refreshed_instance.port, int):
-                            new_port = refreshed_instance.port
-                            logger.debug(
-                                f"Rediscovered instance {self.instance_id} on port {new_port}")
-                        else:
-                            logger.warning(
-                                f"Instance {self.instance_id} not found during reconnection; falling back to port scan",
-                            )
-
-                    # Fallback to registry default if instance-specific discovery failed
-                    if new_port is None:
-                        new_port = stdio_port_registry.get_port(
-                            self.instance_id)
-                        logger.info(
-                            f"Using Unity port from stdio_port_registry: {new_port}")
-
-                    if new_port != self.port:
-                        logger.info(
-                            f"Unity port changed {self.port} -> {new_port}")
-                    self.port = new_port
-                except Exception as de:
-                    logger.debug(f"Port discovery failed: {de}")
-
-                if attempt < attempts:
-                    # Heartbeat-aware, jittered backoff
-                    status = read_status_file(target_hash)
-                    # Base exponential backoff
-                    backoff = base_backoff * (2 ** attempt)
-                    # Decorrelated jitter multiplier
-                    jitter = random.uniform(0.1, 0.3)
-
-                    # Fast‑retry for transient socket failures
-                    fast_error = isinstance(
-                        e, (ConnectionRefusedError, ConnectionResetError, TimeoutError))
-                    if not fast_error:
-                        try:
-                            err_no = getattr(e, 'errno', None)
-                            fast_error = err_no in (
-                                errno.ECONNREFUSED, errno.ECONNRESET, errno.ETIMEDOUT)
-                        except Exception:
-                            pass
-
-                    # Cap backoff depending on state
-                    if status and status.get('reloading'):
-                        # Domain reload can take 10-20s; use longer waits
-                        cap = 5.0
-                    elif fast_error:
-                        cap = 0.25
+            e = failure
+            # Re-discover the port for this specific instance
+            try:
+                stdio_port_registry.get_instances(force_refresh=True)
+                new_port: int | None = None
+                if self.instance_id:
+                    # Try to rediscover the specific instance via shared registry
+                    refreshed_instance = stdio_port_registry.get_instance(
+                        self.instance_id)
+                    if refreshed_instance and isinstance(refreshed_instance.port, int):
+                        new_port = refreshed_instance.port
+                        logger.debug(
+                            f"Rediscovered instance {self.instance_id} on port {new_port}")
                     else:
-                        cap = 3.0
+                        logger.warning(
+                            f"Instance {self.instance_id} not found during reconnection; falling back to port scan",
+                        )
 
-                    sleep_s = min(cap, jitter * (2 ** attempt))
-                    sleep_s = self._cap_to_deadline(sleep_s, deadline, floor=0.0)
-                    time.sleep(sleep_s)
-                    continue
-                raise
+                # Fallback to registry default if instance-specific discovery failed
+                if new_port is None:
+                    new_port = stdio_port_registry.get_port(
+                        self.instance_id)
+                    logger.info(
+                        f"Using Unity port from stdio_port_registry: {new_port}")
+
+                if new_port != self.port:
+                    logger.info(
+                        f"Unity port changed {self.port} -> {new_port}")
+                self.port = new_port
+            except Exception as de:
+                logger.debug(f"Port discovery failed: {de}")
+
+            if attempt < attempts:
+                # Heartbeat-aware, jittered backoff
+                status = read_status_file(target_hash)
+                # Base exponential backoff
+                backoff = base_backoff * (2 ** attempt)
+                # Decorrelated jitter multiplier
+                jitter = random.uniform(0.1, 0.3)
+
+                # Fast‑retry for transient socket failures
+                fast_error = isinstance(
+                    e, (ConnectionRefusedError, ConnectionResetError, TimeoutError))
+                if not fast_error:
+                    try:
+                        err_no = getattr(e, 'errno', None)
+                        fast_error = err_no in (
+                            errno.ECONNREFUSED, errno.ECONNRESET, errno.ETIMEDOUT)
+                    except Exception:
+                        pass
+
+                # Cap backoff depending on state
+                if status and status.get('reloading'):
+                    # Domain reload can take 10-20s; use longer waits
+                    cap = 5.0
+                elif fast_error:
+                    cap = 0.25
+                else:
+                    cap = 3.0
+
+                sleep_s = min(cap, jitter * (2 ** attempt))
+                sleep_s = self._cap_to_deadline(sleep_s, deadline, floor=0.0)
+                time.sleep(sleep_s)
+                continue
+            raise e
 
 
 # -----------------------------
@@ -670,13 +723,14 @@ class UnityConnectionPool:
             f"Check mcpforunity://instances resource for all instances."
         )
 
-    def get_connection(self, instance_identifier: str | None = None) -> UnityConnection:
+    def get_connection(self, instance_identifier: str | None = None, deadline: float | None = None) -> UnityConnection:
         """
         Get or create a connection to a Unity instance.
 
         Args:
             instance_identifier: Optional identifier (name, hash, name@hash, etc.)
                                 If None, uses default or most recent instance
+            deadline: Optional monotonic() ceiling for establishing a new connection
 
         Returns:
             UnityConnection to the specified instance
@@ -696,7 +750,7 @@ class UnityConnectionPool:
                 logger.info(
                     f"Creating new connection to Unity instance: {target.id} (port {target.port})")
                 conn = UnityConnection(port=target.port, instance_id=target.id)
-                if not conn.connect():
+                if not conn.connect(deadline=deadline):
                     raise ConnectionError(
                         f"Failed to connect to Unity instance '{target.id}' on port {target.port}. "
                         f"Ensure the Unity Editor is running."
@@ -749,7 +803,7 @@ def get_unity_connection_pool() -> UnityConnectionPool:
 
 
 # Backwards compatibility: keep old single-connection function
-def get_unity_connection(instance_identifier: str | None = None) -> UnityConnection:
+def get_unity_connection(instance_identifier: str | None = None, deadline: float | None = None) -> UnityConnection:
     """Retrieve or establish a Unity connection.
 
     Args:
@@ -762,7 +816,7 @@ def get_unity_connection(instance_identifier: str | None = None) -> UnityConnect
     Note: This function now uses the connection pool internally.
     """
     pool = get_unity_connection_pool()
-    return pool.get_connection(instance_identifier)
+    return pool.get_connection(instance_identifier, deadline=deadline)
 
 
 # -----------------------------
@@ -818,7 +872,8 @@ def send_command_with_retry(
     instance_id: str | None = None,
     max_retries: int | None = None,
     retry_ms: int | None = None,
-    retry_on_reload: bool = True
+    retry_on_reload: bool = True,
+    budget_s: float | None = None,
 ) -> dict[str, Any] | MCPResponse:
     """Send a command to a Unity instance, waiting politely through Unity reloads.
 
@@ -830,6 +885,8 @@ def send_command_with_retry(
         retry_ms: Delay between retries in milliseconds
         retry_on_reload: If False, don't retry when Unity is reloading (for commands
             that trigger compilation/reload and shouldn't be re-sent)
+        budget_s: Optional cap in seconds on the whole call, connection retries and reload
+            waits included; it can only shorten config.command_total_timeout
 
     Returns:
         Response dictionary or MCPResponse from Unity
@@ -839,9 +896,23 @@ def send_command_with_retry(
     """
     t_retry_start = time.time()
     logger.info("[TIMING-STDIO] send_command_with_retry START command=%s", command_type)
+    # The budget starts now, so finding and connecting to the instance spends it too.
+    total_timeout = max(0.0, float(getattr(config, "command_total_timeout", 90.0)))
+    deadline = time.monotonic() + total_timeout if total_timeout > 0 else None
+    if budget_s is not None:
+        capped = time.monotonic() + max(0.0, budget_s)
+        deadline = capped if deadline is None else min(deadline, capped)
     t_get_conn = time.time()
-    conn = get_unity_connection(instance_id)
+    conn = get_unity_connection(instance_id, deadline=deadline)
     logger.info("[TIMING-STDIO] get_unity_connection took %.3fs command=%s", time.time() - t_get_conn, command_type)
+    if deadline is not None and time.monotonic() >= deadline:
+        # The caller has given up by now (a status poll past its deadline): do not send a command it no
+        # longer waits for.
+        return MCPResponse(
+            success=False,
+            error=f"No time left to send '{command_type}' after connecting to Unity",
+            hint="retry",
+        )
     if max_retries is None:
         max_retries = getattr(config, "reload_max_retries", 40)
     if retry_ms is None:
@@ -867,9 +938,6 @@ def send_command_with_retry(
         max_wait_s = 20.0
     # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
     max_wait_s = max(0.0, min(max_wait_s, 20.0))
-
-    total_timeout = max(0.0, float(getattr(config, "command_total_timeout", 90.0)))
-    deadline = time.monotonic() + total_timeout if total_timeout > 0 else None
 
     # If retry_on_reload=False, disable connection-level retries too (issue #577)
     # Commands that trigger compilation/reload shouldn't retry on disconnect
@@ -952,7 +1020,8 @@ async def async_send_command_with_retry(
     loop=None,
     max_retries: int | None = None,
     retry_ms: int | None = None,
-    retry_on_reload: bool = True
+    retry_on_reload: bool = True,
+    budget_s: float | None = None,
 ) -> dict[str, Any] | MCPResponse:
     """Async wrapper that runs the blocking retry helper in a thread pool.
 
@@ -964,6 +1033,7 @@ async def async_send_command_with_retry(
         max_retries: Maximum number of retries for reload states
         retry_ms: Delay between retries in milliseconds
         retry_on_reload: If False, don't retry when Unity is reloading
+        budget_s: Optional cap in seconds on the whole call (see send_command_with_retry)
 
     Returns:
         Response dictionary or MCPResponse on error
@@ -976,7 +1046,7 @@ async def async_send_command_with_retry(
             None,
             lambda: send_command_with_retry(
                 command_type, params, instance_id=instance_id, max_retries=max_retries,
-                retry_ms=retry_ms, retry_on_reload=retry_on_reload),
+                retry_ms=retry_ms, retry_on_reload=retry_on_reload, budget_s=budget_s),
         )
 
         # After a successful command, check if the connection was freshly
