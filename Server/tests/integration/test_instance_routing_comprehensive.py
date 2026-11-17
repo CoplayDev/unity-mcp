@@ -31,7 +31,7 @@ def _make_stateful_ctx(session_id: str) -> Mock:
     state: dict[str, object] = {}
     ctx = Mock(spec=Context)
     ctx.session_id = session_id
-    ctx.set_state = AsyncMock(side_effect=lambda k, v: state.__setitem__(k, v))
+    ctx.set_state = AsyncMock(side_effect=lambda k, v, **_: state.__setitem__(k, v))
     ctx.get_state = AsyncMock(side_effect=lambda k: state.get(k))
     ctx.delete_state = AsyncMock(side_effect=lambda k: state.pop(k, None))
     return ctx
@@ -100,7 +100,7 @@ class TestInstanceRoutingIntegration:
         # The per-request injection must have happened so tools downstream
         # can read it; the persistence write is verified by the round-trip
         # test in TestInstanceRoutingBasics above.
-        ctx.set_state.assert_any_call("unity_instance", "TestProject@abc123")
+        ctx.set_state.assert_any_call("unity_instance", "TestProject@abc123", serializable=False)
 
     @pytest.mark.asyncio
     async def test_get_unity_instance_from_context_checks_state(self):
@@ -142,7 +142,7 @@ class TestInstanceRoutingToolCategories:
         state_storage = {"unity_instance": instance_id}
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
 
         return ctx
 
@@ -159,7 +159,7 @@ class TestInstanceRoutingHTTP:
         ctx.session_id = "http-session"
         state_storage = {}
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setattr(config, "transport_mode", "http")
@@ -195,7 +195,7 @@ class TestInstanceRoutingHTTP:
         ctx.session_id = "http-session-2"
         state_storage = {}
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setattr(config, "transport_mode", "http")
@@ -287,7 +287,7 @@ class TestInstanceRoutingRaceConditions:
 
         state_storage = {}
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
         instances = ["Project1@aaa", "Project2@bbb", "Project3@ccc"]
@@ -320,7 +320,7 @@ class TestInstanceRoutingRaceConditions:
 
         state_storage = {}
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
         ctx.request_context = None
 
@@ -390,7 +390,7 @@ class TestInstanceRoutingSequentialOperations:
 
         state_storage = {}
         ctx.set_state = AsyncMock(side_effect=lambda k,
-                             v: state_storage.__setitem__(k, v))
+                             v, **_: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
         # Execute sequence

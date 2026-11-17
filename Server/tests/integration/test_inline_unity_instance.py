@@ -154,6 +154,27 @@ async def test_inline_does_not_persist_to_session(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_inline_does_not_leak_without_active_instance(monkeypatch):
+    """With several editors and no session pin, a later call without unity_instance must not reuse the earlier one."""
+    instances = [
+        SimpleNamespace(id="ProjA@aaa111", hash="aaa111"),
+        SimpleNamespace(id="ProjB@bbb222", hash="bbb222"),
+    ]
+    mw = _make_middleware(monkeypatch, pool_instances=instances)
+
+    async def no_autoselect(ctx):
+        return None
+    monkeypatch.setattr(mw, "_maybe_autoselect_instance", no_autoselect)
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    await mw._inject_unity_instance(DummyMiddlewareContext(ctx, arguments={"unity_instance": "bbb222"}))
+    assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
+
+    await mw._inject_unity_instance(DummyMiddlewareContext(ctx, arguments={}))
+    assert await ctx.get_state("unity_instance") is None
+
+@pytest.mark.asyncio
 async def test_inline_overrides_session_persisted_instance(monkeypatch):
     """Inline unity_instance takes precedence over session-persisted instance."""
     instances = [
