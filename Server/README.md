@@ -137,7 +137,7 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `--api-key-service-token TOKEN` - Token value sent to the auth service for server authentication
 - `--default-instance INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
 - `--project-scoped-tools` - Keep custom tools scoped to the active Unity project and enable the custom tools resource
-- `--unity-instance-token TOKEN` - Optional per-launch token set by Unity for deterministic lifecycle management
+- `--unity-instance-token TOKEN` - Optional per-launch token set by Unity for deterministic lifecycle management. A local HTTP server launched with it shuts itself down once no Unity Editor has been connected for 10 minutes
 - `--pidfile PATH` - Optional path where the server writes its PID on startup (used by Unity-managed terminal launches)
 
 ### Environment variables
