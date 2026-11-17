@@ -87,6 +87,21 @@ The CLI mirrors the MCP tool catalog. Each command sends one or more MCP tool ca
 
 ## Discovering subcommands and flags
 
+### Editor window screenshots
+
+`editor windows` lists IDs, titles and types of open Editor tabs. `editor screenshot`
+saves a unique full-size PNG in the selected project's `Library/McpEditorScreenshots`
+and prints metadata. Use one of `--window-id`, `--window-title`, or `--window-type`;
+without a selector, it captures the window with keyboard focus. The previous tab
+and focus are restored unless `--no-restore-focus` is supplied. `--no-focus`
+requires an already selected tab. Screenshots can contain private Editor data.
+See [Editor window screenshots](/guides/editor-window-screenshots) for limits.
+
+```bash
+unity-mcp --instance MyProject@hash editor windows
+unity-mcp --instance MyProject@hash editor screenshot --window-id 12345
+```
+
 Every group supports `--help`:
 
 ```bash

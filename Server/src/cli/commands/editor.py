@@ -17,6 +17,42 @@ def editor():
     pass
 
 
+@editor.command("windows")
+@handle_unity_errors
+def windows():
+    """List open Editor windows, including inactive docked tabs."""
+    config = get_config()
+    result = run_command("manage_editor_windows", {"action": "list"}, config)
+    click.echo(format_output(result, config.format))
+
+
+@editor.command("screenshot")
+@click.option("--window-id", type=int, help="Current ID from editor windows.")
+@click.option("--window-title", help="Exact title (case-insensitive).")
+@click.option("--window-type", help="Exact short or full C# type name.")
+@click.option("--focus/--no-focus", default=True, help="Select the target tab before capture.")
+@click.option("--restore-focus/--no-restore-focus", default=True, help="Restore the previous tab and focus.")
+@handle_unity_errors
+def screenshot(window_id: Optional[int], window_title: Optional[str], window_type: Optional[str],
+               focus: bool, restore_focus: bool):
+    """Save a full-size PNG in the project's Library/McpEditorScreenshots.
+
+    Use one selector; without one, capture the window with keyboard focus.
+    Screenshots can contain private Editor data. Requires a graphical Editor.
+    """
+    selectors = {key: value for key, value in {
+        "window_id": window_id, "window_title": window_title, "window_type": window_type,
+    }.items() if value is not None and (not isinstance(value, str) or value.strip())}
+    if len(selectors) > 1:
+        raise click.UsageError("Use only one window selector.")
+    config = get_config()
+    result = run_command("manage_editor_windows", {
+        "action": "screenshot", **selectors, "focus": focus, "restore_focus": restore_focus,
+        "include_image": False, "save_file": True,
+    }, config)
+    click.echo(format_output(result, config.format))
+
+
 @editor.command("play")
 @handle_unity_errors
 def play():

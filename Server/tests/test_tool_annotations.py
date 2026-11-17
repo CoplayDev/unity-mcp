@@ -48,6 +48,9 @@ NON_DESTRUCTIVE = {
     # 'clear' empties the ephemeral Editor console buffer; Unity still mirrors
     # every entry to the Editor log file on disk.
     "read_console",
+    # Selects/restores tabs; optional files are unique PNGs in Library, never
+    # project assets or caller-specified paths. No existing data is overwritten.
+    "manage_editor_windows",
     # Session-local routing only.
     "set_active_instance",
     # Toggles which tools are visible to this session.

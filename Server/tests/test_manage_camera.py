@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from mcp.types import ImageContent, TextContent
 
 from services.tools.manage_camera import (
     manage_camera,
@@ -31,7 +34,7 @@ def mock_unity(monkeypatch):
         captured["unity_instance"] = unity_instance
         captured["tool_name"] = tool_name
         captured["params"] = params
-        return {"success": True, "message": "ok"}
+        return captured.get("response", {"success": True, "message": "ok"})
 
     monkeypatch.setattr(
         "services.tools.manage_camera.get_unity_instance_from_context",
@@ -361,6 +364,61 @@ def test_screenshot_batch_surround(mock_unity):
     assert result["success"] is True
     assert mock_unity["params"]["batch"] == "surround"
     assert mock_unity["params"]["viewTarget"] == "Player"
+
+
+@pytest.mark.parametrize("batch", ["surround", "orbit"])
+def test_screenshot_batch_preserves_contact_sheet_and_shot_metadata(mock_unity, batch):
+    """Real batch response shapes keep one image, shot metadata, and the source payload intact."""
+    shots = [
+        {"angle": "front", "position": [0, 0, -5]},
+        {"angle": "back", "position": [0, 0, 5]},
+        {"angle": "left", "position": [-5, 0, 0]},
+        {"angle": "right", "position": [5, 0, 0]},
+        {"angle": "top", "position": [0, 5, 0]},
+        {"angle": "bird_eye", "position": [3.5, 3.5, -3.5]},
+    ]
+    batch_metadata = {"sceneRadius": 5}
+    orbit_options = {}
+    if batch == "orbit":
+        shots = [
+            {"angle": "front_level", "azimuth": 0, "elevation": 0, "position": [0, 0, 5]},
+            {"angle": "back_level", "azimuth": 180, "elevation": 0, "position": [0, 0, -5]},
+        ]
+        batch_metadata = {"orbitRadius": 5, "orbitAngles": 2, "orbitElevations": [0], "orbitFov": 60}
+        orbit_options = {"orbit_angles": 2, "orbit_elevations": [0]}
+    response = {"success": True, "message": "captured", "data": {
+        "sceneCenter": [0, 0, 0], "outputFolder": "Assets/Screenshots",
+        "imageBase64": "Y29udGFjdC1zaGVldA==", "imageWidth": 960, "imageHeight": 640,
+        "shots": shots, **batch_metadata,
+    }}
+    original = copy.deepcopy(response)
+    mock_unity["response"] = response
+
+    result = asyncio.run(manage_camera(
+        SimpleNamespace(), action="screenshot", batch=batch, view_target="Player", include_image=True,
+        **orbit_options,
+    ))
+
+    assert mock_unity["tool_name"] == "manage_camera"
+    expected_params = {
+        "action": "screenshot", "batch": batch, "viewTarget": "Player", "includeImage": True,
+    }
+    if batch == "orbit":
+        expected_params.update(orbitAngles=2, orbitElevations=[0])
+    assert mock_unity["params"] == expected_params
+    assert len(result.content) == 2
+    assert isinstance(result.content[0], TextContent)
+    assert isinstance(result.content[1], ImageContent)
+    metadata = json.loads(result.content[0].text)
+    assert metadata == {"success": True, "message": "captured", "data": {
+        key: value for key, value in original["data"].items() if key != "imageBase64"
+    }}
+    assert result.content[1].data == original["data"]["imageBase64"]
+    assert result.content[1].mimeType == "image/png"
+    assert getattr(result.content[1], "annotations", None) is None
+    assert "imageBase64" not in result.content[0].text
+    assert original["data"]["imageBase64"] not in result.content[0].text
+    assert response == original
 
 
 def test_screenshot_batch_orbit(mock_unity):
