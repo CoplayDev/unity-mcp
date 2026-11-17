@@ -22,11 +22,12 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description=(
         "Execute arbitrary C# code inside the Unity Editor. "
         "The code runs as a method body with access to UnityEngine and UnityEditor namespaces. "
-        "Use 'return' to send data back. Compiled in-memory — no script files created. "
+        "Use 'return' to send data back. Nothing is added to the project (the compiler's work files go to the OS temp folder). "
         "Actions: execute (run code), get_history (list past executions), "
         "replay (re-run a history entry), clear_history. "
         "NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. "
-        "Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only)."
+        "Compiler options: 'auto' (the Editor's bundled Roslyn if present, else the Microsoft.CodeAnalysis package, else CodeDom), "
+        "'csc' (bundled Roslyn, latest C#), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only)."
     ),
     group="scripting_ext",
     annotations=ToolAnnotations(
@@ -59,10 +60,13 @@ async def execute_code(
         "Number of history entries to return (for 'get_history' action, 1-50). Default: 10.",
     ] = 10,
     compiler: Annotated[
-        Literal["auto", "roslyn", "codedom"],
+        Literal["auto", "csc", "roslyn", "codedom"],
         "Compiler backend for 'execute' action. "
-        "'auto' uses Roslyn if Microsoft.CodeAnalysis is installed, else falls back to CodeDom. "
-        "'roslyn' forces Roslyn (C# 12+). 'codedom' forces legacy CSharpCodeProvider (C# 6). Default: auto.",
+        "'auto' uses the Roslyn compiler bundled with the Editor if present, else the Microsoft.CodeAnalysis "
+        "package if installed, else CodeDom. 'csc' forces the bundled compiler (latest C#; out of process, "
+        "so a domain reload doesn't slow its next compile). 'roslyn' forces the in-process Microsoft.CodeAnalysis "
+        "package (C# 12+; its first compile after each domain reload takes several seconds). "
+        "'codedom' forces legacy CSharpCodeProvider (C# 6). Default: auto.",
     ] = "auto",
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
