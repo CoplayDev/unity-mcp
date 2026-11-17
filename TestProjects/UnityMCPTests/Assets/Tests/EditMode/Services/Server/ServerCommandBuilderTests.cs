@@ -2,6 +2,7 @@ using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 
 namespace MCPForUnityTests.Editor.Services.Server
@@ -12,6 +13,8 @@ namespace MCPForUnityTests.Editor.Services.Server
     [TestFixture]
     public class ServerCommandBuilderTests : TransportPreferenceTestBase
     {
+        private static string LocalUrlKey => ProjectIdentityUtility.GetProjectScopedKey(EditorPrefKeys.HttpBaseUrl);
+
         private ServerCommandBuilder _builder;
         private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
@@ -22,7 +25,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             _builder = new ServerCommandBuilder();
             // Save current settings
             _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _savedHttpUrl = EditorPrefs.GetString(LocalUrlKey, string.Empty);
         }
 
         [TearDown]
@@ -32,11 +35,11 @@ namespace MCPForUnityTests.Editor.Services.Server
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             if (!string.IsNullOrEmpty(_savedHttpUrl))
             {
-                EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, _savedHttpUrl);
+                EditorPrefs.SetString(LocalUrlKey, _savedHttpUrl);
             }
             else
             {
-                EditorPrefs.DeleteKey(EditorPrefKeys.HttpBaseUrl);
+                EditorPrefs.DeleteKey(LocalUrlKey);
             }
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
@@ -223,7 +226,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         {
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
+            EditorPrefs.SetString(LocalUrlKey, "http://localhost:8080");
             EditorConfigurationCache.Instance.Refresh();
 
             // Act
@@ -243,7 +246,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         {
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
+            EditorPrefs.SetString(LocalUrlKey, "http://remote.server.com:8080");
             EditorConfigurationCache.Instance.Refresh();
 
             // Act
@@ -260,7 +263,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         {
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
+            EditorPrefs.SetString(LocalUrlKey, "http://localhost:8080");
             EditorConfigurationCache.Instance.Refresh();
 
             // Act

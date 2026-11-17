@@ -76,6 +76,15 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Returns <paramref name="key"/> suffixed with the project hash, for EditorPrefs values
+        /// that must not be shared by different projects open on the same machine.
+        /// </summary>
+        public static string GetProjectScopedKey(string key)
+        {
+            return $"{key}_{GetProjectHash()}";
+        }
+
+        /// <summary>
         /// Returns a human friendly project name derived from the Assets directory path,
         /// or "Unknown" if the name cannot be determined.
         /// </summary>

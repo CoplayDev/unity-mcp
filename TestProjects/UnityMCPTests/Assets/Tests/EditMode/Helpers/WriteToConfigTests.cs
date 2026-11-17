@@ -16,7 +16,7 @@ namespace MCPForUnityTests.Editor.Helpers
     public class WriteToConfigTests : TransportPreferenceTestBase
     {
         private const string UseHttpTransportPrefKey = EditorPrefKeys.UseHttpTransport;
-        private const string HttpUrlPrefKey = EditorPrefKeys.HttpBaseUrl;
+        private static string HttpUrlPrefKey => ProjectIdentityUtility.GetProjectScopedKey(EditorPrefKeys.HttpBaseUrl);
 
         private string _tempRoot;
         private string _fakeUvPath;
