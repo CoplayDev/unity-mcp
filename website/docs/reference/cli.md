@@ -76,6 +76,7 @@ The CLI mirrors the MCP tool catalog. Each command sends one or more MCP tool ca
 | `unity-mcp build` | Player builds across platforms | [`manage_build`](/reference/tools/core/manage_build) |
 | `unity-mcp editor` | Play mode, tags/layers, undo/redo, console, refresh, menu items, tests, custom tools | [`manage_editor`](/reference/tools/core/manage_editor), [`read_console`](/reference/tools/core/read_console) (`console`), [`refresh_unity`](/reference/tools/core/refresh_unity) (`refresh`), [`execute_menu_item`](/reference/tools/core/execute_menu_item) (`menu`), [`run_tests`](/reference/tools/testing/run_tests) (`tests`), [`get_test_job`](/reference/tools/testing/get_test_job) (`poll-test`), [`execute_custom_tool`](/reference/tools/core/execute_custom_tool) (`custom-tool`) |
 | `unity-mcp packages` | UPM install/remove/embed | [`manage_packages`](/reference/tools/core/manage_packages) |
+| `unity-mcp addressables` | Manage Addressables configuration and content-build jobs | [`manage_addressables`](/reference/tools/core/manage_addressables) |
 | `unity-mcp probuilder` | ProBuilder meshes | [`manage_probuilder`](/reference/tools/probuilder/manage_probuilder) |
 | `unity-mcp profiler` | Profiler session + counters + snapshots | [`manage_profiler`](/reference/tools/profiling/manage_profiler) |
 | `unity-mcp code` | Execute C# in the Editor; read and search script files | [`execute_code`](/reference/tools/scripting_ext/execute_code), [`manage_script`](/reference/tools/core/manage_script) (`read`, `search`) |

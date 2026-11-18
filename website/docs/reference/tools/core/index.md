@@ -18,6 +18,7 @@ Essential scene, script, asset & editor tools (always on by default)
 - **[`find_gameobjects`](./find_gameobjects.md)** — Search for GameObjects in the scene by name, tag, layer, component type, or path.
 - **[`find_in_file`](./find_in_file.md)** — Searches a file with a regex pattern and returns line numbers and excerpts.
 - **[`get_sha`](./get_sha.md)** — Get SHA256 and basic metadata for a Unity C# script without returning file contents.
+- **[`manage_addressables`](./manage_addressables.md)** — Query and edit optional Unity Addressables configuration. ping reports the installed package version, API availability and settings existence. get_settings reads basic settings; group_list, entry_list, label_list, profile_list and profil…
 - **[`manage_asset`](./manage_asset.md)** — Performs asset operations (import, create, modify, delete, etc.) in Unity.
 - **[`manage_build`](./manage_build.md)** — Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms.
 - **[`manage_camera`](./manage_camera.md)** — Manage cameras (Unity Camera + Cinemachine).

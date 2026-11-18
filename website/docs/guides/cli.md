@@ -551,6 +551,47 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 
 ---
 
+## Addressables
+
+The optional Addressables package must be installed to manage its configuration.
+Queries leave configuration unchanged. Use `settings-set --initialize` to create
+settings explicitly; modification and build commands are separate subcommands.
+
+`profile` reads the active profile when `--profile-id` is omitted. Use `profiles`
+to list available IDs, then pass `--profile-id PROFILE_ID` to read a specific profile.
+
+```bash
+unity-mcp addressables ping
+unity-mcp addressables settings
+unity-mcp addressables groups --page-size 20
+unity-mcp addressables entries --group Characters
+unity-mcp addressables find --path Assets/Characters/Hero.prefab
+unity-mcp addressables labels
+unity-mcp addressables profiles
+unity-mcp addressables profile --profile-id PROFILE_ID
+unity-mcp addressables settings-set --initialize
+unity-mcp addressables group-create Characters --dynamic-content
+unity-mcp addressables entry-add Characters --path Assets/Characters/Hero.prefab
+unity-mcp addressables entry-address characters/hero --path Assets/Characters/Hero.prefab
+unity-mcp addressables label-add characters
+unity-mcp addressables label-set --path Assets/Characters/Hero.prefab --labels '["characters"]'
+unity-mcp addressables build-content
+unity-mcp addressables build-status --job-id JOB_ID
+unity-mcp addressables build-update /path/to/released-content-state.bin
+unity-mcp addressables build-clean
+```
+
+Writes save affected configuration assets. Removing entries or groups preserves
+source assets; non-empty group removal and in-use label removal require `--force`.
+Content operations return a job ID; poll `build-status` and inspect completion
+before submitting another build. Native builds block Unity's main thread and
+cannot be cancelled. For remote catalog configuration, static-content update
+restrictions and version coverage, see [manage_addressables](/reference/tools/core/manage_addressables).
+
+Continue paged queries with `--cursor NEXT_CURSOR`. Restart without a cursor if
+the result set changes. Entries are explicit registrations, without expanding
+addressable folders. Profile values retain their raw tokens.
+
 ## Complete Command Reference
 
 | Group | Subcommands |
@@ -586,6 +627,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `scene` | `active`, `build-settings`, `close`, `create`, `hierarchy`, `load`, `loaded`, `move-to`, `open-additive`, `save`, `set-active`, `validate` |
 | `script` | `create`, `delete`, `edit`, `read`, `validate` |
 | `shader` | `create`, `delete`, `read`, `update` |
+| `addressables` | `ping`, `settings`, `groups`, `entries`, `find`, `labels`, `profiles`, `profile`, `group-create`, `group-remove`, `entry-add`, `entry-remove`, `entry-move`, `entry-address`, `label-add`, `label-remove`, `label-set`, `profile-set`, `profile-activate`, `settings-set`, `build-content`, `build-update`, `build-clean`, `build-status` |
 | `sprite` | `full-setup`, `info`, `setup-clips`, `setup-controller`, `slice` |
 | `texture` | `create`, `delete`, `modify`, `set-import-settings`, `sprite` |
 | `tool` | `list` |
