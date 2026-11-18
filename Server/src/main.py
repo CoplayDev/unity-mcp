@@ -14,6 +14,7 @@ from services.custom_tool_service import (
     CustomToolService,
     resolve_project_id_for_unity_instance,
 )
+from services.overseer_ledger import register_overseer_routes
 from core.config import config
 from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
@@ -383,6 +384,11 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     global custom_tool_service
     custom_tool_service = CustomToolService(
         mcp, project_scoped_tools=project_scoped_tools)
+    register_overseer_routes(
+        mcp,
+        include_internal_routes=not config.http_remote_hosted,
+        allow_default_tokens=not config.http_remote_hosted,
+    )
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health_http(_: Request) -> JSONResponse:
