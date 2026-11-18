@@ -684,7 +684,7 @@ async def _lookup(
                 "For missed queries, try:\n"
                 "- get_doc with exact class name\n"
                 "- get_manual with the correct page slug\n"
-                "- manage_asset(action='search') for shaders, materials, prefabs"
+                "- manage_asset(action='search', path='Assets') for shaders, materials, prefabs"
             ) if all_missed else None,
         },
     }

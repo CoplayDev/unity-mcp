@@ -348,7 +348,7 @@ Unity API Verification (requires 'docs' tool group):
 - BEFORE answering Unity API questions: search the project's assets (`manage_asset`) and reflect the API (`unity_reflect`) to verify. Do NOT rely on training data alone.
 - Common hallucination areas: shaders and materials (always search assets for actual shader names), package-specific APIs (Input System, Cinemachine, ProBuilder, NavMesh, URP/HDRP), and APIs that changed between Unity versions.
 - Workflow: `unity_reflect search` → `unity_reflect get_type` → `unity_reflect get_member` → `unity_docs get_doc` (if you need examples/caveats).
-- For shader/material questions: use `manage_asset(action="search", filter_type="Shader")` to find actual shaders in the project before recommending one.
+- For shader/material questions: use `manage_asset(action="search", path="Assets", filter_type="Shader")` to find actual shaders in the project before recommending one.
 
 Payload sizing & paging (important):
 - Many Unity queries can return very large JSON. Prefer **paged + summary-first** calls.
@@ -358,7 +358,7 @@ Payload sizing & paging (important):
 - `manage_gameobject(action="get_components")`:
   - Start with `include_properties=false` (metadata-only) and small `page_size` (e.g. **10-25**).
   - Only request `include_properties=true` when needed; keep `page_size` small (e.g. **3-10**) to bound payloads.
-- `manage_asset(action="search")`:
+- `manage_asset(action="search", path="Assets")`:
   - Use paging (`page_size`, `page_number`) and keep `page_size` modest (e.g. **25-50**) to avoid token-heavy responses.
   - Keep `generate_preview=false` unless you explicitly need thumbnails (previews may include large base64 payloads).
 """

@@ -14,23 +14,24 @@ description: "Performs asset operations (import, create, modify, delete, etc.) i
 
 Performs asset operations (import, create, modify, delete, etc.) in Unity.
 
-Tip (payload safety): for `action="search"`, prefer paging (`page_size`, `page_number`) and keep `generate_preview=false` (previews can add large base64 blobs).
+For search, set `path` to an existing folder (e.g. 'Assets') and put asset names or AssetDatabase queries in `search_pattern` (e.g. 'Player t:Prefab').
+Tip (payload safety): for `action="search"`, prefer paging (`page_size`, `page_number`) and keep `generate_preview=false` (previews can add large base64 blobs). Only the requested page's assets are loaded.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `action` | `Literal['import', 'create', 'modify', 'delete', 'duplicate', 'move', 'rename', 'search', 'get_info', 'create_folder', 'get_components']` | yes | Perform CRUD operations on assets. |
-| `path` | `str` | yes | Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets'). |
+| `path` | `str` | yes | Asset path (e.g., 'Materials/MyMaterial.mat'). For search, use an existing folder such as 'Assets'. |
 | `asset_type` | `str \| None` | — | Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object. |
 | `properties` | `dict[str, Any] \| str \| None` | — | Dictionary of properties for 'create'/'modify'. Keys are property names, values are property values. |
 | `destination` | `str \| None` | — | Target path for 'duplicate'/'move'. |
 | `generate_preview` | `bool` | — | Generate a preview/thumbnail for the asset when supported. Warning: previews may include large base64 payloads; keep false unless needed. |
-| `search_pattern` | `str \| None` | — | Search pattern (e.g., '*.prefab' or AssetDatabase filters like 't:MonoScript'). Recommended: put queries like 't:MonoScript' here and set path='Assets'. |
+| `search_pattern` | `str \| None` | — | Asset name or AssetDatabase query (e.g., 'Player t:Prefab' or 't:MonoScript'). Recommended: put queries like 't:MonoScript' here and set path='Assets'. |
 | `filter_type` | `str \| None` | — | Filter type for search |
 | `filter_date_after` | `str \| None` | — | Date after which to filter |
-| `page_size` | `int \| float \| str \| None` | — | Page size for pagination. Recommended: 25 (smaller for LLM-friendly responses). |
-| `page_number` | `int \| float \| str \| None` | — | Page number for pagination (1-based). |
+| `page_size` | `int \| float \| str \| None` | — | Positive page size for pagination. Recommended: 25 (smaller for LLM-friendly responses). |
+| `page_number` | `int \| float \| str \| None` | — | Positive page number for pagination (1-based). |
 
 ## Returns
 
