@@ -16,7 +16,54 @@ namespace MCPForUnity.Editor.Clients
     /// <summary>Shared base class for MCP configurators.</summary>
     public abstract class McpClientConfiguratorBase : IMcpClientConfigurator
     {
-        protected readonly McpClient client;
+        protected McpClient client;
+        internal WindowRefreshContext RefreshContext { get; private set; }
+
+        internal Func<ClientRefreshResult> CaptureRefresh(WindowRefreshContext context)
+        {
+            // CheckStatus implementations use their own model. No background result can
+            // modify the live client before the section checks its request generation.
+            var copy = (McpClientConfiguratorBase)MemberwiseClone();
+            copy.client = client.CopyForStatusRefresh();
+            copy.RefreshContext = context;
+            return () =>
+            {
+                context.Resolve();
+                copy.CheckStatus(attemptAutoRewrite: false);
+                string snippet;
+                try { snippet = copy.GetManualSnippet(); }
+                catch { snippet = "# Configuration not available - check paths in Advanced Settings"; }
+                return new ClientRefreshResult
+                {
+                    Status = copy.client.status, Message = copy.client.configStatus,
+                    Transport = copy.client.configuredTransport, ConfigPath = copy.GetConfigPath(),
+                    Snippet = snippet, Steps = copy.GetInstallationSteps(), Context = context
+                };
+            };
+        }
+
+        internal sealed class ClientRefreshResult
+        {
+            internal McpStatus Status;
+            internal string Message, ConfigPath, Snippet;
+            internal ConfiguredTransport Transport;
+            internal IList<string> Steps;
+            internal WindowRefreshContext Context;
+        }
+
+        protected bool UseHttpTransport => RefreshContext?.UseHttp ?? EditorConfigurationCache.Instance.UseHttpTransport;
+        protected bool RemoteScope => RefreshContext?.Remote ?? HttpEndpointUtility.IsRemoteScope();
+        protected string RpcUrl => RefreshContext?.RpcUrl ?? HttpEndpointUtility.GetMcpRpcUrl();
+        protected string LocalRpcUrl => RefreshContext?.LocalRpcUrl ?? HttpEndpointUtility.GetLocalMcpRpcUrl();
+        protected string RemoteRpcUrl => RefreshContext?.RemoteRpcUrl ?? HttpEndpointUtility.GetRemoteMcpRpcUrl();
+        protected ConfiguredTransport CurrentTransport => RefreshContext?.Transport ?? HttpEndpointUtility.GetCurrentServerTransport();
+        protected string ApiKey => RefreshContext?.ApiKey ?? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+        protected string UvxDevFlags => RefreshContext?.DevFlags ?? AssetPathUtility.GetUvxDevFlags();
+        protected IReadOnlyList<string> UvxDevFlagList => RefreshContext?.DevFlagList ?? AssetPathUtility.GetUvxDevFlagsList();
+        protected IList<string> UvxFromArgs => RefreshContext?.FromArgs ?? AssetPathUtility.GetBetaServerFromArgsList();
+        protected string QuotedUvxFromArgs => RefreshContext?.QuotedFromArgs ?? AssetPathUtility.GetBetaServerFromArgs(true);
+        protected (string uvxPath, string fromUrl, string packageName) UvxCommandParts => RefreshContext == null
+            ? AssetPathUtility.GetUvxCommandParts() : (RefreshContext.Paths.UvxPath, RefreshContext.PackageSource, "mcp-for-unity");
 
         protected McpClientConfiguratorBase(McpClient client)
         {
@@ -55,7 +102,7 @@ namespace MCPForUnity.Editor.Clients
 
         protected string GetUvxPathOrError()
         {
-            string uvx = MCPServiceLocator.Paths.GetUvxPath();
+            string uvx = RefreshContext == null ? MCPServiceLocator.Paths.GetUvxPath() : RefreshContext.Paths.UvxPath;
             if (string.IsNullOrEmpty(uvx))
             {
                 throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
@@ -110,10 +157,10 @@ namespace MCPForUnity.Editor.Clients
         /// This should match what Configure() would actually use for the --from argument.
         /// MUST be called from the main thread due to EditorPrefs access.
         /// </summary>
-        protected static string GetExpectedPackageSourceForValidation()
+        protected string GetExpectedPackageSourceForValidation()
         {
             // Includes explicit override, stable pin, or prerelease range depending on package version.
-            return AssetPathUtility.GetMcpServerPackageSource();
+            return RefreshContext?.PackageSource ?? AssetPathUtility.GetMcpServerPackageSource();
         }
 
         /// <summary>
@@ -223,8 +270,8 @@ namespace MCPForUnity.Editor.Clients
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
                     // Distinguish HTTP Local from HTTP Remote by matching against both URLs
-                    string localRpcUrl = HttpEndpointUtility.GetLocalMcpRpcUrl();
-                    string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                    string localRpcUrl = LocalRpcUrl;
+                    string remoteRpcUrl = RemoteRpcUrl;
                     if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(configuredUrl, remoteRpcUrl))
                     {
                         client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
@@ -282,7 +329,7 @@ namespace MCPForUnity.Editor.Clients
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
                     // Match against the active scope's URL
-                    string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                    string expectedUrl = RpcUrl;
                     matches = UrlsEqual(configuredUrl, expectedUrl);
                 }
 
@@ -300,7 +347,7 @@ namespace MCPForUnity.Editor.Clients
                         if (result == "Configured successfully")
                         {
                             client.SetStatus(McpStatus.Configured);
-                            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                            client.configuredTransport = CurrentTransport;
                         }
                         else
                         {
@@ -318,7 +365,7 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
-                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                        client.configuredTransport = CurrentTransport;
                     }
                     else
                     {
@@ -350,7 +397,7 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
-                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                client.configuredTransport = CurrentTransport;
             }
             else
             {
@@ -419,7 +466,7 @@ namespace MCPForUnity.Editor.Clients
             try
             {
                 string uvx = GetUvxPathOrError();
-                return ConfigJsonBuilder.BuildManualConfigJson(uvx, client);
+                return ConfigJsonBuilder.BuildManualConfigJson(uvx, client, RefreshContext);
             }
             catch (Exception ex)
             {
@@ -459,7 +506,7 @@ namespace MCPForUnity.Editor.Clients
                     if (!string.IsNullOrEmpty(url))
                     {
                         // Distinguish HTTP Local from HTTP Remote
-                        string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                        string remoteRpcUrl = RemoteRpcUrl;
                         if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(url, remoteRpcUrl))
                         {
                             client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
@@ -485,7 +532,7 @@ namespace MCPForUnity.Editor.Clients
                     if (!string.IsNullOrEmpty(url))
                     {
                         // Match against the active scope's URL
-                        matches = UrlsEqual(url, HttpEndpointUtility.GetMcpRpcUrl());
+                        matches = UrlsEqual(url, RpcUrl);
                     }
                     else if (args != null && args.Length > 0)
                     {
@@ -538,7 +585,7 @@ namespace MCPForUnity.Editor.Clients
                             if (result == "Configured successfully")
                             {
                                 client.SetStatus(McpStatus.Configured);
-                                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                                client.configuredTransport = CurrentTransport;
                                 return client.status;
                             }
                         }
@@ -557,7 +604,7 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
-                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                        client.configuredTransport = CurrentTransport;
                     }
                     else
                     {
@@ -586,7 +633,7 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
-                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                client.configuredTransport = CurrentTransport;
             }
             else
             {
@@ -599,7 +646,7 @@ namespace MCPForUnity.Editor.Clients
             try
             {
                 string uvx = GetUvxPathOrError();
-                return CodexConfigHelper.BuildCodexServerBlock(uvx);
+                return CodexConfigHelper.BuildCodexServerBlock(uvx, RefreshContext);
             }
             catch (Exception ex)
             {
@@ -659,13 +706,19 @@ namespace MCPForUnity.Editor.Clients
         /// </summary>
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
+            if (RefreshContext != null)
+            {
+                return CheckStatusWithProjectDir(RefreshContext.ProjectDir, RefreshContext.UseHttp,
+                    RefreshContext.Paths.ClaudePath, RefreshContext.Platform, RefreshContext.Remote,
+                    RefreshContext.PackageSource, false, RefreshContext.HasProjectDirOverride);
+            }
             // Capture main-thread-only values before delegating to thread-safe method
             string projectDir = GetClientProjectDir();
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool useHttpTransport = UseHttpTransport;
             // Resolve claudePath on the main thread (EditorPrefs access)
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             RuntimePlatform platform = Application.platform;
-            bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
+            bool isRemoteScope = RemoteScope;
             // Get expected package source for the installed package version (matches what Register() would use)
             string expectedPackageSource = GetExpectedPackageSourceForValidation();
             return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite, HasClientProjectDirOverride);
@@ -953,17 +1006,17 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
             }
 
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool useHttpTransport = UseHttpTransport;
 
             string args;
             if (useHttpTransport)
             {
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = RpcUrl;
                 // Only include API key header for remote-hosted mode
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                if (HttpEndpointUtility.IsRemoteScope())
+                if (RemoteScope)
                 {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    string apiKey = ApiKey;
                     if (!string.IsNullOrEmpty(apiKey))
                     {
                         string safeKey = SanitizeShellHeaderValue(apiKey);
@@ -981,9 +1034,9 @@ namespace MCPForUnity.Editor.Clients
             }
             else
             {
-                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
-                string devFlags = AssetPathUtility.GetUvxDevFlags();
-                string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+                var (uvxPath, _, packageName) = UvxCommandParts;
+                string devFlags = UvxDevFlags;
+                string fromArgs = QuotedUvxFromArgs;
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
                 args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
             }
@@ -1027,7 +1080,7 @@ namespace MCPForUnity.Editor.Clients
             // Set status to Configured immediately after successful registration
             // The UI will trigger an async verification check separately to avoid blocking
             client.SetStatus(McpStatus.Configured);
-            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+            client.configuredTransport = CurrentTransport;
         }
 
         public override void Unregister()
@@ -1062,17 +1115,16 @@ namespace MCPForUnity.Editor.Clients
 
         public override string GetManualSnippet()
         {
-            string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool useHttpTransport = UseHttpTransport;
 
             if (useHttpTransport)
             {
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = RpcUrl;
                 // Only include API key header for remote-hosted mode
                 string headerArg = "";
-                if (HttpEndpointUtility.IsRemoteScope())
+                if (RemoteScope)
                 {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    string apiKey = ApiKey;
                     headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
                 }
                 return "# Register the MCP server with Claude Code:\n" +
@@ -1085,13 +1137,14 @@ namespace MCPForUnity.Editor.Clients
                        "claude mcp list";
             }
 
+            string uvxPath = RefreshContext == null ? MCPServiceLocator.Paths.GetUvxPath() : RefreshContext.Paths.UvxPath;
             if (string.IsNullOrEmpty(uvxPath))
             {
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            string devFlags = AssetPathUtility.GetUvxDevFlags();
-            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+            string devFlags = UvxDevFlags;
+            string fromArgs = QuotedUvxFromArgs;
 
             return "# Register the MCP server with Claude Code:\n" +
                    $"claude mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} mcp-for-unity\n\n" +

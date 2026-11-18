@@ -56,7 +56,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override string GetManualSnippet()
         {
-            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool useHttp = UseHttpTransport;
 
             if (useHttp)
             {

@@ -288,7 +288,7 @@ namespace MCPForUnity.Editor.Windows
                 // Wire up transport mismatch detection: when client status is checked,
                 // update the connection section's warning banner if there's a mismatch
                 clientConfigSection.OnClientTransportDetected += (clientName, transport) =>
-                    connectionSection?.UpdateTransportMismatchWarning(clientName, transport);
+                    connectionSection?.UpdateTransportMismatchWarning(clientName, transport, clientConfigSection.HasClientProjectDirOverride);
 
                 // Wire up version mismatch detection: when client status is checked,
                 // update the connection section's warning banner if there's a version mismatch
@@ -600,8 +600,8 @@ namespace MCPForUnity.Editor.Windows
         private void OnEditorUpdate()
         {
             // Throttle to 2-second intervals instead of every frame.
-            // This prevents the expensive IsLocalHttpServerReachable() socket checks from running
-            // 60+ times per second, which caused main thread blocking and GC pressure.
+            // Socket probes run on a worker; this interval also limits status redraws.
+            // Focus refreshes share the section caches and any in-flight work.
             double now = EditorApplication.timeSinceStartup;
             if (now - _lastEditorUpdateTime < EditorUpdateIntervalSeconds)
             {

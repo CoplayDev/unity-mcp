@@ -167,22 +167,22 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "The Unity MCP server should be detected automatically"
         };
 
-        private static JObject BuildServerEntry()
+        private JObject BuildServerEntry()
         {
-            if (HttpEndpointUtility.GetCurrentServerTransport() == ConfiguredTransport.Stdio)
+            if (CurrentTransport == ConfiguredTransport.Stdio)
             {
-                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                var (uvxPath, _, packageName) = UvxCommandParts;
                 if (string.IsNullOrWhiteSpace(uvxPath))
                 {
                     throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
                 }
 
                 var command = new JArray { uvxPath };
-                foreach (string value in AssetPathUtility.GetUvxDevFlagsList())
+                foreach (string value in UvxDevFlagList)
                 {
                     command.Add(value);
                 }
-                foreach (string value in AssetPathUtility.GetBetaServerFromArgsList())
+                foreach (string value in UvxFromArgs)
                 {
                     command.Add(value);
                 }
@@ -201,7 +201,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             return new JObject
             {
                 ["type"] = RemoteType,
-                ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
+                ["url"] = RpcUrl,
                 ["enabled"] = true
             };
         }
@@ -209,7 +209,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
         private bool EntryMatchesCurrentTransport(JObject entry)
         {
             string entryType = entry["type"]?.ToString();
-            ConfiguredTransport expected = HttpEndpointUtility.GetCurrentServerTransport();
+            ConfiguredTransport expected = CurrentTransport;
 
             if (expected == ConfiguredTransport.Stdio)
             {
@@ -218,7 +218,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
 
             return string.Equals(entryType, RemoteType, StringComparison.OrdinalIgnoreCase)
-                && UrlsEqual(entry["url"]?.ToString(), HttpEndpointUtility.GetMcpRpcUrl());
+                && UrlsEqual(entry["url"]?.ToString(), RpcUrl);
         }
     }
 }

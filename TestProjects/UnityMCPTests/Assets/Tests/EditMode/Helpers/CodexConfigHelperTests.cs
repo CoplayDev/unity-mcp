@@ -265,9 +265,9 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
             Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
 
-            // Verify command contains uvx
+            // The resolved executable was supplied by the caller; do not rediscover it.
             var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
+            Assert.AreEqual(uvPath, command, "Command should use the provided executable path");
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;
@@ -322,9 +322,9 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
             Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
 
-            // Verify command contains uvx
+            // The resolved executable was supplied by the caller; do not rediscover it.
             var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
+            Assert.AreEqual(uvPath, command, "Command should use the provided executable path");
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;

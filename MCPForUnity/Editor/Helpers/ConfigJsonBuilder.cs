@@ -14,6 +14,9 @@ namespace MCPForUnity.Editor.Helpers
     public static class ConfigJsonBuilder
     {
         public static string BuildManualConfigJson(string uvPath, McpClient client)
+            => BuildManualConfigJson(uvPath, client, null);
+
+        internal static string BuildManualConfigJson(string uvPath, McpClient client, WindowRefreshContext context)
         {
             var root = new JObject();
             bool isVSCode = client?.IsVsCodeLayout == true;
@@ -21,7 +24,7 @@ namespace MCPForUnity.Editor.Helpers
             JObject container = EnsureObject(root, GetContainerKey(client, isVSCode));
 
             var unity = new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(unity, uvPath, client, isVSCode, context);
 
             container["unityMCP"] = unity;
 
@@ -48,10 +51,10 @@ namespace MCPForUnity.Editor.Helpers
         /// - Adds transport configuration (HTTP or stdio)
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
-        private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
+        private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode, WindowRefreshContext context = null)
         {
             // Get transport preference (default to HTTP)
-            bool prefValue = EditorConfigurationCache.Instance.UseHttpTransport;
+            bool prefValue = context?.UseHttp ?? EditorConfigurationCache.Instance.UseHttpTransport;
             bool clientSupportsHttp = client?.SupportsHttpTransport != false;
             bool useHttpTransport = clientSupportsHttp && prefValue;
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
@@ -61,7 +64,7 @@ namespace MCPForUnity.Editor.Helpers
             if (useHttpTransport)
             {
                 // HTTP mode: Use URL, no command
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = context?.RpcUrl ?? HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
 
                 foreach (var prop in urlPropsToRemove)
@@ -74,9 +77,9 @@ namespace MCPForUnity.Editor.Helpers
                 if (unity["args"] != null) unity.Remove("args");
 
                 // Only include API key header for remote-hosted mode
-                if (HttpEndpointUtility.IsRemoteScope())
+                if (context?.Remote ?? HttpEndpointUtility.IsRemoteScope())
                 {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    string apiKey = context?.ApiKey ?? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
                     if (!string.IsNullOrEmpty(apiKey))
                     {
                         var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
@@ -102,9 +105,9 @@ namespace MCPForUnity.Editor.Helpers
             else
             {
                 // Stdio mode: Use uvx command
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-
-                var toolArgs = BuildUvxArgs(fromUrl, packageName);
+                string uvxPath = uvPath;
+                string fromUrl = context?.PackageSource ?? AssetPathUtility.GetMcpServerPackageSource();
+                var toolArgs = BuildUvxArgs(fromUrl, "mcp-for-unity", context);
 
                 unity["command"] = uvxPath;
                 unity["args"] = JArray.FromObject(toolArgs.ToArray());
@@ -159,7 +162,7 @@ namespace MCPForUnity.Editor.Helpers
             return created;
         }
 
-        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
+        private static IList<string> BuildUvxArgs(string fromUrl, string packageName, WindowRefreshContext context)
         {
             // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
             // `--no-cache` avoids reading from cache; `--refresh` ensures metadata is revalidated.
@@ -167,11 +170,11 @@ namespace MCPForUnity.Editor.Helpers
             // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
 
-            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
+            foreach (var flag in context?.DevFlagList ?? AssetPathUtility.GetUvxDevFlagsList())
                 args.Add(flag);
 
             // Use centralized helper for beta server / prerelease args
-            foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
+            foreach (var arg in context?.FromArgs ?? AssetPathUtility.GetBetaServerFromArgsList())
             {
                 args.Add(arg);
             }
