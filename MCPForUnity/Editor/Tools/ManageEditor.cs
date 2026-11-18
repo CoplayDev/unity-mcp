@@ -43,12 +43,20 @@ namespace MCPForUnity.Editor.Tools
             }
             string action = actionResult.Value.ToLowerInvariant();
 
+            if (action != "set_game_view_size" && (p.Has("width") || p.Has("height")))
+                return new ErrorResponse("width and height are only valid for set_game_view_size.");
+
             // Parameters for specific actions
             string tagName = p.Get("tagName");
             string layerName = p.Get("layerName");
             // Route action
             switch (action)
             {
+                case "get_game_view_size":
+                    return GameViewSizeControl.Get();
+                case "set_game_view_size":
+                    return GameViewSizeControl.Set(p);
+
                 // Play Mode Control
                 case "play":
                     try
@@ -171,7 +179,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
+                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo, get_game_view_size, set_game_view_size. For prefab editing (open/save/close prefab stage), use manage_prefabs. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
                     );
             }
         }
