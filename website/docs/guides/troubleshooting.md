@@ -203,6 +203,16 @@ If a read fails with an unknown-server error, list resources first and use the k
 
 ---
 
+## HTTP: "Bad Request: Missing session ID"
+
+After `initialize`, send the response's `MCP-Session-Id` header on every later
+request, including `notifications/initialized`. Include the negotiated
+`MCP-Protocol-Version` too. The
+[HTTP client session guide](/guides/http-client-sessions) provides a complete
+curl example and session recovery steps.
+
+---
+
 ## "No Unity Instances Found"
 
 :::tip When in doubt, restart your client
