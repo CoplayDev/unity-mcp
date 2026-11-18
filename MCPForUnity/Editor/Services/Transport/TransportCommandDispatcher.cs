@@ -85,6 +85,21 @@ namespace MCPForUnity.Editor.Services.Transport
         }
 
         /// <summary>
+        /// Number of commands queued for the main thread. Read from transport threads to report how
+        /// much work is stuck behind a main-thread stall.
+        /// </summary>
+        internal static int PendingCount
+        {
+            get
+            {
+                lock (PendingLock)
+                {
+                    return Pending.Count;
+                }
+            }
+        }
+
+        /// <summary>
         /// Schedule a command for execution on the Unity main thread and await its JSON response.
         /// </summary>
         public static Task<string> ExecuteCommandJsonAsync(string commandJson, CancellationToken cancellationToken)
