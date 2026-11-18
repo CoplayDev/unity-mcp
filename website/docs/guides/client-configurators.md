@@ -129,6 +129,21 @@ All of this logic is centralized in **`ConfigJsonBuilder`**, so most JSON-based 
 
 ---
 
+## Custom stdio launchers
+
+JSON-file clients can use a persistent `mcp-for-unity` executable, a Python
+interpreter, or a wrapper as their `unityMCP` command. Status checks recognize
+these entries as configured. Status checks and automatic package migrations
+preserve the entire file, including custom
+`env`, `cwd`, and other servers. Arguments may be omitted or an array of strings.
+Use the client's stdio type (`stdio`, or its supported `local` value) and omit HTTP URLs.
+
+Package runner entries using `uvx` or `uv tool run` retain the existing package
+source/version checks. A custom launcher's server version is not validated;
+maintain its installation yourself. **Configure All** still replaces custom
+entries with the generated configuration. For an individual configured client,
+choose **Unregister** and then **Configure** to generate a new entry.
+
 ## Special clients
 
 Some clients cannot be handled by the generic JSON configurator alone.

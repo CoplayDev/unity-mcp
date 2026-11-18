@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
@@ -179,12 +180,7 @@ namespace MCPForUnity.Editor.Clients
                     JToken unityToken = null;
                     if (rootConfig != null)
                     {
-                        string containerKey = string.IsNullOrEmpty(client.ServerContainerKey)
-                            ? "mcpServers" : client.ServerContainerKey;
-                        unityToken = client.IsVsCodeLayout
-                            ? rootConfig["servers"]?["unityMCP"]
-                                ?? rootConfig["mcp"]?["servers"]?["unityMCP"]
-                            : rootConfig[containerKey]?["unityMCP"];
+                        unityToken = McpConfigurationHelper.GetJsonUnityEntry(rootConfig, client);
                     }
 
                     if (unityToken is JObject unityObj)
@@ -192,6 +188,13 @@ namespace MCPForUnity.Editor.Clients
                         configExists = true;
 
                         var argsToken = unityObj["args"];
+                        if (argsToken != null && (!(argsToken is JArray argsArray)
+                            || argsArray.Any(value => value.Type != JTokenType.String)))
+                        {
+                            client.SetStatus(McpStatus.Error, "The stdio args field must be an array of strings.");
+                            client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                            return client.status;
+                        }
                         if (argsToken is JArray)
                         {
                             args = argsToken.ToObject<string[]>();
@@ -200,10 +203,13 @@ namespace MCPForUnity.Editor.Clients
                         // Clients diverge on the HTTP URL property name: "url" (Cursor/VSCode/Claude),
                         // "serverUrl" (Antigravity/Windsurf), "httpUrl" (Gemini CLI). Accept all three
                         // so CheckStatus matches what Configure() actually wrote.
-                        var urlToken = unityObj["url"] ?? unityObj["serverUrl"] ?? unityObj["httpUrl"];
-                        if (urlToken != null && urlToken.Type != JTokenType.Null)
+                        configuredUrl = McpConfigurationHelper.GetConfiguredHttpUrl(unityObj);
+
+                        if (McpConfigurationHelper.HasCustomStdioLauncher(unityObj, client))
                         {
-                            configuredUrl = urlToken.ToString();
+                            client.SetStatus(McpStatus.Configured);
+                            client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                            return client.status;
                         }
                     }
                 }
@@ -337,6 +343,14 @@ namespace MCPForUnity.Editor.Clients
             }
 
             return client.status;
+        }
+
+        internal bool HasCustomStdioConfiguration()
+        {
+            string path = GetConfigPath();
+            if (!File.Exists(path)) return false;
+            var entry = McpConfigurationHelper.GetJsonUnityEntry(JObject.Parse(File.ReadAllText(path)), client);
+            return McpConfigurationHelper.HasCustomStdioLauncher(entry, client);
         }
 
         public override void Configure()
