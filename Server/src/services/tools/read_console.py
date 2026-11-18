@@ -50,6 +50,8 @@ async def read_console(
                               'json'], "Output format"] | None = None,
     include_stacktrace: Annotated[bool | str,
                                   "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None,
+    include_mcp_logs: Annotated[bool | str,
+                               "Include MCP for Unity's own diagnostics (default true). Set false to exclude them before count and paging limits."] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -96,6 +98,7 @@ async def read_console(
     # Coerce booleans defensively (strings like 'true'/'false')
 
     include_stacktrace = coerce_bool(include_stacktrace, default=False)
+    include_mcp_logs = coerce_bool(include_mcp_logs, default=True)
     coerced_page_size = coerce_int(page_size, default=None)
     coerced_cursor = coerce_int(cursor, default=None)
 
@@ -125,7 +128,8 @@ async def read_console(
         "pageSize": coerced_page_size,
         "cursor": coerced_cursor,
         "format": format.lower() if isinstance(format, str) else format,
-        "includeStacktrace": include_stacktrace
+        "includeStacktrace": include_stacktrace,
+        "includeMcpLogs": include_mcp_logs
     }
 
     # Remove None values unless it's 'count' (as None might mean 'all')

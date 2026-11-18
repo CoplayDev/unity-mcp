@@ -5,12 +5,126 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Helpers;
 using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
     public class ReadConsoleTests
     {
+        [TestCase("plain")]
+        [TestCase("detailed")]
+        public void HandleCommand_Get_ExcludesMcpLogsBeforeCount(string format)
+        {
+            string id = Guid.NewGuid().ToString();
+            McpLog.Warn($"Transport diagnostic {id}");
+            Debug.LogWarning($"Project warning {id}");
+
+            var result = ToJObject(ReadConsole.HandleCommand(new JObject
+            {
+                ["types"] = new JArray { "warning" },
+                ["filterText"] = id,
+                ["format"] = format,
+                ["count"] = 1,
+                ["includeMcpLogs"] = false
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var entries = (JArray)result["data"];
+            Assert.AreEqual(1, entries.Count);
+            string message = format == "plain" ? entries[0].ToString() : entries[0].Value<string>("message");
+            Assert.AreEqual($"Project warning {id}", message);
+        }
+
+        [Test]
+        public void HandleCommand_Get_ExcludesMcpLogsBeforePaging()
+        {
+            string id = Guid.NewGuid().ToString();
+            McpLog.Info($"Transport diagnostic {id}");
+            Debug.Log($"First project log {id}");
+            McpLog.Warn($"Transport warning {id}");
+            Debug.Log($"Second project log {id}");
+
+            var parameters = new JObject
+            {
+                ["types"] = new JArray { "all" },
+                ["filterText"] = id,
+                ["format"] = "plain",
+                ["pageSize"] = 1,
+                ["include_mcp_logs"] = false
+            };
+            var first = ToJObject(ReadConsole.HandleCommand(parameters));
+            Assert.IsTrue(first.Value<bool>("success"), first.ToString());
+            Assert.AreEqual($"First project log {id}", first["data"]["items"][0].ToString());
+            Assert.AreEqual("1", first["data"].Value<string>("nextCursor"));
+
+            parameters["cursor"] = 1;
+            var second = ToJObject(ReadConsole.HandleCommand(parameters));
+            Assert.IsTrue(second.Value<bool>("success"), second.ToString());
+            Assert.AreEqual($"Second project log {id}", second["data"]["items"][0].ToString());
+            Assert.IsFalse(second["data"].Value<bool>("truncated"));
+            Assert.AreEqual(JTokenType.Null, second["data"]["nextCursor"].Type);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void HandleCommand_Get_IncludesMcpLogsByDefaultAndWhenRequested(bool explicitOption)
+        {
+            string id = Guid.NewGuid().ToString();
+            McpLog.Warn($"Transport diagnostic {id}");
+            var parameters = new JObject
+            {
+                ["types"] = new JArray { "warning" },
+                ["filterText"] = id,
+                ["format"] = "plain"
+            };
+            if (explicitOption) parameters["includeMcpLogs"] = true;
+
+            var result = ToJObject(ReadConsole.HandleCommand(parameters));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(1, ((JArray)result["data"]).Count);
+            StringAssert.Contains($"Transport diagnostic {id}", result["data"][0].ToString());
+        }
+
+        [Test]
+        public void HandleCommand_Get_KeepsProjectMessagesMentioningMcp()
+        {
+            string id = Guid.NewGuid().ToString();
+            string message = $"Project warning {id}: MCP-FOR-UNITY: connection unavailable";
+            Debug.LogWarning(message);
+            var result = ToJObject(ReadConsole.HandleCommand(new JObject
+            {
+                ["types"] = new JArray { "warning" },
+                ["filterText"] = id,
+                ["format"] = "plain",
+                ["includeMcpLogs"] = false
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(1, ((JArray)result["data"]).Count);
+            Assert.AreEqual(message, result["data"][0].ToString());
+        }
+
+        [TestCase("MCP-FOR-UNITY:")]
+        [TestCase("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>:")]
+        [TestCase("<b><color=#6AA84F>MCP-FOR-UNITY</color></b>:")]
+        [TestCase("<b><color=#cc7a00>MCP-FOR-UNITY</color></b>:")]
+        [TestCase("<b><color=#cc3333>MCP-FOR-UNITY</color></b>:")]
+        public void HandleCommand_Get_ExcludesKnownMcpPrefixes(string prefix)
+        {
+            string id = Guid.NewGuid().ToString();
+            Debug.Log($"{prefix} Transport diagnostic {id}");
+            var result = ToJObject(ReadConsole.HandleCommand(new JObject
+            {
+                ["types"] = new JArray { "all" },
+                ["filterText"] = id,
+                ["includeMcpLogs"] = false
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(0, ((JArray)result["data"]).Count);
+        }
+
         [Test]
         public void HandleCommand_Clear_Works()
         {
