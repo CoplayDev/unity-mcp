@@ -5,10 +5,11 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+from pydantic import BeforeValidator
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_int, coerce_bool, parse_json_payload
+from services.tools.utils import coerce_int, coerce_bool, parse_json_payload, decode_json_string
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -35,7 +36,8 @@ def _strip_stacktrace_from_list(items: list) -> None:
 async def read_console(
     ctx: Context,
     action: Annotated[Literal['get', 'clear'],
-                      "Get or clear the Unity Editor console. Defaults to 'get' if omitted."] | None = None,
+                      "Get or clear the Unity Editor console. Defaults to 'get' if omitted. Also accepts a JSON-encoded string.",
+                      BeforeValidator(decode_json_string)] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']] | str,
                      "Message types to get (accepts list or JSON string)"] | None = None,
@@ -47,7 +49,8 @@ async def read_console(
     cursor: Annotated[int | str,
                       "Opaque cursor for paging (0-based offset). Defaults to 0."] | None = None,
     format: Annotated[Literal['plain', 'detailed',
-                              'json'], "Output format"] | None = None,
+                              'json'], "Output format. Also accepts a JSON-encoded string.",
+                              BeforeValidator(decode_json_string)] | None = None,
     include_stacktrace: Annotated[bool | str,
                                   "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None,
 ) -> dict[str, Any]:
@@ -55,7 +58,16 @@ async def read_console(
     # Removed session_state import
     unity_instance = await get_unity_instance_from_context(ctx)
     # Set defaults if values are None
-    action = action if action is not None else 'get'
+    action = decode_json_string(action) if action is not None else 'get'
+    format = decode_json_string(format) if format is not None else 'plain'
+    if isinstance(action, str):
+        action = action.lower()
+    if action not in ("get", "clear"):
+        return {"success": False, "message": "action must be 'get' or 'clear'."}
+    if isinstance(format, str):
+        format = format.lower()
+    if format not in ("plain", "detailed", "json"):
+        return {"success": False, "message": "format must be 'plain', 'detailed', or 'json'."}
     
     # Parse types if it's a JSON string (handles client compatibility issue #561)
     if isinstance(types, str):
@@ -92,16 +104,11 @@ async def read_console(
     else:
         types = ['error', 'warning', 'log']
     
-    format = format if format is not None else 'plain'
     # Coerce booleans defensively (strings like 'true'/'false')
 
     include_stacktrace = coerce_bool(include_stacktrace, default=False)
     coerced_page_size = coerce_int(page_size, default=None)
     coerced_cursor = coerce_int(cursor, default=None)
-
-    # Normalize action if it's a string
-    if isinstance(action, str):
-        action = action.lower()
 
     # Coerce count defensively (string/float -> int).
     # Important: leaving count unset previously meant "return all console entries", which can be extremely slow
@@ -124,7 +131,7 @@ async def read_console(
         "filterText": filter_text,
         "pageSize": coerced_page_size,
         "cursor": coerced_cursor,
-        "format": format.lower() if isinstance(format, str) else format,
+        "format": format,
         "includeStacktrace": include_stacktrace
     }
 

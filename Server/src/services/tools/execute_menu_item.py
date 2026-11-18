@@ -23,7 +23,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 async def execute_menu_item(
     ctx: Context,
     menu_path: Annotated[str,
-                         "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] | None = None,
+                         "Menu path (e.g., 'File/Save Project'). Also accepts a JSON-encoded string."] | None = None,
 ) -> MCPResponse:
     unity_instance = await get_unity_instance_from_context(ctx)
     params_dict: dict[str, Any] = {"menuPath": menu_path}
