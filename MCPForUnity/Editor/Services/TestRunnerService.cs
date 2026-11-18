@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
@@ -32,6 +33,7 @@ namespace MCPForUnity.Editor.Services
 
         // Library/ is project-local and gitignored by default.
         private static readonly string MarkerPath = Path.Combine("Library", "MCPPlayModeOptionsBackup.txt");
+        private static readonly string EditorSettingsPath = Path.Combine("ProjectSettings", "EditorSettings.asset");
 
         static PlayModeOptionsGuard()
         {
@@ -77,8 +79,62 @@ namespace MCPForUnity.Editor.Services
 
             EditorSettings.enterPlayModeOptions = origOptions;
             EditorSettings.enterPlayModeOptionsEnabled = origEnabled;
+            RevertSettingsFile(origEnabled, origOptions);
             Clear();
             McpLog.Info("[PlayModeOptionsGuard] Restored enterPlayModeOptions after interrupted test run.");
+        }
+
+        // Not SaveAssets(): the test runner's temporary runInBackground would be saved too.
+        internal static void RevertSettingsFile(bool originalEnabled, EnterPlayModeOptions originalOptions)
+        {
+            try
+            {
+                if (!File.Exists(EditorSettingsPath))
+                {
+                    return;
+                }
+
+                string text = File.ReadAllText(EditorSettingsPath);
+                string reverted = RevertTemporaryValues(text, originalEnabled, originalOptions);
+                if (reverted != text)
+                {
+                    string tempPath = EditorSettingsPath + ".tmp";
+                    try
+                    {
+                        File.WriteAllText(tempPath, reverted);
+                        File.Replace(tempPath, EditorSettingsPath, null);
+                    }
+                    finally
+                    {
+                        if (File.Exists(tempPath))
+                        {
+                            File.Delete(tempPath);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[PlayModeOptionsGuard] Failed to update {EditorSettingsPath}: {ex.Message}");
+            }
+        }
+
+        internal static string RevertTemporaryValues(string settingsYaml, bool originalEnabled, EnterPlayModeOptions originalOptions)
+        {
+            var temporaryOptions = originalOptions | EnterPlayModeOptions.DisableDomainReload;
+            string reverted = ReplaceValue(settingsYaml, "m_EnterPlayModeOptionsEnabled", 1, originalEnabled ? 1 : 0);
+            return ReplaceValue(reverted, "m_EnterPlayModeOptions", (int)temporaryOptions, (int)originalOptions);
+        }
+
+        private static string ReplaceValue(string yaml, string key, int temporaryValue, int originalValue)
+        {
+            if (temporaryValue == originalValue)
+            {
+                return yaml;
+            }
+
+            var line = new Regex($@"^([ \t]*{key}:[ \t]*){temporaryValue}(?=[ \t]*\r?$)", RegexOptions.Multiline);
+            return line.Replace(yaml, "${1}" + originalValue, 1);
         }
 
         internal static void Clear()
@@ -548,6 +604,7 @@ namespace MCPForUnity.Editor.Services
         {
             EditorSettings.enterPlayModeOptions = originalOptions;
             EditorSettings.enterPlayModeOptionsEnabled = originalEnabled;
+            PlayModeOptionsGuard.RevertSettingsFile(originalEnabled, originalOptions);
             PlayModeOptionsGuard.Clear();
         }
 
