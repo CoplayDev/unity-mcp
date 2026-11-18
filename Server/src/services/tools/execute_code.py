@@ -22,6 +22,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description=(
         "Execute arbitrary C# code inside the Unity Editor. "
         "The code runs as a method body with access to UnityEngine and UnityEditor namespaces. "
+        "Object and Random resolve to the UnityEngine types (write System.Random explicitly). "
         "Use 'return' to send data back. Compiled in-memory — no script files created. "
         "Actions: execute (run code), get_history (list past executions), "
         "replay (re-run a history entry), clear_history. "

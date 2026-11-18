@@ -1716,7 +1716,7 @@ Group: `scripting_ext`.
 
 ### execute_code
 
-Runs a C# method body inside the editor, compiled in memory (no script file). `System`, `System.Collections.Generic`, `System.Linq`, `System.Reflection`, `UnityEngine` and `UnityEditor` are imported; `return` a value to get it back. Actions: `execute`, `get_history`, `replay` (`index`), `clear_history`. `safety_checks` (default on) blocks known dangerous calls but is not a sandbox. `compiler`: `auto` (Roslyn if installed, else CodeDom with C# 6), `roslyn`, `codedom`.
+Runs a C# method body inside the editor, compiled in memory (no script file). `System`, `System.Collections.Generic`, `System.Linq`, `System.Reflection`, `UnityEngine` and `UnityEditor` are imported, and `Object`/`Random` mean the UnityEngine types (write `System.Random` for the .NET one); `return` a value to get it back. Actions: `execute`, `get_history`, `replay` (`index`), `clear_history`. `safety_checks` (default on) blocks known dangerous calls but is not a sandbox. `compiler`: `auto` (Roslyn if installed, else CodeDom with C# 6), `roslyn`, `codedom`.
 
 ```python
 execute_code(action="execute", code="return Selection.gameObjects.Select(g => g.name).ToArray();")
