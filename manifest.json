@@ -107,7 +107,7 @@
     },
     {
       "name": "manage_asset",
-      "description": "Create, modify, search, and organize Unity assets"
+      "description": "Create, modify, search, and organize Unity assets; explore built AssetBundle contents"
     },
     {
       "name": "manage_build",

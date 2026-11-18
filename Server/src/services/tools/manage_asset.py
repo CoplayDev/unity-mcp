@@ -18,7 +18,10 @@ from services.tools.preflight import preflight
 
 @mcp_for_unity_tool(
     description=(
-        "Performs asset operations (import, create, modify, delete, etc.) in Unity.\n\n"
+        "Performs asset operations (import, create, modify, delete, etc.) in Unity. "
+        "Read built AssetBundles with list_asset_bundles (directory navigation) or "
+        "get_asset_bundle_info (asset/scene names without loading assets). Both use "
+        "project-local paths and bounded page_size/page_number output.\n\n"
         "Tip (payload safety): for `action=\"search\"`, prefer paging (`page_size`, `page_number`) and keep "
         "`generate_preview=false` (previews can add large base64 blobs)."
     ),
@@ -29,8 +32,8 @@ from services.tools.preflight import preflight
 )
 async def manage_asset(
     ctx: Context,
-    action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Perform CRUD operations on assets."],
-    path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets')."],
+    action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components", "list_asset_bundles", "get_asset_bundle_info"], "Perform asset operations or read built AssetBundles."],
+    path: Annotated[str, "Asset path or search scope. For bundles: a project-relative directory/file, e.g., 'Builds/AssetBundles' or 'Builds/AssetBundles/characters'. Symbolic links are not traversed."],
     asset_type: Annotated[str,
                           "Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object."] | None = None,
     properties: Annotated[dict[str, Any] | str,
@@ -47,15 +50,17 @@ async def manage_asset(
     filter_date_after: Annotated[str,
                                  "Date after which to filter"] | None = None,
     page_size: Annotated[int | float | str,
-                         "Page size for pagination. Recommended: 25 (smaller for LLM-friendly responses)."] | None = None,
+                         "Page size for pagination. Recommended: 25. Bundle actions default to 25 and allow 1-200."] | None = None,
     page_number: Annotated[int | float | str,
                            "Page number for pagination (1-based)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
+    action_l = (action or "").lower()
 
     # Best-effort guard: if Unity is compiling/reloading or known external changes are pending,
     # wait/refresh to avoid stale reads and flaky timeouts.
-    gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
+    gate = await preflight(ctx, wait_for_no_compile=True,
+                           refresh_if_dirty=action_l not in {"list_asset_bundles", "get_asset_bundle_info"})
     if gate is not None:
         return gate.model_dump()
 
@@ -72,7 +77,6 @@ async def manage_asset(
     # Unity's C# handler treats `path` as a folder scope. If a model mistakenly puts a query like
     # "t:MonoScript" into `path`, Unity will consider it an invalid folder and fall back to searching
     # the entire project, which is token-heavy. Normalize such cases into search_pattern + Assets scope.
-    action_l = (action or "").lower()
     if action_l == "search":
         try:
             raw_path = (path or "").strip()
