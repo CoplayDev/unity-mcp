@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import time
 import uuid
@@ -51,6 +52,10 @@ def _read_bounded_wait_env(name: str, default_s: float, max_s: float) -> float:
         value = float(raw)
     except ValueError as e:
         logger.warning("Invalid %s=%r, using default %s: %s", name, raw, default_s, e)
+        value = default_s
+    # float() accepts "nan", which the clamp below would turn into 0.
+    if math.isnan(value):
+        logger.warning("Invalid %s=%r, using default %s", name, raw, default_s)
         value = default_s
     return max(0.0, min(value, max_s))
 
@@ -291,15 +296,20 @@ class PluginHub(WebSocketEndpoint):
         # Compute a per-command timeout:
         # - fast-path commands: short timeout (encourage retry)
         # - long-running commands: allow caller to request a longer timeout via params
-        unity_timeout_s = float(cls.COMMAND_TIMEOUT)
-        server_wait_s = float(cls.COMMAND_TIMEOUT)
+        # Both defaults can be raised for a busy machine (several Editors compiling and importing at
+        # once), where an Editor that is merely slow would otherwise fail commands at the default.
+        command_timeout_s = max(1.0, _read_bounded_wait_env(
+            "UNITY_MCP_COMMAND_TIMEOUT_S", default_s=float(cls.COMMAND_TIMEOUT), max_s=3600.0))
+        unity_timeout_s = command_timeout_s
+        server_wait_s = command_timeout_s
         if command_type == "blender_bridge":
             # The socket's default is 180s even when the caller omits the field.
             # Importing/placing its result in Unity happens after that socket call.
             unity_timeout_s = blender_command_timeout(params)
             server_wait_s = unity_timeout_s + SERVER_RESPONSE_GRACE
         elif command_type in cls._FAST_FAIL_COMMANDS:
-            fast_timeout = float(cls.FAST_FAIL_TIMEOUT)
+            fast_timeout = max(0.5, _read_bounded_wait_env(
+                "UNITY_MCP_FAST_FAIL_TIMEOUT_S", default_s=float(cls.FAST_FAIL_TIMEOUT), max_s=120.0))
             unity_timeout_s = fast_timeout
             server_wait_s = fast_timeout
         else:
@@ -1050,8 +1060,12 @@ class PluginHub(WebSocketEndpoint):
             if max_wait_s > 0:
                 deadline = time.monotonic() + max_wait_s
                 while time.monotonic() < deadline:
+                    # A ping may wait the whole fast-fail timeout, which can be raised past
+                    # this budget; never let one probe outlast it.
+                    remaining_s = max(0.05, deadline - time.monotonic())
                     try:
-                        probe = await cls.send_command(session_id, "ping", {})
+                        probe = await asyncio.wait_for(
+                            cls.send_command(session_id, "ping", {}), timeout=remaining_s)
                     except Exception:
                         probe = None
 
