@@ -72,6 +72,9 @@ namespace MCPForUnity.Editor.Constants
         internal const string LogRecordEnabled = "MCPForUnity.LogRecordEnabled";
 
         internal const string ExecuteCodeCompiler = "MCPForUnity.ExecuteCode.Compiler";
+        // Semicolon-separated, project-relative roots that execute_code may delete under.
+        // A present-but-empty value means "deny every delete".
+        internal const string ExecuteCodeDeleteRoots = "MCPForUnity.ExecuteCode.DeleteRoots";
 
         // AI Asset Generation — NON-SECRET config only. Provider API keys live in the OS
         // secure store (MCPForUnity.Editor.Security.SecureKeyStore), never in EditorPrefs.
