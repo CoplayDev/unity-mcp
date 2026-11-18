@@ -5,6 +5,7 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.PackageManager;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace MCPForUnity.Editor.Services
@@ -25,19 +26,20 @@ namespace MCPForUnity.Editor.Services
         private const string BetaPackageJsonUrl = "https://raw.githubusercontent.com/CoplayDev/unity-mcp/beta/MCPForUnity/package.json";
         private const string AssetStoreVersionUrl = "https://gqoqjkkptwfbkwyssmnj.supabase.co/storage/v1/object/public/coplay-images/assetstoreversion.json";
 
+        private static bool _notApplicableLogged;
+
         /// <inheritdoc/>
         public UpdateCheckResult CheckForUpdate(string currentVersion)
         {
-            bool isGitInstallation = IsGitInstallation();
-            string gitBranch = isGitInstallation ? GetGitUpdateBranch(currentVersion) : "main";
-            bool useBetaChannel = isGitInstallation && string.Equals(gitBranch, "beta", StringComparison.OrdinalIgnoreCase);
+            UpdateInstallSource source = GetInstallSource();
+            string gitBranch = source == UpdateInstallSource.Git ? GetGitUpdateBranch(currentVersion) : "main";
 
-            string lastCheckKey = isGitInstallation
-                ? (useBetaChannel ? LastBetaCheckDateKey : LastCheckDateKey)
-                : LastAssetStoreCheckDateKey;
-            string cachedVersionKey = isGitInstallation
-                ? (useBetaChannel ? CachedBetaVersionKey : CachedVersionKey)
-                : CachedAssetStoreVersionKey;
+            if (!HasUpdateChannel(source))
+            {
+                return CreateNotApplicableResult(source);
+            }
+
+            GetCacheKeys(source, gitBranch, out string lastCheckKey, out string cachedVersionKey);
 
             string lastCheckDate = EditorPrefs.GetString(lastCheckKey, "");
             string cachedLatestVersion = EditorPrefs.GetString(cachedVersionKey, "");
@@ -53,9 +55,7 @@ namespace MCPForUnity.Editor.Services
                 };
             }
 
-            string latestVersion = isGitInstallation
-                ? FetchLatestVersionFromGitHub(gitBranch)
-                : FetchLatestVersionFromAssetStoreJson();
+            string latestVersion = FetchLatestVersion(source, gitBranch);
 
             if (!string.IsNullOrEmpty(latestVersion))
             {
@@ -76,25 +76,21 @@ namespace MCPForUnity.Editor.Services
             {
                 CheckSucceeded = false,
                 UpdateAvailable = false,
-                Message = isGitInstallation
-                    ? "Failed to check for updates (network issue or offline)"
-                    : "Failed to check for Asset Store updates (network issue or offline)"
+                Message = FetchFailureMessage(source)
             };
         }
 
         /// <inheritdoc/>
         public UpdateCheckResult TryGetCachedResult(string currentVersion)
         {
-            bool isGitInstallation = IsGitInstallation();
-            string gitBranch = isGitInstallation ? GetGitUpdateBranch(currentVersion) : "main";
-            bool useBetaChannel = isGitInstallation && string.Equals(gitBranch, "beta", StringComparison.OrdinalIgnoreCase);
+            UpdateInstallSource source = GetInstallSource();
+            if (!HasUpdateChannel(source))
+            {
+                return CreateNotApplicableResult(source);
+            }
 
-            string lastCheckKey = isGitInstallation
-                ? (useBetaChannel ? LastBetaCheckDateKey : LastCheckDateKey)
-                : LastAssetStoreCheckDateKey;
-            string cachedVersionKey = isGitInstallation
-                ? (useBetaChannel ? CachedBetaVersionKey : CachedVersionKey)
-                : CachedAssetStoreVersionKey;
+            string gitBranch = source == UpdateInstallSource.Git ? GetGitUpdateBranch(currentVersion) : "main";
+            GetCacheKeys(source, gitBranch, out string lastCheckKey, out string cachedVersionKey);
 
             string lastCheckDate = EditorPrefs.GetString(lastCheckKey, "");
             string cachedLatestVersion = EditorPrefs.GetString(cachedVersionKey, "");
@@ -116,17 +112,20 @@ namespace MCPForUnity.Editor.Services
         /// <inheritdoc/>
         public UpdateCheckResult FetchAndCompare(string currentVersion)
         {
-            bool isGitInstallation = IsGitInstallation();
-            string gitBranch = isGitInstallation ? GetGitUpdateBranch(currentVersion) : "main";
-            return FetchAndCompare(currentVersion, isGitInstallation, gitBranch);
+            UpdateInstallSource source = GetInstallSource();
+            string gitBranch = source == UpdateInstallSource.Git ? GetGitUpdateBranch(currentVersion) : "main";
+            return FetchAndCompare(currentVersion, source, gitBranch);
         }
 
         /// <inheritdoc/>
-        public UpdateCheckResult FetchAndCompare(string currentVersion, bool isGitInstallation, string gitBranch)
+        public UpdateCheckResult FetchAndCompare(string currentVersion, UpdateInstallSource source, string gitBranch)
         {
-            string latestVersion = isGitInstallation
-                ? FetchLatestVersionFromGitHub(gitBranch)
-                : FetchLatestVersionFromAssetStoreJson();
+            if (!HasUpdateChannel(source))
+            {
+                return CreateNotApplicableResult(source);
+            }
+
+            string latestVersion = FetchLatestVersion(source, gitBranch);
 
             if (!string.IsNullOrEmpty(latestVersion))
             {
@@ -143,9 +142,7 @@ namespace MCPForUnity.Editor.Services
             {
                 CheckSucceeded = false,
                 UpdateAvailable = false,
-                Message = isGitInstallation
-                    ? "Failed to check for updates (network issue or offline)"
-                    : "Failed to check for Asset Store updates (network issue or offline)"
+                Message = FetchFailureMessage(source)
             };
         }
 
@@ -154,16 +151,11 @@ namespace MCPForUnity.Editor.Services
         {
             if (string.IsNullOrEmpty(fetchedVersion)) return;
 
-            bool isGitInstallation = IsGitInstallation();
-            string gitBranch = isGitInstallation ? GetGitUpdateBranch(currentVersion) : "main";
-            bool useBetaChannel = isGitInstallation && string.Equals(gitBranch, "beta", StringComparison.OrdinalIgnoreCase);
+            UpdateInstallSource source = GetInstallSource();
+            if (!HasUpdateChannel(source)) return;
 
-            string lastCheckKey = isGitInstallation
-                ? (useBetaChannel ? LastBetaCheckDateKey : LastCheckDateKey)
-                : LastAssetStoreCheckDateKey;
-            string cachedVersionKey = isGitInstallation
-                ? (useBetaChannel ? CachedBetaVersionKey : CachedVersionKey)
-                : CachedAssetStoreVersionKey;
+            string gitBranch = source == UpdateInstallSource.Git ? GetGitUpdateBranch(currentVersion) : "main";
+            GetCacheKeys(source, gitBranch, out string lastCheckKey, out string cachedVersionKey);
 
             EditorPrefs.SetString(lastCheckKey, DateTime.Now.ToString("yyyy-MM-dd"));
             EditorPrefs.SetString(cachedVersionKey, fetchedVersion);
@@ -311,20 +303,148 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <inheritdoc/>
-        public virtual bool IsGitInstallation()
+        public virtual UpdateInstallSource GetInstallSource()
         {
-            // Git packages are installed via Package Manager and have a package.json in Packages/
-            // Asset Store packages are in Assets/
+            // Asset Store packages are imported into Assets/. Everything else is resolved by the
+            // Package Manager and reported through PackageInfo.source.
             string packageRoot = AssetPathUtility.GetMcpPackageRootPath();
-
             if (string.IsNullOrEmpty(packageRoot))
             {
-                return false;
+                return UpdateInstallSource.Unknown;
             }
 
-            // If the package is in Packages/ it's a PM install (likely Git)
-            // If it's in Assets/ it's an Asset Store install
-            return packageRoot.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase);
+            if (!packageRoot.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+            {
+                return UpdateInstallSource.AssetStore;
+            }
+
+            PackageInfo packageInfo = null;
+            try
+            {
+                packageInfo = PackageInfo.FindForAssembly(typeof(PackageUpdateService).Assembly);
+            }
+            catch
+            {
+                // Fall through to the packageId heuristic; an update check is never worth an exception.
+            }
+
+            if (packageInfo != null)
+            {
+                switch (packageInfo.source)
+                {
+                    case PackageSource.Git:
+                        return UpdateInstallSource.Git;
+                    case PackageSource.Registry:
+                        return UpdateInstallSource.Registry;
+                    case PackageSource.Embedded:
+                        return UpdateInstallSource.Embedded;
+                    case PackageSource.Local:
+                    case PackageSource.LocalTarball:
+                        return UpdateInstallSource.Local;
+                    case PackageSource.BuiltIn:
+                        return UpdateInstallSource.BuiltIn;
+                }
+            }
+
+            // Older editors or an unexpected PackageSource: Git dependencies always carry a
+            // "<url>.git?path=/MCPForUnity#<ref>" packageId, so the shape still identifies them.
+            string packageId = packageInfo?.packageId ?? string.Empty;
+            if (packageId.IndexOf(".git", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return UpdateInstallSource.Git;
+            }
+
+            // Anything else under Packages/ is served by a registry — the case the old
+            // "is it under Packages/" heuristic mislabelled as a Git install.
+            return UpdateInstallSource.Registry;
+        }
+
+        /// <summary>
+        /// Whether the install source has a remote channel this service can poll. Registry, local
+        /// and embedded installs are versioned by the Package Manager, so the GitHub/Asset Store
+        /// numbers do not describe what they can install.
+        /// </summary>
+        private static bool HasUpdateChannel(UpdateInstallSource source)
+        {
+            return source == UpdateInstallSource.Git || source == UpdateInstallSource.AssetStore;
+        }
+
+        private static void GetCacheKeys(
+            UpdateInstallSource source,
+            string gitBranch,
+            out string lastCheckKey,
+            out string cachedVersionKey)
+        {
+            bool useBetaChannel = source == UpdateInstallSource.Git
+                && string.Equals(gitBranch, "beta", StringComparison.OrdinalIgnoreCase);
+
+            if (source != UpdateInstallSource.Git)
+            {
+                lastCheckKey = LastAssetStoreCheckDateKey;
+                cachedVersionKey = CachedAssetStoreVersionKey;
+                return;
+            }
+
+            lastCheckKey = useBetaChannel ? LastBetaCheckDateKey : LastCheckDateKey;
+            cachedVersionKey = useBetaChannel ? CachedBetaVersionKey : CachedVersionKey;
+        }
+
+        private string FetchLatestVersion(UpdateInstallSource source, string gitBranch)
+        {
+            return source == UpdateInstallSource.AssetStore
+                ? FetchLatestVersionFromAssetStoreJson()
+                : FetchLatestVersionFromGitHub(gitBranch);
+        }
+
+        private static string FetchFailureMessage(UpdateInstallSource source)
+        {
+            return source == UpdateInstallSource.AssetStore
+                ? "Failed to check for Asset Store updates (network issue or offline)"
+                : "Failed to check for updates (network issue or offline)";
+        }
+
+        private static UpdateCheckResult CreateNotApplicableResult(UpdateInstallSource source)
+        {
+            string message =
+                $"Update checks follow the Git branch and the Asset Store listing only, but this copy came from {DescribeSource(source)}. " +
+                "Use the Package Manager to look for updates.";
+
+            // The window re-runs the check on every refresh; log the reason once per session.
+            if (!_notApplicableLogged)
+            {
+                _notApplicableLogged = true;
+                McpLog.Info($"Package update check skipped: {message}");
+            }
+
+            return new UpdateCheckResult
+            {
+                CheckSucceeded = false,
+                CheckSkipped = true,
+                UpdateAvailable = false,
+                LatestVersion = null,
+                Message = message
+            };
+        }
+
+        private static string DescribeSource(UpdateInstallSource source)
+        {
+            switch (source)
+            {
+                case UpdateInstallSource.Git:
+                    return "a Git URL";
+                case UpdateInstallSource.AssetStore:
+                    return "the Asset Store";
+                case UpdateInstallSource.Registry:
+                    return "a package registry (for example OpenUPM)";
+                case UpdateInstallSource.Local:
+                    return "a local folder or tarball";
+                case UpdateInstallSource.Embedded:
+                    return "an embedded package";
+                case UpdateInstallSource.BuiltIn:
+                    return "a built-in Unity package";
+                default:
+                    return "an unrecognised source";
+            }
         }
 
         /// <inheritdoc/>

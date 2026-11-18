@@ -1,12 +1,42 @@
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
+    /// How the MCP for Unity package was installed. Determines which channel can supply a newer
+    /// version, and therefore whether an update notification is meaningful at all.
+    /// </summary>
+    public enum UpdateInstallSource
+    {
+        /// <summary>Could not be determined; treat as "no update channel known".</summary>
+        Unknown,
+
+        /// <summary>Installed from a Git URL (Packages/manifest.json holds a git dependency).</summary>
+        Git,
+
+        /// <summary>Imported from the Asset Store into Assets/.</summary>
+        AssetStore,
+
+        /// <summary>Resolved from a package registry (scoped registry such as OpenUPM, or Unity's).</summary>
+        Registry,
+
+        /// <summary>Local folder or tarball dependency (file: or a tarball).</summary>
+        Local,
+
+        /// <summary>Embedded package living directly in Packages/.</summary>
+        Embedded,
+
+        /// <summary>Built-in Unity package.</summary>
+        BuiltIn
+    }
+
+    /// <summary>
     /// Service for checking package updates and version information
     /// </summary>
     public interface IPackageUpdateService
     {
         /// <summary>
-        /// Checks if a newer version of the package is available
+        /// Checks if a newer version of the package is available. Only Git and Asset Store installs
+        /// have a channel to poll; for any other source the result is marked
+        /// <see cref="UpdateCheckResult.CheckSkipped"/> and never reports an update.
         /// </summary>
         /// <param name="currentVersion">The current package version</param>
         /// <returns>Update check result containing availability and latest version info</returns>
@@ -14,6 +44,7 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// Returns a cached update result if one exists for today, or null if a network fetch is needed.
+        /// Returns a skipped result (never null) when the install source has no update channel.
         /// Main-thread only (reads EditorPrefs).
         /// </summary>
         UpdateCheckResult TryGetCachedResult(string currentVersion);
@@ -28,7 +59,7 @@ namespace MCPForUnity.Editor.Services
         /// Performs only the network fetch and version comparison using pre-computed installation info.
         /// Use this overload when calling from a background thread to avoid main-thread-only API calls.
         /// </summary>
-        UpdateCheckResult FetchAndCompare(string currentVersion, bool isGitInstallation, string gitBranch);
+        UpdateCheckResult FetchAndCompare(string currentVersion, UpdateInstallSource source, string gitBranch);
 
         /// <summary>
         /// Caches a successful fetch result in EditorPrefs. Must be called from the main thread.
@@ -44,10 +75,11 @@ namespace MCPForUnity.Editor.Services
         bool IsNewerVersion(string version1, string version2);
 
         /// <summary>
-        /// Determines if the package was installed via Git or Asset Store
+        /// Determines how the package was installed. Must be called from the main thread
+        /// (uses Unity PackageManager APIs).
         /// </summary>
-        /// <returns>True if installed via Git, false if Asset Store or unknown</returns>
-        bool IsGitInstallation();
+        /// <returns>The resolved install source, or <see cref="UpdateInstallSource.Unknown"/>.</returns>
+        UpdateInstallSource GetInstallSource();
 
         /// <summary>
         /// Determines the Git branch to check for updates (e.g. "main" or "beta").
@@ -80,6 +112,12 @@ namespace MCPForUnity.Editor.Services
         /// Whether the check was successful (false if network error, etc.)
         /// </summary>
         public bool CheckSucceeded { get; set; }
+
+        /// <summary>
+        /// True when there was nothing to check: the install source (registry, local, embedded) is
+        /// versioned by the Package Manager, so no remote channel describes what it can install.
+        /// </summary>
+        public bool CheckSkipped { get; set; }
 
         /// <summary>
         /// Optional message about the check result

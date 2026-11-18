@@ -460,8 +460,10 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Main thread: pre-compute installation info (uses main-thread-only Unity APIs)
-            bool isGitInstallation = updateService.IsGitInstallation();
-            string gitBranch = isGitInstallation ? updateService.GetGitUpdateBranch(currentVersion) : "main";
+            UpdateInstallSource installSource = updateService.GetInstallSource();
+            string gitBranch = installSource == UpdateInstallSource.Git
+                ? updateService.GetGitUpdateBranch(currentVersion)
+                : "main";
 
             // Background thread: network I/O only (no EditorPrefs or Unity API access)
             updateCheckInFlight = true;
@@ -469,7 +471,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 try
                 {
-                    return updateService.FetchAndCompare(currentVersion, isGitInstallation, gitBranch);
+                    return updateService.FetchAndCompare(currentVersion, installSource, gitBranch);
                 }
                 catch (Exception ex)
                 {
