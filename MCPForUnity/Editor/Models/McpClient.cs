@@ -19,7 +19,7 @@ namespace MCPForUnity.Editor.Models
         public bool StripEnvWhenNotRequired; // Whether to strip the env object when not required
         public string HttpTypeValue; // Override for the HTTP transport "type" value (null => "http"; Cline/Roo => "streamableHttp"; Kilo => "remote")
         public string StdioTypeValue; // Override for the stdio transport "type" value (null => "stdio"; Kilo => "local")
-        public string ServerContainerKey; // Top-level JSON container key for servers (null => "mcpServers"; Kilo => "mcp")
+        public string ServerContainerKey; // JSON path to servers (null => "mcpServers"; Kilo => "mcp"; ZCode => "mcp.servers")
         public string SchemaUrl; // Optional root "$schema" URL written into the config (e.g. Kilo's kilo.jsonc)
         public string HttpUrlProperty = "url"; // The property name for the HTTP URL in the config
         public Dictionary<string, object> DefaultUnityFields = new();
