@@ -846,6 +846,13 @@ class PluginHub(WebSocketEndpoint):
         return MCPResponse(
             success=False,
             error="Unity session not available; please retry",
+            message=(
+                "The MCP server is reachable, but the requested Unity session is unavailable. "
+                "Open Unity and start its MCP session. If the editor is already open, "
+                "bring it to the foreground and check for pending dialogs, then retry."
+                if reason == "no_unity_session"
+                else None
+            ),
             hint="retry",
             data={"reason": reason, "retry_after_ms": 250},
         ).model_dump()

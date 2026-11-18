@@ -216,6 +216,21 @@ If restarting doesn't fix it:
 
 ---
 
+## HTTP server responds, but the Unity session is unavailable
+
+If a tool returns `Unity session not available; please retry` with
+`data.reason: no_unity_session`, the MCP server has handled the request, but the
+requested Unity bridge session is unavailable. Its message includes recovery
+steps; the machine-readable `hint: retry` and retry interval remain unchanged.
+
+- If Unity is compiling or reloading, allow it to finish before retrying.
+- Open Unity and confirm that its MCP for Unity session is started.
+- If the editor is already open in the background, bring it to the foreground
+  and check for pending dialogs before retrying.
+- Read `mcpforunity://instances` again to confirm that the editor has registered.
+
+---
+
 ## Unity takes focus while tests are running
 
 The server may briefly focus Unity when a running test has not reported progress,
