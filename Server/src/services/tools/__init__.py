@@ -235,8 +235,10 @@ async def sync_tool_visibility_from_unity(
                 "Update MCPForUnity to enable custom tool sync in stdio mode."
             )
 
-        if notify:
-            await PluginHub._notify_mcp_tool_list_changed()
+        await PluginHub._record_and_notify_tool_list_change(
+            enabled_tools,
+            notify=notify,
+        )
 
         # Build summary
         from services.registry import get_group_tool_names
