@@ -162,5 +162,74 @@ namespace MCPForUnityTests.Editor.Tools
                     Object.DestroyImmediate(created);
             }
         }
+
+        [Test]
+        public void StructuredJsonStrings_InCommandParams_AreParsedBeforeDispatch()
+        {
+            var light = testGo.AddComponent<Light>();
+            testGo.name = "BatchStructuredJson_" + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            var batchParams = new JObject
+            {
+                ["commands"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["tool"] = "manage_components",
+                        ["params"] = new JObject
+                        {
+                            ["action"] = "set_property",
+                            ["target"] = testGo.name,
+                            ["search_method"] = "by_name",
+                            ["component_type"] = "Light",
+                            ["property"] = "color",
+                            ["value"] = "[0.0, 1.0, 1.0, 1.0]"
+                        }
+                    }
+                }
+            };
+
+            var result = BatchExecute.HandleCommand(batchParams).GetAwaiter().GetResult();
+            var resultObj = JObject.FromObject(result);
+
+            Assert.IsTrue(resultObj.Value<bool>("success"), $"Batch should succeed: {resultObj}");
+            Assert.AreEqual(new Color(0f, 1f, 1f, 1f), light.color);
+        }
+
+        [Test]
+        public void PlainStrings_InCommandParams_ArePreserved()
+        {
+            testGo.AddComponent<CustomComponent>();
+
+            var batchParams = new JObject
+            {
+                ["commands"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["tool"] = "manage_components",
+                        ["params"] = new JObject
+                        {
+                            ["action"] = "set_property",
+                            ["target"] = testGo.name,
+                            ["search_method"] = "by_name",
+                            ["component_type"] = "CustomComponent",
+                            ["property"] = "customText",
+                            ["value"] = "Player One"
+                        }
+                    }
+                }
+            };
+
+            var result = BatchExecute.HandleCommand(batchParams).GetAwaiter().GetResult();
+            var resultObj = JObject.FromObject(result);
+
+            Assert.IsTrue(resultObj.Value<bool>("success"), $"Batch should succeed: {resultObj}");
+            Assert.AreEqual("Player One",
+                testGo.GetComponent<CustomComponent>()
+                    .GetType()
+                    .GetField("customText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    ?.GetValue(testGo.GetComponent<CustomComponent>()) as string);
+        }
     }
 }
