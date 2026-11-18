@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Server;
@@ -86,7 +89,7 @@ namespace MCPForUnity.Editor.Services
             return _pidFileManager.TryReadPid(pidFilePath, out pid);
         }
 
-        private bool TryProcessCommandLineContainsInstanceToken(int pid, string instanceToken, out bool containsToken)
+        internal virtual bool TryProcessCommandLineContainsInstanceToken(int pid, string instanceToken, out bool containsToken)
         {
             containsToken = false;
             if (pid <= 0 || string.IsNullOrEmpty(instanceToken))
@@ -386,6 +389,65 @@ namespace MCPForUnity.Editor.Services
         public bool StopLocalHttpServer()
         {
             return StopLocalHttpServerInternal(quiet: false);
+        }
+
+        /// <inheritdoc/>
+        public async Task<bool> StopLocalHttpServerAsync()
+        {
+            string url = HttpEndpointUtility.GetLocalBaseUrl();
+            if (!IsLocalUrl(url)) return false;
+            if (TryGetLocalHttpServerHandshake(out var pidFile, out var token)
+                && TryReadPidFromPidFile(pidFile, out int pid)
+                && pid > 1 && pid != GetCurrentProcessIdSafe()
+                && await RequestShutdownAsync(new Uri(url), pid, token))
+            {
+                if (!await WaitForServerExitAsync(pid))
+                {
+                    // The listener may already be closed; revalidate identity before escalation.
+                    if (!TryProcessCommandLineContainsInstanceToken(pid, token, out bool matches)
+                        || !matches || !TerminateProcess(pid)) return false;
+                }
+                if (TryGetLocalHttpServerHandshake(out var currentFile, out var currentToken)
+                    && currentFile == pidFile && currentToken == token
+                    && TryReadPidFromPidFile(currentFile, out int currentPid) && currentPid == pid)
+                {
+                    DeletePidFile(pidFile);
+                    ClearLocalServerPidTracking();
+                }
+                return true;
+            }
+            return StopLocalHttpServerInternal(quiet: false);
+        }
+
+        internal virtual async Task<bool> WaitForServerExitAsync(int pid)
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (_processDetector.ProcessExists(pid) && timer.Elapsed < TimeSpan.FromSeconds(8))
+                await Task.Delay(100);
+            return !_processDetector.ProcessExists(pid);
+        }
+
+        internal virtual async Task<bool> RequestShutdownAsync(Uri url, int pid, string token)
+        {
+            try
+            {
+                using (var handler = new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
+                using (var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(1) })
+                using (var request = new HttpRequestMessage(HttpMethod.Post, new Uri(url, "/_unity/shutdown")))
+                {
+                    request.Headers.Add("X-Unity-Instance-Token", token);
+                    using (var response = await client.SendAsync(request))
+                    {
+                        return response.StatusCode == System.Net.HttpStatusCode.Accepted
+                            && (int?)JObject.Parse(await response.Content.ReadAsStringAsync())["pid"] == pid;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Debug($"Cooperative server shutdown unavailable: {ex.GetType().Name}");
+                return false;
+            }
         }
 
         public bool StopManagedLocalHttpServer()

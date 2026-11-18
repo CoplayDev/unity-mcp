@@ -29,6 +29,9 @@ if sys.platform == "win32":
 import logging
 from contextlib import asynccontextmanager
 import os
+import ipaddress
+import secrets
+import signal
 import threading
 import time
 from typing import AsyncIterator, Any
@@ -62,6 +65,7 @@ except Exception:
     pass
 
 from fastmcp import FastMCP
+from starlette.background import BackgroundTask
 from logging.handlers import RotatingFileHandler
 
 
@@ -383,6 +387,34 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     global custom_tool_service
     custom_tool_service = CustomToolService(
         mcp, project_scoped_tools=project_scoped_tools)
+
+    instance_token = os.environ.get("UNITY_MCP_INSTANCE_TOKEN", "")
+    shutdown_requested = False
+
+    @mcp.custom_route("/_unity/shutdown", methods=["POST"])
+    async def shutdown_http(request: Request) -> JSONResponse:
+        try:
+            local_client = request.client is not None and ipaddress.ip_address(request.client.host).is_loopback
+        except ValueError:
+            local_client = False
+        provided_token = request.headers.get("X-Unity-Instance-Token", "")
+        if (config.http_remote_hosted or not instance_token or not local_client
+                or not secrets.compare_digest(provided_token.encode(), instance_token.encode())):
+            return JSONResponse({"error": "Forbidden"}, status_code=403)
+        handler = signal.getsignal(signal.SIGINT)
+        if not callable(handler) or handler is signal.default_int_handler:
+            return JSONResponse({"error": "Shutdown handler unavailable"}, status_code=503)
+
+        async def request_exit() -> None:
+            nonlocal shutdown_requested
+            if shutdown_requested:
+                return
+            shutdown_requested = True
+            # In-process Ctrl+C also unwinds FastMCP's outer lifespan after Uvicorn exits.
+            signal.raise_signal(signal.SIGINT)
+
+        return JSONResponse({"pid": os.getpid()}, status_code=202,
+                            background=BackgroundTask(request_exit))
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health_http(_: Request) -> JSONResponse:
