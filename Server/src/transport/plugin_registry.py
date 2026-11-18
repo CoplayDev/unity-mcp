@@ -149,6 +149,23 @@ class PluginRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
+    @staticmethod
+    def owner_key(session: PluginSession) -> str:
+        """Identify the project behind a session: its hash, scoped by user in remote-hosted mode."""
+
+        return f"{session.user_id}/{session.project_hash}" if session.user_id else session.project_hash
+
+    async def owner_keys(self) -> set[str]:
+        """Return the ``owner_key`` of every connected session, across all users.
+
+        Global custom tools are shared by name across users, so whether another project still serves a
+        tool's schema must be judged across all of them. Only the keys are returned, never the sessions,
+        so nothing else about another user's projects leaves the registry.
+        """
+
+        async with self._lock:
+            return {self.owner_key(session) for session in self._sessions.values()}
+
     async def get_session_id_by_hash(self, project_hash: str, user_id: str | None = None) -> str | None:
         """Resolve a ``project_hash`` (Unity instance id) to a session id."""
 
