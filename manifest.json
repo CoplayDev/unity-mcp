@@ -198,6 +198,10 @@
       "description": "Manage Visual Effects, particle systems, and trails"
     },
     {
+      "name": "pick_gameobject_from_image",
+      "description": "Pick a GameObject at a pixel coordinate in a supported Unity screenshot"
+    },
+    {
       "name": "read_console",
       "description": "Read Unity Editor console output (logs, warnings, errors)"
     },
