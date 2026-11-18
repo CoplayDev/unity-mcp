@@ -127,7 +127,7 @@
     },
     {
       "name": "manage_camera",
-      "description": "Manage cameras (Unity Camera + Cinemachine) with presets, pipelines, and blending"
+      "description": "Manage Unity cameras and Cinemachine 3 presets, pipelines, and blending; report installed Cinemachine versions"
     },
     {
       "name": "manage_graphics",

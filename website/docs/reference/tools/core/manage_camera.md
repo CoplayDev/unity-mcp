@@ -12,10 +12,10 @@ description: "Manage cameras (Unity Camera + Cinemachine)."
 
 ## Description
 
-Manage cameras (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; unlocks presets, pipelines, and blending when Cinemachine is installed. Use ping to check Cinemachine availability.
+Manage cameras (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; unlocks presets, pipelines, and blending with the Cinemachine 3 camera API. Use ping to check the installed package version and native API availability. Keep Cinemachine 2 projects on their installed version; use execute_code with that version's API. Use manage_packages get_package_info before writing version-specific code.
 
 SETUP:
-- ping: Check if Cinemachine is available
+- ping: Report Cinemachine installation, package version, and native Cinemachine 3 API support
 - ensure_brain: Ensure CinemachineBrain exists on main camera
 - get_brain_status: Get Brain state (active camera, blend, etc.)
 
