@@ -61,7 +61,7 @@ The CLI mirrors the MCP tool catalog. Each command sends one or more MCP tool ca
 | `unity-mcp asset-gen` | Generate images, 3D models and audio; import models | [`generate_image`](/reference/tools/asset_gen/generate_image), [`generate_model`](/reference/tools/asset_gen/generate_model), [`generate_audio`](/reference/tools/asset_gen/generate_audio), [`import_model`](/reference/tools/asset_gen/import_model), [`import_model_file`](/reference/tools/asset_gen/import_model_file) |
 | `unity-mcp blender` | Talk to a running Blender through the Blender Bridge | [`blender_bridge`](/reference/tools/asset_gen/blender_bridge) |
 | `unity-mcp material` | Material CRUD + shader props | [`manage_material`](/reference/tools/core/manage_material) |
-| `unity-mcp prefab` | Prefab create/open/save/close, inspect, headless modify | [`manage_prefabs`](/reference/tools/core/manage_prefabs) |
+| `unity-mcp prefab` | Prefab create/open/save/close, inspect, headless modify, instance overrides/apply-overrides/revert-overrides | [`manage_prefabs`](/reference/tools/core/manage_prefabs) |
 | `unity-mcp texture` | Procedural or image textures, sprites, pixel edits | [`manage_texture`](/reference/tools/vfx/manage_texture) |
 | `unity-mcp shader` | Shader CRUD | [`manage_shader`](/reference/tools/vfx/manage_shader) |
 | `unity-mcp vfx` | Particle systems, line and trail renderers; `raw` for any `manage_vfx` action | [`manage_vfx`](/reference/tools/vfx/manage_vfx) |
