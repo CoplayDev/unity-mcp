@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.TestTools.TestRunner.Api;
@@ -157,6 +159,30 @@ namespace MCPForUnity.Editor.Services
         private readonly List<ITestResultAdaptor> _leafResults = new List<ITestResultAdaptor>();
         private TaskCompletionSource<TestRunResult> _runCompletionSource;
         private string _trackedJobId;
+        private string _unityRunId;
+        private bool _initializationTimedOut;
+        private bool _nativeRunStarted;
+        private TestRunResult _pendingResult;
+        private Exception _pendingError;
+        // A failed native activity query (for example around a domain reload) leaves the run's
+        // state unknown. Retry it for this long, then end in an explicit job failure.
+        private const double NativeQueryRecoveryWindowSeconds = 30.0;
+        private const double NativeQueryFailureLogIntervalSeconds = 5.0;
+        internal const string NativeStateUnconfirmedError =
+            "Unity Test Runner state could not be confirmed, so this job keeps the test run lock to avoid overlapping runs. " +
+            "If Unity is no longer running tests, reload scripts from the Unity Editor or restart it to re-check. " +
+            "run_tests(clear_stuck=true) drops this job from the queue but may not release the test run lock.";
+        internal const string RunErrorMarker = " Run error: ";
+        private double? _nativeQueryFailedSince;
+        private double _nativeQueryFailureLoggedAt;
+        private static readonly MethodInfo CancelRunMethod = typeof(TestRunnerApi).GetMethod("CancelTestRun", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
+        private static readonly MethodInfo IsRunningMethod =
+            typeof(TestRunnerApi).GetMethod("IsRunActive", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null) ??
+            typeof(TestRunnerApi).GetMethod("IsRunning", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
+        private static readonly PropertyInfo RunnerHolderProperty = typeof(TestRunnerApi).GetProperty("m_testJobDataHolder", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly MethodInfo GetRunnerMethod = RunnerHolderProperty?.PropertyType.GetMethod("GetRunner");
+        private static readonly MethodInfo IsRunningJobMethod = GetRunnerMethod?.ReturnType.GetMethod("IsRunningJob");
+        private static readonly bool CanQueryNativeRun = IsRunningMethod != null || IsRunningJobMethod != null;
 
         public TestRunnerService()
         {
@@ -165,7 +191,9 @@ namespace MCPForUnity.Editor.Services
             _testRunnerApi.RegisterCallbacks(this);
         }
 
-        internal void ResumeJobAfterReload(string jobId, string mode)
+        internal void ResumeJobAfterReload(string jobId, string mode, string unityRunId = null,
+            bool initializationTimedOut = false, bool nativeRunStarted = false,
+            bool nativeCleanupPending = false, TestRunResult pendingResult = null, string pendingError = null)
         {
             if (_runCompletionSource != null || _trackedJobId != null ||
                 string.IsNullOrEmpty(jobId) || TestJobManager.CurrentJobId != jobId)
@@ -174,9 +202,145 @@ namespace MCPForUnity.Editor.Services
             }
 
             _trackedJobId = jobId;
+            _nativeQueryFailedSince = null;
+            _unityRunId = unityRunId;
+            _nativeRunStarted = nativeRunStarted;
+            _initializationTimedOut = initializationTimedOut;
+            _pendingResult = pendingResult;
+            _pendingError = RestorePendingError(pendingError);
             if (Enum.TryParse<TestMode>(mode, out var testMode))
             {
                 TestRunStatus.MarkStarted(testMode);
+            }
+            if (nativeCleanupPending && CanQueryNativeRun)
+            {
+                EditorApplication.update += CompleteRunWhenIdle;
+            }
+            else if (initializationTimedOut) CancelForInitializationTimeout(jobId);
+        }
+
+        internal void CancelForInitializationTimeout(string jobId)
+        {
+            if (_trackedJobId != jobId || string.IsNullOrEmpty(_unityRunId)) return;
+            _initializationTimedOut = true;
+            _pendingError = new InvalidOperationException(TestJobManager.InitializationTimeoutError);
+            // Older Test Framework releases have no public per-run activity query. Keep
+            // ownership until cleanup finishes, including cancellation before RunStarted
+            // where Unity may skip RunFinished entirely.
+            if (CancelRunMethod == null || !CanQueryNativeRun)
+            {
+                McpLog.Warn("[TestRunnerService] Test Framework cancellation monitoring is unavailable; waiting for the timed-out run to finish.");
+                return;
+            }
+            EditorApplication.update -= CompleteRunWhenIdle;
+            EditorApplication.update += CompleteRunWhenIdle;
+            // Before RunStarted, cancellation can skip Unity's scene snapshot but still
+            // run its scene restore task. Wait until setup has captured the open scenes.
+            if (!_nativeRunStarted) return;
+            try
+            {
+                if (IsNativeRunActive()) CancelRunMethod.Invoke(null, new object[] { _unityRunId });
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[TestRunnerService] Failed to cancel timed-out run: {ex.GetBaseException().Message}");
+            }
+        }
+
+        private bool IsNativeRunActive()
+        {
+            if (IsRunningMethod != null)
+            {
+                return (bool)IsRunningMethod.Invoke(null, new object[] { _unityRunId });
+            }
+            // Test Framework 1.1.33 exposes only a global activity query. Ask its
+            // holder for this GUID so a manual run cannot keep an MCP lock alive.
+            var holder = RunnerHolderProperty.GetValue(null);
+            var runner = GetRunnerMethod.Invoke(holder, new object[] { _unityRunId });
+            return runner != null && (bool)IsRunningJobMethod.Invoke(runner, null);
+        }
+
+        // A query exception means the native state is unknown. Report it as active so a failed
+        // query can never release ownership; the idle monitor bounds the retries.
+        private bool IsNativeRunActiveOrUnknown()
+        {
+            try
+            {
+                bool active = IsNativeRunActive();
+                _nativeQueryFailedSince = null;
+                return active;
+            }
+            catch (Exception ex)
+            {
+                double now = EditorApplication.timeSinceStartup;
+                string reason = ex.GetBaseException().Message;
+                if (!_nativeQueryFailedSince.HasValue)
+                {
+                    _nativeQueryFailedSince = now;
+                    _nativeQueryFailureLoggedAt = now;
+                    McpLog.Warn($"[TestRunnerService] Failed to query native test cleanup; retrying for up to {NativeQueryRecoveryWindowSeconds}s: {reason}");
+                }
+                else if (now - _nativeQueryFailureLoggedAt >= NativeQueryFailureLogIntervalSeconds)
+                {
+                    _nativeQueryFailureLoggedAt = now;
+                    McpLog.Warn($"[TestRunnerService] Native test cleanup query still failing after {now - _nativeQueryFailedSince.Value:0}s: {reason}");
+                }
+                return true;
+            }
+        }
+
+        // Pure predicate (unit-testable): keep retrying a failing native query until it has failed
+        // continuously for the whole window. No recorded failure means keep monitoring.
+        internal static bool ShouldKeepRetryingNativeQuery(double now, double? firstFailureAt, double windowSeconds)
+            => !firstFailureAt.HasValue || now - firstFailureAt.Value < windowSeconds;
+
+        // The persisted job error becomes the pending error again after a domain reload. The
+        // "unconfirmed" text is this service's own annotation, not a run error, so drop it and keep only
+        // the original run error. A later successful check then reports the run's real outcome.
+        internal static Exception RestorePendingError(string persisted)
+        {
+            if (persisted == null) return null;
+            if (persisted.StartsWith(NativeStateUnconfirmedError, StringComparison.Ordinal))
+            {
+                string rest = persisted.Substring(NativeStateUnconfirmedError.Length);
+                persisted = rest.StartsWith(RunErrorMarker, StringComparison.Ordinal) ? rest.Substring(RunErrorMarker.Length) : null;
+                if (string.IsNullOrEmpty(persisted)) return null;
+            }
+            return new InvalidOperationException(persisted);
+        }
+
+        // The native state stayed unknown for the whole window. Stop polling but keep ownership,
+        // and fail the job with a message that tells the client how to clear it.
+        private void StopMonitoringUnconfirmedRun()
+        {
+            EditorApplication.update -= CompleteRunWhenIdle;
+            string message = NativeStateUnconfirmedError;
+            string reason = _pendingError?.Message;
+            if (!string.IsNullOrEmpty(reason)) message += RunErrorMarker + reason;
+            McpLog.Warn($"[TestRunnerService] Stopped querying native test cleanup after {NativeQueryRecoveryWindowSeconds}s of failures. {message}");
+            if (IsTrackingCurrentJob)
+            {
+                TestJobManager.FinalizeCurrentJobFromRunError(message, keepOwnership: true);
+            }
+        }
+
+        private void CompleteRunWhenIdle()
+        {
+            try
+            {
+                if (!IsNativeRunActiveOrUnknown())
+                {
+                    CompleteRun(_pendingResult, _pendingError);
+                }
+                else if (!ShouldKeepRetryingNativeQuery(EditorApplication.timeSinceStartup, _nativeQueryFailedSince, NativeQueryRecoveryWindowSeconds))
+                {
+                    StopMonitoringUnconfirmedRun();
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorApplication.update -= CompleteRunWhenIdle;
+                McpLog.Warn($"[TestRunnerService] Failed to monitor native test cleanup: {ex.GetBaseException().Message}");
             }
         }
 
@@ -222,6 +386,7 @@ namespace MCPForUnity.Editor.Services
             await _operationLock.WaitAsync().ConfigureAwait(true);
             Task<TestRunResult> runTask;
             bool adjustedPlayModeOptions = false;
+            bool appliedNoThrottling = false;
             bool originalEnterPlayModeOptionsEnabled = false;
             EnterPlayModeOptions originalEnterPlayModeOptions = EnterPlayModeOptions.None;
             try
@@ -252,6 +417,7 @@ namespace MCPForUnity.Editor.Services
 
                 _leafResults.Clear();
                 _trackedJobId = TestJobManager.CurrentJobId;
+                _nativeQueryFailedSince = null;
                 _runCompletionSource = new TaskCompletionSource<TestRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 // Mark running immediately so readiness snapshots reflect the busy state even before callbacks fire.
                 TestRunStatus.MarkStarted(mode);
@@ -270,23 +436,22 @@ namespace MCPForUnity.Editor.Services
                 // (Issue #525: EditMode tests were blocked by save dialog)
                 SaveDirtyScenesIfNeeded();
 
-                // Apply no-throttling preemptively for PlayMode tests. This ensures Unity
-                // isn't throttled during the Play mode transition (which requires multiple
-                // editor frames). Without this, unfocused Unity may never reach RunStarted
-                // where throttling would normally be disabled.
-                if (mode == TestMode.PlayMode)
-                {
-                    TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
-                }
+                // EditMode setup also advances over editor frames before RunStarted.
+                // Disable background throttling before Execute for both test modes.
+                appliedNoThrottling = true;
+                TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
 
-                _testRunnerApi.Execute(settings);
+                _unityRunId = _testRunnerApi.Execute(settings);
+                TestJobManager.OnRunScheduled(_trackedJobId, _unityRunId);
 
                 runTask = _runCompletionSource.Task;
             }
             catch
             {
                 _trackedJobId = null;
+                _unityRunId = null;
                 _runCompletionSource = null;
+                if (appliedNoThrottling) TestRunnerNoThrottle.RestoreThrottling();
                 // Ensure the status is cleared if we failed to start the run.
                 TestRunStatus.MarkFinished();
                 if (adjustedPlayModeOptions)
@@ -315,6 +480,8 @@ namespace MCPForUnity.Editor.Services
 
         public void Dispose()
         {
+            EditorApplication.update -= CompleteRunWhenIdle;
+            _nativeQueryFailedSince = null;
             try
             {
                 _testRunnerApi?.UnregisterCallbacks(this);
@@ -341,6 +508,8 @@ namespace MCPForUnity.Editor.Services
             {
                 return;
             }
+            _nativeRunStarted = true;
+            if (_initializationTimedOut) CancelForInitializationTimeout(_trackedJobId);
             try
             {
                 // Best-effort progress info for async polling (avoid heavy payloads).
@@ -375,6 +544,30 @@ namespace MCPForUnity.Editor.Services
 
         private void CompleteRun(TestRunResult payload, Exception error)
         {
+            if (_initializationTimedOut)
+            {
+                error = new InvalidOperationException(TestJobManager.InitializationTimeoutError);
+            }
+            if (!string.IsNullOrEmpty(_unityRunId) && CanQueryNativeRun)
+            {
+                _pendingResult = payload;
+                _pendingError = error;
+                // A failed query is handled like an active run: the monitor retries it.
+                if (IsNativeRunActiveOrUnknown())
+                {
+                    // RunFinished/OnError precede native scene and preference teardown.
+                    // Persist the result, but retain ownership until all cleanup is done.
+                    if (IsTrackingCurrentJob)
+                    {
+                        if (error == null) TestJobManager.FinalizeCurrentJobFromRunFinished(payload, keepOwnership: true);
+                        else TestJobManager.FinalizeCurrentJobFromRunError(error.Message, keepOwnership: true);
+                    }
+                    EditorApplication.update -= CompleteRunWhenIdle;
+                    EditorApplication.update += CompleteRunWhenIdle;
+                    return;
+                }
+            }
+            EditorApplication.update -= CompleteRunWhenIdle;
 
             // A late callback from a cleared job must not finish a newer job or restore
             // settings belonging to it. Callbacks do not contain an MCP job identifier.
@@ -383,6 +576,7 @@ namespace MCPForUnity.Editor.Services
             if (canCleanUp)
             {
                 TestRunStatus.MarkFinished();
+                TestRunnerNoThrottle.RestoreThrottling();
             }
             if (ownsCurrentJob)
             {
@@ -409,6 +603,11 @@ namespace MCPForUnity.Editor.Services
             var completion = _runCompletionSource;
             _runCompletionSource = null;
             _trackedJobId = null;
+            _unityRunId = null;
+            _initializationTimedOut = false;
+            _nativeRunStarted = false;
+            _pendingResult = null;
+            _pendingError = null;
             if (completion != null)
             {
                 if (error == null) completion.TrySetResult(payload);
@@ -667,6 +866,7 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public sealed class TestRunResult
     {
+        [JsonConstructor]
         internal TestRunResult(TestRunSummary summary, IReadOnlyList<TestRunTestResult> results)
         {
             Summary = summary;
@@ -770,6 +970,7 @@ namespace MCPForUnity.Editor.Services
 
     public sealed class TestRunSummary
     {
+        [JsonConstructor]
         internal TestRunSummary(int total, int passed, int failed, int skipped, double durationSeconds, string resultState)
         {
             Total = total;
@@ -803,6 +1004,7 @@ namespace MCPForUnity.Editor.Services
 
     public sealed class TestRunTestResult
     {
+        [JsonConstructor]
         internal TestRunTestResult(
             string name,
             string fullName,

@@ -75,8 +75,8 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// Apply no-throttling preemptively before tests start.
-        /// Call this before Execute() for PlayMode tests to ensure Unity isn't throttled
-        /// during the Play mode transition (before RunStarted fires).
+        /// Call this before Execute() for both modes so background editor frames advance
+        /// through test setup and Play Mode transitions before RunStarted fires.
         /// </summary>
         public static void ApplyNoThrottlingPreemptive()
         {
@@ -101,7 +101,7 @@ namespace MCPForUnity.Editor.Services
             McpLog.Info("[TestRunnerNoThrottle] Applied No Throttling for test run.");
         }
 
-        private static void RestoreThrottling()
+        internal static void RestoreThrottling()
         {
             if (!AreSettingsCaptured()) return;
 
@@ -140,13 +140,14 @@ namespace MCPForUnity.Editor.Services
 
             public void RunFinished(ITestResultAdaptor result)
             {
-                RestoreThrottling();
+                // MCP restores its pre-Execute backup after Unity's later native reset.
+                if (!TestRunStatus.IsRunning && !TestJobManager.HasRunningJob) RestoreThrottling();
             }
 
             public void OnError(string message)
             {
                 // Build/prebuild failures may terminate before RunFinished is delivered.
-                RestoreThrottling();
+                if (!TestRunStatus.IsRunning && !TestJobManager.HasRunningJob) RestoreThrottling();
             }
 
             public void TestStarted(ITestAdaptor test) { }

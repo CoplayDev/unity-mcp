@@ -43,6 +43,11 @@ namespace MCPForUnityTests.Editor.Services
         private bool _guardEnabled;
         private int _guardOptions;
         private byte[] _marker;
+        private Dictionary<string, (bool Exists, int Value)> _interactionPreferences;
+        private bool _throttleActive;
+        private bool _throttleCaptured;
+        private int _throttlePreviousIdle;
+        private int _throttlePreviousMode;
 
         private static FieldInfo ManagerField(string name) => typeof(TestJobManager).GetField(name, PrivateStatic);
         private static FieldInfo ServiceField => typeof(MCPServiceLocator).GetField("_testRunnerService", PrivateStatic);
@@ -67,6 +72,12 @@ namespace MCPForUnityTests.Editor.Services
             _guardEnabled = SessionState.GetBool(GuardPrefix + "OriginalEnabled", false);
             _guardOptions = SessionState.GetInt(GuardPrefix + "OriginalOptions", 0);
             _marker = File.Exists(MarkerPath) ? File.ReadAllBytes(MarkerPath) : null;
+            _interactionPreferences = new[] { "ApplicationIdleTime", "InteractionMode" }
+                .ToDictionary(key => key, key => (EditorPrefs.HasKey(key), EditorPrefs.GetInt(key)));
+            _throttleActive = SessionState.GetBool("TestRunnerNoThrottle_TestRunActive", false);
+            _throttleCaptured = SessionState.GetBool("TestRunnerNoThrottle_SettingsCaptured", false);
+            _throttlePreviousIdle = SessionState.GetInt("TestRunnerNoThrottle_PrevIdleTime", 4);
+            _throttlePreviousMode = SessionState.GetInt("TestRunnerNoThrottle_PrevInteractionMode", 0);
             _jobs.Clear();
             ManagerField("_currentJobId").SetValue(null, null);
             ServiceField.SetValue(null, null);
@@ -97,6 +108,16 @@ namespace MCPForUnityTests.Editor.Services
                 if (File.Exists(MarkerPath)) File.Delete(MarkerPath);
             }
             else File.WriteAllBytes(MarkerPath, _marker);
+            foreach (var preference in _interactionPreferences)
+            {
+                if (preference.Value.Exists) EditorPrefs.SetInt(preference.Key, preference.Value.Value);
+                else EditorPrefs.DeleteKey(preference.Key);
+            }
+            SessionState.SetBool("TestRunnerNoThrottle_TestRunActive", _throttleActive);
+            SessionState.SetBool("TestRunnerNoThrottle_SettingsCaptured", _throttleCaptured);
+            SessionState.SetInt("TestRunnerNoThrottle_PrevIdleTime", _throttlePreviousIdle);
+            SessionState.SetInt("TestRunnerNoThrottle_PrevInteractionMode", _throttlePreviousMode);
+            typeof(TestRunnerNoThrottle).GetMethod("ForceEditorToApplyInteractionPrefs", PrivateStatic).Invoke(null, null);
         }
 
         private TestJob AddJob(string id = "lifecycle-job")
@@ -269,6 +290,255 @@ namespace MCPForUnityTests.Editor.Services
             var result = pending.GetAwaiter().GetResult();
             Assert.AreEqual(1, result.Passed);
             Assert.AreEqual(TestJobStatus.Succeeded, nextJob.Status);
+        }
+
+        [UnityTest]
+        public IEnumerator EditMode_ExecuteDisablesThrottlingBeforeRunStarted()
+        {
+            AddJob();
+            var service = MCPServiceLocator.Tests as TestRunnerService;
+            var api = typeof(TestRunnerService).GetField("_testRunnerApi", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(service);
+            var scheduler = typeof(TestRunnerApi).GetField("ScheduleJob", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(scheduler);
+            int idleAtExecute = -1;
+            int modeAtExecute = -1;
+            scheduler.SetValue(api, new Func<ExecutionSettings, string>(_ =>
+            {
+                idleAtExecute = EditorPrefs.GetInt("ApplicationIdleTime", 4);
+                modeAtExecute = EditorPrefs.GetInt("InteractionMode", 0);
+                return "synthetic-background-run";
+            }));
+            SessionState.SetBool("TestRunnerNoThrottle_SettingsCaptured", false);
+            EditorPrefs.SetInt("ApplicationIdleTime", 9);
+            EditorPrefs.SetInt("InteractionMode", 0);
+
+            var pending = service.RunTestsAsync(TestMode.EditMode);
+            service.RunFinished(ResultStub.Suite(new ResultStub("Fixture.Pass", "Passed")));
+            double deadline = EditorApplication.timeSinceStartup + 5;
+            while (!pending.IsCompleted && EditorApplication.timeSinceStartup < deadline) yield return null;
+            Assert.IsTrue(pending.IsCompleted);
+            pending.GetAwaiter().GetResult();
+            Assert.AreEqual(0, idleAtExecute, "Setup must advance without background throttling before RunStarted.");
+            Assert.AreEqual(1, modeAtExecute);
+            Assert.AreEqual(9, EditorPrefs.GetInt("ApplicationIdleTime"));
+            Assert.AreEqual(0, EditorPrefs.GetInt("InteractionMode"));
+        }
+
+        [Test]
+        public void ExecuteFailure_RestoresPreemptiveThrottlingSettings()
+        {
+            AddJob();
+            var service = MCPServiceLocator.Tests as TestRunnerService;
+            var api = typeof(TestRunnerService).GetField("_testRunnerApi", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(service);
+            var scheduler = typeof(TestRunnerApi).GetField("ScheduleJob", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(scheduler);
+            scheduler.SetValue(api, new Func<ExecutionSettings, string>(_ => throw new InvalidOperationException("Setup failed before scheduling")));
+            SessionState.SetBool("TestRunnerNoThrottle_SettingsCaptured", false);
+            EditorPrefs.SetInt("ApplicationIdleTime", 9);
+            EditorPrefs.SetInt("InteractionMode", 0);
+
+            Assert.Throws<InvalidOperationException>(() => service.RunTestsAsync(TestMode.EditMode).GetAwaiter().GetResult());
+
+            Assert.AreEqual(9, EditorPrefs.GetInt("ApplicationIdleTime"));
+            Assert.AreEqual(0, EditorPrefs.GetInt("InteractionMode"));
+            Assert.IsFalse(SessionState.GetBool("TestRunnerNoThrottle_SettingsCaptured", true));
+            Assert.IsFalse(TestRunStatus.IsRunning);
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationTimeout_CleansUpNativeRunBeforeStartingNextJob()
+        {
+            var service = MCPServiceLocator.Tests as TestRunnerService;
+            var api = typeof(TestRunnerService).GetField("_testRunnerApi", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(service);
+            var scheduler = typeof(TestRunnerApi).GetField("ScheduleJob", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(scheduler);
+            int scheduled = 0;
+            scheduler.SetValue(api, new Func<ExecutionSettings, string>(_ => "synthetic-timeout-run-" + ++scheduled));
+            SessionState.SetBool("TestRunnerNoThrottle_SettingsCaptured", false);
+            EditorPrefs.SetInt("ApplicationIdleTime", 9);
+            EditorPrefs.SetInt("InteractionMode", 0);
+            var jobId = TestJobManager.StartJob(TestMode.EditMode);
+            var job = TestJobManager.GetJob(jobId);
+            Assert.AreEqual("synthetic-timeout-run-1", job.UnityRunId);
+            job.StartedUnixMs -= 20_000;
+
+            Assert.AreEqual(TestJobStatus.Failed, TestJobManager.GetJob(jobId).Status);
+            Assert.IsTrue(TestJobManager.HasRunningJob, "The timed-out run still owns its native cleanup.");
+            Assert.IsTrue(TestRunStatus.IsRunning);
+            Assert.Throws<InvalidOperationException>(() => TestJobManager.StartJob(TestMode.EditMode));
+            service.RunStarted(null);
+            Assert.AreEqual(TestJobStatus.Failed, job.Status, "Late startup cannot undo the timeout.");
+
+            // The synthetic GUID is not active in Unity. Polling must release ownership
+            // even when cancellation before RunStarted produces no terminal callback.
+            double deadline = EditorApplication.timeSinceStartup + 5;
+            while (TestJobManager.HasRunningJob && EditorApplication.timeSinceStartup < deadline) yield return null;
+            Assert.IsFalse(TestJobManager.HasRunningJob);
+            Assert.IsFalse(TestRunStatus.IsRunning);
+            Assert.AreEqual(9, EditorPrefs.GetInt("ApplicationIdleTime"));
+            Assert.AreEqual(0, EditorPrefs.GetInt("InteractionMode"));
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            Assert.AreEqual(TestJobManager.InitializationTimeoutError, job.Error);
+
+            var nextId = TestJobManager.StartJob(TestMode.EditMode);
+            deadline = EditorApplication.timeSinceStartup + 5;
+            while (scheduled < 2 && EditorApplication.timeSinceStartup < deadline) yield return null;
+            Assert.AreEqual(2, scheduled, "Cleanup must release the operation lock for the next run.");
+            service.RunFinished(ResultStub.Suite(new ResultStub("Next.Pass", "Passed")));
+            Assert.AreEqual(TestJobStatus.Succeeded, TestJobManager.GetJob(nextId).Status);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationTimeout_PendingCancellationSurvivesReload()
+        {
+            var job = AddJob();
+            job.StartedUnixMs -= 20_000;
+            TestJobManager.OnRunScheduled(job.JobId, "synthetic-recovered-timeout-run");
+            var service = RestoreCallbacks();
+            Assert.AreEqual(TestJobStatus.Failed, TestJobManager.GetJob(job.JobId).Status);
+            InvokeManager("BeforeAssemblyReload");
+            service.Dispose();
+            ServiceField.SetValue(null, null);
+            _jobs.Clear();
+            ManagerField("_currentJobId").SetValue(null, null);
+            InvokeManager("TryRestoreFromSessionState");
+
+            var recovered = _jobs[job.JobId];
+            Assert.AreEqual("synthetic-recovered-timeout-run", recovered.UnityRunId);
+            Assert.IsTrue(recovered.InitializationTimedOut);
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId);
+            Assert.NotNull(RestoreCallbacks(), "A failed job must retain callbacks while cancellation is pending.");
+            double deadline = EditorApplication.timeSinceStartup + 5;
+            while (TestJobManager.HasRunningJob && EditorApplication.timeSinceStartup < deadline) yield return null;
+            Assert.IsFalse(TestJobManager.HasRunningJob);
+            Assert.IsFalse(TestRunStatus.IsRunning);
+            Assert.AreEqual(TestJobStatus.Failed, recovered.Status);
+            Assert.AreEqual(TestJobManager.InitializationTimeoutError, recovered.Error);
+        }
+
+        [Test]
+        public void InitializationTimeout_LateRunFinishedPreservesFailure()
+        {
+            var job = AddJob();
+            job.Status = TestJobStatus.Failed;
+            job.Error = TestJobManager.InitializationTimeoutError;
+            job.InitializationTimedOut = true;
+            job.UnityRunId = "synthetic-late-timeout-run";
+            var service = RestoreCallbacks();
+
+            service.RunFinished(ResultStub.Suite(new ResultStub("Late.Pass", "Passed")));
+
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            Assert.AreEqual(TestJobManager.InitializationTimeoutError, job.Error);
+            Assert.IsNull(TestJobManager.CurrentJobId);
+            Assert.IsFalse(job.InitializationTimedOut);
+        }
+
+        [Test]
+        public void NativeCleanup_PreservesResultAndPreferencesAcrossReload()
+        {
+            // Use the outer test run's GUID only for a read-only activity query. Never
+            // cancel it or schedule a nested run. Its native teardown is still pending.
+            var holderProperty = typeof(TestRunnerApi).GetProperty("m_testJobDataHolder", PrivateStatic);
+            Assert.NotNull(holderProperty);
+            var holder = holderProperty.GetValue(null);
+            var runners = (IEnumerable)holder.GetType().GetMethod("GetAllRunners").Invoke(holder, null);
+            var runner = runners.Cast<object>().First(r => (bool)r.GetType().GetMethod("IsRunningJob").Invoke(r, null));
+            var data = runner.GetType().GetMethod("GetData").Invoke(runner, null);
+            var nativeId = (string)data.GetType().GetField("guid").GetValue(data);
+            var job = AddJob();
+            TestJobManager.OnRunScheduled(job.JobId, nativeId);
+            var service = RestoreCallbacks();
+            SessionState.SetBool("TestRunnerNoThrottle_SettingsCaptured", false);
+            EditorPrefs.SetInt("ApplicationIdleTime", 9);
+            EditorPrefs.SetInt("InteractionMode", 0);
+            TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
+
+            service.RunFinished(ResultStub.Suite(new ResultStub("Fixture.Pass", "Passed")));
+            Assert.AreEqual(TestJobStatus.Succeeded, job.Status);
+            Assert.IsTrue(job.NativeCleanupPending);
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId);
+            Assert.IsTrue(TestRunStatus.IsRunning);
+            var callbackType = typeof(TestRunnerNoThrottle).GetNestedType("TestCallbacks", BindingFlags.NonPublic);
+            var callback = (IErrorCallbacks)Activator.CreateInstance(callbackType, true);
+            callback.RunFinished(null);
+            Assert.IsTrue(SessionState.GetBool("TestRunnerNoThrottle_SettingsCaptured", false), "Native cleanup must retain the original preference backup.");
+            InvokeManager("BeforeAssemblyReload");
+            service.Dispose();
+            ServiceField.SetValue(null, null);
+            _jobs.Clear();
+            ManagerField("_currentJobId").SetValue(null, null);
+            InvokeManager("TryRestoreFromSessionState");
+            var recovered = _jobs[job.JobId];
+            Assert.AreEqual(1, recovered.Result.Passed);
+            Assert.AreEqual("Fixture.Pass", recovered.Result.Results.Single().FullName);
+            service = RestoreCallbacks();
+            Assert.NotNull(service);
+
+            // Emulate native teardown becoming idle after resetting its saved 0/1 values.
+            EditorPrefs.SetInt("ApplicationIdleTime", 0);
+            EditorPrefs.SetInt("InteractionMode", 1);
+            typeof(TestRunnerService).GetField("_unityRunId", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(service, "synthetic-finished-cleanup");
+            typeof(TestRunnerService).GetMethod("CompleteRunWhenIdle", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(service, null);
+
+            Assert.IsFalse(TestJobManager.HasRunningJob);
+            Assert.IsFalse(TestRunStatus.IsRunning);
+            Assert.IsFalse(recovered.NativeCleanupPending);
+            Assert.AreEqual(1, recovered.Result.Passed);
+            Assert.AreEqual(9, EditorPrefs.GetInt("ApplicationIdleTime"));
+            Assert.AreEqual(0, EditorPrefs.GetInt("InteractionMode"));
+            Assert.IsFalse(SessionState.GetBool("TestRunnerNoThrottle_SettingsCaptured", true));
+        }
+
+        [Test]
+        public void UnconfirmedNativeCleanup_FailsJobButKeepsOwnershipUntilStateIsKnown()
+        {
+            var job = AddJob();
+            TestJobManager.OnRunScheduled(job.JobId, "synthetic-unconfirmed-run");
+            var service = RestoreCallbacks();
+            // The native activity query cannot be made to throw here, so end the recovery window directly.
+            typeof(TestRunnerService).GetMethod("StopMonitoringUnconfirmedRun", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(service, null);
+
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            StringAssert.Contains("run_tests(clear_stuck=true)", job.Error);
+            Assert.IsTrue(job.NativeCleanupPending, "A domain reload must resume the cleanup check.");
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId, "An unconfirmed run must keep ownership.");
+            Assert.IsTrue(TestRunStatus.IsRunning);
+
+            // A later callback whose activity query works (the synthetic GUID is idle) releases ownership.
+            service.RunFinished(ResultStub.Suite(new ResultStub("Fixture.Pass", "Passed")));
+            Assert.IsFalse(TestJobManager.HasRunningJob);
+            Assert.IsFalse(TestRunStatus.IsRunning);
+            Assert.AreEqual(TestJobStatus.Succeeded, job.Status);
+            Assert.IsFalse(job.NativeCleanupPending);
+        }
+
+        [Test]
+        public void InitializationTimeout_UnconfirmedCleanupKeepsItsMessage()
+        {
+            var job = AddJob();
+            job.InitializationTimedOut = true;
+            string message = TestRunnerService.NativeStateUnconfirmedError + TestRunnerService.RunErrorMarker + TestJobManager.InitializationTimeoutError;
+
+            TestJobManager.FinalizeCurrentJobFromRunError(message, keepOwnership: true);
+
+            Assert.AreEqual(TestJobStatus.Failed, job.Status);
+            Assert.AreEqual(message, job.Error);
+            Assert.IsTrue(job.InitializationTimedOut, "A domain reload must still resume the timeout cleanup.");
+            Assert.IsTrue(job.NativeCleanupPending);
+            Assert.AreEqual(job.JobId, TestJobManager.CurrentJobId);
+        }
+
+        [Test]
+        public void InitializationTimeout_OtherRunErrorsAreStillReportedAsTheTimeout()
+        {
+            var job = AddJob();
+            job.InitializationTimedOut = true;
+
+            TestJobManager.FinalizeCurrentJobFromRunError("Unity test run failed.", keepOwnership: true);
+
+            Assert.AreEqual(TestJobManager.InitializationTimeoutError, job.Error);
         }
 
         [Test]
