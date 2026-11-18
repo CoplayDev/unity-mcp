@@ -12,7 +12,7 @@ description: "Request a Unity asset database refresh and optionally a script com
 
 ## Description
 
-Request a Unity asset database refresh and optionally a script compilation. Can optionally wait for readiness.
+Request a Unity asset database refresh and optionally a script compilation. With wait_for_ready (the default) it returns only once the editor is ready again, compilation and domain reload included, so the next call can follow it directly.
 
 ## Parameters
 
@@ -21,7 +21,7 @@ Request a Unity asset database refresh and optionally a script compilation. Can 
 | `mode` | `Literal['if_dirty', 'force']` | — | Refresh mode |
 | `scope` | `Literal['assets', 'scripts', 'all']` | — | Refresh scope |
 | `compile` | `Literal['none', 'request']` | — | Whether to request compilation |
-| `wait_for_ready` | `bool` | — | If true, wait until mcpforunity://editor/state reports data.advice.ready_for_tools true |
+| `wait_for_ready` | `bool` | — | If true, return only once mcpforunity://editor/state reports data.advice.ready_for_tools true (after any compilation and domain reload); false returns at once |
 
 ## Returns
 
