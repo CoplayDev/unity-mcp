@@ -38,7 +38,8 @@ REQUIRED_PARAMS = {
         "Use component_properties with modify_contents to set serialized fields on existing components "
         "(e.g. component_properties={\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}). "
         "Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. "
-        "Use manage_asset action=search filterType=Prefab to list prefabs."
+        "Use manage_asset action=search filterType=Prefab to list prefabs. "
+        "Performance tip: for save_prefab_stage, pass refresh=false to skip the trailing AssetDatabase.Refresh() (often ~1s on large projects); SaveAssets() still runs so dirty assets are flushed. Call refresh_unity yourself when you actually need the asset database to reimport."
     ),
     annotations=ToolAnnotations(
         title="Manage Prefabs",
@@ -78,6 +79,7 @@ async def manage_prefabs(
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), source_prefab_path (optional: asset path to instantiate as nested prefab, e.g. 'Assets/Prefabs/Bullet.prefab'), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. source_prefab_path and primitive_type are mutually exclusive."] | None = None,
     delete_child: Annotated[str | list[str], "Child name(s) or path(s) to remove from the prefab. Supports single string or array for batch deletion (e.g. 'Child1' or ['Child1', 'Child1/Grandchild'])."] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"}. Single-sprite textures auto-resolve."] | None = None,
+    refresh: Annotated[bool, "For save_prefab_stage: run AssetDatabase.Refresh() after writing the prefab (default true). Set false to skip the ~1s trailing import; SaveAssets() still runs so dirty assets are flushed. Call refresh_unity yourself when needed."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -197,6 +199,10 @@ async def manage_prefabs(
 
         if delete_child is not None:
             params["deleteChild"] = delete_child
+
+        refresh_val = coerce_bool(refresh)
+        if refresh_val is not None:
+            params["refresh"] = refresh_val
 
         # Send command to Unity
         response = await send_with_unity_instance(
