@@ -224,9 +224,9 @@ namespace MCPForUnity.Editor.Tools
                     break;
 
                 case "codedom":
-                    compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var codedomErrors);
+                    compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var codedomErrors, out var codedomSkipped);
                     if (compiled == null)
-                        return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(codedomErrors), compiler = "codedom" });
+                        return CodeDomCompileFailed(codedomErrors, codedomSkipped);
                     usedCompiler = "codedom";
                     break;
 
@@ -240,9 +240,9 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var autoFallbackErrors);
+                        compiled = CodeDomCompile(wrappedSource, assemblyPaths, out var autoFallbackErrors, out var autoFallbackSkipped);
                         if (compiled == null)
-                            return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(autoFallbackErrors), compiler = "codedom" });
+                            return CodeDomCompileFailed(autoFallbackErrors, autoFallbackSkipped);
                         usedCompiler = "codedom";
                     }
                     break;
@@ -300,11 +300,22 @@ namespace MCPForUnity.Editor.Tools
             return errors;
         }
 
+        // A skipped reference is the usual cause of CS0246/CS0012, so return the skips with the errors.
+        private static ErrorResponse CodeDomCompileFailed(List<string> errors, List<string> skippedReferences)
+        {
+            if (skippedReferences.Count > 0)
+                return new ErrorResponse("Compilation failed",
+                    new { errors = OffsetErrors(errors), compiler = "codedom", skippedReferences });
+            return new ErrorResponse("Compilation failed", new { errors = OffsetErrors(errors), compiler = "codedom" });
+        }
+
         // ──────────────────── CodeDom compiler ────────────────────
 
-        private static Assembly CodeDomCompile(string source, string[] assemblyPaths, out List<string> errors)
+        private static Assembly CodeDomCompile(string source, string[] assemblyPaths, out List<string> errors,
+            out List<string> skippedReferences)
         {
             errors = new List<string>();
+            skippedReferences = new List<string>();
 
             // CodeDom needs the netstandard-aware filtered paths
             var filtered = FilterAssemblyPathsForCodeDom(assemblyPaths);
@@ -322,6 +333,15 @@ namespace MCPForUnity.Editor.Tools
                 {
                     foreach (var path in filtered)
                     {
+                        // One bad /r: fails the whole csc build, and the cached list is not rechecked
+                        // until the next domain reload, so check each entry here.
+                        string problem = GetCodeDomReferenceProblem(path);
+                        if (problem != null)
+                        {
+                            skippedReferences.Add($"{path} ({problem})");
+                            WarnSkippedReferenceOnce(path, problem);
+                            continue;
+                        }
                         writer.Write("/r:\"");
                         writer.Write(path);
                         writer.WriteLine("\"");
@@ -414,6 +434,9 @@ namespace MCPForUnity.Editor.Tools
                     !_codedomDuplicateAssemblies.Contains(Path.GetFileNameWithoutExtension(p))).ToArray()
                 : allPaths;
 
+            // Shorten before deduplicating: GetAssemblyName can't read an over-long path either.
+            filtered = filtered.Select(ShortenCodeDomReferencePath).ToArray();
+
             var result = DeduplicateAssemblyPathsForCodeDom(filtered);
             if (useCache)
                 _cachedCodeDomAssemblyPaths = result;
@@ -504,6 +527,89 @@ namespace MCPForUnity.Editor.Tools
 
             public string Path { get; }
             public AssemblyName AssemblyName { get; }
+        }
+
+        // csc/mcs open /r: files through Win32 APIs limited to MAX_PATH, and a longer path fails the
+        // build with "does not contain valid metadata". Mono's GetAssemblyName has the same limit on
+        // Windows and throws FileNotFoundException. Seen with
+        // com.unity.collections/.../System.Runtime.CompilerServices.Unsafe.dll (262 chars) in a
+        // project under a long root.
+        internal const int CodeDomMaxPath = 260;
+
+        // Warn once per domain reload rather than on every compile.
+        private static readonly HashSet<string> _warnedSkippedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Returns a copy at %TEMP%/mcp-codedom-refs/<hash of path>/<file name> for paths at or over
+        // MAX_PATH, and the path unchanged otherwise or if the copy fails. The hash folder keeps
+        // same-named DLLs from different packages apart, and the copy is reused until the source's
+        // size or timestamp changes. csc only reads its metadata; at runtime the compiled code binds
+        // to the assembly that is already loaded.
+        internal static string ShortenCodeDomReferencePath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.Length < CodeDomMaxPath)
+                return path;
+
+            try
+            {
+                if (!File.Exists(path))
+                    return path;
+
+                string dir = Path.Combine(Path.GetTempPath(), "mcp-codedom-refs", StablePathHash(path));
+                string dest = Path.Combine(dir, Path.GetFileName(path));
+
+                var src = new FileInfo(path);
+                var dst = new FileInfo(dest);
+                if (dst.Exists && dst.Length == src.Length && dst.LastWriteTimeUtc == src.LastWriteTimeUtc)
+                    return dest;
+
+                Directory.CreateDirectory(dir);
+                File.Copy(path, dest, overwrite: true);
+                File.SetLastWriteTimeUtc(dest, src.LastWriteTimeUtc);
+                return dest;
+            }
+            catch (Exception)
+            {
+                // The path stays long, so GetCodeDomReferenceProblem skips and reports it.
+                return path;
+            }
+        }
+
+        // Returns why csc can't use this reference, or null if it can.
+        internal static string GetCodeDomReferenceProblem(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return "empty path";
+            if (path.Length >= CodeDomMaxPath)
+                return $"path is {path.Length} chars; csc can't open paths of {CodeDomMaxPath} or more";
+            if (!File.Exists(path))
+                return "file not found";
+            try
+            {
+                AssemblyName.GetAssemblyName(path);
+                return null;
+            }
+            catch (Exception e)
+            {
+                return $"not a managed assembly ({e.GetType().Name})";
+            }
+        }
+
+        // FNV-1a 64-bit. string.GetHashCode isn't stable across processes.
+        private static string StablePathHash(string path)
+        {
+            ulong hash = 14695981039346656037UL;
+            foreach (char c in path.ToLowerInvariant())
+            {
+                hash ^= c;
+                hash *= 1099511628211UL;
+            }
+            return hash.ToString("x16");
+        }
+
+        private static void WarnSkippedReferenceOnce(string path, string problem)
+        {
+            if (_warnedSkippedReferences.Add(path))
+                McpLog.Warn($"[ExecuteCode] CodeDom: skipping reference '{path}' ({problem}). Code that uses types from this assembly will fail to compile.");
         }
 
         // ──────────────────── Shared helpers ────────────────────
