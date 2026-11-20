@@ -473,7 +473,164 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        [Test]
+        public void GetCodeDomReferenceProblem_ValidAssembly_ReturnsNull()
+        {
+            string path = typeof(JObject).Assembly.Location;
+            Assume.That(path.Length, Is.LessThan(ExecuteCode.CodeDomMaxPath));
+
+            Assert.IsNull(ExecuteCode.GetCodeDomReferenceProblem(path));
+        }
+
+        [Test]
+        public void GetCodeDomReferenceProblem_MissingFile_ReportsNotFound()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"mcp-missing-{Guid.NewGuid():N}.dll");
+
+            StringAssert.Contains("not found", ExecuteCode.GetCodeDomReferenceProblem(path));
+        }
+
+        [Test]
+        public void GetCodeDomReferenceProblem_NotAnAssembly_ReportsIt()
+        {
+            var tempRoot = CreateTempDirectory();
+            try
+            {
+                string path = Path.Combine(tempRoot, "garbage.dll");
+                File.WriteAllText(path, "not a PE file");
+
+                StringAssert.Contains("not a managed assembly", ExecuteCode.GetCodeDomReferenceProblem(path));
+            }
+            finally
+            {
+                Directory.Delete(tempRoot, true);
+            }
+        }
+
+        [Test]
+        public void ShortenCodeDomReferencePath_OverLongPath_ReturnsUsableShortCopy()
+        {
+            string source = typeof(JObject).Assembly.Location;
+            var tempRoot = CreateTempDirectory();
+            string copy = null;
+            try
+            {
+                string longPath = CopyToOverLongPath(source, tempRoot);
+
+                copy = ExecuteCode.ShortenCodeDomReferencePath(longPath);
+
+                Assert.Less(copy.Length, ExecuteCode.CodeDomMaxPath);
+                Assert.IsNull(ExecuteCode.GetCodeDomReferenceProblem(copy));
+                Assert.AreEqual(
+                    AssemblyName.GetAssemblyName(source).FullName,
+                    AssemblyName.GetAssemblyName(copy).FullName);
+                Assert.AreEqual(copy, ExecuteCode.ShortenCodeDomReferencePath(longPath));
+            }
+            finally
+            {
+                Directory.Delete(tempRoot, true);
+                DeleteShortCopy(copy);
+            }
+        }
+
+        // Before shortening ran ahead of deduplication, GetAssemblyName threw on the long path, so
+        // the duplicate was kept as "unresolved" and both versions reached csc.
+        [Test]
+        public void FilterAssemblyPathsForCodeDom_OverLongDuplicate_IsDeduplicated()
+        {
+            var tempRoot = CreateTempDirectory();
+            string longNewerPath = null;
+            try
+            {
+                var assemblyName = "McpCodeDomLongDuplicate" + Guid.NewGuid().ToString("N");
+                var referencedPath = CompileVersionedAssembly(tempRoot, assemblyName, "1.0.0.0");
+                var newerPath = CompileVersionedAssembly(tempRoot, assemblyName, "2.0.0.0");
+                longNewerPath = CopyToOverLongPath(newerPath, tempRoot);
+                LoadAssemblyReferencing(referencedPath);
+
+                var filtered = ExecuteCode.FilterAssemblyPathsForCodeDom(new[]
+                {
+                    longNewerPath,
+                    referencedPath,
+                });
+
+                Assert.AreEqual(1, filtered.Length);
+                Assert.AreEqual(referencedPath, filtered[0]);
+            }
+            finally
+            {
+                if (longNewerPath != null)
+                    DeleteShortCopy(ExecuteCode.ShortenCodeDomReferencePath(longNewerPath));
+                Directory.Delete(tempRoot, true);
+            }
+        }
+
+        [Test]
+        public void Execute_CodedomBackend_SkipsMissingReference()
+        {
+            var cachedAssemblyPathsField = typeof(ExecuteCode).GetField(
+                "_cachedAssemblyPaths",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var getAssemblyPaths = typeof(ExecuteCode).GetMethod(
+                "GetAssemblyPaths",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var onDomainReload = typeof(ExecuteCode).GetMethod(
+                "OnDomainReload",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(cachedAssemblyPathsField);
+            Assert.IsNotNull(getAssemblyPaths);
+            Assert.IsNotNull(onDomainReload);
+
+            try
+            {
+                onDomainReload.Invoke(null, null);
+                var paths = (string[])getAssemblyPaths.Invoke(null, null);
+                string missing = Path.Combine(Path.GetTempPath(), $"mcp-missing-{Guid.NewGuid():N}.dll");
+                cachedAssemblyPathsField.SetValue(null, paths.Append(missing).ToArray());
+
+                var result = ToJObject(ExecuteCode.HandleCommand(new JObject
+                {
+                    ["action"] = "execute",
+                    ["code"] = $"return \"{Guid.NewGuid():N}\".Length;",
+                    ["compiler"] = "codedom"
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.AreEqual(32, result["data"]["result"].Value<int>());
+            }
+            finally
+            {
+                onDomainReload.Invoke(null, null);
+            }
+        }
+
         // ──────────────────── Helpers ────────────────────
+
+        private static string CopyToOverLongPath(string source, string tempRoot)
+        {
+            string dir = Path.Combine(tempRoot, "long");
+            while (dir.Length < ExecuteCode.CodeDomMaxPath)
+                dir = Path.Combine(dir, new string('d', 60));
+            string longPath = Path.Combine(dir, Path.GetFileName(source));
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.Copy(source, longPath);
+            }
+            catch (Exception e) when (e is IOException || e is NotSupportedException)
+            {
+                Assert.Ignore($"File system does not support long paths here: {e.Message}");
+            }
+            return longPath;
+        }
+
+        // Each test copies from a new GUID path, which hashes to a new folder, so delete it.
+        private static void DeleteShortCopy(string copy)
+        {
+            if (copy == null || !copy.Contains("mcp-codedom-refs"))
+                return;
+            try { Directory.Delete(Path.GetDirectoryName(copy), true); } catch { /* best effort */ }
+        }
 
         private static string CreateTempDirectory()
         {
