@@ -382,9 +382,9 @@ namespace MCPForUnityTests.Editor.AssetGen
             var root = new VisualElement();
             root.Add(new VisualElement { name = "assetgen-providers-container" });
             new McpAssetGenSection(root);
-            // Keyed rows: tripo, meshy, sketchfab, fal (2D) and openrouter. fal 3D and audio reuse the 2D fal key.
-            Assert.AreEqual(5, root.Query<TextField>().ToList().Count(field => field.isPasswordField));
-            Assert.AreEqual(5, root.Query<Toggle>().ToList().Count(toggle => toggle.label == "Enabled"));
+            // Keyed rows: tripo, meshy, sketchfab, fal (2D), openrouter and wavespeed. fal 3D and audio reuse the 2D fal key.
+            Assert.AreEqual(6, root.Query<TextField>().ToList().Count(field => field.isPasswordField));
+            Assert.AreEqual(6, root.Query<Toggle>().ToList().Count(toggle => toggle.label == "Enabled"));
             Assert.IsTrue(root.Query<Label>().ToList().Any(label => label.text == "fal (3D)"));
             var sketchfab = root.Query<Label>().ToList().Single(label => label.text == "Sketchfab").parent.parent;
             Assert.IsEmpty(sketchfab.Query<DropdownField>().ToList());

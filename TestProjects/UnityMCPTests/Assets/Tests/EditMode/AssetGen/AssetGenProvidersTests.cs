@@ -28,6 +28,15 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void Image_WaveSpeed_ReturnsAdapter_AndIsListed()
+        {
+            IImageProviderAdapter adapter = AssetGenProviders.Image("wavespeed");
+            Assert.IsNotNull(adapter);
+            Assert.AreEqual("wavespeed", adapter.Id);
+            Assert.IsNotNull(FindByIdKind("wavespeed", "image"), "List() should advertise a wavespeed image row");
+        }
+
+        [Test]
         public void Audio_Fal_ReturnsAdapter()
         {
             IAudioProviderAdapter adapter = AssetGenProviders.Audio("fal");
