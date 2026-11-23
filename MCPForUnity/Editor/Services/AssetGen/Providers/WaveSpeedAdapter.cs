@@ -27,6 +27,14 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
         private static readonly Regex SafeModelId = new Regex(@"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)+$");
         private static readonly Regex SafePredictionId = new Regex(@"^[A-Za-z0-9_-]+$");
 
+        // The aspect_ratio values the image models accept; a requested size snaps to the nearest one.
+        private static readonly string[] AspectRatios =
+            { "1:1", "1:2", "2:1", "1:3", "3:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "9:21", "21:9" };
+
+        // Result reads are retried on 408/429/5xx and network errors (status 0); the submit POST never is.
+        private const int MaxPollRetries = 4;
+        internal static Func<TimeSpan, CancellationToken, Task> DelayOverrideForTests;
+
         public string Id => "wavespeed";
 
         public async Task<string> SubmitAsync(ImageGenRequest req, string apiKey, IHttpTransport http, CancellationToken ct)
@@ -50,9 +58,10 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             }
             else if (req.Width > 0 && req.Height > 0)
             {
-                // Image models take an aspect ratio rather than pixel dimensions.
-                int d = Gcd(req.Width, req.Height);
-                body["aspect_ratio"] = (req.Width / d) + ":" + (req.Height / d);
+                // Image models take an aspect ratio rather than pixel dimensions: use the nearest supported one.
+                body["aspect_ratio"] = NearestAspectRatio(req.Width, req.Height);
+                // The default model also takes a size tier; pick the one nearest to the requested pixel count.
+                if (model == DefaultModel) body["resolution"] = NearestResolution(req.Width, req.Height);
             }
 
             string url = ApiBase + model;
@@ -80,7 +89,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 
             var spec = new HttpRequestSpec { Method = "GET", Url = ApiBase + "predictions/" + providerJobId + "/result" };
             spec.Headers["Authorization"] = "Bearer " + apiKey;
-            JObject data = ParseData(await http.SendAsync(spec, ct), apiKey, "poll");
+            JObject data = ParseData(await SendPollWithRetry(spec, http, ct), apiKey, "poll");
 
             string status = (data["status"]?.ToString() ?? string.Empty).ToLowerInvariant();
             var result = new ProviderPollResult();
@@ -138,6 +147,51 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             return data;
         }
 
-        private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
+        private static async Task<HttpResult> SendPollWithRetry(HttpRequestSpec spec, IHttpTransport http, CancellationToken ct)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                HttpResult res;
+                try
+                {
+                    res = await http.SendAsync(spec, ct);
+                }
+                catch (Exception) when (!ct.IsCancellationRequested && attempt < MaxPollRetries)
+                {
+                    await Delay(TimeSpan.FromSeconds(1 << attempt), ct);
+                    continue;
+                }
+                int status = res?.Status ?? 0;
+                bool retryable = res?.Ok != true && (status == 0 || status == 408 || status == 429 || status >= 500);
+                if (!retryable || attempt >= MaxPollRetries) return res;
+                await Delay(TimeSpan.FromSeconds(Math.Min(30, Math.Max(1, res?.RetryAfterSeconds ?? (1 << attempt)))), ct);
+            }
+        }
+
+        private static Task Delay(TimeSpan duration, CancellationToken ct)
+            => DelayOverrideForTests?.Invoke(duration, ct) ?? Task.Delay(duration, ct);
+
+        internal static string NearestAspectRatio(int width, int height)
+        {
+            double target = Math.Log((double)width / height);
+            string best = AspectRatios[0];
+            double bestDistance = double.MaxValue;
+            foreach (string ratio in AspectRatios)
+            {
+                string[] parts = ratio.Split(':');
+                double distance = Math.Abs(Math.Log(double.Parse(parts[0]) / double.Parse(parts[1])) - target);
+                if (distance < bestDistance) { bestDistance = distance; best = ratio; }
+            }
+            return best;
+        }
+
+        internal static string NearestResolution(int width, int height)
+        {
+            // Compare the side of a square with the same pixel count against the 1k / 1.5k / 2k tiers.
+            double side = Math.Sqrt((double)width * height);
+            if (side < 1280) return "1k";
+            if (side < 1792) return "1.5k";
+            return "2k";
+        }
     }
 }

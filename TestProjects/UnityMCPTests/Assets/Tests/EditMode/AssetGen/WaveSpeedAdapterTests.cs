@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Services.AssetGen.Http;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
 using NUnit.Framework;
@@ -17,6 +19,17 @@ namespace MCPForUnityTests.Editor.AssetGen
     public class WaveSpeedAdapterTests
     {
         private const string Key = "ws_secret_value";
+        private readonly List<TimeSpan> _delays = new List<TimeSpan>();
+
+        [SetUp]
+        public void SetUp()
+        {
+            _delays.Clear();
+            WaveSpeedAdapter.DelayOverrideForTests = (d, _) => { _delays.Add(d); return Task.CompletedTask; };
+        }
+
+        [TearDown]
+        public void TearDown() => WaveSpeedAdapter.DelayOverrideForTests = null;
 
         private static string ProjectRoot()
         {
@@ -71,6 +84,32 @@ namespace MCPForUnityTests.Editor.AssetGen
             StringAssert.Contains("\"aspect_ratio\":\"16:9\"", Encoding.UTF8.GetString(rec.Body));
         }
 
+        [TestCase(2520, 1080, "21:9", "2k")]
+        [TestCase(1080, 2520, "9:21", "2k")]
+        [TestCase(1920, 1080, "16:9", "1.5k")]
+        [TestCase(1024, 1024, "1:1", "1k")]
+        [TestCase(1000, 700, "3:2", "1k")]
+        public void Submit_Text_DefaultModel_SendsNearestSupportedRatio_AndResolution(int w, int h, string ratio, string resolution)
+        {
+            var http = new FakeHttpTransport { Handler = _ => Prediction("created") };
+
+            Submit(new ImageGenRequest { Mode = "text", Prompt = "x", Width = w, Height = h }, http);
+
+            string body = Encoding.UTF8.GetString(http.RecordedRequests[0].Body);
+            StringAssert.Contains("\"aspect_ratio\":\"" + ratio + "\"", body);
+            StringAssert.Contains("\"resolution\":\"" + resolution + "\"", body);
+        }
+
+        [Test]
+        public void Submit_Text_OtherModel_SendsNoResolution()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Prediction("created") };
+
+            Submit(new ImageGenRequest { Mode = "text", Prompt = "x", Model = "vendor/other-model", Width = 1024, Height = 1024 }, http);
+
+            StringAssert.DoesNotContain("resolution", Encoding.UTF8.GetString(http.RecordedRequests[0].Body));
+        }
+
         [Test]
         public void Submit_ImageMode_DefaultModel_UsesEditEndpoint_WithImagesArray()
         {
@@ -118,6 +157,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             var ex = Assert.Throws<Exception>(() => Submit(new ImageGenRequest { Mode = "text", Prompt = "x" }, http));
 
             StringAssert.Contains("status=500", ex.Message);
+            Assert.AreEqual(1, http.RecordedRequests.Count);
         }
 
         [Test]
@@ -171,6 +211,43 @@ namespace MCPForUnityTests.Editor.AssetGen
 
             Assert.AreEqual(ProviderPollState.Failed, res.State);
             Assert.AreEqual("content rejected", res.Error);
+        }
+
+        [Test]
+        public void Poll_TransientFailures_AreRetried_HonoringRetryAfter()
+        {
+            var responses = new Queue<HttpResult>(new[]
+            {
+                new HttpResult { Status = 429, Text = "{\"code\":429,\"message\":\"slow down\"}", RetryAfterSeconds = 7 },
+                new HttpResult { Status = 503, Text = "unavailable" },
+                new HttpResult { Status = 0, Text = null },
+                Prediction("processing"),
+            });
+            var http = new FakeHttpTransport { Handler = _ => responses.Dequeue() };
+
+            Assert.AreEqual(ProviderPollState.Running, Poll(http).State);
+            Assert.AreEqual(4, http.RecordedRequests.Count);
+            CollectionAssert.AreEqual(new[] { TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4) }, _delays);
+        }
+
+        [Test]
+        public void Poll_PersistentServerError_ThrowsAfterBoundedRetries()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"code\":502,\"message\":\"bad gateway\"}", 502) };
+
+            var ex = Assert.Throws<Exception>(() => Poll(http));
+
+            StringAssert.Contains("status=502", ex.Message);
+            Assert.AreEqual(5, http.RecordedRequests.Count);
+        }
+
+        [Test]
+        public void Poll_AuthError_IsNotRetried()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"code\":401,\"message\":\"invalid api key\"}", 401) };
+
+            Assert.Throws<Exception>(() => Poll(http));
+            Assert.AreEqual(1, http.RecordedRequests.Count);
         }
 
         [Test]

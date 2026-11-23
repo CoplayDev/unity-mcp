@@ -53,8 +53,9 @@ async def generate_image(
     transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "
                            "and OpenRouter have no generation-time transparency, so this only sets the "
                            "Unity import flag — it does not make the model render a transparent background."] | None = None,
-    width: Annotated[int, "Output width in pixels."] | None = None,
-    height: Annotated[int, "Output height in pixels."] | None = None,
+    width: Annotated[int, "Output width in pixels. WaveSpeedAI takes no pixel size: width and height "
+                     "select the nearest supported aspect ratio and, for the default model, size tier."] | None = None,
+    height: Annotated[int, "Output height in pixels (see width for WaveSpeedAI)."] | None = None,
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,

@@ -35,8 +35,8 @@ ACTIONS:
 | `image_url` | `str \| None` | — | URL of a source image for image->image. |
 | `model` | `str \| None` | — | Provider model id/slug returned by list_models; omit for the GUI-selected default. |
 | `transparent` | `bool \| None` | — | Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX and OpenRouter have no generation-time transparency, so this only sets the Unity import flag — it does not make the model render a transparent background. |
-| `width` | `int \| None` | — | Output width in pixels. |
-| `height` | `int \| None` | — | Output height in pixels. |
+| `width` | `int \| None` | — | Output width in pixels. WaveSpeedAI takes no pixel size: width and height select the nearest supported aspect ratio and, for the default model, size tier. |
+| `height` | `int \| None` | — | Output height in pixels (see width for WaveSpeedAI). |
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `job_id` | `str \| None` | — | Job id for status/cancel. |
