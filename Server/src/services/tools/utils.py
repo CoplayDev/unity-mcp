@@ -305,6 +305,12 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
                 return [c / 255.0 for c in components]
             return [float(c) for c in components]
 
+    def _default_alpha(rgb: list[float]) -> float:
+        """Opaque alpha on the scale _to_output_range will read the r, g, b values in."""
+        if output_range == "int":
+            return 1.0 if all(0 <= c <= 1 for c in rgb) else 255
+        return 255 if any(c > 1 for c in rgb) else 1.0
+
     # Handle dict with r/g/b keys
     if isinstance(value, dict):
         if all(k in value for k in ("r", "g", "b")):
@@ -313,10 +319,7 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
                 if "a" in value:
                     color.append(float(value["a"]))
                 else:
-                    if output_range == "int" and all(0 <= c <= 1 for c in color):
-                        color.append(1.0)
-                    else:
-                        color.append(1.0 if output_range == "float" else 255)
+                    color.append(_default_alpha(color))
                 return _to_output_range(color), None
             except (ValueError, TypeError, KeyError):
                 return None, f"color dict values must be numbers, got {value}"
@@ -328,10 +331,7 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
             try:
                 color = [float(c) for c in value]
                 if len(color) == 3:
-                    if output_range == "int" and all(0 <= c <= 1 for c in color):
-                        color.append(1.0)
-                    else:
-                        color.append(1.0 if output_range == "float" else 255)
+                    color.append(_default_alpha(color))
                 return _to_output_range(color), None
             except (ValueError, TypeError):
                 return None, f"color values must be numbers, got {value}"
@@ -372,10 +372,7 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
             try:
                 color = [float(c) for c in parsed]
                 if len(color) == 3:
-                    if output_range == "int" and all(0 <= c <= 1 for c in color):
-                        color.append(1.0)
-                    else:
-                        color.append(1.0 if output_range == "float" else 255)
+                    color.append(_default_alpha(color))
                 return _to_output_range(color), None
             except (ValueError, TypeError):
                 return None, f"color values must be numbers, got {parsed}"
@@ -389,10 +386,7 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
             try:
                 color = [float(p) for p in parts]
                 if len(color) == 3:
-                    if output_range == "int" and all(0 <= c <= 1 for c in color):
-                        color.append(1.0)
-                    else:
-                        color.append(1.0 if output_range == "float" else 255)
+                    color.append(_default_alpha(color))
                 return _to_output_range(color), None
             except (ValueError, TypeError):
                 pass  # Fall through to error message
