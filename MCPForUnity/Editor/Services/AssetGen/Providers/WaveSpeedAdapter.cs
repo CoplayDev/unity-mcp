@@ -136,7 +136,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 try { json = JObject.Parse(text); } catch { /* non-JSON */ }
             }
 
-            int? code = json?["code"]?.Type == JTokenType.Integer ? json["code"].Value<int>() : (int?)null;
+            int? code = EnvelopeCode(json);
             if (res?.Ok != true || (code.HasValue && code.Value != 200))
             {
                 string detail = json?["message"]?.ToString() ?? ProviderHttp.Truncate(text);
@@ -161,11 +161,22 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     await Delay(TimeSpan.FromSeconds(1 << attempt), ct);
                     continue;
                 }
-                int status = res?.Status ?? 0;
-                bool retryable = res?.Ok != true && (status == 0 || status == 408 || status == 429 || status >= 500);
+                // The envelope code is authoritative even on HTTP 200, so a transient one is retried too.
+                bool ok = res?.Ok == true;
+                int status = ok ? (EnvelopeCode(TryParse(ProviderHttp.BodyText(res))) ?? 200) : (res?.Status ?? 0);
+                bool retryable = (!ok && status == 0) || status == 408 || status == 429 || status >= 500;
                 if (!retryable || attempt >= MaxPollRetries) return res;
                 await Delay(TimeSpan.FromSeconds(Math.Min(30, Math.Max(1, res?.RetryAfterSeconds ?? (1 << attempt)))), ct);
             }
+        }
+
+        private static int? EnvelopeCode(JObject json)
+            => json?["code"]?.Type == JTokenType.Integer ? json["code"].Value<int>() : (int?)null;
+
+        private static JObject TryParse(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+            try { return JObject.Parse(text); } catch { return null; }
         }
 
         private static Task Delay(TimeSpan duration, CancellationToken ct)

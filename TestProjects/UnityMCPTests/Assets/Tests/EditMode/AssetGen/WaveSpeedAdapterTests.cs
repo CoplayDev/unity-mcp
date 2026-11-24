@@ -84,8 +84,9 @@ namespace MCPForUnityTests.Editor.AssetGen
             StringAssert.Contains("\"aspect_ratio\":\"16:9\"", Encoding.UTF8.GetString(rec.Body));
         }
 
-        [TestCase(2520, 1080, "21:9", "2k")]
-        [TestCase(1080, 2520, "9:21", "2k")]
+        [TestCase(2520, 1080, "21:9", "1.5k")]
+        [TestCase(1080, 2520, "9:21", "1.5k")]
+        [TestCase(2048, 2048, "1:1", "2k")]
         [TestCase(1920, 1080, "16:9", "1.5k")]
         [TestCase(1024, 1024, "1:1", "1k")]
         [TestCase(1000, 700, "3:2", "1k")]
@@ -228,6 +229,29 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(ProviderPollState.Running, Poll(http).State);
             Assert.AreEqual(4, http.RecordedRequests.Count);
             CollectionAssert.AreEqual(new[] { TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4) }, _delays);
+        }
+
+        [Test]
+        public void Poll_TransientEnvelopeCodeOnHttp200_IsRetried()
+        {
+            var responses = new Queue<HttpResult>(new[]
+            {
+                Json("{\"code\":503,\"message\":\"busy\"}"),
+                Prediction("processing"),
+            });
+            var http = new FakeHttpTransport { Handler = _ => responses.Dequeue() };
+
+            Assert.AreEqual(ProviderPollState.Running, Poll(http).State);
+            Assert.AreEqual(2, http.RecordedRequests.Count);
+        }
+
+        [Test]
+        public void Poll_AuthEnvelopeCodeOnHttp200_IsNotRetried()
+        {
+            var http = new FakeHttpTransport { Handler = _ => Json("{\"code\":401,\"message\":\"invalid api key\"}") };
+
+            Assert.Throws<Exception>(() => Poll(http));
+            Assert.AreEqual(1, http.RecordedRequests.Count);
         }
 
         [Test]
