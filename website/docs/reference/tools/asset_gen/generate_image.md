@@ -1,7 +1,7 @@
 ---
 title: generate_image
 sidebar_label: generate_image
-description: "Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as textures/sprites into the Unity project."
+description: "Generate 2D images with AI providers (fal.ai, OpenRouter, WaveSpeedAI) and import them as textures/sprites into the Unity project."
 ---
 
 # `generate_image`
@@ -12,7 +12,7 @@ description: "Generate 2D images with AI providers (fal.ai, OpenRouter) and impo
 
 ## Description
 
-Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as textures/sprites into the Unity project. Bring-your-own-key: provider keys live in the editor's secure store and never cross the bridge.
+Generate 2D images with AI providers (fal.ai, OpenRouter, WaveSpeedAI) and import them as textures/sprites into the Unity project. Bring-your-own-key: provider keys live in the editor's secure store and never cross the bridge.
 
 ACTIONS:
 - generate: Submit an image job (text->image or image->image). Returns { job_id }; poll with the status action. Params: provider, mode (text|image), prompt, image_path|image_url, model, transparent, width, height, name, output_folder.
@@ -20,7 +20,7 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured image providers and capabilities (no key values).
-- list_models: Search/paginate live fal and OpenRouter models, modes and freshness.
+- list_models: Search/paginate live fal and OpenRouter models (bundled WaveSpeedAI default), modes and freshness.
 - refresh_models: Force discovery. Repeat list_models while catalogs[].refreshing is true.
 
 ## Parameters
@@ -28,15 +28,15 @@ ACTIONS:
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `action` | `Literal['generate', 'remove_background', 'status', 'cancel', 'list_providers', 'list_models', 'refresh_models']` | yes | Action to perform. |
-| `provider` | `str \| None` | — | Provider id (fal, openrouter). |
+| `provider` | `str \| None` | — | Provider id (fal, openrouter, wavespeed). |
 | `mode` | `str \| None` | — | Generation mode: text or image. |
 | `prompt` | `str \| None` | — | Text prompt for text->image. |
 | `image_path` | `str \| None` | — | Path to a source image for image->image mode. |
 | `image_url` | `str \| None` | — | URL of a source image for image->image. |
 | `model` | `str \| None` | — | Provider model id/slug returned by list_models; omit for the GUI-selected default. |
 | `transparent` | `bool \| None` | — | Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX and OpenRouter have no generation-time transparency, so this only sets the Unity import flag — it does not make the model render a transparent background. |
-| `width` | `int \| None` | — | Output width in pixels. |
-| `height` | `int \| None` | — | Output height in pixels. |
+| `width` | `int \| None` | — | Output width in pixels. WaveSpeedAI takes no pixel size: width and height select the nearest supported aspect ratio and, for the default model, size tier. |
+| `height` | `int \| None` | — | Output height in pixels (see width for WaveSpeedAI). |
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `job_id` | `str \| None` | — | Job id for status/cancel. |

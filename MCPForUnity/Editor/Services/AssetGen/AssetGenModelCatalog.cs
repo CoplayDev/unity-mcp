@@ -69,6 +69,9 @@ namespace MCPForUnity.Editor.Services.AssetGen
             // Image — openrouter
             new ModelEntry { Id = OpenRouterAdapter.DefaultModel, Label = "Gemini 2.5 Flash Image", Provider = "openrouter", Kind = "image", UseCase = "General image" },
 
+            // Image — wavespeed (image mode uses the model's /edit endpoint)
+            new ModelEntry { Id = WaveSpeedAdapter.DefaultModel, Label = "Seedream 5.5", Provider = "wavespeed", Kind = "image", UseCase = "General image" },
+
             // 3D — tripo / meshy (defaults reference the adapter constants)
             new ModelEntry { Id = TripoAdapter.ModelVersion, Label = "Tripo v3.1", Provider = "tripo", Kind = "model", UseCase = "Text / image -> 3D" },
             new ModelEntry { Id = "P1-20260311", Label = "Tripo P1 (premium)", Provider = "tripo", Kind = "model", UseCase = "Premium 3D" },
@@ -103,7 +106,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         {
             if (string.IsNullOrEmpty(id)) return null;
             foreach (string kind in new[] { "audio", "image", "model" })
-                foreach (string provider in new[] { "fal", "openrouter", "tripo", "meshy" })
+                foreach (string provider in new[] { "fal", "openrouter", "wavespeed", "tripo", "meshy" })
                     foreach (ModelEntry e in ForProvider(provider, kind))
                         if (Eq(e.Id, id)) return e;
             return null;

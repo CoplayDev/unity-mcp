@@ -6,7 +6,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
 {
     /// <summary>
     /// Factory + registry for asset-gen provider adapters. Resolves a provider id to its adapter
-    /// (model: tripo/meshy; image: fal/openrouter; audio: fal; marketplace: sketchfab); unknown ids
+    /// (model: tripo/meshy; image: fal/openrouter/wavespeed; audio: fal; marketplace: sketchfab); unknown ids
     /// throw <see cref="NotSupportedException"/>. <see cref="List"/> advertises providers and reports
     /// <c>Configured</c> existence only — never a key value.
     /// </summary>
@@ -35,6 +35,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     return new FalAdapter();
                 case "openrouter":
                     return new OpenRouterAdapter();
+                case "wavespeed":
+                    return new WaveSpeedAdapter();
                 default:
                     throw new NotSupportedException($"Unknown image provider '{id}'.");
             }
@@ -72,6 +74,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                 new ProviderInfo { Id = "sketchfab", Kind = "marketplace", Configured = IsConfigured("sketchfab"), Capabilities = new[] { "search", "import" } },
                 new ProviderInfo { Id = "fal", Kind = "image", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "image" } },
                 new ProviderInfo { Id = "openrouter", Kind = "image", Configured = IsConfigured("openrouter"), Capabilities = new[] { "text", "image" } },
+                new ProviderInfo { Id = "wavespeed", Kind = "image", Configured = IsConfigured("wavespeed"), Capabilities = new[] { "text", "image" } },
                 // fal's three asset kinds share one secure-store key.
                 new ProviderInfo { Id = "fal", Kind = "audio", Configured = IsConfigured("fal"), Capabilities = new[] { "text", "music", "sfx" } },
             };

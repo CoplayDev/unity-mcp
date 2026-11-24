@@ -85,6 +85,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             Assert.AreEqual(MeshyAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("meshy", "model"));
             Assert.AreEqual(FalAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "image"));
             Assert.AreEqual(FalAudioAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("fal", "audio"));
+            Assert.AreEqual(WaveSpeedAdapter.DefaultModel, AssetGenModelCatalog.DefaultModelId("wavespeed", "image"));
         }
 
         [Test]

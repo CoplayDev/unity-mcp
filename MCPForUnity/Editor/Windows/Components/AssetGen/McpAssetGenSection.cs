@@ -45,6 +45,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             ("fal", "fal"),
             ("openrouter", "OpenRouter"),
+            ("wavespeed", "WaveSpeedAI"),
         };
 
         // UI Elements

@@ -19,7 +19,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 @mcp_for_unity_tool(
     group="asset_gen",
     description=(
-        "Generate 2D images with AI providers (fal.ai, OpenRouter) and import them as "
+        "Generate 2D images with AI providers (fal.ai, OpenRouter, WaveSpeedAI) and import them as "
         "textures/sprites into the Unity project. Bring-your-own-key: provider keys live "
         "in the editor's secure store and never cross the bridge.\n\n"
         "ACTIONS:\n"
@@ -31,7 +31,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured image providers and capabilities (no key values).\n"
-        "- list_models: Search/paginate live fal and OpenRouter models, modes and freshness.\n"
+        "- list_models: Search/paginate live fal and OpenRouter models (bundled WaveSpeedAI default), modes and freshness.\n"
         "- refresh_models: Force discovery. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
@@ -44,7 +44,7 @@ async def generate_image(
     action: Annotated[Literal["generate", "remove_background", "status", "cancel", "list_providers", "list_models", "refresh_models"],
                       "Action to perform."],
 
-    provider: Annotated[str, "Provider id (fal, openrouter)."] | None = None,
+    provider: Annotated[str, "Provider id (fal, openrouter, wavespeed)."] | None = None,
     mode: Annotated[str, "Generation mode: text or image."] | None = None,
     prompt: Annotated[str, "Text prompt for text->image."] | None = None,
     image_path: Annotated[str, "Path to a source image for image->image mode."] | None = None,
@@ -53,8 +53,9 @@ async def generate_image(
     transparent: Annotated[bool, "Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX "
                            "and OpenRouter have no generation-time transparency, so this only sets the "
                            "Unity import flag — it does not make the model render a transparent background."] | None = None,
-    width: Annotated[int, "Output width in pixels."] | None = None,
-    height: Annotated[int, "Output height in pixels."] | None = None,
+    width: Annotated[int, "Output width in pixels. WaveSpeedAI takes no pixel size: width and height "
+                     "select the nearest supported aspect ratio and, for the default model, size tier."] | None = None,
+    height: Annotated[int, "Output height in pixels (see width for WaveSpeedAI)."] | None = None,
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,

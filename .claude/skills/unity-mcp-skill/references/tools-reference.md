@@ -1744,7 +1744,7 @@ Group: `asset_gen`. Bring your own key: provider keys are entered in the Unity e
 
 ### generate_image
 
-Text-to-image or image-to-image with fal.ai or OpenRouter, imported as a texture or sprite. Actions: `generate`, `status`, `cancel`, `list_providers`, `list_models`, `refresh_models` (`remove_background` is not supported yet). `generate` takes `provider` (`fal`, `openrouter`), `mode` (`text` or `image`), `prompt` or `image_path`/`image_url`, and optional `model` (from `list_models`), `width`, `height`, `transparent`, `name`, `output_folder`.
+Text-to-image or image-to-image with fal.ai, OpenRouter or WaveSpeedAI, imported as a texture or sprite. Actions: `generate`, `status`, `cancel`, `list_providers`, `list_models`, `refresh_models` (`remove_background` is not supported yet). `generate` takes `provider` (`fal`, `openrouter`, `wavespeed`), `mode` (`text` or `image`), `prompt` or `image_path`/`image_url`, and optional `model` (from `list_models`), `width`, `height`, `transparent`, `name`, `output_folder`.
 
 ```python
 generate_image(action="generate", provider="fal", mode="text", prompt="mossy stone wall, hand-painted",
