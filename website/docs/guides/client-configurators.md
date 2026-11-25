@@ -190,6 +190,7 @@ Some clients cannot be handled by the generic JSON configurator alone.
   ```
 - Installing as a bundle (instead of editing `$DSH_HOME/cordis.patch.yml`, a global layer that collides with rows from other sources) keeps the row profile-scoped, and DSH's own plugin manager owns enable/disable and removal afterwards.
 - Detection is fail-closed: DSH counts as installed only once it has run at least once (its home directory exists).
+- Status reflects bundle-file presence: once the snippet's `cordis.patch.yml` exists the client reads as **Configured**; whether DSH currently has the bundle enabled is owned by DSH's plugin manager and not visible to Unity.
 
 ---
 

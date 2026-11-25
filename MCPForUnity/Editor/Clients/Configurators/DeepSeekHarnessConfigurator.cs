@@ -15,9 +15,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
     /// through its plugin manager as a configuration-only bundle (a manifest plus a
     /// <c>cordis.patch.yml</c> row for <c>@deepseek-ai/dsh-mcp-client</c>), so setup is
     /// manual like the other UI-driven clients: the snippet below holds the two bundle
-    /// files and the <c>dsh plugin add</c> command that installs them. After a DSH
-    /// reload the tools surface as <c>mcp__unityMCP__&lt;tool&gt;</c>. From there DSH's
-    /// own plugin manager owns enable/disable and removal.
+    /// files and the <c>dsh plugin add</c> command that installs them. Status reflects
+    /// bundle-file presence (<c>Configured</c> once the snippet's patch file exists);
+    /// whether DSH has the bundle enabled is owned by DSH's plugin manager. After a DSH
+    /// reload the tools surface as <c>mcp__unityMCP__&lt;tool&gt;</c>.
     /// </summary>
     public class DeepSeekHarnessConfigurator : McpClientConfiguratorBase
     {
@@ -42,9 +43,23 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override string GetConfigPath() => BundlePatchPath();
 
+        // Unity cannot read DSH's enable state (plugin manager owns it), so the closest
+        // honest signal is bundle-file presence: the user ran the manual snippet.
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
-            client.SetStatus(McpStatus.NotConfigured, "DeepSeek Harness setup is manual; DSH's plugin manager owns the bundle.");
+            if (!File.Exists(BundlePatchPath()))
+            {
+                client.SetStatus(McpStatus.NotConfigured);
+                client.configuredTransport = ConfiguredTransport.Unknown;
+                return client.status;
+            }
+
+            client.configuredTransport = EditorConfigurationCache.Instance.UseHttpTransport
+                ? (HttpEndpointUtility.IsRemoteScope()
+                    ? ConfiguredTransport.HttpRemote
+                    : ConfiguredTransport.Http)
+                : ConfiguredTransport.Stdio;
+            client.SetStatus(McpStatus.Configured);
             return client.status;
         }
 
@@ -133,7 +148,6 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 {
                     throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
                 }
-
                 sb.AppendLine("        transport: stdio");
                 sb.AppendLine("        command: " + YamlQuote(uvxPath));
                 sb.AppendLine("        args:");
@@ -154,37 +168,39 @@ namespace MCPForUnity.Editor.Clients.Configurators
                     sb.AppendLine("          SystemRoot: " + YamlQuote(MCPServiceLocator.Platform.GetSystemRoot()));
                 }
             }
-
             sb.AppendLine("        failOnStartupError: true");
             sb.AppendLine("# <<< MCP for Unity (unityMCP) <<<");
             return sb.ToString();
         }
 
-        /// <summary>DSH home: <c>$DSH_HOME</c> when set, else <c>~/.dsh</c>.</summary>
+        /// <summary>DSH home: <c>$DSH_HOME</c> when set, else <c>~/.dsh</c>. Whitespace-only values fall through.</summary>
         private static string DshHome()
         {
             string envHome = Environment.GetEnvironmentVariable("DSH_HOME");
-            if (!string.IsNullOrEmpty(envHome)) return envHome;
-
+            if (!string.IsNullOrWhiteSpace(envHome)) return envHome.Trim();
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return string.IsNullOrEmpty(home) ? string.Empty : Path.Combine(home, ".dsh");
+            return string.IsNullOrWhiteSpace(home) ? string.Empty : Path.Combine(home, ".dsh");
         }
 
-        /// <summary>Target profile: <c>DSH_PROFILE</c> when set, else <c>desktop</c>.</summary>
+        /// <summary>Target profile: <c>DSH_PROFILE</c> when set, else <c>desktop</c>. Whitespace-only values fall back.</summary>
         private static string ProfileName()
         {
             string envProfile = Environment.GetEnvironmentVariable("DSH_PROFILE");
-            return string.IsNullOrEmpty(envProfile) ? "desktop" : envProfile;
+            return string.IsNullOrWhiteSpace(envProfile) ? "desktop" : envProfile.Trim();
         }
 
         private static string BundleDir() => Path.Combine(DshHome(), "bundles", ProfileName(), "unity-mcp");
-
         private static string BundlePatchPath() => Path.Combine(BundleDir(), "cordis.patch.yml");
 
         /// <summary>Single-quotes a YAML scalar; embedded single quotes are doubled.</summary>
         private static string YamlQuote(string value) => "'" + (value ?? string.Empty).Replace("'", "''") + "'";
 
-        /// <summary>Double-quotes a shell argument so cmd.exe metacharacters stay literal.</summary>
+        /// <summary>
+        /// Double-quotes a shell argument so cmd.exe metacharacters stay literal. Only the
+        /// double quote is escaped: callers pass constants (bundle name, profile) and OS
+        /// paths, never user input, and the snippet is copy-pasted into a shell — escaping
+        /// <c>%VAR%</c> / <c>$</c> would corrupt legitimate Windows/POSIX paths.
+        /// </summary>
         private static string ShellQuote(string value) => "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
     }
 }
