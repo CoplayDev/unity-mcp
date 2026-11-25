@@ -49,6 +49,15 @@ namespace MCPForUnity.Editor.Services
                     summary.SkippedCount++;
                     continue;
                 }
+                if (!configurator.SupportsAutoConfigure)
+                {
+                    // Manual/UI-driven clients (Cherry Studio, DeepSeek Harness, ...):
+                    // their Configure() throws by design; count them as skipped instead
+                    // of a spurious failure.
+                    summary.SkippedCount++;
+                    summary.Messages.Add($"○ {configurator.DisplayName}: manual configuration — skipped");
+                    continue;
+                }
                 try
                 {
                     // Always re-run configuration so core fields stay current

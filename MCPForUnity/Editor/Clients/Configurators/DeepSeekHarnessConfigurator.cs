@@ -196,11 +196,17 @@ namespace MCPForUnity.Editor.Clients.Configurators
         private static string YamlQuote(string value) => "'" + (value ?? string.Empty).Replace("'", "''") + "'";
 
         /// <summary>
-        /// Double-quotes a shell argument so cmd.exe metacharacters stay literal. Only the
-        /// double quote is escaped: callers pass constants (bundle name, profile) and OS
-        /// paths, never user input, and the snippet is copy-pasted into a shell — escaping
-        /// <c>%VAR%</c> / <c>$</c> would corrupt legitimate Windows/POSIX paths.
+        /// Quotes a shell argument for the current host's shell. cmd.exe uses double
+        /// quotes (embedded double quotes escaped); POSIX sh uses single quotes, which
+        /// are fully literal — <c>$</c>, backticks and <c>!</c> survive verbatim, and an
+        /// embedded single quote closes, escapes, and reopens (<c>'\''</c>).
         /// </summary>
-        private static string ShellQuote(string value) => "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        private static string ShellQuote(string value)
+        {
+            string v = value ?? string.Empty;
+            if (MCPServiceLocator.Platform.IsWindows())
+                return "\"" + v.Replace("\"", "\\\"") + "\"";
+            return "'" + v.Replace("'", "'\\''") + "'";
+        }
     }
 }
