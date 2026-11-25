@@ -18,9 +18,9 @@ namespace MCPForUnityTests.Editor.Services
         {
             var svc = new ClientConfigurationService();
             var summary = svc.ConfigureAllDetectedClients();
-            int installedCount = svc.GetAllClients().Count(c => c.IsInstalled);
-            Assert.AreEqual(installedCount, summary.SuccessCount + summary.FailureCount,
-                "Only installed clients should appear in success/failure totals");
+            int autoInstalledCount = svc.GetAllClients().Count(c => c.IsInstalled && c.SupportsAutoConfigure);
+            Assert.AreEqual(autoInstalledCount, summary.SuccessCount + summary.FailureCount,
+                "Only installed clients with auto-configure support should appear in success/failure totals");
         }
 
         [Test]
@@ -29,8 +29,8 @@ namespace MCPForUnityTests.Editor.Services
         {
             var svc = new ClientConfigurationService();
             var summary = svc.ConfigureAllDetectedClients();
-            int uninstalledCount = svc.GetAllClients().Count(c => !c.IsInstalled);
-            Assert.AreEqual(uninstalledCount, summary.SkippedCount);
+            int skippedCount = svc.GetAllClients().Count(c => !c.IsInstalled || !c.SupportsAutoConfigure);
+            Assert.AreEqual(skippedCount, summary.SkippedCount);
         }
     }
 }
