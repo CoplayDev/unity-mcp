@@ -163,6 +163,22 @@ namespace MCPForUnity.Editor.Services
             _testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
             _testRunnerApi.hideFlags = HideFlags.HideAndDontSave;
             _testRunnerApi.RegisterCallbacks(this);
+            AssemblyReloadEvents.beforeAssemblyReload += ReleaseTestRunnerApi;
+        }
+
+        /// <summary>
+        /// The service lives in a static field, so a domain reload drops it without Dispose() while
+        /// the HideAndDontSave TestRunnerApi survives. Destroy it first so reloads do not pile up
+        /// orphaned instances. A run in flight is resumed by a new service after the reload
+        /// (see TestJobManager), which creates its own TestRunnerApi.
+        /// </summary>
+        internal void ReleaseTestRunnerApi()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= ReleaseTestRunnerApi;
+            if (_testRunnerApi != null)
+            {
+                ScriptableObject.DestroyImmediate(_testRunnerApi);
+            }
         }
 
         internal void ResumeJobAfterReload(string jobId, string mode)
@@ -324,10 +340,7 @@ namespace MCPForUnity.Editor.Services
                 // Ignore cleanup errors
             }
 
-            if (_testRunnerApi != null)
-            {
-                ScriptableObject.DestroyImmediate(_testRunnerApi);
-            }
+            ReleaseTestRunnerApi();
 
             _operationLock.Dispose();
         }

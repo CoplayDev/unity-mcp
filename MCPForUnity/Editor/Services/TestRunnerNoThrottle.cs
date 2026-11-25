@@ -46,6 +46,7 @@ namespace MCPForUnity.Editor.Services
                 _api = ScriptableObject.CreateInstance<TestRunnerApi>();
                 _api.hideFlags = HideFlags.HideAndDontSave;
                 _api.RegisterCallbacks(new TestCallbacks());
+                AssemblyReloadEvents.beforeAssemblyReload += ReleaseApi;
 
                 // Check if recovering from domain reload during an active test run
                 if (IsTestRunActive())
@@ -58,6 +59,22 @@ namespace MCPForUnity.Editor.Services
             {
                 McpLog.Warn($"[TestRunnerNoThrottle] Failed to register callbacks: {e}");
             }
+        }
+
+        /// <summary>
+        /// HideAndDontSave keeps the native TestRunnerApi alive across a domain reload, but the static
+        /// reference to it is lost, so every reload used to leave one orphaned instance behind.
+        /// Callbacks live in the Test Framework's CallbacksHolder, not in the instance, and are
+        /// registered again by the static constructor after the reload.
+        /// </summary>
+        internal static void ReleaseApi()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= ReleaseApi;
+            if (_api != null)
+            {
+                ScriptableObject.DestroyImmediate(_api);
+            }
+            _api = null;
         }
 
         #region State Persistence
