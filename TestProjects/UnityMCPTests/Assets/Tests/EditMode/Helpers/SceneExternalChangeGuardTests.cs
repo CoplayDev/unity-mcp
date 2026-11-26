@@ -118,6 +118,67 @@ namespace MCPForUnityTests.Editor.Helpers
         }
 
         [Test]
+        public void HandleCommand_KeepEditor_SaveFailsPartway_ReportsTheScenesAlreadyOverwritten()
+        {
+            // keep_editor saves changed scenes one at a time. When a later save fails, the earlier ones
+            // are already written over their disk versions; the blocked reply must name them, or the
+            // caller can't tell an overwritten scene from one still unresolved.
+            string pathA = $"Assets/McpGuardTest_{Guid.NewGuid():N}.unity";
+            string pathB = $"Assets/McpGuardTest_{Guid.NewGuid():N}.unity";
+            // Unity won't add a scene while an untitled one is unsaved, so each is saved before the next.
+            Scene sceneA = default, sceneB = default;
+            var realSave = SceneExternalChangeGuard.SaveScene;
+            try
+            {
+                sceneA = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+                Assert.IsTrue(EditorSceneManager.SaveScene(sceneA, pathA), "sanity: scene A saved");
+                sceneB = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+                Assert.IsTrue(EditorSceneManager.SaveScene(sceneB, pathB), "sanity: scene B saved");
+                File.SetLastWriteTimeUtc(pathA, File.GetLastWriteTimeUtc(pathA).AddMinutes(1));
+                File.SetLastWriteTimeUtc(pathB, File.GetLastWriteTimeUtc(pathB).AddMinutes(1));
+                // The first save goes through and the second fails, whichever scene the guard takes first.
+                int saves = 0;
+                SceneExternalChangeGuard.SaveScene = scene => ++saves == 1 && realSave(scene);
+
+                var task = RefreshUnity.HandleCommand(new JObject
+                {
+                    ["mode"] = "if_dirty",
+                    ["scope"] = "all",
+                    ["compile"] = "none",
+                    ["wait_for_ready"] = false,
+                    ["on_external_scene_change"] = "keep_editor",
+                });
+                var result = ToJObject(task.Result);
+                if (TestRunStatus.IsRunning)
+                {
+                    Assert.Ignore(BridgeRunReason);
+                }
+
+                Assert.IsFalse(result.Value<bool>("success"), "a failed save must block the refresh: " + result);
+                var data = result["data"];
+                Assert.AreEqual("open_scene_changed_on_disk", data?["reason"]?.ToString(), result.ToString());
+                CollectionAssert.AreEquivalent(new[] { pathA, pathB }, data["changed_scenes"].ToObject<string[]>(), result.ToString());
+                var overwritten = data["overwritten_scenes"]?.ToObject<string[]>();
+                Assert.IsNotNull(overwritten, "the blocked reply must list the overwritten scenes: " + result);
+                Assert.AreEqual(1, overwritten.Length, result.ToString());
+                CollectionAssert.Contains(new[] { pathA, pathB }, overwritten[0], result.ToString());
+            }
+            finally
+            {
+                SceneExternalChangeGuard.SaveScene = realSave;
+                foreach (var scene in new[] { sceneA, sceneB })
+                {
+                    if (scene.IsValid())
+                    {
+                        EditorSceneManager.CloseScene(scene, removeScene: true);
+                    }
+                }
+                AssetDatabase.DeleteAsset(pathA);
+                AssetDatabase.DeleteAsset(pathB);
+            }
+        }
+
+        [Test]
         public void HandleCommand_ScriptsScope_LeavesAChangedSceneAlone()
         {
             // Two scenes open plus an external edit is what makes "auto" block. A script-only request

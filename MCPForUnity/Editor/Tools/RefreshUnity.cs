@@ -92,6 +92,10 @@ namespace MCPForUnity.Editor.Tools
                 {
                     reason = "open_scene_changed_on_disk",
                     changed_scenes = sceneOutcome.ChangedScenes,
+                    // keep_editor saves scenes one by one, so a save that fails partway leaves the
+                    // earlier ones already written over their disk versions. Name them, or the caller
+                    // can't tell them from the scenes still unresolved.
+                    overwritten_scenes = sceneOutcome.OverwrittenScenes,
                     refresh_triggered = false,
                 });
             }
