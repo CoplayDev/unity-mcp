@@ -485,6 +485,15 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             {
                 // Shutting down.
             }
+            catch (Exception ex) when (token.IsCancellationRequested)
+            {
+                // The connection was torn down while this message was in flight (a domain reload's
+                // ForceStop, or StopAsync), so its reply has no socket left to go out on. Every
+                // teardown cancels the token before it nulls or disposes the socket, so a failure
+                // seen after cancellation is that race, not a fault. The server fails the pending
+                // command on the disconnect and the client retries once the bridge reconnects.
+                McpLog.Debug($"[WebSocket] Dropped a message's reply after the connection closed: {ex.Message}");
+            }
             catch (Exception ex)
             {
                 McpLog.Warn($"[WebSocket] Message handling failed: {ex.Message}");
