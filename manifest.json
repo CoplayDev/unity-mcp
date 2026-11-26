@@ -30,6 +30,10 @@
   },
   "tools": [
     {
+      "name": "answer_dialog",
+      "description": "Read or answer a modal dialog blocking the Unity Editor"
+    },
+    {
       "name": "apply_text_edits",
       "description": "Apply text edits to script content"
     },
