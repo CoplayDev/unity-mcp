@@ -33,6 +33,7 @@ dependencies = [
  "fastmcp>=3.0.2,<4",
  "mcp>=1.16.0",
  "pydantic>=2.12.5",
+ "pyyaml>=6.0.3",
  "tomli>=2.3.0",
  "fastapi>=0.104.0",
  "uvicorn>=0.35.0",

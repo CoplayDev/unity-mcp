@@ -13,6 +13,7 @@ Essential scene, script, asset & editor tools (always on by default)
 - **[`create_script`](./create_script.md)** — Create a new C# script at the given project path.
 - **[`debug_request_context`](./debug_request_context.md)** — Return the current FastMCP request context details (client_id, session_id, and meta dump).
 - **[`delete_script`](./delete_script.md)** — Delete a C# script by URI or Assets-relative path.
+- **[`diff_prefab`](./diff_prefab.md)** — Read-only comparison of one regular text-serialized Prefab under Assets/ against Git HEAD.
 - **[`execute_custom_tool`](./execute_custom_tool.md)** — Execute a project-scoped custom tool registered by Unity.
 - **[`execute_menu_item`](./execute_menu_item.md)** — Execute a Unity menu item by path.
 - **[`find_gameobjects`](./find_gameobjects.md)** — Search for GameObjects in the scene by name, tag, layer, component type, or path.

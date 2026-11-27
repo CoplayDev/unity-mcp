@@ -867,6 +867,7 @@ dependencies = [
     { name = "httpx" },
     { name = "mcp" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "tomli" },
     { name = "uvicorn" },
 ]
@@ -889,6 +890,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tomli", specifier = ">=2.3.0" },
     { name = "uvicorn", specifier = ">=0.35.0" },
 ]

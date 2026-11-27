@@ -54,6 +54,10 @@
       "description": "Delete C# scripts"
     },
     {
+      "name": "diff_prefab",
+      "description": "Compare a saved Unity Prefab against Git HEAD and report field changes"
+    },
+    {
       "name": "execute_custom_tool",
       "description": "Execute custom Unity Editor tools registered by the project"
     },
