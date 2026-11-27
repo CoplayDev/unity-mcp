@@ -985,6 +985,20 @@ class TestScriptCommands:
                 cli, ["script", "read", "Assets/Scripts/Test.cs"])
             assert result.exit_code == 0
 
+    # Unity's manage_script read returns the whole file and reads no line range, so the CLI cuts it.
+    def test_script_and_code_read_print_only_the_requested_lines(self, runner):
+        reply = {"success": True, "data": {"contents": "a\nb\nc\nd\n"}}
+        with patch("cli.commands.script.run_command", return_value=reply) as mock_run:
+            result = runner.invoke(cli, ["script", "read", "Assets/Scripts/Test.cs", "--start-line", "2", "--line-count", "2"])
+            assert result.exit_code == 0, result.output
+            assert result.output.rstrip("\n").split("\n") == ["b", "c"]
+            assert mock_run.call_args[0][1] == {"action": "read", "name": "Test", "path": "Assets/Scripts"}
+            result = runner.invoke(cli, ["script", "read", "Assets/Scripts/Test.cs", "--start-line", "3"])
+            assert result.output.rstrip("\n").split("\n") == ["c", "d"]
+        with patch("cli.commands.code.run_command", return_value=reply):
+            result = runner.invoke(cli, ["code", "read", "Assets/Scripts/Test.cs", "--start-line", "2", "--line-count", "2"])
+            assert result.output.rstrip("\n").split("\n") == ["b", "c"]
+
     def test_script_delete(self, runner, mock_unity_response):
         """Test script delete command."""
         with patch("cli.commands.script.run_command", return_value=mock_unity_response):
@@ -1409,6 +1423,33 @@ class TestEditorEnhancedCommands:
             result = runner.invoke(
                 cli, ["editor", "poll-test", "test-job-123"])
             assert result.exit_code == 0
+
+    # Unity's run_tests and get_test_job return at once; only the MCP tool waited, server-side.
+    def test_editor_tests_wait_polls_the_job_until_it_finishes(self, runner):
+        running = {"success": True, "data": {"job_id": "j1", "status": "running"}}
+        done = {"success": True, "data": {"job_id": "j1", "status": "succeeded"}}
+        with patch("cli.commands.editor.run_command", side_effect=[running, running, done]) as mock_run, patch("time.sleep"):
+            result = runner.invoke(cli, ["editor", "tests", "--wait", "60", "--failed-only"])
+            assert result.exit_code == 0, result.output
+            assert [c[0][:2] for c in mock_run.call_args_list] == [
+                ("run_tests", {"mode": "EditMode", "include_failed_tests": True}),
+                ("get_test_job", {"job_id": "j1", "include_failed_tests": True}),
+                ("get_test_job", {"job_id": "j1", "include_failed_tests": True}),
+            ]
+            assert "succeeded" in result.output
+
+    def test_editor_poll_test_waits_until_the_job_finishes_or_the_time_is_up(self, runner):
+        running = {"success": True, "data": {"job_id": "j1", "status": "running"}}
+        done = {"success": True, "data": {"job_id": "j1", "status": "failed"}}
+        with patch("cli.commands.editor.run_command", side_effect=[running, done]) as mock_run, patch("time.sleep"):
+            result = runner.invoke(cli, ["editor", "poll-test", "j1", "--wait", "10"])
+            assert result.exit_code == 0, result.output
+            assert [c[0][:2] for c in mock_run.call_args_list] == [("get_test_job", {"job_id": "j1"})] * 2
+        with patch("cli.commands.editor.run_command", return_value=running) as mock_run, patch("time.sleep"), \
+                patch("time.monotonic", side_effect=[0.0, 5.0, 11.0]):
+            result = runner.invoke(cli, ["editor", "poll-test", "j1", "--wait", "10"])
+            assert result.exit_code == 0, result.output
+            assert mock_run.call_count == 2
 
 
 # =============================================================================
