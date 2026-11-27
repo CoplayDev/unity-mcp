@@ -115,17 +115,15 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
         "path": directory,
     }
 
-    if start_line:
-        params["startLine"] = start_line
-    if line_count:
-        params["lineCount"] = line_count
-
     result = run_command("manage_script", params, config)
     # For read, just output the content directly
     if result.get("success") and result.get("data"):
         data = result.get("data", {})
         if isinstance(data, dict) and "contents" in data:
-            click.echo(data["contents"])
+            # Unity returns the whole file, so the range is cut here
+            first = (start_line or 1) - 1
+            lines = data["contents"].splitlines(keepends=True)
+            click.echo("".join(lines[first:first + line_count if line_count else None]))
         else:
             click.echo(format_output(result, config.format))
     else:

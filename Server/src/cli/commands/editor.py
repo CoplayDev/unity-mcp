@@ -1,6 +1,7 @@
 """Editor CLI commands."""
 
 import sys
+import time
 import click
 from typing import Optional, Any
 
@@ -350,22 +351,22 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
         return
 
     params: dict[str, Any] = {"mode": mode}
-    if wait is not None:
-        params["wait_timeout"] = wait
     if details:
         params["include_details"] = True
     if failed_only:
         params["include_failed_tests"] = True
 
     result = run_command("run_tests", params, config)
+    job_id = result.get("data", {}).get("job_id") if result.get("success") else None
 
     # For async mode, just show job ID
-    if async_mode and result.get("success"):
-        job_id = result.get("data", {}).get("job_id")
-        if job_id:
-            click.echo(f"Test job started: {job_id}")
-            print_info("Poll with: unity-mcp editor poll-test " + job_id)
-            return
+    if async_mode and job_id:
+        click.echo(f"Test job started: {job_id}")
+        print_info("Poll with: unity-mcp editor poll-test " + job_id)
+        return
+    if wait and job_id:
+        click.get_current_context().invoke(poll_test, job_id=job_id, wait=wait, details=details, failed_only=failed_only)
+        return
 
     click.echo(format_output(result, config.format))
 
@@ -401,14 +402,21 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     config = get_config()
 
     params: dict[str, Any] = {"job_id": job_id}
-    if wait:
-        params["wait_timeout"] = wait
     if details:
         params["include_details"] = True
     if failed_only:
         params["include_failed_tests"] = True
 
-    result = run_command("get_test_job", params, config)
+    # Unity answers at once, so the wait is here, as the MCP tool does it server-side
+    deadline = time.monotonic() + (wait or 0)
+    while True:
+        result = run_command("get_test_job", params, config)
+        if not (isinstance(result, dict) and result.get("success")) or result.get("data", {}).get("status") in ("succeeded", "failed", "cancelled"):
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(2.0, remaining))
     click.echo(format_output(result, config.format))
 
     if isinstance(result, dict) and result.get("success"):
