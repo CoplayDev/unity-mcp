@@ -80,6 +80,16 @@ def _prefab(*, trigger: int = 0, enabled: int = 1, reverse_documents: bool = Fal
     return HEADER + "".join(documents)
 
 
+def _prefab_with_script_fields(fields: str) -> str:
+    return (
+        _prefab().replace(_game_object(100, "Player", (101,)), _game_object(100, "Player", (101, 102)))
+        + "--- !u!114 &102\nMonoBehaviour:\n"
+        + "  m_GameObject: {fileID: 100}\n"
+        + "  m_Script: {fileID: 11500000, guid: abcdef0123456789abcdef0123456789, type: 3}\n"
+        + fields
+    )
+
+
 def test_matches_siblings_and_same_type_components_by_file_id() -> None:
     result = compare_prefabs(_prefab(), _prefab(trigger=1))
 
@@ -97,6 +107,9 @@ def test_matches_siblings_and_same_type_components_by_file_id() -> None:
         "totalChanges": 1,
         "truncated": False,
     }
+    change, = result["changes"]
+    assert type(change["oldValue"]) is int
+    assert type(change["newValue"]) is int
 
 
 def test_document_and_mapping_order_and_line_endings_do_not_change_the_result() -> None:
@@ -174,6 +187,55 @@ def test_unity_object_names_are_strings_even_when_they_look_like_yaml_types() ->
     assert change["field"] == "m_Name"
     assert change["oldValue"] == "Off"
     assert change["newValue"] == "123"
+
+
+@pytest.mark.parametrize(("old", "new"), [("1", "1.0"), ("1.0", "1.00")])
+def test_numeric_looking_script_text_preserves_serialized_spelling(old: str, new: str) -> None:
+    result = compare_prefabs(
+        _prefab_with_script_fields(f"  m_text: {old}\n"),
+        _prefab_with_script_fields(f"  m_text: {new}\n"),
+    )
+
+    assert result["totalChanges"] == 1
+    change, = result["changes"]
+    assert (change["component"], change["field"], change["oldValue"], change["newValue"]) == (
+        "MonoBehaviour", "m_text", old, new,
+    )
+
+
+@pytest.mark.parametrize(("hexadecimal", "decimal"), [
+    ("0x3F800000", "1.0"),
+    ("0x3F800000(1)", "1.0"),
+    ("0x3F800000(2)", "1.0"),
+    ("0x3DCCCCCD(0.1)", "0.1"),
+])
+def test_transform_float_compares_by_value_across_serialized_formats(hexadecimal: str, decimal: str) -> None:
+    prefab = _prefab()
+    coordinate = "m_LocalPosition: {x: 0,"
+    before = prefab.replace(coordinate, f"m_LocalPosition: {{x: {hexadecimal},", 1)
+    after = prefab.replace(coordinate, f"m_LocalPosition: {{x: {decimal},", 1)
+
+    assert compare_prefabs(before, after) == {"changes": [], "totalChanges": 0, "truncated": False}
+
+
+def test_hexadecimal_looking_custom_transform_field_remains_lexical() -> None:
+    before = _prefab_with_script_fields("  m_LocalPosition: {x: 0x3F800000(1)}\n")
+    after = before.replace("0x3F800000(1)", "0x3F800000(2)")
+
+    change, = compare_prefabs(before, after)["changes"]
+    assert (change["component"], change["field"], change["oldValue"], change["newValue"]) == (
+        "MonoBehaviour", "m_LocalPosition.x", "0x3F800000(1)", "0x3F800000(2)",
+    )
+
+
+def test_quoted_hexadecimal_looking_transform_scalar_remains_text() -> None:
+    before = _prefab().replace("m_LocalPosition: {x: 0,", 'm_LocalPosition: {x: "0x3F800000(1)",', 1)
+    after = before.replace("0x3F800000(1)", "0x3F800000(2)")
+
+    change, = compare_prefabs(before, after)["changes"]
+    assert (change["component"], change["field"], change["oldValue"], change["newValue"]) == (
+        "Transform", "m_LocalPosition.x", "0x3F800000(1)", "0x3F800000(2)",
+    )
 
 
 @pytest.mark.parametrize("content", [

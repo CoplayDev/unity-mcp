@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import math
 import re
+import struct
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterator
 
 import yaml
@@ -27,15 +28,30 @@ _DECIMAL_FLOAT = re.compile(
     r"^[+-]?(?:(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|"
     r"[0-9]+[eE][+-]?[0-9]+)$"
 )
+_HEX_FLOAT = re.compile(r"^0[xX]([0-9a-fA-F]{8}(?:[0-9a-fA-F]{8})?)(?:\([^()\r\n]*\))?$")
 _YAML_TAG = "tag:yaml.org,2002:"
+_HEX_FLOAT_TAG = "!unity-hex-float"
 _TEXT_FIELDS = {"m_Name", "m_TagString", "m_EditorClassIdentifier", "fileID", "guid"}
 _MISSING = object()
 _MAX_CHANGE_OUTPUT_BYTES = 256 * 1024
+_TRANSFORM_VECTORS = {"m_LocalPosition", "m_LocalRotation", "m_LocalScale", "m_LocalEulerAnglesHint"}
+_RECT_TRANSFORM_VECTORS = _TRANSFORM_VECTORS | {
+    "m_AnchorMin", "m_AnchorMax", "m_AnchoredPosition", "m_SizeDelta", "m_Pivot",
+}
+
+
+@dataclass(frozen=True)
+class _Number:
+    value: int | float
+    spelling: str
+    hexadecimal: bool = False
+    float32: bytes | None = None
 
 
 class _PrefabLoader(yaml.SafeLoader):
     # Unity string fields such as m_Name can include plain words like "Off".
-    # Keep only ordinary decimal numbers and true/false as implicit types.
+    # Preserve number spellings and keep words like "On" and "Off" as strings.
+
     yaml_implicit_resolvers = {
         key: [entry for entry in entries if entry[0] == _YAML_TAG + "null"]
         for key, entries in yaml.SafeLoader.yaml_implicit_resolvers.items()
@@ -70,17 +86,52 @@ class _PrefabLoader(yaml.SafeLoader):
         return fields
 
 
-def _decimal_float(loader: _PrefabLoader, node: yaml.ScalarNode) -> float:
-    value = float(loader.construct_scalar(node))
+def _decimal_int(loader: _PrefabLoader, node: yaml.ScalarNode) -> _Number:
+    text = loader.construct_scalar(node)
+    return _Number(int(text, 10), text)
+
+
+def _decimal_float(loader: _PrefabLoader, node: yaml.ScalarNode) -> _Number:
+    text = loader.construct_scalar(node)
+    value = float(text)
     if not math.isfinite(value):
         raise PrefabDiffError("Unity YAML contains an out-of-range number.")
-    return value
+    return _Number(value, text)
+
+
+def _hex_float(loader: _PrefabLoader, node: yaml.ScalarNode) -> _Number | str:
+    text = loader.construct_scalar(node)
+    match = _HEX_FLOAT.fullmatch(text)
+    assert match is not None  # matched by the implicit YAML resolver
+    bits = bytes.fromhex(match[1])
+    # Unity uses the IEEE bits and treats the decimal in parentheses as a note.
+    value, = struct.unpack(">f" if len(bits) == 4 else ">d", bits)
+    return _Number(value, text, hexadecimal=True) if math.isfinite(value) else text
 
 
 _PrefabLoader.add_implicit_resolver(_YAML_TAG + "int", _DECIMAL_INT, "+-0123456789")
 _PrefabLoader.add_implicit_resolver(_YAML_TAG + "float", _DECIMAL_FLOAT, "+-.0123456789")
 _PrefabLoader.add_implicit_resolver(_YAML_TAG + "bool", re.compile(r"^(?:true|false)$"), "tf")
+_PrefabLoader.add_implicit_resolver(_HEX_FLOAT_TAG, _HEX_FLOAT, "0")
+_PrefabLoader.add_constructor(_YAML_TAG + "int", _decimal_int)
 _PrefabLoader.add_constructor(_YAML_TAG + "float", _decimal_float)
+_PrefabLoader.add_constructor(_HEX_FLOAT_TAG, _hex_float)
+
+
+def _mark_transform_vectors(fields: dict[str, Any], vector_fields: set[str]) -> None:
+    # Only these built-in fields give us a reliable float32 type. A script can
+    # use the same field names for strings and must keep its saved spellings.
+    for name in vector_fields:
+        vector = fields.get(name)
+        if not isinstance(vector, dict):
+            continue
+        for axis, number in vector.items():
+            if isinstance(number, _Number) and axis in {"x", "y", "z", "w"}:
+                try:
+                    bits = struct.pack(">f", number.value)
+                except (OverflowError, struct.error):
+                    continue
+                vector[axis] = replace(number, float32=bits)
 
 
 @dataclass(frozen=True)
@@ -140,6 +191,10 @@ def _parse_documents(text: str) -> dict[str, _Document]:
             raise PrefabDiffError(f"Document {file_id} must contain a Unity object with fields.")
         if component == "PrefabInstance":
             raise PrefabDiffError("Nested Prefabs and Prefab Variants are unsupported.")
+        if (class_id, component) == ("4", "Transform"):
+            _mark_transform_vectors(fields, _TRANSFORM_VECTORS)
+        elif (class_id, component) == ("224", "RectTransform"):
+            _mark_transform_vectors(fields, _RECT_TRANSFORM_VECTORS)
         documents[file_id] = _Document(file_id, class_id, component, fields)
     return documents
 
@@ -217,11 +272,34 @@ def _same_value(before: Any, after: Any) -> bool:
     # Python considers True equal to 1. Keep distinct YAML scalar types visible.
     if isinstance(before, bool) != isinstance(after, bool):
         return False
+    if isinstance(before, _Number) and isinstance(after, _Number):
+        if before.float32 is not None and after.float32 is not None:
+            return before.float32 == after.float32
+        return before.spelling == after.spelling
     if isinstance(before, list) and isinstance(after, list):
         return len(before) == len(after) and all(_same_value(a, b) for a, b in zip(before, after))
     if isinstance(before, dict) and isinstance(after, dict):
         return before.keys() == after.keys() and all(_same_value(before[key], after[key]) for key in before)
     return before == after
+
+
+def _report_value(value: Any, other: Any) -> Any:
+    if isinstance(value, _Number):
+        if value.float32 is None and (
+            value.hexadecimal or (
+                isinstance(other, _Number) and value.value == other.value and value.spelling != other.spelling
+            )
+        ):
+            return value.spelling
+        return value.value
+    if isinstance(value, dict):
+        matching = other if isinstance(other, dict) else {}
+        return {key: _report_value(item, matching.get(key)) for key, item in value.items()}
+    if isinstance(value, list):
+        matching = other if isinstance(other, list) else []
+        return [_report_value(item, matching[index] if index < len(matching) else None)
+                for index, item in enumerate(value)]
+    return None if value is _MISSING else value
 
 
 def _field_changes(
@@ -278,8 +356,8 @@ def compare_prefabs(before: str, after: str, *, max_changes: int = 200) -> dict[
                     "component": document.component,
                     "componentFileId": document.file_id,
                     "field": field,
-                    "oldValue": None if old_value is _MISSING else old_value,
-                    "newValue": None if new_value is _MISSING else new_value,
+                    "oldValue": _report_value(old_value, new_value),
+                    "newValue": _report_value(new_value, old_value),
                     "kind": kind,
                 }
                 # Count JSON escaping as well as the values themselves.
