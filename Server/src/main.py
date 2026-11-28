@@ -146,12 +146,34 @@ _server_version: str | None = None
 custom_tool_service: CustomToolService | None = None
 
 
+def _recover_reset_self_pipe(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+    """Rebuild the selector loop's self-pipe after Windows resets it (cpython#116091).
+
+    A reset self-pipe socket stays readable, so every loop iteration fails in
+    _read_from_self and logs the same traceback until the disk fills (#1511).
+    """
+    callback = getattr(context.get("handle"), "_callback", None)
+    if (
+        isinstance(context.get("exception"), ConnectionResetError)
+        and getattr(callback, "__self__", None) is loop
+        and getattr(callback, "__name__", None) == "_read_from_self"
+    ):
+        logger.warning("Event loop self-pipe was reset by the OS; recreating it (cpython#116091)")
+        loop._close_self_pipe()
+        loop._make_self_pipe()
+        return
+    loop.default_exception_handler(context)
+
+
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Handle server startup and shutdown."""
     global _unity_connection_pool, _server_version
     _server_version = get_package_version()
     logger.info(f"MCP for Unity Server v{_server_version} starting up")
+
+    if sys.platform == "win32":
+        asyncio.get_running_loop().set_exception_handler(_recover_reset_self_pipe)
 
     # Register custom tool management endpoints with FastMCP
     # Routes are declared globally below after FastMCP initialization
